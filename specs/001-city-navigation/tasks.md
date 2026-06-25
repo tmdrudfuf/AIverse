@@ -42,23 +42,23 @@ Each task uses this format:
 
 **Purpose**: Establish input, camera, and navigation state modules before implementing user-visible movement and zoom behavior.
 
-- [ ] T005 Create navigation type definitions in `src/features/city-view/scene/navigation/navigationTypes.ts`
+- [X] T005 Create navigation type definitions in `src/features/city-view/scene/navigation/navigationTypes.ts`
   - Files likely affected: `src/features/city-view/scene/navigation/navigationTypes.ts`
   - Acceptance criteria: Defines `NavigationIntent`, `NavigationState`, optional camera target types, and config-facing type shapes; types are generic to navigation and do not reference Founder, Buildings, NPCs, AI Agents, company interiors, or AI integrations.
 
-- [ ] T006 Create runtime navigation state module in `src/features/city-view/scene/navigation/NavigationState.ts`
+- [X] T006 Create runtime navigation state module in `src/features/city-view/scene/navigation/NavigationState.ts`
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationState.ts`, `src/features/city-view/scene/navigation/navigationTypes.ts`
   - Acceptance criteria: Provides initialization for camera velocity, target zoom, current intent, bounds, and focus state; state is runtime-only and does not use React state, persistence, server calls, or external services.
 
-- [ ] T007 Create `NavigationInputController` skeleton in `src/features/city-view/scene/navigation/NavigationInputController.ts`
+- [X] T007 Create `NavigationInputController` skeleton in `src/features/city-view/scene/navigation/NavigationInputController.ts`
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/scene/navigation/navigationTypes.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Exposes lifecycle methods for setup, reading current intent, and cleanup; does not directly modify Phaser camera scroll or zoom; returns a neutral intent when no input is active.
 
-- [ ] T008 Create `CameraController` skeleton in `src/features/city-view/scene/navigation/CameraController.ts`
+- [X] T008 Create `CameraController` skeleton in `src/features/city-view/scene/navigation/CameraController.ts`
   - Files likely affected: `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/navigation/navigationTypes.ts`, `src/features/city-view/scene/shared/geometry.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Exposes methods for update, bounds assignment, target zoom assignment, optional world-point focus, and cleanup; accepts navigation intent instead of reading keyboard input directly.
 
-- [ ] T009 Wire `NavigationInputController`, `CameraController`, and `NavigationState` into `CityWorldScene`
+- [X] T009 Wire `NavigationInputController`, `CameraController`, and `NavigationState` into `CityWorldScene`
   - Files likely affected: `src/features/city-view/scene/CityWorldScene.ts`, `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/navigation/NavigationState.ts`
   - Acceptance criteria: Scene initializes controllers during `create`, passes per-frame intent to camera update during `update`, and cleans up listeners on scene shutdown; scene remains free of inline camera/input algorithms beyond orchestration.
 
