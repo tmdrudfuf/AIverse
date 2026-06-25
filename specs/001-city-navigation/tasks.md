@@ -100,11 +100,11 @@ Each task uses this format:
 
 **Independent Test**: Navigate a comparable route using only WASD and then only arrow keys; verify the direction model and camera behavior match.
 
-- [ ] T016 [US2] Centralize movement bindings in `navigationConfig.ts`
+- [X] T016 [US2] Centralize movement bindings in `navigationConfig.ts`
   - Files likely affected: `src/features/city-view/scene/config/navigationConfig.ts`, `src/features/city-view/scene/navigation/NavigationInputController.ts`
   - Acceptance criteria: WASD and arrow-key bindings are defined in configuration; changing a binding does not require changing camera movement code; both schemes remain enabled by default.
 
-- [ ] T017 [US2] Verify and align WASD and arrow-key behavior through shared intent mapping
+- [X] T017 [US2] Verify and align WASD and arrow-key behavior through shared intent mapping
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`
   - Acceptance criteria: WASD and arrow keys feed the same `NavigationIntent` shape; alternating between input schemes requires no mode switch; simultaneous equivalent keys do not double movement speed.
 

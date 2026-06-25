@@ -1,5 +1,5 @@
 import type Phaser from "phaser";
-import { MOVEMENT_KEYS } from "../config/navigationConfig";
+import { MOVEMENT_BINDINGS, MOVEMENT_KEYS } from "../config/navigationConfig";
 import type { PhaserScene } from "../shared/phaserTypes";
 import { NEUTRAL_NAVIGATION_INTENT } from "./NavigationState";
 import type { NavigationIntent, NavigationState } from "./navigationTypes";
@@ -28,14 +28,8 @@ export class NavigationInputController {
   }
 
   getIntent(): NavigationIntent {
-    const directionX = resolveAxis(
-      this.isDown("A") || this.isDown("LEFT"),
-      this.isDown("D") || this.isDown("RIGHT"),
-    );
-    const directionY = resolveAxis(
-      this.isDown("W") || this.isDown("UP"),
-      this.isDown("S") || this.isDown("DOWN"),
-    );
+    const directionX = resolveAxis(this.isDirectionActive(-1, 0), this.isDirectionActive(1, 0));
+    const directionY = resolveAxis(this.isDirectionActive(0, -1), this.isDirectionActive(0, 1));
     const isMoving = directionX !== 0 || directionY !== 0;
 
     return {
@@ -56,6 +50,15 @@ export class NavigationInputController {
     this.keys = undefined;
     this.scene = undefined;
     this.state = undefined;
+  }
+
+  private isDirectionActive(directionX: -1 | 0 | 1, directionY: -1 | 0 | 1) {
+    return MOVEMENT_BINDINGS.some(
+      (binding) =>
+        binding.directionX === directionX &&
+        binding.directionY === directionY &&
+        binding.keys.some((keyName) => this.isDown(keyName)),
+    );
   }
 
   private isDown(keyName: MovementKeyName) {
