@@ -5,12 +5,19 @@ const C = { ink: 0x253247, grass: 0x79b45d, grassDark: 0x5b9748, road: 0x4a5262,
 const WORLD = { width: 1800, height: 1080 };
 const CAMERA_SPEED = 360;
 const CAMERA_SMOOTHING = 0.18;
+const MIN_ZOOM = 0.75;
+const MAX_ZOOM = 1.75;
+const KEYBOARD_ZOOM_SPEED = 0.9;
+const WHEEL_ZOOM_STEP = 0.18;
+const ZOOM_SMOOTHING = 0.16;
 
 export function createCityScene(PhaserRuntime: PhaserRuntime) {
   return class CityScene extends PhaserRuntime.Scene {
     private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
     private wasd?: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
+    private zoomKeys?: Record<"Q" | "E", Phaser.Input.Keyboard.Key>;
     private cameraVelocity = new PhaserRuntime.Math.Vector2(0, 0);
+    private targetZoom = 1;
 
     create() {
       this.cameras.main.setBackgroundColor("#79b45d");
@@ -48,10 +55,20 @@ export function createCityScene(PhaserRuntime: PhaserRuntime) {
 
       this.cursors = this.input.keyboard?.createCursorKeys();
       this.wasd = this.input.keyboard?.addKeys("W,A,S,D") as Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key> | undefined;
-      this.input.keyboard?.addCapture(["W", "A", "S", "D", "UP", "DOWN", "LEFT", "RIGHT"]);
+      this.zoomKeys = this.input.keyboard?.addKeys("Q,E") as Record<"Q" | "E", Phaser.Input.Keyboard.Key> | undefined;
+      this.input.keyboard?.addCapture(["W", "A", "S", "D", "Q", "E", "UP", "DOWN", "LEFT", "RIGHT"]);
+      this.input.on("wheel", (_pointer: Phaser.Input.Pointer, _objects: Phaser.GameObjects.GameObject[], _deltaX: number, deltaY: number) => {
+        this.targetZoom = PhaserRuntime.Math.Clamp(this.targetZoom + (deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP), MIN_ZOOM, MAX_ZOOM);
+      });
     }
 
     update(_: number, delta: number) {
+      const deltaSeconds = delta / 1000;
+      const zoomOut = Boolean(this.zoomKeys?.Q.isDown);
+      const zoomIn = Boolean(this.zoomKeys?.E.isDown);
+      this.targetZoom = PhaserRuntime.Math.Clamp(this.targetZoom + (Number(zoomIn) - Number(zoomOut)) * KEYBOARD_ZOOM_SPEED * deltaSeconds, MIN_ZOOM, MAX_ZOOM);
+      this.setSmoothedZoom(this.targetZoom);
+
       const left = Boolean(this.cursors?.left.isDown || this.wasd?.A.isDown);
       const right = Boolean(this.cursors?.right.isDown || this.wasd?.D.isDown);
       const up = Boolean(this.cursors?.up.isDown || this.wasd?.W.isDown);
@@ -61,11 +78,25 @@ export function createCityScene(PhaserRuntime: PhaserRuntime) {
       this.cameraVelocity.lerp(targetVelocity, CAMERA_SMOOTHING);
 
       const camera = this.cameras.main;
-      const maxScrollX = Math.max(0, WORLD.width - camera.width);
-      const maxScrollY = Math.max(0, WORLD.height - camera.height);
-      const nextX = PhaserRuntime.Math.Clamp(camera.scrollX + this.cameraVelocity.x * (delta / 1000), 0, maxScrollX);
-      const nextY = PhaserRuntime.Math.Clamp(camera.scrollY + this.cameraVelocity.y * (delta / 1000), 0, maxScrollY);
-      camera.setScroll(nextX, nextY);
+      this.setClampedCameraScroll(camera.scrollX + this.cameraVelocity.x * deltaSeconds, camera.scrollY + this.cameraVelocity.y * deltaSeconds);
+    }
+
+    private setSmoothedZoom(targetZoom: number) {
+      const camera = this.cameras.main;
+      const centerX = camera.scrollX + camera.width / (2 * camera.zoom);
+      const centerY = camera.scrollY + camera.height / (2 * camera.zoom);
+      const nextZoom = PhaserRuntime.Math.Linear(camera.zoom, targetZoom, ZOOM_SMOOTHING);
+      camera.setZoom(nextZoom);
+      this.setClampedCameraScroll(centerX - camera.width / (2 * nextZoom), centerY - camera.height / (2 * nextZoom));
+    }
+
+    private setClampedCameraScroll(x: number, y: number) {
+      const camera = this.cameras.main;
+      const visibleWidth = camera.width / camera.zoom;
+      const visibleHeight = camera.height / camera.zoom;
+      const maxScrollX = Math.max(0, WORLD.width - visibleWidth);
+      const maxScrollY = Math.max(0, WORLD.height - visibleHeight);
+      camera.setScroll(PhaserRuntime.Math.Clamp(x, 0, maxScrollX), PhaserRuntime.Math.Clamp(y, 0, maxScrollY));
     }
 
     private drawBuilding(g: Phaser.GameObjects.Graphics, b: { x:number; y:number; width:number; height:number; wall:number; roof:number; accent:number; name:string; active:boolean }) {

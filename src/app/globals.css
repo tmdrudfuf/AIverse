@@ -93,7 +93,7 @@ h1 { margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: .9; letter-spaci
 .city-view-key span { display: flex; align-items: center; gap: 8px; }
 .city-view-key i { width: 12px; height: 12px; border: 2px solid var(--ink); }
 .active-key { background: #f4c85d; } .future-key { background: #737b89; }
-.city-view-hint { border: 2px solid var(--ink); background: var(--cream); box-shadow: 3px 3px 0 rgba(37,50,71,.18); padding: 7px 10px; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.city-view-hint { display: grid; gap: 4px; border: 2px solid var(--ink); background: var(--cream); box-shadow: 3px 3px 0 rgba(37,50,71,.18); padding: 7px 10px; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 .city-scene-canvas { width: 100%; aspect-ratio: 5 / 3; background: #79b45d; }
 .city-scene-canvas canvas { display: block; width: 100% !important; height: 100% !important; image-rendering: pixelated; }
 .city-view-footer { min-height: 50px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px; border-top: 3px solid var(--ink); padding: 10px 18px; background: var(--cream); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
