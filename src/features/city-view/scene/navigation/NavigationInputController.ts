@@ -1,18 +1,28 @@
-import type Phaser from "phaser";
 import { MOVEMENT_BINDINGS, MOVEMENT_KEYS } from "../config/navigationConfig";
 import type { PhaserScene } from "../shared/phaserTypes";
 import { NEUTRAL_NAVIGATION_INTENT } from "./NavigationState";
 import type { NavigationIntent, NavigationState } from "./navigationTypes";
 
 type MovementKeyName = (typeof MOVEMENT_KEYS)[number];
-type MovementKeyMap = Partial<Record<MovementKeyName, Phaser.Input.Keyboard.Key>>;
 
 const MOVEMENT_CAPTURE_KEYS = MOVEMENT_KEYS.join(",");
+const KEY_EVENT_TO_MOVEMENT_KEY: Partial<Record<string, MovementKeyName>> = {
+  KeyW: "W",
+  KeyA: "A",
+  KeyS: "S",
+  KeyD: "D",
+  ArrowUp: "UP",
+  ArrowLeft: "LEFT",
+  ArrowDown: "DOWN",
+  ArrowRight: "RIGHT",
+};
 
 export class NavigationInputController {
   private scene?: PhaserScene;
   private state?: NavigationState;
-  private keys?: MovementKeyMap;
+  private activeKeys = new Set<MovementKeyName>();
+  private readonly handleKeyDown = (event: KeyboardEvent) => this.setKeyActive(event, true);
+  private readonly handleKeyUp = (event: KeyboardEvent) => this.setKeyActive(event, false);
 
   setup(scene: PhaserScene, state: NavigationState) {
     this.scene = scene;
@@ -23,8 +33,10 @@ export class NavigationInputController {
     const keyboard = scene.input.keyboard;
     if (!keyboard) return;
 
-    this.keys = keyboard.addKeys(MOVEMENT_CAPTURE_KEYS) as MovementKeyMap;
+    keyboard.addKeys(MOVEMENT_CAPTURE_KEYS);
     keyboard.addCapture(MOVEMENT_CAPTURE_KEYS);
+    window.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("keyup", this.handleKeyUp);
   }
 
   getIntent(): NavigationIntent {
@@ -42,14 +54,27 @@ export class NavigationInputController {
   }
 
   destroy() {
+    window.removeEventListener("keydown", this.handleKeyDown);
+    window.removeEventListener("keyup", this.handleKeyUp);
     this.scene?.input.keyboard?.removeCapture(MOVEMENT_CAPTURE_KEYS);
+    this.activeKeys.clear();
     if (this.state) {
       this.state.currentIntent = NEUTRAL_NAVIGATION_INTENT;
       this.state.isCityViewFocused = false;
     }
-    this.keys = undefined;
     this.scene = undefined;
     this.state = undefined;
+  }
+
+  private setKeyActive(event: KeyboardEvent, isActive: boolean) {
+    const keyName = KEY_EVENT_TO_MOVEMENT_KEY[event.code];
+    if (!keyName) return;
+
+    if (isActive) {
+      this.activeKeys.add(keyName);
+    } else {
+      this.activeKeys.delete(keyName);
+    }
   }
 
   private isDirectionActive(directionX: -1 | 0 | 1, directionY: -1 | 0 | 1) {
@@ -62,7 +87,7 @@ export class NavigationInputController {
   }
 
   private isDown(keyName: MovementKeyName) {
-    return Boolean(this.keys?.[keyName]?.isDown);
+    return this.activeKeys.has(keyName);
   }
 }
 
