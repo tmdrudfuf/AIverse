@@ -88,16 +88,18 @@ h1 { margin: 0; font-size: clamp(34px, 5vw, 60px); line-height: .9; letter-spaci
 .city-view-framebar { min-height: 82px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 3px solid var(--ink); padding: 14px 18px; }
 .city-view-framebar p { margin: 0 0 4px; color: #b84e3e; font-size: 10px; font-weight: 900; letter-spacing: .13em; }
 .city-view-framebar h2 { margin: 0; font-family: system-ui, sans-serif; font-size: 22px; }
+.city-view-controls { display: grid; justify-items: end; gap: 9px; }
 .city-view-key { display: flex; gap: 20px; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 .city-view-key span { display: flex; align-items: center; gap: 8px; }
 .city-view-key i { width: 12px; height: 12px; border: 2px solid var(--ink); }
 .active-key { background: #f4c85d; } .future-key { background: #737b89; }
+.city-view-hint { border: 2px solid var(--ink); background: var(--cream); box-shadow: 3px 3px 0 rgba(37,50,71,.18); padding: 7px 10px; font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 .city-scene-canvas { width: 100%; aspect-ratio: 5 / 3; background: #79b45d; }
 .city-scene-canvas canvas { display: block; width: 100% !important; height: 100% !important; image-rendering: pixelated; }
 .city-view-footer { min-height: 50px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px; border-top: 3px solid var(--ink); padding: 10px 18px; background: var(--cream); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
 .city-view-footer strong { color: #9e3f32; text-align: center; } .city-view-footer span:last-child { text-align: right; }
 @media (max-width: 700px) {
   .city-view-shell { padding: 16px; } .city-view-header { align-items: start; gap: 12px; } .city-view-status { padding-top: 5px; }
-  .city-view-framebar { align-items: start; flex-direction: column; gap: 12px; } .city-view-key { flex-wrap: wrap; gap: 10px 18px; }
+  .city-view-framebar { align-items: start; flex-direction: column; gap: 12px; } .city-view-controls { justify-items: start; } .city-view-key { flex-wrap: wrap; gap: 10px 18px; }
   .city-view-footer { grid-template-columns: 1fr; gap: 5px; text-align: center; } .city-view-footer span:last-child { text-align: center; }
 }
