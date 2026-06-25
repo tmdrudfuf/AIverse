@@ -22,19 +22,19 @@ Each task uses this format:
 
 **Purpose**: Create the modular file structure from `plan.md` before moving behavior into focused modules.
 
-- [ ] T001 Create city scene configuration modules in `src/features/city-view/scene/config/cityWorldConfig.ts` and `src/features/city-view/scene/config/navigationConfig.ts`
+- [X] T001 Create city scene configuration modules in `src/features/city-view/scene/config/cityWorldConfig.ts` and `src/features/city-view/scene/config/navigationConfig.ts`
   - Files likely affected: `src/features/city-view/scene/config/cityWorldConfig.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Exports world dimensions, movement speed, smoothing values, zoom limits, zoom speeds, and input binding names; no Phaser scene lifecycle code is placed in config files.
 
-- [ ] T002 Create shared scene type modules in `src/features/city-view/scene/shared/geometry.ts` and `src/features/city-view/scene/shared/phaserTypes.ts`
+- [X] T002 Create shared scene type modules in `src/features/city-view/scene/shared/geometry.ts` and `src/features/city-view/scene/shared/phaserTypes.ts`
   - Files likely affected: `src/features/city-view/scene/shared/geometry.ts`, `src/features/city-view/scene/shared/phaserTypes.ts`
   - Acceptance criteria: Defines reusable world-space geometry types such as point and bounds; defines reusable Phaser runtime type aliases used by scene modules; no feature behavior is implemented in shared type files.
 
-- [ ] T003 Create world layer modules in `src/features/city-view/scene/layers/CityGroundLayer.ts`, `CityRoadLayer.ts`, `CityBuildingLayer.ts`, and `CityDecorationLayer.ts`
+- [X] T003 Create world layer modules in `src/features/city-view/scene/layers/CityGroundLayer.ts`, `CityRoadLayer.ts`, `CityBuildingLayer.ts`, and `CityDecorationLayer.ts`
   - Files likely affected: `src/features/city-view/scene/layers/CityGroundLayer.ts`, `src/features/city-view/scene/layers/CityRoadLayer.ts`, `src/features/city-view/scene/layers/CityBuildingLayer.ts`, `src/features/city-view/scene/layers/CityDecorationLayer.ts`
   - Acceptance criteria: Each layer exposes a focused draw/create function; layer modules only create visual city content; no camera movement, input handling, Founder behavior, building entry, NPCs, AI agents, AI integration, or ECS implementation is added.
 
-- [ ] T004 Refactor exterior city scene composition into `src/features/city-view/scene/CityWorldScene.ts`
+- [X] T004 Refactor exterior city scene composition into `src/features/city-view/scene/CityWorldScene.ts`
   - Files likely affected: `src/features/city-view/scene/CityWorldScene.ts`, `src/features/city-view/scene/createCityScene.ts`, layer modules from T003
   - Acceptance criteria: `CityWorldScene` owns Phaser `create` and `update` lifecycle composition; visual drawing is delegated to layer modules; `createCityScene.ts` remains a thin factory/export boundary; existing city visuals remain recognizable.
 
