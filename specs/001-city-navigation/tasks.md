@@ -68,27 +68,27 @@ Each task uses this format:
 
 **Independent Test**: Open the city view and verify that directional keyboard input changes the visible city area without requiring Founder, building interaction, NPCs, or AI behavior.
 
-- [ ] T010 [US1] Implement WASD movement intent in `NavigationInputController`
+- [X] T010 [US1] Implement WASD movement intent in `NavigationInputController`
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: `W`, `A`, `S`, and `D` produce up, left, down, and right movement intent respectively; no camera movement is performed inside the input controller.
 
-- [ ] T011 [US1] Implement arrow-key movement intent in `NavigationInputController`
+- [X] T011 [US1] Implement arrow-key movement intent in `NavigationInputController`
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Arrow up, left, down, and right produce the same directional intent as corresponding WASD keys; using either keyboard scheme produces equivalent movement intent.
 
-- [ ] T012 [US1] Capture movement keys while the city view is active to prevent page scrolling
+- [X] T012 [US1] Capture movement keys while the city view is active to prevent page scrolling
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/CitySceneCanvas.tsx`
   - Acceptance criteria: WASD and arrow keys are captured for the active city canvas; arrow-key navigation does not scroll the page during focused city navigation; cleanup restores normal behavior when the Phaser game is destroyed.
 
-- [ ] T013 [US1] Implement camera movement update in `CameraController`
+- [X] T013 [US1] Implement camera movement update in `CameraController`
   - Files likely affected: `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/navigation/NavigationState.ts`
   - Acceptance criteria: Directional intent changes camera scroll in the expected direction; diagonal movement is normalized so diagonal speed does not exceed cardinal speed; camera movement is independent of world layer modules.
 
-- [ ] T014 [US1] Implement smooth camera acceleration and stopping in `CameraController`
+- [X] T014 [US1] Implement smooth camera acceleration and stopping in `CameraController`
   - Files likely affected: `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/config/navigationConfig.ts`, `src/features/city-view/scene/navigation/NavigationState.ts`
   - Acceptance criteria: Camera velocity interpolates toward target velocity using configured smoothing; held movement remains controlled over a 30-second session; releasing movement keys slows/stops without visible jitter.
 
-- [ ] T015 [US1] Implement predictable opposite-key conflict handling in movement intent
+- [X] T015 [US1] Implement predictable opposite-key conflict handling in movement intent
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/scene/navigation/navigationTypes.ts`
   - Acceptance criteria: Pressing opposite directions on the same axis does not create jitter; each axis resolves to zero or a documented deterministic result; combined non-conflicting axes still allow controlled diagonal movement.
 
