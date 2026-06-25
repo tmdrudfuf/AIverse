@@ -114,19 +114,19 @@ Each task uses this format:
 
 **Independent Test**: Zoom in and out from the city view and confirm the city remains readable, oriented around the current area of interest, and constrained to supported zoom levels.
 
-- [ ] T018 [US3] Add zoom input intent to `NavigationInputController`
+- [X] T018 [US3] Add zoom input intent to `NavigationInputController`
   - Files likely affected: `src/features/city-view/scene/navigation/NavigationInputController.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Keyboard zoom controls and mouse wheel input produce zoom intent; wheel zoom applies only when interacting with the city canvas; input controller still does not mutate camera zoom directly.
 
-- [ ] T019 [US3] Implement target zoom state and smooth zoom interpolation in `CameraController`
+- [X] T019 [US3] Implement target zoom state and smooth zoom interpolation in `CameraController`
   - Files likely affected: `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/navigation/NavigationState.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Zoom changes interpolate smoothly toward a target zoom; zooming preserves the user's current area of interest; movement remains usable during and after zoom changes.
 
-- [ ] T020 [US3] Enforce configured minimum and maximum zoom limits
+- [X] T020 [US3] Enforce configured minimum and maximum zoom limits
   - Files likely affected: `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/config/navigationConfig.ts`
   - Acceptance criteria: Repeated zoom-in attempts stop at configured max zoom; repeated zoom-out attempts stop at configured min zoom; no broken visual state appears at either limit.
 
-- [ ] T021 [US3] Re-clamp camera scroll after zoom changes
+- [X] T021 [US3] Re-clamp camera scroll after zoom changes
   - Files likely affected: `src/features/city-view/scene/navigation/CameraController.ts`, `src/features/city-view/scene/shared/geometry.ts`
   - Acceptance criteria: Zooming near world edges does not expose unintended blank or broken space; camera bounds remain valid after visible world size changes.
 
