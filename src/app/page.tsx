@@ -1,5 +1,5 @@
-import { CityDashboard } from "@/components/CityDashboard";
+import { CityView } from "@/features/city-view/CityView";
 
 export default function Home() {
-  return <CityDashboard />;
+  return <CityView />;
 }
