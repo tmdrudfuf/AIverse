@@ -1,7 +1,7 @@
-import { CAMERA_SMOOTHING, CAMERA_SPEED, MAX_ZOOM, MIN_ZOOM, ZOOM_SMOOTHING } from "../config/navigationConfig";
+import { MAX_ZOOM, MIN_ZOOM, ZOOM_SMOOTHING } from "../config/navigationConfig";
 import type { Point, WorldBounds } from "../shared/geometry";
 import type { PhaserScene } from "../shared/phaserTypes";
-import type { CameraTarget, NavigationIntent, NavigationMovementConstraint, NavigationState } from "./navigationTypes";
+import type { CameraTarget, NavigationIntent, NavigationState } from "./navigationTypes";
 
 export class CameraController {
   constructor(
@@ -9,31 +9,13 @@ export class CameraController {
     private readonly state: NavigationState,
   ) {}
 
-  update(deltaMs: number, intent: NavigationIntent, constrainMovement?: NavigationMovementConstraint) {
+  update(deltaMs: number, intent: NavigationIntent) {
     this.state.currentIntent = intent;
 
     const deltaSeconds = deltaMs / 1000;
-    const camera = this.scene.cameras.main;
     this.applyZoomIntent(intent, deltaSeconds);
-
-    const targetVelocity = getTargetVelocity(intent);
-    this.state.cameraVelocity = {
-      x: lerp(this.state.cameraVelocity.x, targetVelocity.x, CAMERA_SMOOTHING),
-      y: lerp(this.state.cameraVelocity.y, targetVelocity.y, CAMERA_SMOOTHING),
-    };
-
-    const currentCenter = getCameraCenter(camera.scrollX, camera.scrollY, camera.width, camera.height, camera.zoom);
-    const proposedCenter = {
-      x: currentCenter.x + this.state.cameraVelocity.x * deltaSeconds,
-      y: currentCenter.y + this.state.cameraVelocity.y * deltaSeconds,
-    };
-    const resolvedCenter = constrainMovement ? constrainMovement(currentCenter, proposedCenter) : proposedCenter;
-    const nextX = resolvedCenter.x - camera.width / (2 * camera.zoom);
-    const nextY = resolvedCenter.y - camera.height / (2 * camera.zoom);
-    const movedScroll = clampCameraScroll(nextX, nextY, this.state.bounds, camera.width, camera.height, camera.zoom);
-    camera.setScroll(movedScroll.x, movedScroll.y);
-
     this.updateZoom();
+    this.applyActiveCameraTarget();
   }
 
   setBounds(bounds: WorldBounds) {
@@ -59,6 +41,8 @@ export class CameraController {
       position: point,
       preferredZoom: options.preferredZoom,
     };
+
+    if (options.preferredZoom !== undefined) this.setZoomTarget(options.preferredZoom);
   }
 
   destroy() {
@@ -79,15 +63,29 @@ export class CameraController {
     const targetZoom = clampZoom(this.state.targetZoom, this.state.bounds, camera.width, camera.height);
     this.state.targetZoom = targetZoom;
 
-    const nextZoom = snapZoom(lerp(currentZoom, targetZoom, ZOOM_SMOOTHING), targetZoom);
+    const nextZoom = snapZoom(currentZoom + (targetZoom - currentZoom) * ZOOM_SMOOTHING, targetZoom);
     if (nextZoom === currentZoom) return;
 
-    const center = getCameraCenter(camera.scrollX, camera.scrollY, camera.width, camera.height, currentZoom);
+    const center = {
+      x: camera.scrollX + camera.width / (2 * currentZoom),
+      y: camera.scrollY + camera.height / (2 * currentZoom),
+    };
     camera.setZoom(nextZoom);
 
     const nextX = center.x - camera.width / (2 * nextZoom);
     const nextY = center.y - camera.height / (2 * nextZoom);
     const clamped = clampCameraScroll(nextX, nextY, this.state.bounds, camera.width, camera.height, nextZoom);
+    camera.setScroll(clamped.x, clamped.y);
+  }
+
+  private applyActiveCameraTarget() {
+    const target = this.state.activeCameraTarget;
+    if (!target) return;
+
+    const camera = this.scene.cameras.main;
+    const nextX = target.position.x - camera.width / (2 * camera.zoom);
+    const nextY = target.position.y - camera.height / (2 * camera.zoom);
+    const clamped = clampCameraScroll(nextX, nextY, this.state.bounds, camera.width, camera.height, camera.zoom);
     camera.setScroll(clamped.x, clamped.y);
   }
 
@@ -98,22 +96,6 @@ export class CameraController {
   }
 }
 
-function getTargetVelocity(intent: NavigationIntent): Point {
-  if (!intent.isMoving) return { x: 0, y: 0 };
-
-  const magnitude = Math.hypot(intent.directionX, intent.directionY) || 1;
-  return {
-    x: (intent.directionX / magnitude) * CAMERA_SPEED,
-    y: (intent.directionY / magnitude) * CAMERA_SPEED,
-  };
-}
-
-function getCameraCenter(x: number, y: number, viewportWidth: number, viewportHeight: number, zoom: number): Point {
-  return {
-    x: x + viewportWidth / (2 * zoom),
-    y: y + viewportHeight / (2 * zoom),
-  };
-}
 
 function clampCameraScroll(
   x: number,
@@ -146,9 +128,6 @@ function snapZoom(current: number, target: number) {
   return Math.abs(current - target) < 0.001 ? target : current;
 }
 
-function lerp(current: number, target: number, amount: number) {
-  return current + (target - current) * amount;
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
