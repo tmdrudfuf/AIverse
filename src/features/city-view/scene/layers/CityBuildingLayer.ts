@@ -1,4 +1,6 @@
-import { CITY_BUILDINGS, CITY_COLORS, type CityBuildingDefinition } from "../config/cityWorldConfig";
+import { CITY_BUILDINGS } from "../config/cityBuildingConfig";
+import { CITY_COLORS } from "../config/cityWorldConfig";
+import type { CityBuildingDefinition } from "../buildings/buildingTypes";
 import type { PhaserGraphics, PhaserScene } from "../shared/phaserTypes";
 
 export function createCityBuildingLayer(scene: PhaserScene, g: PhaserGraphics) {
@@ -6,7 +8,10 @@ export function createCityBuildingLayer(scene: PhaserScene, g: PhaserGraphics) {
 }
 
 function drawBuilding(scene: PhaserScene, g: PhaserGraphics, building: CityBuildingDefinition) {
-  const { x, y, width, height, wall, roof, accent, name, active } = building;
+  const { worldPosition, size, visual, name, active } = building;
+  const { x, y } = worldPosition;
+  const { width, height } = size;
+  const { wall, roof, accent } = visual;
 
   g.fillStyle(0x314233, 0.28).fillRect(x + 12, y + 15, width, height);
 
