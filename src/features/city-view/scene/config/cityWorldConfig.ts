@@ -5,6 +5,8 @@ export const CITY_WORLD_BOUNDS = {
   height: 1080,
 } as const;
 
+export const CITY_NAVIGATION_BOUNDS = CITY_WORLD_BOUNDS;
+
 export const CITY_COLORS = {
   ink: 0x253247,
   grass: 0x79b45d,

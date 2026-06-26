@@ -1,7 +1,7 @@
 import { CAMERA_SMOOTHING, CAMERA_SPEED, MAX_ZOOM, MIN_ZOOM, ZOOM_SMOOTHING } from "../config/navigationConfig";
 import type { Point, WorldBounds } from "../shared/geometry";
 import type { PhaserScene } from "../shared/phaserTypes";
-import type { CameraTarget, NavigationIntent, NavigationState } from "./navigationTypes";
+import type { CameraTarget, NavigationIntent, NavigationMovementConstraint, NavigationState } from "./navigationTypes";
 
 export class CameraController {
   constructor(
@@ -9,7 +9,7 @@ export class CameraController {
     private readonly state: NavigationState,
   ) {}
 
-  update(deltaMs: number, intent: NavigationIntent) {
+  update(deltaMs: number, intent: NavigationIntent, constrainMovement?: NavigationMovementConstraint) {
     this.state.currentIntent = intent;
 
     const deltaSeconds = deltaMs / 1000;
@@ -22,8 +22,14 @@ export class CameraController {
       y: lerp(this.state.cameraVelocity.y, targetVelocity.y, CAMERA_SMOOTHING),
     };
 
-    const nextX = camera.scrollX + this.state.cameraVelocity.x * deltaSeconds;
-    const nextY = camera.scrollY + this.state.cameraVelocity.y * deltaSeconds;
+    const currentCenter = getCameraCenter(camera.scrollX, camera.scrollY, camera.width, camera.height, camera.zoom);
+    const proposedCenter = {
+      x: currentCenter.x + this.state.cameraVelocity.x * deltaSeconds,
+      y: currentCenter.y + this.state.cameraVelocity.y * deltaSeconds,
+    };
+    const resolvedCenter = constrainMovement ? constrainMovement(currentCenter, proposedCenter) : proposedCenter;
+    const nextX = resolvedCenter.x - camera.width / (2 * camera.zoom);
+    const nextY = resolvedCenter.y - camera.height / (2 * camera.zoom);
     const movedScroll = clampCameraScroll(nextX, nextY, this.state.bounds, camera.width, camera.height, camera.zoom);
     camera.setScroll(movedScroll.x, movedScroll.y);
 
@@ -32,10 +38,19 @@ export class CameraController {
 
   setBounds(bounds: WorldBounds) {
     this.state.bounds = bounds;
+    const camera = this.scene.cameras.main;
+    camera.setBounds(bounds.x, bounds.y, bounds.width, bounds.height);
+    this.setZoomTarget(this.state.targetZoom);
+
+    const boundedZoom = clampZoom(camera.zoom, bounds, camera.width, camera.height);
+    if (boundedZoom !== camera.zoom) camera.setZoom(boundedZoom);
+
+    this.clampCurrentScroll();
   }
 
   setZoomTarget(zoom: number) {
-    this.state.targetZoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
+    const camera = this.scene.cameras.main;
+    this.state.targetZoom = clampZoom(zoom, this.state.bounds, camera.width, camera.height);
   }
 
   focusWorldPoint(point: Point, options: { preferredZoom?: number; targetId?: string } = {}) {
@@ -61,7 +76,10 @@ export class CameraController {
   private updateZoom() {
     const camera = this.scene.cameras.main;
     const currentZoom = camera.zoom;
-    const nextZoom = snapZoom(lerp(currentZoom, this.state.targetZoom, ZOOM_SMOOTHING), this.state.targetZoom);
+    const targetZoom = clampZoom(this.state.targetZoom, this.state.bounds, camera.width, camera.height);
+    this.state.targetZoom = targetZoom;
+
+    const nextZoom = snapZoom(lerp(currentZoom, targetZoom, ZOOM_SMOOTHING), targetZoom);
     if (nextZoom === currentZoom) return;
 
     const center = getCameraCenter(camera.scrollX, camera.scrollY, camera.width, camera.height, currentZoom);
@@ -70,6 +88,12 @@ export class CameraController {
     const nextX = center.x - camera.width / (2 * nextZoom);
     const nextY = center.y - camera.height / (2 * nextZoom);
     const clamped = clampCameraScroll(nextX, nextY, this.state.bounds, camera.width, camera.height, nextZoom);
+    camera.setScroll(clamped.x, clamped.y);
+  }
+
+  private clampCurrentScroll() {
+    const camera = this.scene.cameras.main;
+    const clamped = clampCameraScroll(camera.scrollX, camera.scrollY, this.state.bounds, camera.width, camera.height, camera.zoom);
     camera.setScroll(clamped.x, clamped.y);
   }
 }
@@ -110,6 +134,12 @@ function clampCameraScroll(
     x: clamp(x, minX, maxX),
     y: clamp(y, minY, maxY),
   };
+}
+
+function clampZoom(zoom: number, bounds: WorldBounds, viewportWidth: number, viewportHeight: number) {
+  const minZoomForBounds = Math.max(MIN_ZOOM, viewportWidth / bounds.width, viewportHeight / bounds.height);
+  const maxZoomForBounds = Math.max(MAX_ZOOM, minZoomForBounds);
+  return clamp(zoom, minZoomForBounds, maxZoomForBounds);
 }
 
 function snapZoom(current: number, target: number) {

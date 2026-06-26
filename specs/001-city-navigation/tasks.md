@@ -164,11 +164,11 @@ Each task uses this format:
 
 **Purpose**: Confirm the feature satisfies the specification and does not add excluded systems.
 
-- [ ] T027 Run TypeScript validation with `npx tsc --noEmit`
+- [X] T027 Run TypeScript validation with `npx tsc --noEmit`
   - Files likely affected: `package.json`, `tsconfig.json`, files under `src/features/city-view/scene/`
   - Acceptance criteria: TypeScript validation completes with no type errors introduced by this feature.
 
-- [ ] T028 Run production build with `npm run build`
+- [X] T028 Run production build with `npm run build`
   - Files likely affected: `package.json`, `src/app/`, `src/features/city-view/`
   - Acceptance criteria: Production build completes; client-only Phaser import boundaries remain valid.
 
