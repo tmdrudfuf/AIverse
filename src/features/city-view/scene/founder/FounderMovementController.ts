@@ -1,6 +1,6 @@
 import { FOUNDER_MOVE_SPEED } from "../config/founderConfig";
 import type { Point } from "../shared/geometry";
-import type { NavigationMovementResolver } from "../navigation/NavigationMovementResolver";
+import type { MovementResolver } from "../shared/movementTypes";
 import type { NavigationIntent } from "../navigation/navigationTypes";
 import { FounderEntity } from "./FounderEntity";
 import type { FounderFacingDirection } from "./founderTypes";
@@ -8,7 +8,7 @@ import type { FounderFacingDirection } from "./founderTypes";
 export class FounderMovementController {
   constructor(
     private readonly founder: FounderEntity,
-    private readonly movementResolver: NavigationMovementResolver,
+    private readonly movementResolver: MovementResolver,
   ) {}
 
   update(deltaMs: number, intent: NavigationIntent) {

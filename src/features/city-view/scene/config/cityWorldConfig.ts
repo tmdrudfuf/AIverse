@@ -1,3 +1,5 @@
+export const CITY_WORLD_SCENE_KEY = "city-world";
+
 export const CITY_WORLD_BOUNDS = {
   x: 0,
   y: 0,

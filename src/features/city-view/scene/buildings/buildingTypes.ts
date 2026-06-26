@@ -1,4 +1,5 @@
 import type { Point } from "../shared/geometry";
+import type { FounderFacingDirection } from "../founder/founderTypes";
 
 export type Rect = Point & {
   width: number;
@@ -37,7 +38,9 @@ export type CityBuildingDefinition = {
 
 export type BuildingEntryRequest = {
   buildingId: string;
-  destinationSceneKey: string;
+  companyName: string;
+  officeSceneKey: string;
   returnSceneKey: string;
   returnPosition: Point;
+  returnFacing?: FounderFacingDirection;
 };

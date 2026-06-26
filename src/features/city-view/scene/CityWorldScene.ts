@@ -4,7 +4,7 @@ import { BuildingRegistry } from "./buildings/BuildingRegistry";
 import { BuildingTransitionController } from "./buildings/BuildingTransitionController";
 import type { CityBuildingDefinition } from "./buildings/buildingTypes";
 import { CITY_BUILDINGS } from "./config/cityBuildingConfig";
-import { CITY_COLORS, CITY_NAVIGATION_BOUNDS } from "./config/cityWorldConfig";
+import { CITY_COLORS, CITY_NAVIGATION_BOUNDS, CITY_WORLD_SCENE_KEY } from "./config/cityWorldConfig";
 import { FOUNDER_INITIAL_POSITION, FOUNDER_SPAWN_SEARCH_RADIUS_TILES } from "./config/founderConfig";
 import { INITIAL_ZOOM } from "./config/navigationConfig";
 import { FounderEntity } from "./founder/FounderEntity";
@@ -16,6 +16,7 @@ import { NavigationInputController } from "./navigation/NavigationInputControlle
 import { NavigationMovementResolver } from "./navigation/NavigationMovementResolver";
 import { createNavigationState } from "./navigation/NavigationState";
 import type { NavigationState } from "./navigation/navigationTypes";
+import type { CityReturnPayload } from "./office/officeTypes";
 import type { Point } from "./shared/geometry";
 import type { PhaserRuntime } from "./shared/phaserTypes";
 import { CityCollisionMap } from "./tilemap/CityCollisionMap";
@@ -32,6 +33,15 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
     private buildingInteractionController?: BuildingInteractionController;
     private buildingInteractionPrompt?: BuildingInteractionPrompt;
     private buildingTransitionController?: BuildingTransitionController;
+    private returnPayload?: CityReturnPayload;
+
+    constructor() {
+      super({ key: CITY_WORLD_SCENE_KEY });
+    }
+
+    init(payload?: CityReturnPayload) {
+      this.returnPayload = payload;
+    }
 
     preload() {
       loadCityTilemapAssets(this);
@@ -56,8 +66,9 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       createCityBuildingLayer(this, graphics);
       createCityDecorationLayer(this, graphics);
 
-      const founderSpawn = resolveFounderSpawn(cityCollisionMap);
+      const founderSpawn = resolveFounderSpawn(cityCollisionMap, this.returnPayload);
       this.founderEntity = new FounderEntity(this, founderSpawn);
+      if (this.returnPayload?.returnFacing) this.founderEntity.setFacing(this.returnPayload.returnFacing);
       this.founderMovementController = new FounderMovementController(this.founderEntity, this.navigationMovementResolver);
 
       const buildingRegistry = new BuildingRegistry(CITY_BUILDINGS);
@@ -80,7 +91,16 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionPrompt?.update(activeBuilding);
 
       if (this.buildingInteractionController?.consumeInteractionPressed(activeBuilding) && activeBuilding) {
-        this.buildingTransitionController?.createEntryRequest(activeBuilding, this.founderEntity.position);
+        const entryRequest = this.buildingTransitionController?.createEntryRequest(
+          activeBuilding,
+          this.founderEntity.position,
+          this.founderEntity.state.facing,
+        );
+
+        if (entryRequest) {
+          this.scene.start(entryRequest.officeSceneKey, entryRequest);
+          return;
+        }
       }
 
       this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
@@ -102,20 +122,26 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionController = undefined;
       this.buildingInteractionPrompt = undefined;
       this.buildingTransitionController = undefined;
+      this.returnPayload = undefined;
       this.navigationState = undefined;
     }
   };
 }
 
-function resolveFounderSpawn(collisionMap: CityCollisionMap): Point {
-  const configuredSpawn = { ...FOUNDER_INITIAL_POSITION };
+function resolveFounderSpawn(collisionMap: CityCollisionMap, returnPayload?: CityReturnPayload): Point {
+  if (returnPayload && !collisionMap.isBlockedWorldPoint(returnPayload.returnPosition)) {
+    return { ...returnPayload.returnPosition };
+  }
+
+  const configuredSpawn = returnPayload ? { ...returnPayload.returnPosition } : { ...FOUNDER_INITIAL_POSITION };
   if (!collisionMap.isBlockedWorldPoint(configuredSpawn)) return configuredSpawn;
 
   const openSpawn = collisionMap.findNearestOpenTileCenter(configuredSpawn, FOUNDER_SPAWN_SEARCH_RADIUS_TILES);
   if (openSpawn) return openSpawn;
 
+  const spawnSource = returnPayload ? "city return" : "Founder";
   throw new Error(
-    `Founder spawn ${configuredSpawn.x},${configuredSpawn.y} is blocked and no open tile was found within ${FOUNDER_SPAWN_SEARCH_RADIUS_TILES} tiles.`,
+    `${spawnSource} spawn ${configuredSpawn.x},${configuredSpawn.y} is blocked and no open tile was found within ${FOUNDER_SPAWN_SEARCH_RADIUS_TILES} tiles.`,
   );
 }
 
