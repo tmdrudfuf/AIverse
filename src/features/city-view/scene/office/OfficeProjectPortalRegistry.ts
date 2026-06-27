@@ -134,6 +134,7 @@ export function createProjectPortalState(): ProjectPortalState {
     selectedProjectId: PROJECTS[0].id,
     selectedWorkspaceSectionIndex: 0,
     selectedTaskIndex: 0,
+    selectedEmployeeIndex: 0,
     projects: PROJECTS.map((project) => ({
       ...project,
       linkedServices: project.linkedServices.map((service) => ({ ...service })),
@@ -143,6 +144,8 @@ export function createProjectPortalState(): ProjectPortalState {
     workspaces: createWorkspaces(),
     repositorySummaries: {},
     taskCollections: {},
+    employees: [],
+    employeeAssignments: {},
   };
 }
 

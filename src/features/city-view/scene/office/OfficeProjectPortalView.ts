@@ -1,7 +1,7 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
-import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
 
@@ -54,6 +54,11 @@ export class OfficeProjectPortalView {
 
     if (state.viewMode === "task-detail") {
       this.renderTaskDetail(state);
+      return;
+    }
+
+    if (state.viewMode === "employee-selection") {
+      this.renderEmployeeSelection(state);
       return;
     }
 
@@ -259,12 +264,36 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 238, wrapText(task.description, 70), bodyStyle());
 
     this.addText(this.panelX + 28, this.panelY + 304, "Next Action:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 334, "Assign Employee (placeholder)", rowStyle(true, false));
-
-    const actionText = getLastTaskActionText(state, task);
-    if (actionText) this.addText(this.panelX + 44, this.panelY + 366, actionText, mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 334, "Assign Employee", rowStyle(true, false));
 
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Enter/Space action", instructionStyle()).setOrigin(1, 0.5);
+  }
+
+  private renderEmployeeSelection(state: ProjectPortalState) {
+    this.addText(this.panelX + 28, this.panelY + 24, "Assign Employee", titleStyle());
+
+    if (state.employees.length === 0) {
+      this.addText(this.panelX + 44, this.panelY + 84, "Loading employees...", bodyStyle());
+      this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
+      return;
+    }
+
+    state.employees.forEach((employee, index) => {
+      const rowY = this.panelY + 84 + index * 34;
+      const marker = index === state.selectedEmployeeIndex ? ">" : " ";
+      const rowText = `${marker} ${employee.name.padEnd(16, " ")} ${employee.role.padEnd(10, " ")} ${employee.status}`;
+      this.addText(this.panelX + 44, rowY, rowText, rowStyle(true, index === state.selectedEmployeeIndex));
+    });
+
+    const selectedEmployee = getSelectedEmployee(state);
+    if (selectedEmployee) {
+      this.addText(this.panelX + 28, this.panelY + 238, "Capabilities:", headingStyle());
+      this.addText(this.panelX + 44, this.panelY + 268, wrapText(selectedEmployee.capabilities.join(", "), 70), bodyStyle());
+      this.addText(this.panelX + 28, this.panelY + 312, "Description:", headingStyle());
+      this.addText(this.panelX + 44, this.panelY + 340, wrapText(selectedEmployee.description, 72), mutedStyle());
+    }
+
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Up/Down select  Enter/Space assign", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private addText(x: number, y: number, text: string, style: Phaser.Types.GameObjects.Text.TextStyle) {
@@ -284,16 +313,15 @@ function getLastActionText(state: ProjectPortalState, project: ProjectPortalProj
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;
 }
 
-function getLastTaskActionText(state: ProjectPortalState, task: ProjectTask) {
-  if (state.lastTaskPlaceholderAction?.taskId !== task.id) return undefined;
-  return `Placeholder action recorded: ${state.lastTaskPlaceholderAction.actionLabel}`;
-}
-
 function getSelectedTask(state: ProjectPortalState) {
   const project = state.projects[state.selectedProjectIndex];
   const projectId = state.selectedTaskProjectId ?? project?.id;
   const collection = projectId ? state.taskCollections[projectId] : undefined;
   return collection?.tasks[state.selectedTaskIndex];
+}
+
+function getSelectedEmployee(state: ProjectPortalState): Employee | undefined {
+  return state.employees[state.selectedEmployeeIndex];
 }
 
 function wrapText(text: string, maxLength: number) {

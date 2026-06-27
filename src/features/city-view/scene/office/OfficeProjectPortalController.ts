@@ -1,4 +1,6 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { EmployeeService } from "./employees/EmployeeService";
+import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
@@ -21,14 +23,17 @@ export class OfficeProjectPortalController {
   private readonly view: OfficeProjectPortalView;
   private readonly repositoryService: GitHubRepositoryService;
   private readonly taskService: ProjectTaskService;
+  private readonly employeeService: EmployeeService;
   private repositoryRequestVersion = 0;
   private taskRequestVersion = 0;
+  private employeeRequestVersion = 0;
 
   constructor(scene: PhaserScene) {
     this.state = createProjectPortalState();
     this.view = new OfficeProjectPortalView(scene, this.state);
     this.repositoryService = new GitHubRepositoryService(new MockGitHubRepositoryProvider());
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
+    this.employeeService = new EmployeeService(new MockEmployeeProvider());
   }
 
   open() {
@@ -76,7 +81,12 @@ export class OfficeProjectPortalController {
       return;
     }
 
-    this.updateTaskDetailInput(input);
+    if (this.state.viewMode === "task-detail") {
+      this.updateTaskDetailInput(input);
+      return;
+    }
+
+    this.updateEmployeeSelectionInput(input);
   }
 
   isOpen() {
@@ -92,14 +102,17 @@ export class OfficeProjectPortalController {
     this.state.selectedRepositoryProjectId = undefined;
     this.state.selectedTaskProjectId = undefined;
     this.state.selectedTaskId = undefined;
+    this.state.selectedEmployeeIndex = 0;
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
+    this.employeeRequestVersion += 1;
     this.view.hide();
   }
 
   destroy() {
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
+    this.employeeRequestVersion += 1;
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
@@ -210,17 +223,23 @@ export class OfficeProjectPortalController {
     }
 
     if (input.actionPressed || input.enterPressed) {
-      const project = this.getSelectedProject();
-      const task = this.getSelectedTask();
-      if (!project || !task) return;
+      void this.openEmployeeSelection();
+    }
+  }
 
-      this.state.lastTaskPlaceholderAction = {
-        projectId: project.id,
-        taskId: task.id,
-        actionLabel: "Assign Employee",
-        status: "placeholder",
-      };
+  private updateEmployeeSelectionInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "task-detail";
+      this.employeeRequestVersion += 1;
       this.view.render(this.state);
+      return;
+    }
+
+    if (input.upPressed) this.moveEmployeeSelection(-1);
+    if (input.downPressed) this.moveEmployeeSelection(1);
+
+    if (input.actionPressed || input.enterPressed) {
+      this.assignSelectedEmployeeToSelectedTask();
     }
   }
 
@@ -258,6 +277,27 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
+  private async openEmployeeSelection() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    const task = this.getSelectedTask();
+    if (!projectId || !task) return;
+
+    this.state.selectedTaskId = task.id;
+    this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(this.state.employees.length - 1, 0));
+    this.state.viewMode = "employee-selection";
+    this.view.render(this.state);
+
+    const requestVersion = this.employeeRequestVersion + 1;
+    this.employeeRequestVersion = requestVersion;
+
+    const employees = await this.employeeService.getEmployees();
+    if (!this.shouldApplyEmployees(projectId, task.id, requestVersion)) return;
+
+    this.state.employees = employees;
+    this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(employees.length - 1, 0));
+    this.view.render(this.state);
+  }
+
   private shouldApplyRepositorySummary(projectId: string, requestVersion: number) {
     return (
       this.state.isOpen &&
@@ -276,6 +316,52 @@ export class OfficeProjectPortalController {
     );
   }
 
+  private shouldApplyEmployees(projectId: string, taskId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "employee-selection" &&
+      this.state.selectedTaskProjectId === projectId &&
+      this.state.selectedTaskId === taskId &&
+      this.employeeRequestVersion === requestVersion
+    );
+  }
+
+  private assignSelectedEmployeeToSelectedTask() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    const collection = projectId ? this.state.taskCollections[projectId] : undefined;
+    const task = collection?.tasks[this.state.selectedTaskIndex];
+    const employee = this.state.employees[this.state.selectedEmployeeIndex];
+    if (!projectId || !collection || !task || !employee) return;
+
+    const updatedTask = {
+      ...task,
+      assignee: employee.name,
+      assigneeId: employee.id,
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.state.taskCollections[projectId] = {
+      ...collection,
+      tasks: collection.tasks.map((item) => (item.id === task.id ? updatedTask : item)),
+    };
+    this.state.employees = this.state.employees.map((item) =>
+      item.id === employee.id
+        ? {
+            ...item,
+            assignedTaskId: task.id,
+            currentProjectId: projectId,
+          }
+        : item,
+    );
+    this.state.employeeAssignments = {
+      ...this.state.employeeAssignments,
+      [task.id]: employee.id,
+    };
+    this.state.selectedTaskId = task.id;
+    this.state.viewMode = "task-detail";
+    this.view.render(this.state);
+  }
+
   private moveProjectSelection(delta: number) {
     const nextIndex = clamp(this.state.selectedProjectIndex + delta, 0, this.state.projects.length - 1);
     if (nextIndex === this.state.selectedProjectIndex) return;
@@ -287,7 +373,9 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskProjectId = undefined;
     this.state.selectedTaskId = undefined;
     this.state.selectedTaskIndex = 0;
+    this.state.selectedEmployeeIndex = 0;
     this.taskRequestVersion += 1;
+    this.employeeRequestVersion += 1;
     this.view.render(this.state);
   }
 
@@ -312,6 +400,16 @@ export class OfficeProjectPortalController {
 
     this.state.selectedTaskIndex = nextIndex;
     this.state.selectedTaskId = collection.tasks[nextIndex]?.id;
+    this.view.render(this.state);
+  }
+
+  private moveEmployeeSelection(delta: number) {
+    if (this.state.employees.length === 0) return;
+
+    const nextIndex = clamp(this.state.selectedEmployeeIndex + delta, 0, this.state.employees.length - 1);
+    if (nextIndex === this.state.selectedEmployeeIndex) return;
+
+    this.state.selectedEmployeeIndex = nextIndex;
     this.view.render(this.state);
   }
 

@@ -10,6 +10,7 @@ export type ProjectTask = {
   priority: TaskPriority;
   projectId: string;
   assignee?: string;
+  assigneeId?: string;
   estimatedHours?: number;
   createdAt: string;
   updatedAt: string;
