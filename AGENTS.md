@@ -25,5 +25,5 @@ Do not implement application features directly from a prompt unless the active f
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/005-project-portal-selection/plan.md
+shell commands, and other important information, read specs/006-project-workspace-view/plan.md
 <!-- SPECKIT END -->

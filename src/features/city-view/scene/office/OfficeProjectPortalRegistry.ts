@@ -1,4 +1,9 @@
-import type { ProjectPortalProject, ProjectPortalServiceStatus, ProjectPortalState } from "./OfficeProjectPortalTypes";
+import type {
+  ProjectPortalProject,
+  ProjectPortalServiceStatus,
+  ProjectPortalState,
+  ProjectWorkspace,
+} from "./OfficeProjectPortalTypes";
 
 const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
   {
@@ -76,6 +81,50 @@ const PROJECTS: ProjectPortalProject[] = [
   },
 ];
 
+const WORKSPACES: Record<string, ProjectWorkspace> = {
+  "daily-proof": {
+    projectId: "daily-proof",
+    projectName: "Daily Proof",
+    sections: [
+      {
+        id: "repository",
+        label: "Repository",
+        status: "Not connected",
+        enabled: false,
+        placeholder: true,
+      },
+      {
+        id: "firebase",
+        label: "Firebase",
+        status: "Not connected",
+        enabled: false,
+        placeholder: true,
+      },
+      {
+        id: "analytics",
+        label: "Analytics",
+        status: "Placeholder",
+        enabled: false,
+        placeholder: true,
+      },
+      {
+        id: "tasks",
+        label: "Tasks",
+        status: "Placeholder",
+        enabled: false,
+        placeholder: true,
+      },
+      {
+        id: "ai-agents",
+        label: "AI Agents",
+        status: "Placeholder",
+        enabled: false,
+        placeholder: true,
+      },
+    ],
+  },
+};
+
 export function createProjectPortalState(): ProjectPortalState {
   return {
     isOpen: false,
@@ -83,15 +132,29 @@ export function createProjectPortalState(): ProjectPortalState {
     viewMode: "list",
     selectedProjectIndex: 0,
     selectedProjectId: PROJECTS[0].id,
+    selectedWorkspaceSectionIndex: 0,
     projects: PROJECTS.map((project) => ({
       ...project,
       linkedServices: project.linkedServices.map((service) => ({ ...service })),
       nextAction: { ...project.nextAction },
     })),
     services: createLinkedServices(),
+    workspaces: createWorkspaces(),
   };
 }
 
 function createLinkedServices() {
   return PLACEHOLDER_SERVICES.map((service) => ({ ...service }));
+}
+
+function createWorkspaces() {
+  return Object.fromEntries(
+    Object.entries(WORKSPACES).map(([projectId, workspace]) => [
+      projectId,
+      {
+        ...workspace,
+        sections: workspace.sections.map((section) => ({ ...section })),
+      },
+    ]),
+  );
 }

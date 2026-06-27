@@ -45,7 +45,12 @@ export class OfficeProjectPortalController {
       return;
     }
 
-    this.updateDetailInput(input);
+    if (this.state.viewMode === "detail") {
+      this.updateDetailInput(input);
+      return;
+    }
+
+    this.updateWorkspaceInput(input);
   }
 
   isOpen() {
@@ -73,8 +78,8 @@ export class OfficeProjectPortalController {
       return;
     }
 
-    if (input.upPressed) this.moveSelection(-1);
-    if (input.downPressed) this.moveSelection(1);
+    if (input.upPressed) this.moveProjectSelection(-1);
+    if (input.downPressed) this.moveProjectSelection(1);
 
     if (input.actionPressed || input.enterPressed) {
       this.state.viewMode = "detail";
@@ -93,22 +98,65 @@ export class OfficeProjectPortalController {
       const project = this.getSelectedProject();
       if (!project || !project.nextAction.enabled) return;
 
-      this.state.lastPlaceholderAction = {
-        projectId: project.id,
-        actionLabel: project.nextAction.label,
-        status: "placeholder",
-      };
-      console.info("Project portal placeholder action", this.state.lastPlaceholderAction);
+      const workspace = this.state.workspaces[project.id];
+      if (!workspace) return;
+
+      this.state.selectedWorkspaceSectionIndex = clamp(
+        this.state.selectedWorkspaceSectionIndex,
+        0,
+        workspace.sections.length - 1,
+      );
+      this.state.viewMode = "workspace";
       this.view.render(this.state);
     }
   }
 
-  private moveSelection(delta: number) {
+  private updateWorkspaceInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "detail";
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.upPressed) this.moveWorkspaceSelection(-1);
+    if (input.downPressed) this.moveWorkspaceSelection(1);
+
+    if (input.actionPressed || input.enterPressed) {
+      const project = this.getSelectedProject();
+      const workspace = project ? this.state.workspaces[project.id] : undefined;
+      const section = workspace?.sections[this.state.selectedWorkspaceSectionIndex];
+      if (!project || !section?.enabled) return;
+
+      this.state.lastPlaceholderAction = {
+        projectId: project.id,
+        actionLabel: section.label,
+        status: "placeholder",
+        workspaceSectionId: section.id,
+      };
+      console.info("Project workspace placeholder action", this.state.lastPlaceholderAction);
+      this.view.render(this.state);
+    }
+  }
+
+  private moveProjectSelection(delta: number) {
     const nextIndex = clamp(this.state.selectedProjectIndex + delta, 0, this.state.projects.length - 1);
     if (nextIndex === this.state.selectedProjectIndex) return;
 
     this.state.selectedProjectIndex = nextIndex;
     this.state.selectedProjectId = this.state.projects[nextIndex]?.id ?? "";
+    this.state.selectedWorkspaceSectionIndex = 0;
+    this.view.render(this.state);
+  }
+
+  private moveWorkspaceSelection(delta: number) {
+    const project = this.getSelectedProject();
+    const workspace = project ? this.state.workspaces[project.id] : undefined;
+    if (!workspace) return;
+
+    const nextIndex = clamp(this.state.selectedWorkspaceSectionIndex + delta, 0, workspace.sections.length - 1);
+    if (nextIndex === this.state.selectedWorkspaceSectionIndex) return;
+
+    this.state.selectedWorkspaceSectionIndex = nextIndex;
     this.view.render(this.state);
   }
 

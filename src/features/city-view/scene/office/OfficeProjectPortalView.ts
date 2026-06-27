@@ -40,6 +40,11 @@ export class OfficeProjectPortalView {
   render(state: ProjectPortalState) {
     this.content.removeAll(true);
 
+    if (state.viewMode === "workspace") {
+      this.renderWorkspace(state);
+      return;
+    }
+
     if (state.viewMode === "detail") {
       this.renderDetail(state);
       return;
@@ -109,6 +114,33 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, instructionText, instructionStyle()).setOrigin(1, 0.5);
   }
 
+  private renderWorkspace(state: ProjectPortalState) {
+    const project = state.projects[state.selectedProjectIndex];
+    const workspace = project ? state.workspaces[project.id] : undefined;
+    if (!workspace) return;
+
+    this.addText(this.panelX + 28, this.panelY + 24, `${workspace.projectName} Workspace`, titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 78, "Sections", headingStyle());
+
+    workspace.sections.forEach((section, index) => {
+      const rowY = this.panelY + 116 + index * 38;
+      const marker = index === state.selectedWorkspaceSectionIndex ? ">" : " ";
+      const status = section.enabled ? section.status : `${section.status} (not available)`;
+      this.addText(
+        this.panelX + 44,
+        rowY,
+        `${marker} ${section.label.padEnd(12, " ")} ${status}`,
+        rowStyle(section.enabled, index === state.selectedWorkspaceSectionIndex),
+      );
+    });
+
+    const lastActionText = getLastActionText(state, project);
+    if (lastActionText) this.addText(this.panelX + 44, this.panelY + 340, lastActionText, mutedStyle());
+
+    this.addText(this.panelX + 28, this.panelY + 354, "Workspace sections are placeholders only.", mutedStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Up/Down select", instructionStyle()).setOrigin(1, 0.5);
+  }
+
   private addText(x: number, y: number, text: string, style: Phaser.Types.GameObjects.Text.TextStyle) {
     const textObject = this.scene.add.text(x, y, text, style);
     this.content.add(textObject);
@@ -120,6 +152,7 @@ function getNextActionText(project: ProjectPortalProject) {
   if (!project.nextAction.enabled) return `${project.nextAction.label} (not available)`;
   return `${project.nextAction.label} (placeholder)`;
 }
+
 function getLastActionText(state: ProjectPortalState, project: ProjectPortalProject) {
   if (state.lastPlaceholderAction?.projectId !== project.id) return undefined;
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;

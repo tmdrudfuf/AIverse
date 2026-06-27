@@ -2,7 +2,7 @@ export type ProjectPortalProjectStatus = "Active" | "Planned" | "Coming Soon";
 
 export type ProjectPortalProjectType = "Company" | "Portfolio" | "Lab";
 
-export type ProjectPortalViewMode = "list" | "detail";
+export type ProjectPortalViewMode = "list" | "detail" | "workspace";
 
 export type ProjectPortalServiceStatus = {
   id: string;
@@ -29,10 +29,27 @@ export type ProjectPortalProject = {
   nextAction: ProjectPortalNextAction;
 };
 
+export type ProjectWorkspaceSectionId = "repository" | "firebase" | "analytics" | "tasks" | "ai-agents";
+
+export type ProjectWorkspaceSection = {
+  id: ProjectWorkspaceSectionId;
+  label: string;
+  status: "Not connected" | "Placeholder";
+  enabled: boolean;
+  placeholder: true;
+};
+
+export type ProjectWorkspace = {
+  projectId: string;
+  projectName: string;
+  sections: ProjectWorkspaceSection[];
+};
+
 export type ProjectPortalPlaceholderAction = {
   projectId: string;
   actionLabel: string;
   status: "placeholder";
+  workspaceSectionId?: ProjectWorkspaceSectionId;
 };
 
 export type ProjectPortalState = {
@@ -41,7 +58,9 @@ export type ProjectPortalState = {
   viewMode: ProjectPortalViewMode;
   selectedProjectIndex: number;
   selectedProjectId: string;
+  selectedWorkspaceSectionIndex: number;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
   projects: ProjectPortalProject[];
   services: ProjectPortalServiceStatus[];
+  workspaces: Record<string, ProjectWorkspace>;
 };
