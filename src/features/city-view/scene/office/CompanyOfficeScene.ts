@@ -96,9 +96,18 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
 
       const actionPressed = this.officeActionInputController?.consumeActionPressed() ?? false;
       const escapePressed = this.officeActionInputController?.consumeEscapePressed() ?? false;
+      const upPressed = this.officeActionInputController?.consumeUpPressed() ?? false;
+      const downPressed = this.officeActionInputController?.consumeDownPressed() ?? false;
+      const enterPressed = this.officeActionInputController?.consumeEnterPressed() ?? false;
 
       if (this.officeProjectPortalController?.isOpen()) {
-        this.officeProjectPortalController.updateInput(actionPressed, escapePressed);
+        this.officeProjectPortalController.updateInput({
+          actionPressed,
+          escapePressed,
+          upPressed,
+          downPressed,
+          enterPressed,
+        });
         return;
       }
 
