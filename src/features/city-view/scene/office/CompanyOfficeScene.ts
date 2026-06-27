@@ -15,6 +15,7 @@ import { OfficeExitController } from "./OfficeExitController";
 import { OfficeInteractionController } from "./OfficeInteractionController";
 import { OfficeInteractionPrompt } from "./OfficeInteractionPrompt";
 import { OfficeInteractiveObjectRegistry } from "./OfficeInteractiveObjectRegistry";
+import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { OfficeSpawnManager } from "./OfficeSpawnManager";
 import { OfficeTileMovementResolver } from "./OfficeTileMovementResolver";
 import { createOfficeTilemapLayer, loadOfficeTilemapAssets, type OfficeTilemapLayers } from "./OfficeTilemapLayer";
@@ -34,6 +35,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeActionInputController?: OfficeActionInputController;
     private officeInteractionController?: OfficeInteractionController;
     private officeInteractionPrompt?: OfficeInteractionPrompt;
+    private officeProjectPortalController?: OfficeProjectPortalController;
     private officeTilemapLayers?: OfficeTilemapLayers;
     private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
@@ -80,6 +82,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const objectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);
       this.officeInteractionController = new OfficeInteractionController(objectRegistry);
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
+      this.officeProjectPortalController = new OfficeProjectPortalController(this);
       this.officeMovementResolver = new OfficeTileMovementResolver(this.officeCollisionMap);
       this.founderMovementController = new FounderMovementController(this.founderEntity, this.officeMovementResolver);
       this.officeExitController = new OfficeExitController(this, this.office, this.requireSpawnRequest());
@@ -89,10 +92,18 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     }
 
     update(_: number, delta: number) {
-      const intent = this.navigationInputController?.getIntent();
-      if (!intent || !this.founderEntity || !this.spawnRequest) return;
+      if (!this.founderEntity || !this.spawnRequest) return;
 
       const actionPressed = this.officeActionInputController?.consumeActionPressed() ?? false;
+      const escapePressed = this.officeActionInputController?.consumeEscapePressed() ?? false;
+
+      if (this.officeProjectPortalController?.isOpen()) {
+        this.officeProjectPortalController.updateInput(actionPressed, escapePressed);
+        return;
+      }
+
+      const intent = this.navigationInputController?.getIntent();
+      if (!intent) return;
 
       this.founderMovementController?.update(delta, intent);
       this.officeExitController?.update(this.founderEntity.position);
@@ -109,7 +120,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           return;
         }
 
-        this.officeInteractionController?.consumePlaceholderInteraction();
+        const interactionResult = this.officeInteractionController?.consumePlaceholderInteraction();
+        if (interactionResult?.action === "use_computer") {
+          this.officeInteractionPrompt?.update(undefined);
+          this.officeProjectPortalController?.open();
+        }
       }
 
       this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
@@ -139,6 +154,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeActionInputController?.destroy(this);
       this.officeInteractionController?.destroy();
       this.officeInteractionPrompt?.destroy();
+      this.officeProjectPortalController?.destroy();
       this.officeExitController?.destroy();
       this.officeVisualLayer?.destroy();
       this.navigationInputController = undefined;
@@ -149,6 +165,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeActionInputController = undefined;
       this.officeInteractionController = undefined;
       this.officeInteractionPrompt = undefined;
+      this.officeProjectPortalController = undefined;
       this.officeExitController = undefined;
       this.officeVisualLayer = undefined;
       this.officeTilemapLayers = undefined;
