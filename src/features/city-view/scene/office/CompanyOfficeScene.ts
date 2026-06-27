@@ -1,3 +1,4 @@
+import type { Rect } from "../buildings/buildingTypes";
 import { INITIAL_ZOOM } from "../config/navigationConfig";
 import { FounderEntity } from "../founder/FounderEntity";
 import { FounderMovementController } from "../founder/FounderMovementController";
@@ -5,11 +6,14 @@ import { CameraController } from "../navigation/CameraController";
 import { NavigationInputController } from "../navigation/NavigationInputController";
 import { createNavigationState } from "../navigation/NavigationState";
 import type { NavigationState } from "../navigation/navigationTypes";
+import type { Point } from "../shared/geometry";
 import type { PhaserRuntime } from "../shared/phaserTypes";
 import { DAILY_PROOF_OFFICE_SCENE_KEY } from "./officeConfig";
-import { OfficeBoundsMovementResolver } from "./OfficeBoundsMovementResolver";
+import { OfficeCollisionMap } from "./OfficeCollisionMap";
 import { OfficeExitController } from "./OfficeExitController";
 import { OfficeSpawnManager } from "./OfficeSpawnManager";
+import { OfficeTileMovementResolver } from "./OfficeTileMovementResolver";
+import { createOfficeTilemapLayer, loadOfficeTilemapAssets, type OfficeTilemapLayers } from "./OfficeTilemapLayer";
 import { OfficeVisualLayer } from "./OfficeVisualLayer";
 import type { OfficeDefinition, OfficeSpawnRequest } from "./officeTypes";
 
@@ -20,9 +24,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private cameraController?: CameraController;
     private founderEntity?: FounderEntity;
     private founderMovementController?: FounderMovementController;
-    private officeMovementResolver?: OfficeBoundsMovementResolver;
+    private officeMovementResolver?: OfficeTileMovementResolver;
     private officeVisualLayer?: OfficeVisualLayer;
     private officeExitController?: OfficeExitController;
+    private officeTilemapLayers?: OfficeTilemapLayers;
+    private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
     private spawnRequest?: OfficeSpawnRequest;
 
@@ -34,27 +40,37 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.spawnRequest = payload;
     }
 
+    preload() {
+      loadOfficeTilemapAssets(this, this.resolveConfiguredOffice());
+    }
+
     create() {
-      const spawnResolution = new OfficeSpawnManager().resolveSpawn(this.spawnRequest);
-      this.office = spawnResolution.office;
-      this.spawnRequest = spawnResolution.spawnRequest;
-      validateOfficeSpawn(this.office);
+      const configuredOffice = this.resolveConfiguredOffice();
 
       this.cameras.main.setBackgroundColor(0x202a3a);
-      this.navigationState = createNavigationState(this.office.worldBounds, INITIAL_ZOOM);
+      this.navigationState = createNavigationState(configuredOffice.worldBounds, INITIAL_ZOOM);
       this.navigationInputController = new NavigationInputController();
       this.cameraController = new CameraController(this, this.navigationState);
-      this.cameraController.setBounds(this.office.worldBounds);
+      this.cameraController.setBounds(configuredOffice.worldBounds);
       this.navigationInputController.setup(this, this.navigationState);
       this.events.once("shutdown", () => this.destroyOfficeControllers());
 
+      this.officeTilemapLayers = createOfficeTilemapLayer(this, configuredOffice);
+      this.officeCollisionMap = new OfficeCollisionMap(this.officeTilemapLayers.collision);
+      this.office = {
+        ...configuredOffice,
+        founderSpawn: this.officeTilemapLayers.markers.founderSpawn,
+        exitZone: this.officeTilemapLayers.markers.exitZone,
+      };
+      validateOfficeLayout(this.office, this.officeCollisionMap);
+
       this.officeVisualLayer = new OfficeVisualLayer(this, this.office);
       this.founderEntity = new FounderEntity(this, this.office.founderSpawn);
-      if (this.spawnRequest.returnFacing) this.founderEntity.setFacing(this.spawnRequest.returnFacing);
+      if (this.spawnRequest?.returnFacing) this.founderEntity.setFacing(this.spawnRequest.returnFacing);
 
-      this.officeMovementResolver = new OfficeBoundsMovementResolver(this.office.walkableBounds);
+      this.officeMovementResolver = new OfficeTileMovementResolver(this.officeCollisionMap);
       this.founderMovementController = new FounderMovementController(this.founderEntity, this.officeMovementResolver);
-      this.officeExitController = new OfficeExitController(this, this.office, this.spawnRequest);
+      this.officeExitController = new OfficeExitController(this, this.office, this.requireSpawnRequest());
       this.officeExitController.setup();
 
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
@@ -79,6 +95,22 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController?.update(delta, intent);
     }
 
+    private resolveConfiguredOffice() {
+      if (this.office && this.spawnRequest) return this.office;
+
+      const spawnResolution = new OfficeSpawnManager().resolveSpawn(this.spawnRequest);
+      this.office = spawnResolution.office;
+      this.spawnRequest = spawnResolution.spawnRequest;
+      return this.office;
+    }
+
+    private requireSpawnRequest() {
+      if (!this.spawnRequest) {
+        throw new Error("CompanyOfficeScene requires an OfficeSpawnRequest. Enter the office through a city building interaction.");
+      }
+      return this.spawnRequest;
+    }
+
     private destroyOfficeControllers() {
       this.navigationInputController?.destroy();
       this.cameraController?.destroy();
@@ -92,6 +124,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.founderEntity = undefined;
       this.officeExitController = undefined;
       this.officeVisualLayer = undefined;
+      this.officeTilemapLayers = undefined;
+      this.officeCollisionMap = undefined;
       this.office = undefined;
       this.spawnRequest = undefined;
       this.navigationState = undefined;
@@ -99,18 +133,20 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
   };
 }
 
-function validateOfficeSpawn(office: OfficeDefinition) {
-  const spawn = office.founderSpawn;
-  const bounds = office.walkableBounds;
-  const isInside =
-    spawn.x >= bounds.x &&
-    spawn.x <= bounds.x + bounds.width &&
-    spawn.y >= bounds.y &&
-    spawn.y <= bounds.y + bounds.height;
+function validateOfficeLayout(office: OfficeDefinition, collisionMap: OfficeCollisionMap) {
+  validateOpenPoint(office.sceneKey, "founder spawn", office.founderSpawn, collisionMap);
+  validateOpenPoint(office.sceneKey, "exit zone center", getRectCenter(office.exitZone), collisionMap);
+}
 
-  if (!isInside) {
-    throw new Error(
-      `Office ${office.sceneKey} founder spawn ${spawn.x},${spawn.y} is outside walkable bounds ${bounds.x},${bounds.y},${bounds.width},${bounds.height}.`,
-    );
-  }
+function validateOpenPoint(sceneKey: string, label: string, point: Point, collisionMap: OfficeCollisionMap) {
+  if (!collisionMap.isBlockedWorldPoint(point)) return;
+
+  throw new Error(`Office ${sceneKey} ${label} ${point.x},${point.y} is blocked by the collision layer.`);
+}
+
+function getRectCenter(rect: Rect): Point {
+  return {
+    x: rect.x + rect.width / 2,
+    y: rect.y + rect.height / 2,
+  };
 }

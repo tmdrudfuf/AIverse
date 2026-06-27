@@ -11,5 +11,24 @@ export const OFFICE_DEFINITIONS: OfficeDefinition[] = [
     walkableBounds: { x: 48, y: 72, width: 864, height: 468 },
     founderSpawn: { x: 480, y: 490 },
     exitZone: { x: 420, y: 510, width: 120, height: 54 },
+    tilemap: {
+      mapKey: "office-daily-proof-map",
+      mapUrl: "/assets/office/daily-proof/daily-proof-office.tmj",
+      tilesets: [
+        {
+          name: "office-tiles",
+          key: "office-daily-proof-tiles",
+          url: "/assets/office/daily-proof/office-tiles.png",
+        },
+      ],
+      layers: {
+        floor: "Floor Layer",
+        wall: "Wall Layer",
+        decoration: "Decoration Layer",
+        collision: "Collision Layer",
+        objects: "Object Layer",
+        interaction: "Interaction Layer",
+      },
+    },
   },
 ];
