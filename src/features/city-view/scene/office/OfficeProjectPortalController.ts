@@ -333,11 +333,22 @@ export class OfficeProjectPortalController {
     const employee = this.state.employees[this.state.selectedEmployeeIndex];
     if (!projectId || !collection || !task || !employee) return;
 
+    const assignedAt = new Date().toISOString();
+    const activity = {
+      id: `${task.id}-employee-assigned-${Date.now()}`,
+      taskId: task.id,
+      type: "employee_assigned" as const,
+      message: `${employee.name} assigned to task`,
+      createdAt: assignedAt,
+      actorId: employee.id,
+      actorName: employee.name,
+    };
     const updatedTask = {
       ...task,
       assignee: employee.name,
       assigneeId: employee.id,
-      updatedAt: new Date().toISOString(),
+      updatedAt: assignedAt,
+      activityLog: [activity, ...(task.activityLog ?? [])],
     };
 
     this.state.taskCollections[projectId] = {

@@ -12,6 +12,7 @@ const DAILY_PROOF_TASKS: ProjectTask[] = [
     estimatedHours: 6,
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z",
+    activityLog: [],
   },
   {
     id: "daily-proof-camera-navigation-polish",
@@ -23,6 +24,7 @@ const DAILY_PROOF_TASKS: ProjectTask[] = [
     estimatedHours: 3,
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z",
+    activityLog: [],
   },
   {
     id: "daily-proof-repository-integration",
@@ -34,6 +36,7 @@ const DAILY_PROOF_TASKS: ProjectTask[] = [
     estimatedHours: 2,
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z",
+    activityLog: [],
   },
 ];
 
@@ -42,7 +45,10 @@ export class MockProjectTaskProvider implements ProjectTaskProvider {
     if (projectId === "daily-proof") {
       return {
         projectId,
-        tasks: DAILY_PROOF_TASKS.map((task) => ({ ...task })),
+        tasks: DAILY_PROOF_TASKS.map((task) => ({
+          ...task,
+          activityLog: task.activityLog ? task.activityLog.map((activity) => ({ ...activity })) : undefined,
+        })),
       };
     }
 

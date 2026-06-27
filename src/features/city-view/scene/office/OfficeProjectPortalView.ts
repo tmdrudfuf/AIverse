@@ -260,11 +260,21 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 28, this.panelY + 134, `Assigned: ${task.assignee ?? "None"}`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 162, `Estimated Hours: ${task.estimatedHours ?? "None"}`, bodyStyle());
 
-    this.addText(this.panelX + 28, this.panelY + 208, "Description:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 238, wrapText(task.description, 70), bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 196, "Description:", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 224, wrapText(task.description, 70), bodyStyle());
 
-    this.addText(this.panelX + 28, this.panelY + 304, "Next Action:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 334, "Assign Employee", rowStyle(true, false));
+    this.addText(this.panelX + 28, this.panelY + 284, "Next Action:", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 312, "Assign Employee", rowStyle(true, false));
+
+    this.addText(this.panelX + 28, this.panelY + 348, "Activity:", headingStyle());
+    const activityLog = task.activityLog ?? [];
+    if (activityLog.length === 0) {
+      this.addText(this.panelX + 44, this.panelY + 376, "No activity yet.", mutedStyle());
+    } else {
+      activityLog.slice(0, 3).forEach((activity, index) => {
+        this.addText(this.panelX + 44, this.panelY + 374 + index * 18, wrapText(activity.message, 68), mutedStyle());
+      });
+    }
 
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Enter/Space action", instructionStyle()).setOrigin(1, 0.5);
   }
