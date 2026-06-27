@@ -129,20 +129,28 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
 }
 
 function resolveFounderSpawn(collisionMap: CityCollisionMap, returnPayload?: CityReturnPayload): Point {
-  if (returnPayload && !collisionMap.isBlockedWorldPoint(returnPayload.returnPosition)) {
-    return { ...returnPayload.returnPosition };
+  const returnPosition = getValidReturnPosition(returnPayload);
+  if (returnPosition && !collisionMap.isBlockedWorldPoint(returnPosition)) {
+    return { ...returnPosition };
   }
 
-  const configuredSpawn = returnPayload ? { ...returnPayload.returnPosition } : { ...FOUNDER_INITIAL_POSITION };
+  const configuredSpawn = returnPosition ? { ...returnPosition } : { ...FOUNDER_INITIAL_POSITION };
   if (!collisionMap.isBlockedWorldPoint(configuredSpawn)) return configuredSpawn;
 
   const openSpawn = collisionMap.findNearestOpenTileCenter(configuredSpawn, FOUNDER_SPAWN_SEARCH_RADIUS_TILES);
   if (openSpawn) return openSpawn;
 
-  const spawnSource = returnPayload ? "city return" : "Founder";
+  const spawnSource = returnPosition ? "city return" : "Founder";
   throw new Error(
     `${spawnSource} spawn ${configuredSpawn.x},${configuredSpawn.y} is blocked and no open tile was found within ${FOUNDER_SPAWN_SEARCH_RADIUS_TILES} tiles.`,
   );
+}
+
+function getValidReturnPosition(returnPayload?: CityReturnPayload): Point | undefined {
+  const position = returnPayload?.returnPosition;
+  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) return undefined;
+
+  return position;
 }
 
 function validateBuildingInteractionZones(buildings: CityBuildingDefinition[], collisionMap: CityCollisionMap) {

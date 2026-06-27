@@ -9,8 +9,12 @@ import type { NavigationState } from "../navigation/navigationTypes";
 import type { Point } from "../shared/geometry";
 import type { PhaserRuntime } from "../shared/phaserTypes";
 import { DAILY_PROOF_OFFICE_SCENE_KEY } from "./officeConfig";
+import { OfficeActionInputController } from "./OfficeActionInputController";
 import { OfficeCollisionMap } from "./OfficeCollisionMap";
 import { OfficeExitController } from "./OfficeExitController";
+import { OfficeInteractionController } from "./OfficeInteractionController";
+import { OfficeInteractionPrompt } from "./OfficeInteractionPrompt";
+import { OfficeInteractiveObjectRegistry } from "./OfficeInteractiveObjectRegistry";
 import { OfficeSpawnManager } from "./OfficeSpawnManager";
 import { OfficeTileMovementResolver } from "./OfficeTileMovementResolver";
 import { createOfficeTilemapLayer, loadOfficeTilemapAssets, type OfficeTilemapLayers } from "./OfficeTilemapLayer";
@@ -27,6 +31,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeMovementResolver?: OfficeTileMovementResolver;
     private officeVisualLayer?: OfficeVisualLayer;
     private officeExitController?: OfficeExitController;
+    private officeActionInputController?: OfficeActionInputController;
+    private officeInteractionController?: OfficeInteractionController;
+    private officeInteractionPrompt?: OfficeInteractionPrompt;
     private officeTilemapLayers?: OfficeTilemapLayers;
     private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
@@ -53,6 +60,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController = new CameraController(this, this.navigationState);
       this.cameraController.setBounds(configuredOffice.worldBounds);
       this.navigationInputController.setup(this, this.navigationState);
+      this.officeActionInputController = new OfficeActionInputController();
+      this.officeActionInputController.setup(this);
       this.events.once("shutdown", () => this.destroyOfficeControllers());
 
       this.officeTilemapLayers = createOfficeTilemapLayer(this, configuredOffice);
@@ -68,10 +77,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.founderEntity = new FounderEntity(this, this.office.founderSpawn);
       if (this.spawnRequest?.returnFacing) this.founderEntity.setFacing(this.spawnRequest.returnFacing);
 
+      const objectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);
+      this.officeInteractionController = new OfficeInteractionController(objectRegistry);
+      this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
       this.officeMovementResolver = new OfficeTileMovementResolver(this.officeCollisionMap);
       this.founderMovementController = new FounderMovementController(this.founderEntity, this.officeMovementResolver);
       this.officeExitController = new OfficeExitController(this, this.office, this.requireSpawnRequest());
-      this.officeExitController.setup();
 
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController.update(0, this.navigationState.currentIntent);
@@ -81,15 +92,25 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const intent = this.navigationInputController?.getIntent();
       if (!intent || !this.founderEntity || !this.spawnRequest) return;
 
-      this.officeExitController?.update(this.founderEntity.position);
-      const returnPayload = this.officeExitController?.consumeReturnPayload(this.founderEntity.state.facing);
-      if (returnPayload) {
-        this.scene.start(this.spawnRequest.returnSceneKey, returnPayload);
-        return;
-      }
+      const actionPressed = this.officeActionInputController?.consumeActionPressed() ?? false;
 
       this.founderMovementController?.update(delta, intent);
       this.officeExitController?.update(this.founderEntity.position);
+      this.officeInteractionController?.update(this.founderEntity.position);
+
+      const isExitActive = this.officeExitController?.isExitActive() ?? false;
+      const activeObject = isExitActive ? undefined : this.officeInteractionController?.getActiveObject();
+      this.officeInteractionPrompt?.update(activeObject);
+
+      if (actionPressed) {
+        const returnPayload = this.officeExitController?.createReturnPayload(this.founderEntity.state.facing);
+        if (returnPayload) {
+          this.scene.start(this.spawnRequest.returnSceneKey, returnPayload);
+          return;
+        }
+
+        this.officeInteractionController?.consumePlaceholderInteraction();
+      }
 
       this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController?.update(delta, intent);
@@ -115,6 +136,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.navigationInputController?.destroy();
       this.cameraController?.destroy();
       this.founderEntity?.destroy();
+      this.officeActionInputController?.destroy(this);
+      this.officeInteractionController?.destroy();
+      this.officeInteractionPrompt?.destroy();
       this.officeExitController?.destroy();
       this.officeVisualLayer?.destroy();
       this.navigationInputController = undefined;
@@ -122,6 +146,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.founderMovementController = undefined;
       this.officeMovementResolver = undefined;
       this.founderEntity = undefined;
+      this.officeActionInputController = undefined;
+      this.officeInteractionController = undefined;
+      this.officeInteractionPrompt = undefined;
       this.officeExitController = undefined;
       this.officeVisualLayer = undefined;
       this.officeTilemapLayers = undefined;

@@ -3,18 +3,9 @@ import type { FounderFacingDirection } from "../founder/founderTypes";
 import type { Point } from "../shared/geometry";
 import type { PhaserScene } from "../shared/phaserTypes";
 
-const EXIT_KEY_CODE = "Space";
-
 export class OfficeExitController {
   private readonly prompt: Phaser.GameObjects.Text;
-  private pendingExit = false;
   private isFounderInExitZone = false;
-  private readonly handleKeyDown = (event: KeyboardEvent) => {
-    if (event.code !== EXIT_KEY_CODE) return;
-
-    event.preventDefault();
-    this.pendingExit = true;
-  };
 
   constructor(
     private readonly scene: PhaserScene,
@@ -34,20 +25,17 @@ export class OfficeExitController {
       .setVisible(false);
   }
 
-  setup() {
-    this.scene.input.keyboard?.addCapture("SPACE");
-    window.addEventListener("keydown", this.handleKeyDown);
-  }
-
-  update(founderPosition: Point) {
+  update(founderPosition: Point, showPrompt = true) {
     this.isFounderInExitZone = isPointInExitZone(founderPosition, this.office);
-    this.prompt.setVisible(this.isFounderInExitZone);
+    this.prompt.setVisible(showPrompt && this.isFounderInExitZone);
   }
 
-  consumeReturnPayload(currentFacing?: FounderFacingDirection): CityReturnPayload | undefined {
-    const shouldExit = this.pendingExit && this.isFounderInExitZone;
-    this.pendingExit = false;
-    if (!shouldExit) return undefined;
+  isExitActive() {
+    return this.isFounderInExitZone;
+  }
+
+  createReturnPayload(currentFacing?: FounderFacingDirection): CityReturnPayload | undefined {
+    if (!this.isFounderInExitZone) return undefined;
 
     return {
       buildingId: this.spawnRequest.buildingId,
@@ -57,10 +45,7 @@ export class OfficeExitController {
   }
 
   destroy() {
-    window.removeEventListener("keydown", this.handleKeyDown);
-    this.scene.input.keyboard?.removeCapture("SPACE");
     this.prompt.destroy();
-    this.pendingExit = false;
     this.isFounderInExitZone = false;
   }
 }

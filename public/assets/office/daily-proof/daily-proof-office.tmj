@@ -4139,7 +4139,34 @@
                        "id":  6,
                        "name":  "Interaction Layer",
                        "objects":  [
-
+                                       {
+                                           "height":  72,
+                                           "id":  7,
+                                           "name":  "computer_01",
+                                           "rotation":  0,
+                                           "type":  "computer",
+                                           "visible":  true,
+                                           "width":  144,
+                                           "x":  408,
+                                           "y":  264,
+                                           "properties":  [
+                                                              {
+                                                                  "name":  "displayName",
+                                                                  "type":  "string",
+                                                                  "value":  "Computer"
+                                                              },
+                                                              {
+                                                                  "name":  "action",
+                                                                  "type":  "string",
+                                                                  "value":  "use_computer"
+                                                              },
+                                                              {
+                                                                  "name":  "enabled",
+                                                                  "type":  "bool",
+                                                                  "value":  true
+                                                              }
+                                                          ]
+                                       }
                                    ],
                        "opacity":  1,
                        "type":  "objectgroup",
@@ -4149,7 +4176,7 @@
                    }
                ],
     "nextlayerid":  7,
-    "nextobjectid":  7,
+    "nextobjectid":  8,
     "orientation":  "orthogonal",
     "renderorder":  "right-down",
     "tiledversion":  "1.11.2",

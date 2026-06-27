@@ -30,6 +30,27 @@ export type OfficeLayoutMarkers = {
   reservedZones: Record<string, Rect>;
 };
 
+export type OfficeInteractiveObjectType = "computer" | "desk" | "whiteboard" | "workstation";
+
+export type OfficeInteractiveAction = "use_computer" | "inspect" | "open_workspace";
+
+export type OfficeInteractiveObject = {
+  id: string;
+  type: OfficeInteractiveObjectType;
+  displayName: string;
+  interactionZone: Rect;
+  enabled: boolean;
+  action: OfficeInteractiveAction;
+  markerId: string;
+};
+
+export type OfficeInteractionResult = {
+  objectId: string;
+  action: OfficeInteractiveAction;
+  status: "placeholder";
+  message: string;
+};
+
 export type OfficeDefinition = {
   sceneKey: string;
   buildingId: string;
