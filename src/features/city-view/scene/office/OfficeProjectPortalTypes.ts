@@ -1,8 +1,11 @@
+import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
+import type { TaskCollection } from "./tasks/ProjectTaskTypes";
+
 export type ProjectPortalProjectStatus = "Active" | "Planned" | "Coming Soon";
 
 export type ProjectPortalProjectType = "Company" | "Portfolio" | "Lab";
 
-export type ProjectPortalViewMode = "list" | "detail" | "workspace";
+export type ProjectPortalViewMode = "list" | "detail" | "workspace" | "repository-detail" | "task-list" | "task-detail";
 
 export type ProjectPortalServiceStatus = {
   id: string;
@@ -34,7 +37,7 @@ export type ProjectWorkspaceSectionId = "repository" | "firebase" | "analytics" 
 export type ProjectWorkspaceSection = {
   id: ProjectWorkspaceSectionId;
   label: string;
-  status: "Not connected" | "Placeholder";
+  status: "Not connected" | "Placeholder" | "Mock connected" | "3 tasks";
   enabled: boolean;
   placeholder: true;
 };
@@ -52,6 +55,13 @@ export type ProjectPortalPlaceholderAction = {
   workspaceSectionId?: ProjectWorkspaceSectionId;
 };
 
+export type ProjectTaskPlaceholderAction = {
+  projectId: string;
+  taskId: string;
+  actionLabel: "Assign Employee";
+  status: "placeholder";
+};
+
 export type ProjectPortalState = {
   isOpen: boolean;
   justOpened: boolean;
@@ -59,8 +69,15 @@ export type ProjectPortalState = {
   selectedProjectIndex: number;
   selectedProjectId: string;
   selectedWorkspaceSectionIndex: number;
+  selectedRepositoryProjectId?: string;
+  selectedTaskProjectId?: string;
+  selectedTaskIndex: number;
+  selectedTaskId?: string;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
+  lastTaskPlaceholderAction?: ProjectTaskPlaceholderAction;
   projects: ProjectPortalProject[];
   services: ProjectPortalServiceStatus[];
   workspaces: Record<string, ProjectWorkspace>;
+  repositorySummaries: Record<string, GitHubRepositorySummary>;
+  taskCollections: Record<string, TaskCollection>;
 };

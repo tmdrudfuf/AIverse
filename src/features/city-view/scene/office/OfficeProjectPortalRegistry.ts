@@ -89,8 +89,8 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
       {
         id: "repository",
         label: "Repository",
-        status: "Not connected",
-        enabled: false,
+        status: "Mock connected",
+        enabled: true,
         placeholder: true,
       },
       {
@@ -110,8 +110,8 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
       {
         id: "tasks",
         label: "Tasks",
-        status: "Placeholder",
-        enabled: false,
+        status: "3 tasks",
+        enabled: true,
         placeholder: true,
       },
       {
@@ -133,6 +133,7 @@ export function createProjectPortalState(): ProjectPortalState {
     selectedProjectIndex: 0,
     selectedProjectId: PROJECTS[0].id,
     selectedWorkspaceSectionIndex: 0,
+    selectedTaskIndex: 0,
     projects: PROJECTS.map((project) => ({
       ...project,
       linkedServices: project.linkedServices.map((service) => ({ ...service })),
@@ -140,6 +141,8 @@ export function createProjectPortalState(): ProjectPortalState {
     })),
     services: createLinkedServices(),
     workspaces: createWorkspaces(),
+    repositorySummaries: {},
+    taskCollections: {},
   };
 }
 

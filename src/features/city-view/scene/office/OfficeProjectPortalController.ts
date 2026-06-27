@@ -1,7 +1,12 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
+import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
+import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
+import { ProjectTaskService } from "./tasks/ProjectTaskService";
 
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
@@ -14,10 +19,16 @@ export type OfficeProjectPortalInput = {
 export class OfficeProjectPortalController {
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
+  private readonly repositoryService: GitHubRepositoryService;
+  private readonly taskService: ProjectTaskService;
+  private repositoryRequestVersion = 0;
+  private taskRequestVersion = 0;
 
   constructor(scene: PhaserScene) {
     this.state = createProjectPortalState();
     this.view = new OfficeProjectPortalView(scene, this.state);
+    this.repositoryService = new GitHubRepositoryService(new MockGitHubRepositoryProvider());
+    this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
   }
 
   open() {
@@ -50,7 +61,22 @@ export class OfficeProjectPortalController {
       return;
     }
 
-    this.updateWorkspaceInput(input);
+    if (this.state.viewMode === "workspace") {
+      this.updateWorkspaceInput(input);
+      return;
+    }
+
+    if (this.state.viewMode === "repository-detail") {
+      this.updateRepositoryDetailInput(input);
+      return;
+    }
+
+    if (this.state.viewMode === "task-list") {
+      this.updateTaskListInput(input);
+      return;
+    }
+
+    this.updateTaskDetailInput(input);
   }
 
   isOpen() {
@@ -63,10 +89,17 @@ export class OfficeProjectPortalController {
     this.state.isOpen = false;
     this.state.justOpened = false;
     this.state.viewMode = "list";
+    this.state.selectedRepositoryProjectId = undefined;
+    this.state.selectedTaskProjectId = undefined;
+    this.state.selectedTaskId = undefined;
+    this.repositoryRequestVersion += 1;
+    this.taskRequestVersion += 1;
     this.view.hide();
   }
 
   destroy() {
+    this.repositoryRequestVersion += 1;
+    this.taskRequestVersion += 1;
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
@@ -127,15 +160,120 @@ export class OfficeProjectPortalController {
       const section = workspace?.sections[this.state.selectedWorkspaceSectionIndex];
       if (!project || !section?.enabled) return;
 
-      this.state.lastPlaceholderAction = {
-        projectId: project.id,
-        actionLabel: section.label,
-        status: "placeholder",
-        workspaceSectionId: section.id,
-      };
-      console.info("Project workspace placeholder action", this.state.lastPlaceholderAction);
+      if (section.id === "repository") {
+        void this.openRepositoryDetail(project.id);
+        return;
+      }
+
+      if (section.id === "tasks") {
+        void this.openTaskList(project.id);
+      }
+    }
+  }
+
+  private updateRepositoryDetailInput(input: OfficeProjectPortalInput) {
+    if (!input.escapePressed) return;
+
+    this.state.viewMode = "workspace";
+    this.state.selectedRepositoryProjectId = undefined;
+    this.repositoryRequestVersion += 1;
+    this.view.render(this.state);
+  }
+
+  private updateTaskListInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "workspace";
+      this.state.selectedTaskId = undefined;
+      this.taskRequestVersion += 1;
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.upPressed) this.moveTaskSelection(-1);
+    if (input.downPressed) this.moveTaskSelection(1);
+
+    if (input.actionPressed || input.enterPressed) {
+      const task = this.getSelectedTask();
+      if (!task) return;
+
+      this.state.selectedTaskId = task.id;
+      this.state.viewMode = "task-detail";
       this.view.render(this.state);
     }
+  }
+
+  private updateTaskDetailInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "task-list";
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.actionPressed || input.enterPressed) {
+      const project = this.getSelectedProject();
+      const task = this.getSelectedTask();
+      if (!project || !task) return;
+
+      this.state.lastTaskPlaceholderAction = {
+        projectId: project.id,
+        taskId: task.id,
+        actionLabel: "Assign Employee",
+        status: "placeholder",
+      };
+      this.view.render(this.state);
+    }
+  }
+
+  private async openRepositoryDetail(projectId: string) {
+    const requestVersion = this.repositoryRequestVersion + 1;
+    this.repositoryRequestVersion = requestVersion;
+    this.state.selectedRepositoryProjectId = projectId;
+    this.state.repositorySummaries[projectId] = createLoadingRepositorySummary();
+    this.state.viewMode = "repository-detail";
+    this.view.render(this.state);
+
+    const summary = await this.repositoryService.getRepositorySummary(projectId);
+    if (!this.shouldApplyRepositorySummary(projectId, requestVersion)) return;
+
+    this.state.repositorySummaries[projectId] = summary;
+    this.view.render(this.state);
+  }
+
+  private async openTaskList(projectId: string) {
+    this.state.selectedTaskProjectId = projectId;
+    this.state.selectedTaskId = undefined;
+    this.state.selectedTaskIndex = 0;
+    this.state.viewMode = "task-list";
+    this.view.render(this.state);
+
+    const requestVersion = this.taskRequestVersion + 1;
+    this.taskRequestVersion = requestVersion;
+
+    const collection = await this.taskService.getTaskCollection(projectId);
+    if (!this.shouldApplyTaskCollection(projectId, requestVersion)) return;
+
+    this.state.taskCollections[projectId] = collection;
+    this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(collection.tasks.length - 1, 0));
+    this.state.selectedTaskId = collection.tasks[this.state.selectedTaskIndex]?.id;
+    this.view.render(this.state);
+  }
+
+  private shouldApplyRepositorySummary(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "repository-detail" &&
+      this.state.selectedRepositoryProjectId === projectId &&
+      this.repositoryRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplyTaskCollection(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail") &&
+      this.state.selectedTaskProjectId === projectId &&
+      this.taskRequestVersion === requestVersion
+    );
   }
 
   private moveProjectSelection(delta: number) {
@@ -145,6 +283,11 @@ export class OfficeProjectPortalController {
     this.state.selectedProjectIndex = nextIndex;
     this.state.selectedProjectId = this.state.projects[nextIndex]?.id ?? "";
     this.state.selectedWorkspaceSectionIndex = 0;
+    this.state.selectedRepositoryProjectId = undefined;
+    this.state.selectedTaskProjectId = undefined;
+    this.state.selectedTaskId = undefined;
+    this.state.selectedTaskIndex = 0;
+    this.taskRequestVersion += 1;
     this.view.render(this.state);
   }
 
@@ -160,9 +303,42 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
+  private moveTaskSelection(delta: number) {
+    const collection = this.getSelectedTaskCollection();
+    if (!collection || collection.tasks.length === 0) return;
+
+    const nextIndex = clamp(this.state.selectedTaskIndex + delta, 0, collection.tasks.length - 1);
+    if (nextIndex === this.state.selectedTaskIndex) return;
+
+    this.state.selectedTaskIndex = nextIndex;
+    this.state.selectedTaskId = collection.tasks[nextIndex]?.id;
+    this.view.render(this.state);
+  }
+
   private getSelectedProject() {
     return this.state.projects[this.state.selectedProjectIndex];
   }
+
+  private getSelectedTaskCollection() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    return projectId ? this.state.taskCollections[projectId] : undefined;
+  }
+
+  private getSelectedTask() {
+    const collection = this.getSelectedTaskCollection();
+    return collection?.tasks[this.state.selectedTaskIndex];
+  }
+}
+
+function createLoadingRepositorySummary(): GitHubRepositorySummary {
+  return {
+    owner: "",
+    name: "",
+    defaultBranch: "",
+    openIssueCount: 0,
+    openPullRequestCount: 0,
+    connectionStatus: "loading",
+  };
 }
 
 function clamp(value: number, min: number, max: number) {
