@@ -148,6 +148,7 @@ export function createProjectPortalState(): ProjectPortalState {
     employeeRecommendations: {},
     projectManagementSuggestions: {},
     employees: [],
+    employeeSimulations: {},
     employeeAssignments: {},
     workSessions: {},
   };
