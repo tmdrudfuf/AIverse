@@ -10,6 +10,8 @@ import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
 import { ProjectTaskService } from "./tasks/ProjectTaskService";
 import type { ProjectTask, TaskStatus } from "./tasks/ProjectTaskTypes";
+import { MockWorkSessionProvider } from "./work-sessions/MockWorkSessionProvider";
+import { WorkSessionService } from "./work-sessions/WorkSessionService";
 
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
@@ -25,6 +27,7 @@ export class OfficeProjectPortalController {
   private readonly repositoryService: GitHubRepositoryService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
+  private readonly workSessionService: WorkSessionService;
   private repositoryRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
@@ -35,6 +38,7 @@ export class OfficeProjectPortalController {
     this.repositoryService = new GitHubRepositoryService(new MockGitHubRepositoryProvider());
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
+    this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
   }
 
   open() {
@@ -104,6 +108,7 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskProjectId = undefined;
     this.state.selectedTaskId = undefined;
     this.state.selectedEmployeeIndex = 0;
+    this.state.selectedWorkSessionId = undefined;
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
@@ -232,7 +237,7 @@ export class OfficeProjectPortalController {
       }
 
       if (taskAction === "start_work") {
-        this.startPlaceholderWorkOnSelectedTask();
+        void this.startPlaceholderWorkOnSelectedTask();
         return;
       }
 
@@ -429,29 +434,58 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
-  private startPlaceholderWorkOnSelectedTask() {
+  private async startPlaceholderWorkOnSelectedTask() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
     const task = this.getSelectedTask();
-    if (!task?.assignee || task.status !== "Todo") return;
+    if (!projectId || !task?.assignee || task.status !== "Todo") return;
 
-    const employee = this.state.employees.find((item) => item.id === task.assigneeId);
-    const actorId = employee?.id ?? task.assigneeId;
-    const actorName = employee?.name ?? task.assignee;
+    const employee = task.assigneeId
+      ? this.state.employees.find((item) => item.id === task.assigneeId)
+      : this.state.employees.find((item) => item.name === task.assignee);
+    const employeeId = employee?.id ?? task.assigneeId ?? task.assignee;
+    const employeeName = employee?.name ?? task.assignee;
     const startedAt = new Date().toISOString();
+    const workSession = await this.workSessionService.createWorkSession({
+      taskId: task.id,
+      projectId,
+      employeeId,
+      employeeName,
+      startedAt,
+    });
+
+    if (!this.shouldApplyStartedWorkSession(projectId, task.id)) return;
+
+    const activityId = `${task.id}-work-started-${Date.now()}`;
+    const workSessionWithActivity = {
+      ...workSession,
+      activityIds: [activityId, ...(workSession.activityIds ?? [])],
+    };
     const updatedTask = this.appendTaskActivity(task, {
-      id: `${task.id}-work-started-${Date.now()}`,
+      id: activityId,
       taskId: task.id,
       type: "work_started" as const,
-      message: `${actorName} started placeholder work`,
+      message: `${employeeName} started placeholder work session`,
       createdAt: startedAt,
-      actorId,
-      actorName,
+      actorId: employeeId,
+      actorName: employeeName,
     }, startedAt);
 
+    this.state.workSessions[task.id] = [workSessionWithActivity, ...(this.state.workSessions[task.id] ?? [])];
+    this.state.selectedWorkSessionId = workSessionWithActivity.id;
     this.updateSelectedTask({
       ...updatedTask,
       status: "In Progress",
     });
     this.view.render(this.state);
+  }
+
+  private shouldApplyStartedWorkSession(projectId: string, taskId: string) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "task-detail" &&
+      this.state.selectedTaskProjectId === projectId &&
+      this.state.selectedTaskId === taskId
+    );
   }
 
   private moveSelectedTaskToReview() {
@@ -547,6 +581,7 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskId = undefined;
     this.state.selectedTaskIndex = 0;
     this.state.selectedEmployeeIndex = 0;
+    this.state.selectedWorkSessionId = undefined;
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
     this.view.render(this.state);

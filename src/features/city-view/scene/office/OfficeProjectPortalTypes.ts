@@ -1,6 +1,7 @@
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
+import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
 export type ProjectPortalProjectStatus = "Active" | "Planned" | "Coming Soon";
 
@@ -75,6 +76,7 @@ export type ProjectPortalState = {
   selectedTaskIndex: number;
   selectedTaskId?: string;
   selectedEmployeeIndex: number;
+  selectedWorkSessionId?: string;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
   projects: ProjectPortalProject[];
   services: ProjectPortalServiceStatus[];
@@ -83,4 +85,5 @@ export type ProjectPortalState = {
   taskCollections: Record<string, TaskCollection>;
   employees: Employee[];
   employeeAssignments: Record<string, string>;
+  workSessions: Record<string, WorkSession[]>;
 };

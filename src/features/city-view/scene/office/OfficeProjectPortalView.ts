@@ -261,6 +261,14 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 28, this.panelY + 134, `Assigned: ${getTaskAssigneeText(state, task)}`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 162, `Estimated Hours: ${task.estimatedHours ?? "None"}`, bodyStyle());
 
+    const latestWorkSession = getLatestWorkSession(state, task);
+    if (latestWorkSession) {
+      this.addText(this.panelX + 390, this.panelY + 78, "Work Session:", headingStyle());
+      this.addText(this.panelX + 406, this.panelY + 106, `Provider: ${latestWorkSession.provider}`, bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 132, `Status: ${latestWorkSession.status}`, bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 158, wrapText(`Started: ${latestWorkSession.startedAt}`, 30), bodyStyle());
+    }
+
     this.addText(this.panelX + 28, this.panelY + 196, "Description:", headingStyle());
     this.addText(this.panelX + 44, this.panelY + 224, wrapText(task.description, 70), bodyStyle());
 
@@ -349,6 +357,10 @@ function getTaskNextActionText(task: ProjectTask) {
   if (task.status === "Review") return "Mark Done";
   if (task.status === "In Progress") return "Move to Review";
   return task.assignee ? "Start Work (placeholder)" : "Assign Employee";
+}
+
+function getLatestWorkSession(state: ProjectPortalState, task: ProjectTask) {
+  return state.workSessions[task.id]?.[0];
 }
 
 function wrapText(text: string, maxLength: number) {
