@@ -1,4 +1,5 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { EmployeeService } from "./employees/EmployeeService";
@@ -11,7 +12,7 @@ import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
 import { ProjectTaskService } from "./tasks/ProjectTaskService";
-import type { ProjectTask, TaskStatus } from "./tasks/ProjectTaskTypes";
+import type { ProjectTask, TaskActivity, TaskStatus } from "./tasks/ProjectTaskTypes";
 import { MockWorkSessionProvider } from "./work-sessions/MockWorkSessionProvider";
 import { WorkSessionService } from "./work-sessions/WorkSessionService";
 
@@ -31,11 +32,13 @@ export class OfficeProjectPortalController {
   private readonly employeeService: EmployeeService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
+  private readonly aiProjectManagerService: AIProjectManagerService;
   private repositoryRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
   private taskAnalysisRequestVersion = 0;
   private employeeRecommendationRequestVersion = 0;
+  private projectManagerRequestVersion = 0;
 
   constructor(scene: PhaserScene) {
     this.state = createProjectPortalState();
@@ -45,6 +48,7 @@ export class OfficeProjectPortalController {
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
+    this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
   }
 
   open() {
@@ -120,6 +124,7 @@ export class OfficeProjectPortalController {
     this.employeeRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
+    this.projectManagerRequestVersion += 1;
     this.view.hide();
   }
 
@@ -129,6 +134,7 @@ export class OfficeProjectPortalController {
     this.employeeRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
+    this.projectManagerRequestVersion += 1;
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
@@ -169,6 +175,7 @@ export class OfficeProjectPortalController {
         workspace.sections.length - 1,
       );
       this.state.viewMode = "workspace";
+      void this.prepareProjectManagementSuggestion(project.id);
       this.view.render(this.state);
     }
   }
@@ -307,6 +314,7 @@ export class OfficeProjectPortalController {
       this.state.selectedTaskId = existingCollection.tasks[this.state.selectedTaskIndex]?.id;
       void this.prepareTaskAnalyses(existingCollection.tasks, projectId);
       void this.prepareSelectedEmployeeRecommendation();
+      void this.prepareProjectManagementSuggestion(projectId);
       this.view.render(this.state);
       return;
     }
@@ -324,6 +332,7 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskId = collection.tasks[this.state.selectedTaskIndex]?.id;
     void this.prepareTaskAnalyses(collection.tasks, projectId);
     void this.prepareSelectedEmployeeRecommendation();
+    void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
 
@@ -348,6 +357,7 @@ export class OfficeProjectPortalController {
     this.state.employees = employees;
     this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(employees.length - 1, 0));
     void this.prepareSelectedEmployeeRecommendation();
+    void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
 
@@ -448,6 +458,7 @@ export class OfficeProjectPortalController {
     };
     this.state.selectedTaskId = task.id;
     this.state.viewMode = "task-detail";
+    void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
 
@@ -501,6 +512,7 @@ export class OfficeProjectPortalController {
       ...updatedTask,
       status: "In Progress",
     });
+    void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
 
@@ -548,6 +560,7 @@ export class OfficeProjectPortalController {
       ...updatedTask,
       status: nextStatus,
     });
+    void this.prepareProjectManagementSuggestion(task.projectId);
     this.view.render(this.state);
   }
 
@@ -611,6 +624,7 @@ export class OfficeProjectPortalController {
     this.employeeRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
+    this.projectManagerRequestVersion += 1;
     this.view.render(this.state);
   }
 
@@ -637,6 +651,8 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskId = collection.tasks[nextIndex]?.id;
     void this.prepareSelectedTaskAnalysis();
     void this.prepareSelectedEmployeeRecommendation();
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    if (projectId) void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
 
@@ -648,6 +664,32 @@ export class OfficeProjectPortalController {
 
     this.state.selectedEmployeeIndex = nextIndex;
     this.view.render(this.state);
+  }
+
+  private async prepareProjectManagementSuggestion(projectId: string) {
+    const project = this.state.projects.find((item) => item.id === projectId);
+    if (!project) return;
+
+    const tasks = this.state.taskCollections[projectId]?.tasks ?? [];
+    const activityLogs = getTaskActivityLogs(tasks);
+    const requestVersion = this.projectManagerRequestVersion;
+    const suggestion = await this.aiProjectManagerService.createProjectManagementSuggestion(
+      project,
+      tasks,
+      this.state.employees,
+      activityLogs,
+    );
+    if (!this.shouldApplyProjectManagementSuggestion(projectId, requestVersion)) return;
+
+    this.state.projectManagementSuggestions[projectId] = suggestion;
+  }
+
+  private shouldApplyProjectManagementSuggestion(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.selectedProjectId === projectId &&
+      this.projectManagerRequestVersion === requestVersion
+    );
   }
 
   private async prepareTaskAnalyses(tasks: ProjectTask[], projectId: string) {
@@ -757,6 +799,10 @@ export class OfficeProjectPortalController {
 }
 
 type SelectedTaskAction = "assign_employee" | "start_work" | "move_to_review" | "mark_done" | "completed";
+
+function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
+  return tasks.flatMap((task) => task.activityLog ?? []);
+}
 
 function createLoadingRepositorySummary(): GitHubRepositorySummary {
   return {
