@@ -2,6 +2,7 @@ import type { PhaserScene } from "../shared/phaserTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
+import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
 
@@ -257,7 +258,7 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 28, this.panelY + 24, task.title, titleStyle());
     this.addText(this.panelX + 28, this.panelY + 78, `Status: ${task.status}`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 106, `Priority: ${task.priority}`, bodyStyle());
-    this.addText(this.panelX + 28, this.panelY + 134, `Assigned: ${task.assignee ?? "None"}`, bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 134, `Assigned: ${getTaskAssigneeText(state, task)}`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 162, `Estimated Hours: ${task.estimatedHours ?? "None"}`, bodyStyle());
 
     this.addText(this.panelX + 28, this.panelY + 196, "Description:", headingStyle());
@@ -332,6 +333,15 @@ function getSelectedTask(state: ProjectPortalState) {
 
 function getSelectedEmployee(state: ProjectPortalState): Employee | undefined {
   return state.employees[state.selectedEmployeeIndex];
+}
+
+function getTaskAssigneeText(state: ProjectPortalState, task: ProjectTask) {
+  if (!task.assignee) return "None";
+
+  const employee = state.employees.find((item) => item.id === task.assigneeId);
+  if (!employee) return task.assignee;
+
+  return `${task.assignee} (${employee.status})`;
 }
 
 function wrapText(text: string, maxLength: number) {

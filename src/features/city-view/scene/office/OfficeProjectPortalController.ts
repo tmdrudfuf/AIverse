@@ -263,6 +263,15 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskId = undefined;
     this.state.selectedTaskIndex = 0;
     this.state.viewMode = "task-list";
+
+    const existingCollection = this.state.taskCollections[projectId];
+    if (existingCollection) {
+      this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(existingCollection.tasks.length - 1, 0));
+      this.state.selectedTaskId = existingCollection.tasks[this.state.selectedTaskIndex]?.id;
+      this.view.render(this.state);
+      return;
+    }
+
     this.view.render(this.state);
 
     const requestVersion = this.taskRequestVersion + 1;
@@ -286,6 +295,8 @@ export class OfficeProjectPortalController {
     this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(this.state.employees.length - 1, 0));
     this.state.viewMode = "employee-selection";
     this.view.render(this.state);
+
+    if (this.state.employees.length > 0) return;
 
     const requestVersion = this.employeeRequestVersion + 1;
     this.employeeRequestVersion = requestVersion;
@@ -333,6 +344,7 @@ export class OfficeProjectPortalController {
     const employee = this.state.employees[this.state.selectedEmployeeIndex];
     if (!projectId || !collection || !task || !employee) return;
 
+    const previousAssigneeId = task.assigneeId;
     const assignedAt = new Date().toISOString();
     const activity = {
       id: `${task.id}-employee-assigned-${Date.now()}`,
@@ -355,15 +367,39 @@ export class OfficeProjectPortalController {
       ...collection,
       tasks: collection.tasks.map((item) => (item.id === task.id ? updatedTask : item)),
     };
-    this.state.employees = this.state.employees.map((item) =>
-      item.id === employee.id
-        ? {
-            ...item,
-            assignedTaskId: task.id,
-            currentProjectId: projectId,
-          }
-        : item,
-    );
+    const previousAssignment = previousAssigneeId && previousAssigneeId !== employee.id
+      ? this.findLoadedAssignmentForEmployee(previousAssigneeId)
+      : undefined;
+    this.state.employees = this.state.employees.map((item) => {
+      if (item.id === employee.id) {
+        return {
+          ...item,
+          status: "Working" as const,
+          assignedTaskId: task.id,
+          currentProjectId: projectId,
+        };
+      }
+
+      if (item.id === previousAssigneeId && !previousAssignment) {
+        return {
+          ...item,
+          status: "Idle" as const,
+          assignedTaskId: undefined,
+          currentProjectId: undefined,
+        };
+      }
+
+      if (item.id === previousAssigneeId && previousAssignment) {
+        return {
+          ...item,
+          status: "Working" as const,
+          assignedTaskId: previousAssignment.taskId,
+          currentProjectId: previousAssignment.projectId,
+        };
+      }
+
+      return item;
+    });
     this.state.employeeAssignments = {
       ...this.state.employeeAssignments,
       [task.id]: employee.id,
@@ -436,6 +472,20 @@ export class OfficeProjectPortalController {
   private getSelectedTask() {
     const collection = this.getSelectedTaskCollection();
     return collection?.tasks[this.state.selectedTaskIndex];
+  }
+
+  private findLoadedAssignmentForEmployee(employeeId: string) {
+    for (const collection of Object.values(this.state.taskCollections)) {
+      const task = collection.tasks.find((item) => item.assigneeId === employeeId);
+      if (task) {
+        return {
+          projectId: collection.projectId,
+          taskId: task.id,
+        };
+      }
+    }
+
+    return undefined;
   }
 }
 
