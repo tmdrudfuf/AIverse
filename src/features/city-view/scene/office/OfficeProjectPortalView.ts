@@ -345,6 +345,9 @@ function getTaskAssigneeText(state: ProjectPortalState, task: ProjectTask) {
 }
 
 function getTaskNextActionText(task: ProjectTask) {
+  if (task.status === "Done") return "Completed";
+  if (task.status === "Review") return "Mark Done";
+  if (task.status === "In Progress") return "Move to Review";
   return task.assignee ? "Start Work (placeholder)" : "Assign Employee";
 }
 

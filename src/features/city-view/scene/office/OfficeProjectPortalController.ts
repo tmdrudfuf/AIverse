@@ -9,6 +9,7 @@ import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
 import { ProjectTaskService } from "./tasks/ProjectTaskService";
+import type { ProjectTask, TaskStatus } from "./tasks/ProjectTaskTypes";
 
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
@@ -223,13 +224,26 @@ export class OfficeProjectPortalController {
     }
 
     if (input.actionPressed || input.enterPressed) {
-      const task = this.getSelectedTask();
-      if (!task?.assignee) {
+      const taskAction = this.getSelectedTaskAction();
+
+      if (taskAction === "assign_employee") {
         void this.openEmployeeSelection();
         return;
       }
 
-      this.startPlaceholderWorkOnSelectedTask();
+      if (taskAction === "start_work") {
+        this.startPlaceholderWorkOnSelectedTask();
+        return;
+      }
+
+      if (taskAction === "move_to_review") {
+        this.moveSelectedTaskToReview();
+        return;
+      }
+
+      if (taskAction === "mark_done") {
+        this.markSelectedTaskDone();
+      }
     }
   }
 
@@ -416,16 +430,14 @@ export class OfficeProjectPortalController {
   }
 
   private startPlaceholderWorkOnSelectedTask() {
-    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
-    const collection = projectId ? this.state.taskCollections[projectId] : undefined;
-    const task = collection?.tasks[this.state.selectedTaskIndex];
-    if (!projectId || !collection || !task?.assignee) return;
+    const task = this.getSelectedTask();
+    if (!task?.assignee || task.status !== "Todo") return;
 
     const employee = this.state.employees.find((item) => item.id === task.assigneeId);
     const actorId = employee?.id ?? task.assigneeId;
     const actorName = employee?.name ?? task.assignee;
     const startedAt = new Date().toISOString();
-    const activity = {
+    const updatedTask = this.appendTaskActivity(task, {
       id: `${task.id}-work-started-${Date.now()}`,
       taskId: task.id,
       type: "work_started" as const,
@@ -433,20 +445,94 @@ export class OfficeProjectPortalController {
       createdAt: startedAt,
       actorId,
       actorName,
-    };
-    const updatedTask = {
-      ...task,
-      status: task.status === "Todo" ? ("In Progress" as const) : task.status,
-      updatedAt: startedAt,
-      activityLog: [activity, ...(task.activityLog ?? [])],
-    };
+    }, startedAt);
+
+    this.updateSelectedTask({
+      ...updatedTask,
+      status: "In Progress",
+    });
+    this.view.render(this.state);
+  }
+
+  private moveSelectedTaskToReview() {
+    const task = this.getSelectedTask();
+    if (!task || task.status !== "In Progress") return;
+
+    this.moveSelectedTaskStatus("Review", "Task moved to review", "moved-to-review");
+  }
+
+  private markSelectedTaskDone() {
+    const task = this.getSelectedTask();
+    if (!task || task.status !== "Review") return;
+
+    this.moveSelectedTaskStatus("Done", "Task marked done", "marked-done");
+    if (task.assigneeId) {
+      this.releaseEmployeeIfUnassigned(task.assigneeId, task.id);
+      this.view.render(this.state);
+    }
+  }
+
+  private moveSelectedTaskStatus(nextStatus: TaskStatus, message: string, activityIdLabel: string) {
+    const task = this.getSelectedTask();
+    if (!task) return;
+
+    const changedAt = new Date().toISOString();
+    const updatedTask = this.appendTaskActivity(task, {
+      id: `${task.id}-${activityIdLabel}-${Date.now()}`,
+      taskId: task.id,
+      type: "status_changed" as const,
+      message,
+      createdAt: changedAt,
+    }, changedAt);
+
+    this.updateSelectedTask({
+      ...updatedTask,
+      status: nextStatus,
+    });
+    this.view.render(this.state);
+  }
+
+  private updateSelectedTask(updatedTask: ProjectTask) {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    const collection = projectId ? this.state.taskCollections[projectId] : undefined;
+    if (!projectId || !collection) return;
 
     this.state.taskCollections[projectId] = {
       ...collection,
-      tasks: collection.tasks.map((item) => (item.id === task.id ? updatedTask : item)),
+      tasks: collection.tasks.map((item) => (item.id === updatedTask.id ? updatedTask : item)),
     };
-    this.state.selectedTaskId = task.id;
-    this.view.render(this.state);
+    this.state.selectedTaskId = updatedTask.id;
+  }
+
+  private appendTaskActivity(task: ProjectTask, activity: NonNullable<ProjectTask["activityLog"]>[number], updatedAt: string) {
+    return {
+      ...task,
+      updatedAt,
+      activityLog: [activity, ...(task.activityLog ?? [])],
+    };
+  }
+
+  private releaseEmployeeIfUnassigned(employeeId: string, completedTaskId: string) {
+    const remainingAssignment = this.findLoadedAssignmentForEmployee(employeeId, completedTaskId);
+    this.state.employees = this.state.employees.map((employee) => {
+      if (employee.id !== employeeId) return employee;
+
+      if (remainingAssignment) {
+        return {
+          ...employee,
+          status: "Working" as const,
+          assignedTaskId: remainingAssignment.taskId,
+          currentProjectId: remainingAssignment.projectId,
+        };
+      }
+
+      return {
+        ...employee,
+        status: "Idle" as const,
+        assignedTaskId: undefined,
+        currentProjectId: undefined,
+      };
+    });
   }
 
   private moveProjectSelection(delta: number) {
@@ -514,9 +600,18 @@ export class OfficeProjectPortalController {
     return collection?.tasks[this.state.selectedTaskIndex];
   }
 
-  private findLoadedAssignmentForEmployee(employeeId: string) {
+  private getSelectedTaskAction(): SelectedTaskAction | undefined {
+    const task = this.getSelectedTask();
+    if (!task) return undefined;
+    if (task.status === "Done") return "completed";
+    if (task.status === "Review") return "mark_done";
+    if (task.status === "In Progress") return "move_to_review";
+    return task.assignee ? "start_work" : "assign_employee";
+  }
+
+  private findLoadedAssignmentForEmployee(employeeId: string, excludedTaskId?: string) {
     for (const collection of Object.values(this.state.taskCollections)) {
-      const task = collection.tasks.find((item) => item.assigneeId === employeeId);
+      const task = collection.tasks.find((item) => item.id !== excludedTaskId && item.status !== "Done" && item.assigneeId === employeeId);
       if (task) {
         return {
           projectId: collection.projectId,
@@ -528,6 +623,8 @@ export class OfficeProjectPortalController {
     return undefined;
   }
 }
+
+type SelectedTaskAction = "assign_employee" | "start_work" | "move_to_review" | "mark_done" | "completed";
 
 function createLoadingRepositorySummary(): GitHubRepositorySummary {
   return {

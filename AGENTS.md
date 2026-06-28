@@ -25,5 +25,5 @@ Do not implement application features directly from a prompt unless the active f
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/012-employee-work-simulation-placeholder/plan.md
+shell commands, and other important information, read specs/013-task-status-progression/plan.md
 <!-- SPECKIT END -->
