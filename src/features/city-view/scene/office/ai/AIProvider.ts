@@ -5,12 +5,12 @@ import type {
   AIActivityMessageInput,
   AIActivityMessageResult,
   EmployeeRecommendationResult,
-  TaskAnalysisResult,
+  TaskAnalysis,
   WorkSessionSummaryResult,
 } from "./AITypes";
 
 export interface AIProvider {
-  analyzeTask(task: ProjectTask): Promise<TaskAnalysisResult>;
+  analyzeTask(task: ProjectTask): Promise<TaskAnalysis>;
   recommendEmployeeForTask(task: ProjectTask, employees: Employee[]): Promise<EmployeeRecommendationResult>;
   summarizeWorkSession(session: WorkSession): Promise<WorkSessionSummaryResult>;
   generateActivityMessage(input: AIActivityMessageInput): Promise<AIActivityMessageResult>;

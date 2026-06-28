@@ -1,6 +1,6 @@
 import type { PhaserScene } from "../shared/phaserTypes";
 import { AIService } from "./ai/AIService";
-import { MockAIProvider } from "./ai/MockAIProvider";
+import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { EmployeeService } from "./employees/EmployeeService";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
@@ -34,6 +34,7 @@ export class OfficeProjectPortalController {
   private repositoryRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
+  private taskAnalysisRequestVersion = 0;
 
   constructor(scene: PhaserScene) {
     this.state = createProjectPortalState();
@@ -42,7 +43,7 @@ export class OfficeProjectPortalController {
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
-    this.aiService = new AIService(new MockAIProvider());
+    this.aiService = createMockAIService();
   }
 
   open() {
@@ -116,6 +117,7 @@ export class OfficeProjectPortalController {
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
+    this.taskAnalysisRequestVersion += 1;
     this.view.hide();
   }
 
@@ -123,6 +125,7 @@ export class OfficeProjectPortalController {
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
+    this.taskAnalysisRequestVersion += 1;
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
@@ -220,6 +223,7 @@ export class OfficeProjectPortalController {
       if (!task) return;
 
       this.state.selectedTaskId = task.id;
+      void this.prepareSelectedTaskAnalysis();
       this.state.viewMode = "task-detail";
       this.view.render(this.state);
     }
@@ -297,6 +301,7 @@ export class OfficeProjectPortalController {
     if (existingCollection) {
       this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(existingCollection.tasks.length - 1, 0));
       this.state.selectedTaskId = existingCollection.tasks[this.state.selectedTaskIndex]?.id;
+      void this.prepareTaskAnalyses(existingCollection.tasks, projectId);
       this.view.render(this.state);
       return;
     }
@@ -312,6 +317,7 @@ export class OfficeProjectPortalController {
     this.state.taskCollections[projectId] = collection;
     this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(collection.tasks.length - 1, 0));
     this.state.selectedTaskId = collection.tasks[this.state.selectedTaskIndex]?.id;
+    void this.prepareTaskAnalyses(collection.tasks, projectId);
     this.view.render(this.state);
   }
 
@@ -596,6 +602,7 @@ export class OfficeProjectPortalController {
     this.state.selectedWorkSessionId = undefined;
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
+    this.taskAnalysisRequestVersion += 1;
     this.view.render(this.state);
   }
 
@@ -620,6 +627,7 @@ export class OfficeProjectPortalController {
 
     this.state.selectedTaskIndex = nextIndex;
     this.state.selectedTaskId = collection.tasks[nextIndex]?.id;
+    void this.prepareSelectedTaskAnalysis();
     this.view.render(this.state);
   }
 
@@ -631,6 +639,51 @@ export class OfficeProjectPortalController {
 
     this.state.selectedEmployeeIndex = nextIndex;
     this.view.render(this.state);
+  }
+
+  private async prepareTaskAnalyses(tasks: ProjectTask[], projectId: string) {
+    const missingTasks = tasks.filter((task) => !this.state.taskAnalyses[task.id]);
+    if (missingTasks.length === 0) return;
+
+    const requestVersion = this.taskAnalysisRequestVersion;
+
+    const analyses = await Promise.all(missingTasks.map((task) => this.aiService.analyzeTask(task)));
+    if (!this.shouldApplyTaskAnalyses(projectId, requestVersion)) return;
+
+    analyses.forEach((analysis) => {
+      this.state.taskAnalyses[analysis.taskId] = analysis;
+    });
+  }
+
+  private async prepareSelectedTaskAnalysis() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    const task = this.getSelectedTask();
+    if (!projectId || !task || this.state.taskAnalyses[task.id]) return;
+
+    const requestVersion = this.taskAnalysisRequestVersion;
+    const analysis = await this.aiService.analyzeTask(task);
+    if (!this.shouldApplySelectedTaskAnalysis(projectId, task.id, requestVersion)) return;
+
+    this.state.taskAnalyses[analysis.taskId] = analysis;
+  }
+
+  private shouldApplyTaskAnalyses(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail") &&
+      this.state.selectedTaskProjectId === projectId &&
+      this.taskAnalysisRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplySelectedTaskAnalysis(projectId: string, taskId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail") &&
+      this.state.selectedTaskProjectId === projectId &&
+      this.state.selectedTaskId === taskId &&
+      this.taskAnalysisRequestVersion === requestVersion
+    );
   }
 
   private getSelectedProject() {
