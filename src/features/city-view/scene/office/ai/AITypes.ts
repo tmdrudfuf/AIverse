@@ -1,12 +1,15 @@
 import type { TaskPriority, TaskStatus } from "../tasks/ProjectTaskTypes";
 import type { WorkSessionProviderKind, WorkSessionStatus } from "../work-sessions/WorkSessionTypes";
 
-export type TaskAnalysisResult = {
+export type TaskAnalysisDifficulty = "Low" | "Medium" | "High" | "Critical";
+
+export type TaskAnalysis = {
   taskId: string;
-  summary: string;
-  suggestedPriority: TaskPriority;
-  suggestedFocusAreas: string[];
-  riskNotes: string[];
+  difficulty: TaskAnalysisDifficulty;
+  estimatedHours: number;
+  requiredSkills: string[];
+  priority: TaskPriority;
+  reasoning: string;
 };
 
 export type EmployeeRecommendationResult = {

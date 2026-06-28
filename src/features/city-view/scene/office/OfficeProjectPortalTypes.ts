@@ -1,3 +1,4 @@
+import type { TaskAnalysis } from "./ai/AITypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
@@ -83,6 +84,7 @@ export type ProjectPortalState = {
   workspaces: Record<string, ProjectWorkspace>;
   repositorySummaries: Record<string, GitHubRepositorySummary>;
   taskCollections: Record<string, TaskCollection>;
+  taskAnalyses: Record<string, TaskAnalysis>;
   employees: Employee[];
   employeeAssignments: Record<string, string>;
   workSessions: Record<string, WorkSession[]>;

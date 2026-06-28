@@ -6,14 +6,14 @@ import type {
   AIActivityMessageInput,
   AIActivityMessageResult,
   EmployeeRecommendationResult,
-  TaskAnalysisResult,
+  TaskAnalysis,
   WorkSessionSummaryResult,
 } from "./AITypes";
 
 export class AIService {
   constructor(private readonly provider: AIProvider) {}
 
-  analyzeTask(task: ProjectTask): Promise<TaskAnalysisResult> {
+  analyzeTask(task: ProjectTask): Promise<TaskAnalysis> {
     return this.provider.analyzeTask(task);
   }
 

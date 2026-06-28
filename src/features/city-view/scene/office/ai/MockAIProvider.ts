@@ -6,18 +6,23 @@ import type {
   AIActivityMessageInput,
   AIActivityMessageResult,
   EmployeeRecommendationResult,
-  TaskAnalysisResult,
+  TaskAnalysis,
   WorkSessionSummaryResult,
 } from "./AITypes";
 
 export class MockAIProvider implements AIProvider {
-  async analyzeTask(task: ProjectTask): Promise<TaskAnalysisResult> {
+  async analyzeTask(task: ProjectTask): Promise<TaskAnalysis> {
+    const requiredSkills = getRequiredSkills(task);
+    const difficulty = getDifficulty(task);
+    const estimatedHours = task.estimatedHours ?? getEstimatedHours(difficulty);
+
     return {
       taskId: task.id,
-      summary: `${task.title} is a ${task.priority} priority task currently in ${task.status}.`,
-      suggestedPriority: task.priority,
-      suggestedFocusAreas: getFocusAreas(task),
-      riskNotes: getRiskNotes(task),
+      difficulty,
+      estimatedHours,
+      requiredSkills,
+      priority: task.priority,
+      reasoning: `${task.title} is estimated as ${difficulty} because it is ${task.priority} priority and focuses on ${requiredSkills.join(", ")}.`,
     };
   }
 
@@ -51,7 +56,7 @@ export class MockAIProvider implements AIProvider {
   }
 }
 
-function getFocusAreas(task: ProjectTask) {
+function getRequiredSkills(task: ProjectTask) {
   const text = `${task.title} ${task.description}`.toLowerCase();
   if (text.includes("auth")) return ["Authentication", "Security"];
   if (text.includes("camera") || text.includes("navigation")) return ["UX", "Interaction"];
@@ -59,10 +64,18 @@ function getFocusAreas(task: ProjectTask) {
   return ["Planning", "Implementation"];
 }
 
-function getRiskNotes(task: ProjectTask) {
-  if (task.priority === "Critical") return ["Critical priority requires review before completion."];
-  if (task.priority === "High") return ["High priority task should stay visible in planning."];
-  return [];
+function getDifficulty(task: ProjectTask) {
+  if (task.priority === "Critical") return "Critical" as const;
+  if (task.priority === "High") return "High" as const;
+  if ((task.estimatedHours ?? 0) >= 4) return "Medium" as const;
+  return task.priority;
+}
+
+function getEstimatedHours(difficulty: ReturnType<typeof getDifficulty>) {
+  if (difficulty === "Critical") return 8;
+  if (difficulty === "High") return 6;
+  if (difficulty === "Medium") return 3;
+  return 1;
 }
 
 function getPreferredRole(task: ProjectTask) {
