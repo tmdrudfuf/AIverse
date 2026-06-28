@@ -29,15 +29,18 @@ export class MockAIProvider implements AIProvider {
   async recommendEmployeeForTask(task: ProjectTask, employees: Employee[]): Promise<EmployeeRecommendationResult> {
     const preferredRole = getPreferredRole(task);
     const recommendedEmployee = employees.find((employee) => employee.role === preferredRole) ?? employees[0];
+    const alternativeEmployeeIds = employees
+      .filter((employee) => employee.id !== recommendedEmployee?.id)
+      .map((employee) => employee.id);
 
     return {
       taskId: task.id,
-      employeeId: recommendedEmployee?.id,
-      employeeName: recommendedEmployee?.name,
-      reason: recommendedEmployee
-        ? `${recommendedEmployee.role} matches the current placeholder task focus.`
-        : "No employees are available for recommendation.",
+      recommendedEmployeeId: recommendedEmployee?.id,
       confidence: recommendedEmployee ? 0.75 : 0,
+      reasons: recommendedEmployee
+        ? [`${recommendedEmployee.role} matches the current placeholder task focus.`]
+        : ["No employees are available for recommendation."],
+      alternativeEmployeeIds,
     };
   }
 

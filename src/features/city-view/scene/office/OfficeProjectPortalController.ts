@@ -35,6 +35,7 @@ export class OfficeProjectPortalController {
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
   private taskAnalysisRequestVersion = 0;
+  private employeeRecommendationRequestVersion = 0;
 
   constructor(scene: PhaserScene) {
     this.state = createProjectPortalState();
@@ -118,6 +119,7 @@ export class OfficeProjectPortalController {
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
+    this.employeeRecommendationRequestVersion += 1;
     this.view.hide();
   }
 
@@ -126,6 +128,7 @@ export class OfficeProjectPortalController {
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
+    this.employeeRecommendationRequestVersion += 1;
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
@@ -224,6 +227,7 @@ export class OfficeProjectPortalController {
 
       this.state.selectedTaskId = task.id;
       void this.prepareSelectedTaskAnalysis();
+      void this.prepareSelectedEmployeeRecommendation();
       this.state.viewMode = "task-detail";
       this.view.render(this.state);
     }
@@ -302,6 +306,7 @@ export class OfficeProjectPortalController {
       this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(existingCollection.tasks.length - 1, 0));
       this.state.selectedTaskId = existingCollection.tasks[this.state.selectedTaskIndex]?.id;
       void this.prepareTaskAnalyses(existingCollection.tasks, projectId);
+      void this.prepareSelectedEmployeeRecommendation();
       this.view.render(this.state);
       return;
     }
@@ -318,6 +323,7 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(collection.tasks.length - 1, 0));
     this.state.selectedTaskId = collection.tasks[this.state.selectedTaskIndex]?.id;
     void this.prepareTaskAnalyses(collection.tasks, projectId);
+    void this.prepareSelectedEmployeeRecommendation();
     this.view.render(this.state);
   }
 
@@ -341,6 +347,7 @@ export class OfficeProjectPortalController {
 
     this.state.employees = employees;
     this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(employees.length - 1, 0));
+    void this.prepareSelectedEmployeeRecommendation();
     this.view.render(this.state);
   }
 
@@ -603,6 +610,7 @@ export class OfficeProjectPortalController {
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
+    this.employeeRecommendationRequestVersion += 1;
     this.view.render(this.state);
   }
 
@@ -628,6 +636,7 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskIndex = nextIndex;
     this.state.selectedTaskId = collection.tasks[nextIndex]?.id;
     void this.prepareSelectedTaskAnalysis();
+    void this.prepareSelectedEmployeeRecommendation();
     this.view.render(this.state);
   }
 
@@ -665,6 +674,19 @@ export class OfficeProjectPortalController {
     if (!this.shouldApplySelectedTaskAnalysis(projectId, task.id, requestVersion)) return;
 
     this.state.taskAnalyses[analysis.taskId] = analysis;
+    void this.prepareSelectedEmployeeRecommendation();
+  }
+
+  private async prepareSelectedEmployeeRecommendation() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    const task = this.getSelectedTask();
+    if (!projectId || !task || this.state.employees.length === 0 || this.state.employeeRecommendations[task.id]) return;
+
+    const requestVersion = this.employeeRecommendationRequestVersion;
+    const recommendation = await this.aiService.recommendEmployeeForTask(task, this.state.employees);
+    if (!this.shouldApplySelectedEmployeeRecommendation(projectId, task.id, requestVersion)) return;
+
+    this.state.employeeRecommendations[recommendation.taskId] = recommendation;
   }
 
   private shouldApplyTaskAnalyses(projectId: string, requestVersion: number) {
@@ -679,10 +701,20 @@ export class OfficeProjectPortalController {
   private shouldApplySelectedTaskAnalysis(projectId: string, taskId: string, requestVersion: number) {
     return (
       this.state.isOpen &&
-      (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail") &&
+      (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail" || this.state.viewMode === "employee-selection") &&
       this.state.selectedTaskProjectId === projectId &&
       this.state.selectedTaskId === taskId &&
       this.taskAnalysisRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplySelectedEmployeeRecommendation(projectId: string, taskId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail" || this.state.viewMode === "employee-selection") &&
+      this.state.selectedTaskProjectId === projectId &&
+      this.state.selectedTaskId === taskId &&
+      this.employeeRecommendationRequestVersion === requestVersion
     );
   }
 
