@@ -265,7 +265,7 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 224, wrapText(task.description, 70), bodyStyle());
 
     this.addText(this.panelX + 28, this.panelY + 284, "Next Action:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 312, "Assign Employee", rowStyle(true, false));
+    this.addText(this.panelX + 44, this.panelY + 312, getTaskNextActionText(task), rowStyle(true, false));
 
     this.addText(this.panelX + 28, this.panelY + 348, "Activity:", headingStyle());
     const activityLog = task.activityLog ?? [];
@@ -342,6 +342,10 @@ function getTaskAssigneeText(state: ProjectPortalState, task: ProjectTask) {
   if (!employee) return task.assignee;
 
   return `${task.assignee} (${employee.status})`;
+}
+
+function getTaskNextActionText(task: ProjectTask) {
+  return task.assignee ? "Start Work (placeholder)" : "Assign Employee";
 }
 
 function wrapText(text: string, maxLength: number) {

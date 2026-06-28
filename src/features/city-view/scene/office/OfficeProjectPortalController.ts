@@ -223,7 +223,13 @@ export class OfficeProjectPortalController {
     }
 
     if (input.actionPressed || input.enterPressed) {
-      void this.openEmployeeSelection();
+      const task = this.getSelectedTask();
+      if (!task?.assignee) {
+        void this.openEmployeeSelection();
+        return;
+      }
+
+      this.startPlaceholderWorkOnSelectedTask();
     }
   }
 
@@ -406,6 +412,40 @@ export class OfficeProjectPortalController {
     };
     this.state.selectedTaskId = task.id;
     this.state.viewMode = "task-detail";
+    this.view.render(this.state);
+  }
+
+  private startPlaceholderWorkOnSelectedTask() {
+    const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
+    const collection = projectId ? this.state.taskCollections[projectId] : undefined;
+    const task = collection?.tasks[this.state.selectedTaskIndex];
+    if (!projectId || !collection || !task?.assignee) return;
+
+    const employee = this.state.employees.find((item) => item.id === task.assigneeId);
+    const actorId = employee?.id ?? task.assigneeId;
+    const actorName = employee?.name ?? task.assignee;
+    const startedAt = new Date().toISOString();
+    const activity = {
+      id: `${task.id}-work-started-${Date.now()}`,
+      taskId: task.id,
+      type: "work_started" as const,
+      message: `${actorName} started placeholder work`,
+      createdAt: startedAt,
+      actorId,
+      actorName,
+    };
+    const updatedTask = {
+      ...task,
+      status: task.status === "Todo" ? ("In Progress" as const) : task.status,
+      updatedAt: startedAt,
+      activityLog: [activity, ...(task.activityLog ?? [])],
+    };
+
+    this.state.taskCollections[projectId] = {
+      ...collection,
+      tasks: collection.tasks.map((item) => (item.id === task.id ? updatedTask : item)),
+    };
+    this.state.selectedTaskId = task.id;
     this.view.render(this.state);
   }
 
