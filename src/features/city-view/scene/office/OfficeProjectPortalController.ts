@@ -1,4 +1,6 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { AIService } from "./ai/AIService";
+import { MockAIProvider } from "./ai/MockAIProvider";
 import { EmployeeService } from "./employees/EmployeeService";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
@@ -28,6 +30,7 @@ export class OfficeProjectPortalController {
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly workSessionService: WorkSessionService;
+  private readonly aiService: AIService;
   private repositoryRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
@@ -39,6 +42,7 @@ export class OfficeProjectPortalController {
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
+    this.aiService = new AIService(new MockAIProvider());
   }
 
   open() {
@@ -452,6 +456,14 @@ export class OfficeProjectPortalController {
       employeeName,
       startedAt,
     });
+    const activityMessage = await this.aiService.generateActivityMessage({
+      type: "work_started",
+      taskTitle: task.title,
+      employeeName,
+      workSessionId: workSession.id,
+      status: workSession.status,
+      provider: workSession.provider,
+    });
 
     if (!this.shouldApplyStartedWorkSession(projectId, task.id)) return;
 
@@ -464,7 +476,7 @@ export class OfficeProjectPortalController {
       id: activityId,
       taskId: task.id,
       type: "work_started" as const,
-      message: `${employeeName} started placeholder work session`,
+      message: activityMessage.message,
       createdAt: startedAt,
       actorId: employeeId,
       actorName: employeeName,
