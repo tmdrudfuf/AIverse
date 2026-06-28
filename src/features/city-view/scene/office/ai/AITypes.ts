@@ -14,10 +14,10 @@ export type TaskAnalysis = {
 
 export type EmployeeRecommendationResult = {
   taskId: string;
-  employeeId?: string;
-  employeeName?: string;
-  reason: string;
+  recommendedEmployeeId?: string;
   confidence: number;
+  reasons: string[];
+  alternativeEmployeeIds: string[];
 };
 
 export type WorkSessionSummaryResult = {
