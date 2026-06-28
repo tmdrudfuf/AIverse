@@ -25,5 +25,5 @@ Do not implement application features directly from a prompt unless the active f
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/018-ai-project-manager-foundation/plan.md
+shell commands, and other important information, read specs/019-employee-simulation-foundation/plan.md
 <!-- SPECKIT END -->

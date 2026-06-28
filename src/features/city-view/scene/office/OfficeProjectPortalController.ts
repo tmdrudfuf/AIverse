@@ -3,6 +3,7 @@ import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { EmployeeService } from "./employees/EmployeeService";
+import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -30,6 +31,7 @@ export class OfficeProjectPortalController {
   private readonly repositoryService: GitHubRepositoryService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
+  private readonly employeeSimulationService: EmployeeSimulationService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -46,6 +48,7 @@ export class OfficeProjectPortalController {
     this.repositoryService = new GitHubRepositoryService(new MockGitHubRepositoryProvider());
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
+    this.employeeSimulationService = new EmployeeSimulationService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -355,6 +358,7 @@ export class OfficeProjectPortalController {
     if (!this.shouldApplyEmployees(projectId, task.id, requestVersion)) return;
 
     this.state.employees = employees;
+    this.refreshEmployeeSimulationSnapshots();
     this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(employees.length - 1, 0));
     void this.prepareSelectedEmployeeRecommendation();
     void this.prepareProjectManagementSuggestion(projectId);
@@ -456,6 +460,7 @@ export class OfficeProjectPortalController {
       ...this.state.employeeAssignments,
       [task.id]: employee.id,
     };
+    this.refreshEmployeeSimulationSnapshotsForTaskAssigned();
     this.state.selectedTaskId = task.id;
     this.state.viewMode = "task-detail";
     void this.prepareProjectManagementSuggestion(projectId);
@@ -508,6 +513,7 @@ export class OfficeProjectPortalController {
 
     this.state.workSessions[task.id] = [workSessionWithActivity, ...(this.state.workSessions[task.id] ?? [])];
     this.state.selectedWorkSessionId = workSessionWithActivity.id;
+    this.refreshEmployeeSimulationSnapshotsForWorkStarted();
     this.updateSelectedTask({
       ...updatedTask,
       status: "In Progress",
@@ -539,6 +545,7 @@ export class OfficeProjectPortalController {
     this.moveSelectedTaskStatus("Done", "Task marked done", "marked-done");
     if (task.assigneeId) {
       this.releaseEmployeeIfUnassigned(task.assigneeId, task.id);
+      this.refreshEmployeeSimulationSnapshotsForWorkCompleted();
       this.view.render(this.state);
     }
   }
@@ -664,6 +671,46 @@ export class OfficeProjectPortalController {
 
     this.state.selectedEmployeeIndex = nextIndex;
     this.view.render(this.state);
+  }
+
+  private refreshEmployeeSimulationSnapshots() {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    this.state.employeeSimulations = this.employeeSimulationService.deriveSnapshots(
+      this.state.employees,
+      tasks,
+      this.state.workSessions,
+      this.state.employeeSimulations,
+    );
+  }
+
+  private refreshEmployeeSimulationSnapshotsForTaskAssigned() {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    this.state.employeeSimulations = this.employeeSimulationService.updateForTaskAssigned(
+      this.state.employees,
+      tasks,
+      this.state.workSessions,
+      this.state.employeeSimulations,
+    );
+  }
+
+  private refreshEmployeeSimulationSnapshotsForWorkStarted() {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    this.state.employeeSimulations = this.employeeSimulationService.updateForWorkStarted(
+      this.state.employees,
+      tasks,
+      this.state.workSessions,
+      this.state.employeeSimulations,
+    );
+  }
+
+  private refreshEmployeeSimulationSnapshotsForWorkCompleted() {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    this.state.employeeSimulations = this.employeeSimulationService.updateForWorkCompleted(
+      this.state.employees,
+      tasks,
+      this.state.workSessions,
+      this.state.employeeSimulations,
+    );
   }
 
   private async prepareProjectManagementSuggestion(projectId: string) {
@@ -799,6 +846,10 @@ export class OfficeProjectPortalController {
 }
 
 type SelectedTaskAction = "assign_employee" | "start_work" | "move_to_review" | "mark_done" | "completed";
+
+function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"]): ProjectTask[] {
+  return Object.values(taskCollections).flatMap((collection) => collection.tasks);
+}
 
 function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
   return tasks.flatMap((task) => task.activityLog ?? []);
