@@ -2,6 +2,12 @@ import type { PhaserScene } from "../shared/phaserTypes";
 import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
+import { EmployeeConversationService } from "./conversations/EmployeeConversationService";
+import type {
+  EmployeeConversation,
+  EmployeeConversationViewModel,
+  NearbyEmployeeConversationTarget,
+} from "./conversations/EmployeeConversationTypes";
 import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
@@ -28,6 +34,19 @@ import { WorkSessionService } from "./work-sessions/WorkSessionService";
 import { WorkstationOccupancyService } from "./workstations/WorkstationOccupancyService";
 import type { WorkstationSnapshot } from "./workstations/WorkstationTypes";
 
+const CONVERSATION_PREVIEW_TIMESTAMP = "2026-01-01T00:00:00.000Z";
+const CONVERSATION_POSITION_ZONES = new Set<string>([
+  "desk",
+  "collaboration",
+  "review",
+  "idle",
+  "entrance",
+  "workstation",
+  "meetingArea",
+  "breakArea",
+  "idleSpot",
+]);
+
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
   escapePressed: boolean;
@@ -37,6 +56,7 @@ export type OfficeProjectPortalInput = {
 };
 
 export class OfficeProjectPortalController {
+  private readonly maxEmployeeConversationDistance = 48;
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
   private readonly repositoryService: GitHubRepositoryService;
@@ -46,6 +66,7 @@ export class OfficeProjectPortalController {
   private readonly employeeNpcMovementService: EmployeeNpcMovementService;
   private readonly workstationOccupancyService: WorkstationOccupancyService;
   private readonly employeeDailyScheduleService: EmployeeDailyScheduleService;
+  private readonly employeeConversationService: EmployeeConversationService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -67,6 +88,7 @@ export class OfficeProjectPortalController {
     this.employeeNpcMovementService = new EmployeeNpcMovementService();
     this.workstationOccupancyService = new WorkstationOccupancyService();
     this.employeeDailyScheduleService = new EmployeeDailyScheduleService();
+    this.employeeConversationService = new EmployeeConversationService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -235,6 +257,31 @@ export class OfficeProjectPortalController {
       });
   }
 
+  getEmployeeConversation(employeeId: string): EmployeeConversation | undefined {
+    const { context } = this.createPreviewEmployeeConversationContext(employeeId);
+    return this.employeeConversationService.createConversation(context);
+  }
+
+  getEmployeeConversationViewModel(employeeId: string): EmployeeConversationViewModel | undefined {
+    const { context, positionHint } = this.createPreviewEmployeeConversationContext(employeeId);
+    const conversation = this.employeeConversationService.createConversation(context);
+    if (!conversation) return undefined;
+
+    return this.employeeConversationService.createConversationViewModel(conversation, positionHint);
+  }
+
+  getNearbyEmployeeConversationTarget(
+    playerPosition: EmployeeConversationPlayerPosition,
+  ): NearbyEmployeeConversationTarget | undefined {
+    if (!isResolvedConversationPlayerPosition(playerPosition)) return undefined;
+
+    const targets = this.deriveCurrentEmployeeConversationTargets(playerPosition)
+      .sort((left, right) => left.distance - right.distance || left.employeeId.localeCompare(right.employeeId));
+    const nearestTarget = targets[0];
+    if (!nearestTarget || nearestTarget.distance > this.maxEmployeeConversationDistance) return undefined;
+
+    return nearestTarget;
+  }
   close() {
     if (!this.state.isOpen) return;
 
@@ -968,9 +1015,88 @@ export class OfficeProjectPortalController {
 
     return undefined;
   }
+
+  private deriveCurrentEmployeeConversationTargets(
+    playerPosition: ResolvedEmployeeConversationPlayerPosition,
+  ): NearbyEmployeeConversationTarget[] {
+    return this.createPreviewEmployeeConversationState().movementSnapshots.map((snapshot) => ({
+      employeeId: snapshot.employeeId,
+      distance: getConversationDistance(playerPosition, snapshot.positionHint),
+    }));
+  }
+
+  private createPreviewEmployeeConversationContext(employeeId: string) {
+    const previewState = this.createPreviewEmployeeConversationState();
+    const employee = this.state.employees.find((item) => item.id === employeeId);
+    const simulationSnapshot = previewState.employeeSnapshots.find((snapshot) => snapshot.employeeId === employeeId);
+    const currentTask = simulationSnapshot?.currentTaskId
+      ? previewState.tasks.find((task) => task.id === simulationSnapshot.currentTaskId)
+      : undefined;
+    const workstationSnapshot = previewState.workstationSnapshots
+      .find((snapshot) => snapshot.assignedEmployeeId === employeeId || snapshot.occupiedByEmployeeId === employeeId);
+    const scheduleSnapshot = previewState.scheduleSnapshots.find((snapshot) => snapshot.employeeId === employeeId);
+    const movementSnapshot = previewState.movementSnapshots.find((snapshot) => snapshot.employeeId === employeeId);
+    const projectName = currentTask
+      ? this.state.projects.find((project) => project.id === currentTask.projectId)?.name
+      : undefined;
+
+    return {
+      context: {
+        employee,
+        simulationSnapshot,
+        currentTask,
+        workstationSnapshot,
+        scheduleSnapshot,
+        projectName,
+      },
+      positionHint: movementSnapshot?.positionHint,
+    };
+  }
+
+  private createPreviewEmployeeConversationState() {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    const employeeSnapshots = Object.values(this.employeeSimulationService.deriveSnapshots(
+      this.state.employees,
+      tasks,
+      this.state.workSessions,
+      this.state.employeeSimulations,
+      CONVERSATION_PREVIEW_TIMESTAMP,
+    )).sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+    const workstationSnapshots = this.workstationOccupancyService.previewSnapshots(employeeSnapshots);
+    const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
+    const scheduleSnapshots = this.employeeDailyScheduleService.previewSnapshots(employeeSnapshots);
+    const scheduleTargetHints = createScheduleTargetHints(scheduleSnapshots, employeeSnapshots, workstationTargetHints);
+    const targetPositionHints = {
+      ...scheduleTargetHints,
+      ...workstationTargetHints,
+    };
+    const movementSnapshots = this.employeeNpcMovementService.previewSnapshots(
+      employeeSnapshots,
+      CONVERSATION_PREVIEW_TIMESTAMP,
+      targetPositionHints,
+    );
+
+    return {
+      tasks,
+      employeeSnapshots,
+      workstationSnapshots,
+      scheduleSnapshots,
+      movementSnapshots,
+    };
+  }
 }
 
 type SelectedTaskAction = "assign_employee" | "start_work" | "move_to_review" | "mark_done" | "completed";
+
+type EmployeeConversationPlayerPosition = {
+  zone?: string;
+  slot?: number;
+};
+
+type ResolvedEmployeeConversationPlayerPosition = {
+  zone: EmployeeNpcPositionZone;
+  slot: number;
+};
 
 function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"]): ProjectTask[] {
   return Object.values(taskCollections).flatMap((collection) => collection.tasks);
@@ -980,6 +1106,24 @@ function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
   return tasks.flatMap((task) => task.activityLog ?? []);
 }
 
+function isResolvedConversationPlayerPosition(
+  playerPosition: EmployeeConversationPlayerPosition,
+): playerPosition is ResolvedEmployeeConversationPlayerPosition {
+  return (
+    typeof playerPosition.zone === "string" &&
+    CONVERSATION_POSITION_ZONES.has(playerPosition.zone) &&
+    typeof playerPosition.slot === "number" &&
+    Number.isFinite(playerPosition.slot)
+  );
+}
+
+function getConversationDistance(
+  playerPosition: ResolvedEmployeeConversationPlayerPosition,
+  npcPosition: EmployeeNpcViewModel["positionHint"],
+) {
+  const zoneDistance = playerPosition.zone === npcPosition.zone ? 0 : 100;
+  return zoneDistance + Math.abs(playerPosition.slot - npcPosition.slot);
+}
 function createWorkstationTargetHints(workstationSnapshots: ReadonlyArray<WorkstationSnapshot>) {
   return workstationSnapshots.reduce<Record<string, EmployeeNpcMovementPositionHint>>((targetHints, snapshot) => {
     if (snapshot.state !== "reserved" && snapshot.state !== "occupied") return targetHints;

@@ -9,63 +9,86 @@ export class WorkstationOccupancyService {
   private snapshots: Record<string, WorkstationSnapshot> = createAvailableWorkstations();
 
   deriveSnapshots(employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>): Record<string, WorkstationSnapshot> {
-    const activeEmployees = employeeSnapshots
-      .filter((snapshot) => snapshot.currentState === "assigned" || snapshot.currentState === "working")
-      .sort((left, right) => left.employeeId.localeCompare(right.employeeId));
-    const activeEmployeeIds = new Set(activeEmployees.map((snapshot) => snapshot.employeeId));
+    const nextState = createWorkstationSnapshotState(employeeSnapshots, this.employeeAssignments);
 
-    Object.keys(this.employeeAssignments).forEach((employeeId) => {
-      if (!activeEmployeeIds.has(employeeId)) delete this.employeeAssignments[employeeId];
-    });
-
-    activeEmployees.forEach((snapshot) => {
-      if (this.employeeAssignments[snapshot.employeeId]) return;
-
-      const workstationId = this.findAvailableWorkstationId();
-      if (workstationId) this.employeeAssignments[snapshot.employeeId] = workstationId;
-    });
-
-    const nextSnapshots = createAvailableWorkstations();
-    activeEmployees.forEach((snapshot) => {
-      const workstationId = this.employeeAssignments[snapshot.employeeId];
-      if (!workstationId) return;
-
-      const workstation = nextSnapshots[workstationId];
-      if (!workstation || workstation.state === "unavailable") return;
-
-      nextSnapshots[workstationId] = {
-        ...workstation,
-        assignedEmployeeId: snapshot.employeeId,
-        occupiedByEmployeeId: snapshot.currentState === "working" ? snapshot.employeeId : undefined,
-        currentTaskId: snapshot.currentTaskId,
-        state: getWorkstationState(snapshot.currentState),
-      };
-    });
-
-    this.snapshots = nextSnapshots;
+    replaceAssignments(this.employeeAssignments, nextState.employeeAssignments);
+    this.snapshots = nextState.snapshots;
     return this.cloneSnapshots();
+  }
+
+  previewSnapshots(employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>): ReadonlyArray<WorkstationSnapshot> {
+    const nextState = createWorkstationSnapshotState(employeeSnapshots, { ...this.employeeAssignments });
+    return Object.values(cloneSnapshots(nextState.snapshots));
   }
 
   getSnapshots(): ReadonlyArray<WorkstationSnapshot> {
     return Object.values(this.cloneSnapshots());
   }
 
-  private findAvailableWorkstationId() {
-    const assignedWorkstationIds = new Set(Object.values(this.employeeAssignments));
-    return WORKSTATION_IDS.find((workstationId) => !assignedWorkstationIds.has(workstationId));
-  }
-
   private cloneSnapshots() {
-    return Object.fromEntries(
-      Object.entries(this.snapshots).map(([workstationId, snapshot]) => [
-        workstationId,
-        {
-          ...snapshot,
-          positionHint: { ...snapshot.positionHint },
-        },
-      ]),
-    );
+    return cloneSnapshots(this.snapshots);
   }
+}
+
+type WorkstationSnapshotState = {
+  employeeAssignments: Record<string, string>;
+  snapshots: Record<string, WorkstationSnapshot>;
+};
+
+function createWorkstationSnapshotState(
+  employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
+  existingAssignments: Record<string, string>,
+): WorkstationSnapshotState {
+  const employeeAssignments = { ...existingAssignments };
+  const activeEmployees = employeeSnapshots
+    .filter((snapshot) => snapshot.currentState === "assigned" || snapshot.currentState === "working")
+    .sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+  const activeEmployeeIds = new Set(activeEmployees.map((snapshot) => snapshot.employeeId));
+
+  Object.keys(employeeAssignments).forEach((employeeId) => {
+    if (!activeEmployeeIds.has(employeeId)) delete employeeAssignments[employeeId];
+  });
+
+  activeEmployees.forEach((snapshot) => {
+    if (employeeAssignments[snapshot.employeeId]) return;
+
+    const workstationId = findAvailableWorkstationId(employeeAssignments);
+    if (workstationId) employeeAssignments[snapshot.employeeId] = workstationId;
+  });
+
+  const snapshots = createAvailableWorkstations();
+  activeEmployees.forEach((snapshot) => {
+    const workstationId = employeeAssignments[snapshot.employeeId];
+    if (!workstationId) return;
+
+    const workstation = snapshots[workstationId];
+    if (!workstation || workstation.state === "unavailable") return;
+
+    snapshots[workstationId] = {
+      ...workstation,
+      assignedEmployeeId: snapshot.employeeId,
+      occupiedByEmployeeId: snapshot.currentState === "working" ? snapshot.employeeId : undefined,
+      currentTaskId: snapshot.currentTaskId,
+      state: getWorkstationState(snapshot.currentState),
+    };
+  });
+
+  return {
+    employeeAssignments,
+    snapshots,
+  };
+}
+
+function replaceAssignments(target: Record<string, string>, nextAssignments: Record<string, string>) {
+  Object.keys(target).forEach((employeeId) => delete target[employeeId]);
+  Object.entries(nextAssignments).forEach(([employeeId, workstationId]) => {
+    target[employeeId] = workstationId;
+  });
+}
+
+function findAvailableWorkstationId(employeeAssignments: Record<string, string>) {
+  const assignedWorkstationIds = new Set(Object.values(employeeAssignments));
+  return WORKSTATION_IDS.find((workstationId) => !assignedWorkstationIds.has(workstationId));
 }
 
 function createAvailableWorkstations(): Record<string, WorkstationSnapshot> {
@@ -80,6 +103,18 @@ function createAvailableWorkstations(): Record<string, WorkstationSnapshot> {
           slot: index,
         },
         state: "available" as const,
+      },
+    ]),
+  );
+}
+
+function cloneSnapshots(snapshots: Record<string, WorkstationSnapshot>) {
+  return Object.fromEntries(
+    Object.entries(snapshots).map(([workstationId, snapshot]) => [
+      workstationId,
+      {
+        ...snapshot,
+        positionHint: { ...snapshot.positionHint },
       },
     ]),
   );
