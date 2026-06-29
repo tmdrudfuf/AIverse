@@ -25,5 +25,5 @@ Do not implement application features directly from a prompt unless the active f
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/021-npc-movement-foundation/plan.md
+shell commands, and other important information, read specs/022-workstation-occupancy-foundation/plan.md
 <!-- SPECKIT END -->
