@@ -15,12 +15,16 @@ import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
+import { OfficeLayoutService } from "./layout/OfficeLayoutService";
+import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import type { CompanyProgressionSnapshot } from "./progression/CompanyProgressionTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type {
   EmployeeDailyScheduleSnapshot,
@@ -67,6 +71,8 @@ export class OfficeProjectPortalController {
   private readonly workstationOccupancyService: WorkstationOccupancyService;
   private readonly employeeDailyScheduleService: EmployeeDailyScheduleService;
   private readonly employeeConversationService: EmployeeConversationService;
+  private readonly companyProgressionService: CompanyProgressionService;
+  private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -89,6 +95,8 @@ export class OfficeProjectPortalController {
     this.workstationOccupancyService = new WorkstationOccupancyService();
     this.employeeDailyScheduleService = new EmployeeDailyScheduleService();
     this.employeeConversationService = new EmployeeConversationService();
+    this.companyProgressionService = new CompanyProgressionService();
+    this.officeLayoutService = new OfficeLayoutService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -185,6 +193,27 @@ export class OfficeProjectPortalController {
     const visibleEmployees = this.getVisibleOfficeEmployees();
     this.employeeDailyScheduleService.deriveSnapshots(visibleEmployees);
     return this.employeeDailyScheduleService.getSnapshots();
+  }
+
+  getCompanyProgressionSnapshot(): CompanyProgressionSnapshot {
+    return this.companyProgressionService.getProgressionSnapshot({
+      activeEmployees: this.state.employees.length,
+      completedProjects: getAllLoadedTasks(this.state.taskCollections).filter((task) => task.status === "Done").length,
+    });
+  }
+
+  getActiveOfficeLayout(): OfficeLayoutSnapshot {
+    const progression = this.getCompanyProgressionSnapshot();
+    return this.officeLayoutService.getActiveLayout(progression.layoutId);
+  }
+
+  getOfficeZoneSnapshots(): ReadonlyArray<OfficeLayoutZone> {
+    return this.getActiveOfficeLayout().zones;
+  }
+
+  getOfficeLayoutPositionHints(): ReadonlyArray<OfficeLayoutPositionHint> {
+    const progression = this.getCompanyProgressionSnapshot();
+    return this.officeLayoutService.getPositionHints(progression.layoutId);
   }
 
   getEmployeeMovementSnapshots(
