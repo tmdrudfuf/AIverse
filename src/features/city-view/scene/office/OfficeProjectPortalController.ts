@@ -12,7 +12,7 @@ import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvi
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
-import type { EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
+import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
@@ -20,6 +20,8 @@ import { ProjectTaskService } from "./tasks/ProjectTaskService";
 import type { ProjectTask, TaskActivity, TaskStatus } from "./tasks/ProjectTaskTypes";
 import { MockWorkSessionProvider } from "./work-sessions/MockWorkSessionProvider";
 import { WorkSessionService } from "./work-sessions/WorkSessionService";
+import { WorkstationOccupancyService } from "./workstations/WorkstationOccupancyService";
+import type { WorkstationSnapshot } from "./workstations/WorkstationTypes";
 
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
@@ -37,6 +39,7 @@ export class OfficeProjectPortalController {
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
   private readonly employeeNpcMovementService: EmployeeNpcMovementService;
+  private readonly workstationOccupancyService: WorkstationOccupancyService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -56,6 +59,7 @@ export class OfficeProjectPortalController {
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
     this.employeeNpcMovementService = new EmployeeNpcMovementService();
+    this.workstationOccupancyService = new WorkstationOccupancyService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -142,13 +146,25 @@ export class OfficeProjectPortalController {
     return this.getEmployeeSimulationSnapshots();
   }
 
-  getEmployeeMovementSnapshots(): ReadonlyArray<EmployeeNpcMovementSnapshot> {
+  getWorkstationSnapshots(): ReadonlyArray<WorkstationSnapshot> {
     const visibleEmployees = this.getVisibleOfficeEmployees();
-    this.employeeNpcMovementService.deriveSnapshots(visibleEmployees);
+    this.workstationOccupancyService.deriveSnapshots(visibleEmployees);
+    return this.workstationOccupancyService.getSnapshots();
+  }
+
+  getEmployeeMovementSnapshots(
+    targetPositionHints: Record<string, EmployeeNpcMovementPositionHint> = {},
+  ): ReadonlyArray<EmployeeNpcMovementSnapshot> {
+    const visibleEmployees = this.getVisibleOfficeEmployees();
+    this.employeeNpcMovementService.deriveSnapshots(visibleEmployees, undefined, targetPositionHints);
     return this.employeeNpcMovementService.getSnapshots();
   }
 
   getEmployeeNpcViewModels(): EmployeeNpcViewModel[] {
+    return this.getEmployeeNpcViewModelsWithWorkstations();
+  }
+
+  getEmployeeNpcViewModelsWithWorkstations(): EmployeeNpcViewModel[] {
     return this.getEmployeeNpcViewModelsWithMovement();
   }
 
@@ -159,7 +175,11 @@ export class OfficeProjectPortalController {
 
     const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
     const tasksById = new Map(getAllLoadedTasks(this.state.taskCollections).map((task) => [task.id, task]));
-    const movementByEmployeeId = new Map(this.getEmployeeMovementSnapshots().map((snapshot) => [snapshot.employeeId, snapshot]));
+    const workstationSnapshots = this.getWorkstationSnapshots();
+    const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
+    const movementByEmployeeId = new Map(
+      this.getEmployeeMovementSnapshots(workstationTargetHints).map((snapshot) => [snapshot.employeeId, snapshot]),
+    );
 
     return Array.from(this.getVisibleOfficeEmployees())
       .sort((left: EmployeeSimulationSnapshot, right: EmployeeSimulationSnapshot) => left.employeeId.localeCompare(right.employeeId))
@@ -933,6 +953,18 @@ function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"
 
 function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
   return tasks.flatMap((task) => task.activityLog ?? []);
+}
+
+function createWorkstationTargetHints(workstationSnapshots: ReadonlyArray<WorkstationSnapshot>) {
+  return workstationSnapshots.reduce<Record<string, EmployeeNpcMovementPositionHint>>((targetHints, snapshot) => {
+    if (snapshot.state !== "reserved" && snapshot.state !== "occupied") return targetHints;
+
+    const employeeId = snapshot.occupiedByEmployeeId ?? snapshot.assignedEmployeeId;
+    if (!employeeId) return targetHints;
+
+    targetHints[employeeId] = snapshot.positionHint;
+    return targetHints;
+  }, {});
 }
 
 function getNpcPositionZone(state: EmployeeSimulationSnapshot["currentState"]): EmployeeNpcPositionZone {

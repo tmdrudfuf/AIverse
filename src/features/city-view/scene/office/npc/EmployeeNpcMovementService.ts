@@ -1,6 +1,7 @@
 import type { EmployeeSimulationSnapshot, EmployeeSimulationState } from "../employees/EmployeeSimulationTypes";
 import type {
   EmployeeNpcMovementPosition,
+  EmployeeNpcMovementPositionHint,
   EmployeeNpcMovementSnapshot,
   EmployeeNpcMovementState,
   OfficeNpcLogicalPosition,
@@ -15,13 +16,14 @@ export class EmployeeNpcMovementService {
   deriveSnapshots(
     employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
     updatedAt = new Date().toISOString(),
+    targetPositionHints: Record<string, EmployeeNpcMovementPositionHint> = {},
   ): Record<string, EmployeeNpcMovementSnapshot> {
     const orderedSnapshots = [...employeeSnapshots].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
 
     this.snapshots = Object.fromEntries(
       orderedSnapshots.map((snapshot, index) => {
         const previous = this.snapshots[snapshot.employeeId];
-        const targetPosition = createTargetPosition(snapshot.currentState, index);
+        const targetPosition = targetPositionHints[snapshot.employeeId] ?? createTargetPosition(snapshot.currentState, index);
         const movement = resolveMovement(previous, targetPosition, snapshot.currentState, updatedAt);
 
         return [
@@ -76,7 +78,7 @@ function createTargetPosition(state: EmployeeSimulationState, slot: number): Emp
 
 function getTargetZone(state: EmployeeSimulationState): OfficeNpcLogicalPosition {
   if (state === "working") return "meetingArea";
-  if (state === "assigned") return "workstation";
+  if (state === "assigned") return "idleSpot";
   if (state === "unavailable") return "breakArea";
   return "idleSpot";
 }
