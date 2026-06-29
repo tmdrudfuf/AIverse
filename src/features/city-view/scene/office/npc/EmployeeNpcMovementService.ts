@@ -18,30 +18,16 @@ export class EmployeeNpcMovementService {
     updatedAt = new Date().toISOString(),
     targetPositionHints: Record<string, EmployeeNpcMovementPositionHint> = {},
   ): Record<string, EmployeeNpcMovementSnapshot> {
-    const orderedSnapshots = [...employeeSnapshots].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
-
-    this.snapshots = Object.fromEntries(
-      orderedSnapshots.map((snapshot, index) => {
-        const previous = this.snapshots[snapshot.employeeId];
-        const targetPosition = targetPositionHints[snapshot.employeeId] ?? createTargetPosition(snapshot.currentState, index);
-        const movement = resolveMovement(previous, targetPosition, snapshot.currentState, updatedAt);
-
-        return [
-          snapshot.employeeId,
-          {
-            employeeId: snapshot.employeeId,
-            currentPosition: movement.currentPosition,
-            targetPosition,
-            movementState: movement.movementState,
-            speed: previous?.speed ?? DEFAULT_MOVEMENT_SPEED,
-            lastUpdatedAt: movement.lastUpdatedAt,
-            positionHint: targetPosition,
-          },
-        ];
-      }),
-    );
-
+    this.snapshots = createMovementSnapshots(employeeSnapshots, this.snapshots, updatedAt, targetPositionHints);
     return this.cloneSnapshots();
+  }
+
+  previewSnapshots(
+    employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
+    updatedAt = new Date().toISOString(),
+    targetPositionHints: Record<string, EmployeeNpcMovementPositionHint> = {},
+  ): ReadonlyArray<EmployeeNpcMovementSnapshot> {
+    return Object.values(cloneSnapshots(createMovementSnapshots(employeeSnapshots, this.snapshots, updatedAt, targetPositionHints)));
   }
 
   getSnapshots(): ReadonlyArray<EmployeeNpcMovementSnapshot> {
@@ -49,18 +35,52 @@ export class EmployeeNpcMovementService {
   }
 
   private cloneSnapshots() {
-    return Object.fromEntries(
-      Object.entries(this.snapshots).map(([employeeId, snapshot]) => [
-        employeeId,
-        {
-          ...snapshot,
-          currentPosition: { ...snapshot.currentPosition },
-          targetPosition: { ...snapshot.targetPosition },
-          positionHint: { ...snapshot.positionHint },
-        },
-      ]),
-    );
+    return cloneSnapshots(this.snapshots);
   }
+}
+
+function createMovementSnapshots(
+  employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
+  previousSnapshots: Record<string, EmployeeNpcMovementSnapshot>,
+  updatedAt: string,
+  targetPositionHints: Record<string, EmployeeNpcMovementPositionHint>,
+): Record<string, EmployeeNpcMovementSnapshot> {
+  const orderedSnapshots = [...employeeSnapshots].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+
+  return Object.fromEntries(
+    orderedSnapshots.map((snapshot, index) => {
+      const previous = previousSnapshots[snapshot.employeeId];
+      const targetPosition = targetPositionHints[snapshot.employeeId] ?? createTargetPosition(snapshot.currentState, index);
+      const movement = resolveMovement(previous, targetPosition, snapshot.currentState, updatedAt);
+
+      return [
+        snapshot.employeeId,
+        {
+          employeeId: snapshot.employeeId,
+          currentPosition: movement.currentPosition,
+          targetPosition,
+          movementState: movement.movementState,
+          speed: previous?.speed ?? DEFAULT_MOVEMENT_SPEED,
+          lastUpdatedAt: movement.lastUpdatedAt,
+          positionHint: targetPosition,
+        },
+      ];
+    }),
+  );
+}
+
+function cloneSnapshots(snapshots: Record<string, EmployeeNpcMovementSnapshot>) {
+  return Object.fromEntries(
+    Object.entries(snapshots).map(([employeeId, snapshot]) => [
+      employeeId,
+      {
+        ...snapshot,
+        currentPosition: { ...snapshot.currentPosition },
+        targetPosition: { ...snapshot.targetPosition },
+        positionHint: { ...snapshot.positionHint },
+      },
+    ]),
+  );
 }
 
 type ResolvedMovement = {

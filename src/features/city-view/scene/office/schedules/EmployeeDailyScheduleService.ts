@@ -18,32 +18,16 @@ export class EmployeeDailyScheduleService {
     workdayTime = DEFAULT_WORKDAY_TIME,
     updatedAt = createWorkdayTimestamp(workdayTime),
   ): Record<string, EmployeeDailyScheduleSnapshot> {
-    const orderedSnapshots = [...employeeSnapshots].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
-
-    this.snapshots = Object.fromEntries(
-      orderedSnapshots.map((employee, index) => {
-        const schedule = createDailySchedule(employee.employeeId, index);
-        const currentBlock = findCurrentBlock(schedule, workdayTime);
-        const nextBlock = findNextBlock(schedule, workdayTime);
-        const positionIntent = currentBlock?.positionIntent ?? IDLE_POSITION_INTENT;
-
-        return [
-          employee.employeeId,
-          {
-            employeeId: employee.employeeId,
-            scheduleId: `daily-schedule-${employee.employeeId}`,
-            currentBlock,
-            nextBlock,
-            scheduleState: getScheduleState(currentBlock?.type, employee.currentState),
-            workdayTime,
-            lastUpdatedAt: updatedAt,
-            positionIntent: { ...positionIntent },
-          },
-        ];
-      }),
-    );
-
+    this.snapshots = createScheduleSnapshots(employeeSnapshots, workdayTime, updatedAt);
     return this.cloneSnapshots();
+  }
+
+  previewSnapshots(
+    employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
+    workdayTime = DEFAULT_WORKDAY_TIME,
+    updatedAt = createWorkdayTimestamp(workdayTime),
+  ): ReadonlyArray<EmployeeDailyScheduleSnapshot> {
+    return Object.values(cloneSnapshots(createScheduleSnapshots(employeeSnapshots, workdayTime, updatedAt)));
   }
 
   getSnapshots(): ReadonlyArray<EmployeeDailyScheduleSnapshot> {
@@ -51,18 +35,39 @@ export class EmployeeDailyScheduleService {
   }
 
   private cloneSnapshots() {
-    return Object.fromEntries(
-      Object.entries(this.snapshots).map(([employeeId, snapshot]) => [
-        employeeId,
-        {
-          ...snapshot,
-          currentBlock: cloneBlock(snapshot.currentBlock),
-          nextBlock: cloneBlock(snapshot.nextBlock),
-          positionIntent: { ...snapshot.positionIntent },
-        },
-      ]),
-    );
+    return cloneSnapshots(this.snapshots);
   }
+}
+
+function createScheduleSnapshots(
+  employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
+  workdayTime: number,
+  updatedAt: string,
+): Record<string, EmployeeDailyScheduleSnapshot> {
+  const orderedSnapshots = [...employeeSnapshots].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+
+  return Object.fromEntries(
+    orderedSnapshots.map((employee, index) => {
+      const schedule = createDailySchedule(employee.employeeId, index);
+      const currentBlock = findCurrentBlock(schedule, workdayTime);
+      const nextBlock = findNextBlock(schedule, workdayTime);
+      const positionIntent = currentBlock?.positionIntent ?? IDLE_POSITION_INTENT;
+
+      return [
+        employee.employeeId,
+        {
+          employeeId: employee.employeeId,
+          scheduleId: `daily-schedule-${employee.employeeId}`,
+          currentBlock,
+          nextBlock,
+          scheduleState: getScheduleState(currentBlock?.type, employee.currentState),
+          workdayTime,
+          lastUpdatedAt: updatedAt,
+          positionIntent: { ...positionIntent },
+        },
+      ];
+    }),
+  );
 }
 
 function createDailySchedule(employeeId: string, slot: number): EmployeeScheduleBlock[] {
@@ -125,6 +130,20 @@ function getScheduleState(
   if (blockType === "lunch") return "atLunch";
   if (blockType === "leave") return "leaving";
   return employeeState === "idle" ? "available" : "focused";
+}
+
+function cloneSnapshots(snapshots: Record<string, EmployeeDailyScheduleSnapshot>) {
+  return Object.fromEntries(
+    Object.entries(snapshots).map(([employeeId, snapshot]) => [
+      employeeId,
+      {
+        ...snapshot,
+        currentBlock: cloneBlock(snapshot.currentBlock),
+        nextBlock: cloneBlock(snapshot.nextBlock),
+        positionIntent: { ...snapshot.positionIntent },
+      },
+    ]),
+  );
 }
 
 function cloneBlock(block: EmployeeScheduleBlock | undefined) {
