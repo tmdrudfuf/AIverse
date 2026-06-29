@@ -15,6 +15,11 @@ import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
+import type {
+  EmployeeDailyScheduleSnapshot,
+  EmployeeSchedulePositionIntent,
+} from "./schedules/EmployeeDailyScheduleTypes";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
 import { ProjectTaskService } from "./tasks/ProjectTaskService";
 import type { ProjectTask, TaskActivity, TaskStatus } from "./tasks/ProjectTaskTypes";
@@ -40,6 +45,7 @@ export class OfficeProjectPortalController {
   private readonly employeeSimulationService: EmployeeSimulationService;
   private readonly employeeNpcMovementService: EmployeeNpcMovementService;
   private readonly workstationOccupancyService: WorkstationOccupancyService;
+  private readonly employeeDailyScheduleService: EmployeeDailyScheduleService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -60,6 +66,7 @@ export class OfficeProjectPortalController {
     this.employeeSimulationService = new EmployeeSimulationService();
     this.employeeNpcMovementService = new EmployeeNpcMovementService();
     this.workstationOccupancyService = new WorkstationOccupancyService();
+    this.employeeDailyScheduleService = new EmployeeDailyScheduleService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -152,6 +159,12 @@ export class OfficeProjectPortalController {
     return this.workstationOccupancyService.getSnapshots();
   }
 
+  getEmployeeDailyScheduleSnapshots(): ReadonlyArray<EmployeeDailyScheduleSnapshot> {
+    const visibleEmployees = this.getVisibleOfficeEmployees();
+    this.employeeDailyScheduleService.deriveSnapshots(visibleEmployees);
+    return this.employeeDailyScheduleService.getSnapshots();
+  }
+
   getEmployeeMovementSnapshots(
     targetPositionHints: Record<string, EmployeeNpcMovementPositionHint> = {},
   ): ReadonlyArray<EmployeeNpcMovementSnapshot> {
@@ -161,6 +174,10 @@ export class OfficeProjectPortalController {
   }
 
   getEmployeeNpcViewModels(): EmployeeNpcViewModel[] {
+    return this.getEmployeeNpcViewModelsWithSchedule();
+  }
+
+  getEmployeeNpcViewModelsWithSchedule(): EmployeeNpcViewModel[] {
     return this.getEmployeeNpcViewModelsWithWorkstations();
   }
 
@@ -175,14 +192,22 @@ export class OfficeProjectPortalController {
 
     const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
     const tasksById = new Map(getAllLoadedTasks(this.state.taskCollections).map((task) => [task.id, task]));
+    const visibleEmployees = Array.from(this.getVisibleOfficeEmployees()).sort((left, right) =>
+      left.employeeId.localeCompare(right.employeeId),
+    );
     const workstationSnapshots = this.getWorkstationSnapshots();
     const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
+    const scheduleSnapshots = this.getEmployeeDailyScheduleSnapshots();
+    const scheduleTargetHints = createScheduleTargetHints(scheduleSnapshots, visibleEmployees, workstationTargetHints);
+    const targetPositionHints = {
+      ...scheduleTargetHints,
+      ...workstationTargetHints,
+    };
     const movementByEmployeeId = new Map(
-      this.getEmployeeMovementSnapshots(workstationTargetHints).map((snapshot) => [snapshot.employeeId, snapshot]),
+      this.getEmployeeMovementSnapshots(targetPositionHints).map((snapshot) => [snapshot.employeeId, snapshot]),
     );
 
-    return Array.from(this.getVisibleOfficeEmployees())
-      .sort((left: EmployeeSimulationSnapshot, right: EmployeeSimulationSnapshot) => left.employeeId.localeCompare(right.employeeId))
+    return visibleEmployees
       .map((snapshot: EmployeeSimulationSnapshot, index: number) => {
         const employee = employeesById.get(snapshot.employeeId);
         const currentTask = snapshot.currentTaskId ? tasksById.get(snapshot.currentTaskId) : undefined;
@@ -965,6 +990,43 @@ function createWorkstationTargetHints(workstationSnapshots: ReadonlyArray<Workst
     targetHints[employeeId] = snapshot.positionHint;
     return targetHints;
   }, {});
+}
+function createScheduleTargetHints(
+  scheduleSnapshots: ReadonlyArray<EmployeeDailyScheduleSnapshot>,
+  employeeSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
+  workstationTargetHints: Record<string, EmployeeNpcMovementPositionHint>,
+) {
+  const employeeStateById = new Map(employeeSnapshots.map((snapshot) => [snapshot.employeeId, snapshot.currentState]));
+
+  return scheduleSnapshots.reduce<Record<string, EmployeeNpcMovementPositionHint>>((targetHints, snapshot, index) => {
+    const employeeState = employeeStateById.get(snapshot.employeeId);
+    if (employeeState !== "idle") return targetHints;
+
+    targetHints[snapshot.employeeId] = createSchedulePositionHint(
+      snapshot.positionIntent,
+      workstationTargetHints[snapshot.employeeId],
+      index,
+    );
+    return targetHints;
+  }, {});
+}
+
+function createSchedulePositionHint(
+  positionIntent: EmployeeSchedulePositionIntent,
+  workstationTargetHint: EmployeeNpcMovementPositionHint | undefined,
+  fallbackSlot: number,
+): EmployeeNpcMovementPositionHint {
+  if (positionIntent.zone === "workstation") {
+    return workstationTargetHint ?? {
+      zone: "idleSpot",
+      slot: positionIntent.slot ?? fallbackSlot,
+    };
+  }
+
+  return {
+    zone: positionIntent.zone,
+    slot: positionIntent.slot ?? fallbackSlot,
+  };
 }
 
 function getNpcPositionZone(state: EmployeeSimulationSnapshot["currentState"]): EmployeeNpcPositionZone {
