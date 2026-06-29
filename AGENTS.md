@@ -25,5 +25,5 @@ Do not implement application features directly from a prompt unless the active f
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/024-npc-conversation-foundation/plan.md
+shell commands, and other important information, read specs/025-office-layout-company-progression-foundation/plan.md
 <!-- SPECKIT END -->
