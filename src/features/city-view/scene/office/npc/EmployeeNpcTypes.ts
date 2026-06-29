@@ -1,6 +1,12 @@
 import type { EmployeeSimulationState } from "../employees/EmployeeSimulationTypes";
+import type {
+  EmployeeNpcMovementPosition,
+  EmployeeNpcMovementPositionHint,
+  EmployeeNpcMovementState,
+  OfficeNpcLogicalPosition,
+} from "./EmployeeNpcMovementTypes";
 
-export type EmployeeNpcPositionZone = "desk" | "collaboration" | "review" | "idle";
+export type EmployeeNpcPositionZone = "desk" | "collaboration" | "review" | "idle" | OfficeNpcLogicalPosition;
 
 export type EmployeeNpcPositionHint = {
   zone: EmployeeNpcPositionZone;
@@ -19,7 +25,10 @@ export type EmployeeNpcViewModel = {
   displayLabel: string;
   state: EmployeeSimulationState;
   currentTaskTitle?: string;
-  positionHint: EmployeeNpcPositionHint;
+  positionHint: EmployeeNpcPositionHint | EmployeeNpcMovementPositionHint;
+  movementState?: EmployeeNpcMovementState;
+  currentMovementPosition?: EmployeeNpcMovementPosition;
+  targetMovementPosition?: EmployeeNpcMovementPosition;
   spriteKey?: string;
   placeholderStyle?: EmployeeNpcPlaceholderStyle;
 };
