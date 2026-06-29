@@ -20,6 +20,11 @@ const ZONE_ANCHORS: Record<EmployeeNpcPositionHint["zone"], { x: number; y: numb
   collaboration: { x: 328, y: 202 },
   review: { x: 288, y: 146 },
   idle: { x: 210, y: 232 },
+  entrance: { x: 160, y: 270 },
+  workstation: { x: 248, y: 182 },
+  meetingArea: { x: 328, y: 202 },
+  breakArea: { x: 288, y: 146 },
+  idleSpot: { x: 210, y: 232 },
 };
 
 const SLOT_OFFSETS = [
@@ -58,8 +63,12 @@ export class OfficeEmployeeNpcRenderer {
   }
 
   private renderNpc(viewModel: EmployeeNpcViewModel) {
-    const renderedNpc = this.renderedNpcs.get(viewModel.employeeId) ?? this.createNpc(viewModel);
-    const position = resolveNpcPosition(viewModel.positionHint);
+    const existingNpc = this.renderedNpcs.get(viewModel.employeeId);
+    const renderedNpc = existingNpc ?? this.createNpc(viewModel);
+    const targetPosition = resolveNpcPosition(viewModel.positionHint);
+    const position = existingNpc && viewModel.movementState === "moving"
+      ? interpolatePosition(renderedNpc.container.x, renderedNpc.container.y, targetPosition)
+      : targetPosition;
     const style = viewModel.placeholderStyle ?? DEFAULT_STYLE;
 
     renderedNpc.container.setPosition(position.x, position.y);
@@ -109,6 +118,13 @@ function resolveNpcPosition(positionHint: EmployeeNpcPositionHint) {
   return {
     x: anchor.x + offset.x,
     y: anchor.y + offset.y,
+  };
+}
+
+function interpolatePosition(currentX: number, currentY: number, target: { x: number; y: number }) {
+  return {
+    x: currentX + (target.x - currentX) * 0.18,
+    y: currentY + (target.y - currentY) * 0.18,
   };
 }
 

@@ -11,6 +11,8 @@ import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
+import type { EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
@@ -34,6 +36,7 @@ export class OfficeProjectPortalController {
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
+  private readonly employeeNpcMovementService: EmployeeNpcMovementService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -52,6 +55,7 @@ export class OfficeProjectPortalController {
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
+    this.employeeNpcMovementService = new EmployeeNpcMovementService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -138,19 +142,31 @@ export class OfficeProjectPortalController {
     return this.getEmployeeSimulationSnapshots();
   }
 
+  getEmployeeMovementSnapshots(): ReadonlyArray<EmployeeNpcMovementSnapshot> {
+    const visibleEmployees = this.getVisibleOfficeEmployees();
+    this.employeeNpcMovementService.deriveSnapshots(visibleEmployees);
+    return this.employeeNpcMovementService.getSnapshots();
+  }
+
   getEmployeeNpcViewModels(): EmployeeNpcViewModel[] {
+    return this.getEmployeeNpcViewModelsWithMovement();
+  }
+
+  getEmployeeNpcViewModelsWithMovement(): EmployeeNpcViewModel[] {
     if (this.state.employees.length > 0) {
       this.refreshEmployeeSimulationSnapshots();
     }
 
     const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
     const tasksById = new Map(getAllLoadedTasks(this.state.taskCollections).map((task) => [task.id, task]));
+    const movementByEmployeeId = new Map(this.getEmployeeMovementSnapshots().map((snapshot) => [snapshot.employeeId, snapshot]));
 
     return Array.from(this.getVisibleOfficeEmployees())
       .sort((left: EmployeeSimulationSnapshot, right: EmployeeSimulationSnapshot) => left.employeeId.localeCompare(right.employeeId))
       .map((snapshot: EmployeeSimulationSnapshot, index: number) => {
         const employee = employeesById.get(snapshot.employeeId);
         const currentTask = snapshot.currentTaskId ? tasksById.get(snapshot.currentTaskId) : undefined;
+        const movementSnapshot = movementByEmployeeId.get(snapshot.employeeId);
 
         return {
           employeeId: snapshot.employeeId,
@@ -158,10 +174,13 @@ export class OfficeProjectPortalController {
           displayLabel: snapshot.displayLabel,
           state: snapshot.currentState,
           currentTaskTitle: currentTask?.title,
-          positionHint: {
+          positionHint: movementSnapshot?.positionHint ?? {
             zone: getNpcPositionZone(snapshot.currentState),
             slot: index,
           },
+          movementState: movementSnapshot?.movementState,
+          currentMovementPosition: movementSnapshot?.currentPosition,
+          targetMovementPosition: movementSnapshot?.targetPosition,
           placeholderStyle: {
             fillColor: parseNpcColor(employee?.avatarColor) ?? 0x64748b,
             borderColor: 0xf8fafc,
