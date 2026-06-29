@@ -16,6 +16,7 @@ import { OfficeInteractionController } from "./OfficeInteractionController";
 import { OfficeInteractionPrompt } from "./OfficeInteractionPrompt";
 import { OfficeInteractiveObjectRegistry } from "./OfficeInteractiveObjectRegistry";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
+import { OfficeEmployeeNpcRenderer } from "./npc/OfficeEmployeeNpcRenderer";
 import { OfficeSpawnManager } from "./OfficeSpawnManager";
 import { OfficeTileMovementResolver } from "./OfficeTileMovementResolver";
 import { createOfficeTilemapLayer, loadOfficeTilemapAssets, type OfficeTilemapLayers } from "./OfficeTilemapLayer";
@@ -36,6 +37,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeInteractionController?: OfficeInteractionController;
     private officeInteractionPrompt?: OfficeInteractionPrompt;
     private officeProjectPortalController?: OfficeProjectPortalController;
+    private officeEmployeeNpcRenderer?: OfficeEmployeeNpcRenderer;
     private officeTilemapLayers?: OfficeTilemapLayers;
     private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
@@ -83,6 +85,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeInteractionController = new OfficeInteractionController(objectRegistry);
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
       this.officeProjectPortalController = new OfficeProjectPortalController(this);
+      this.officeEmployeeNpcRenderer = new OfficeEmployeeNpcRenderer(this);
+      void this.officeProjectPortalController.initializeEmployeeSimulationSnapshots().then(() => {
+        this.refreshEmployeeNpcRenderer();
+      });
       this.officeMovementResolver = new OfficeTileMovementResolver(this.officeCollisionMap);
       this.founderMovementController = new FounderMovementController(this.founderEntity, this.officeMovementResolver);
       this.officeExitController = new OfficeExitController(this, this.office, this.requireSpawnRequest());
@@ -108,6 +114,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           downPressed,
           enterPressed,
         });
+        this.refreshEmployeeNpcRenderer();
         return;
       }
 
@@ -138,6 +145,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
 
       this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController?.update(delta, intent);
+      this.refreshEmployeeNpcRenderer();
+    }
+
+    private refreshEmployeeNpcRenderer() {
+      const viewModels = this.officeProjectPortalController?.getEmployeeNpcViewModels() ?? [];
+      this.officeEmployeeNpcRenderer?.render(viewModels);
     }
 
     private resolveConfiguredOffice() {
@@ -163,6 +176,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeActionInputController?.destroy(this);
       this.officeInteractionController?.destroy();
       this.officeInteractionPrompt?.destroy();
+      this.officeEmployeeNpcRenderer?.destroy();
       this.officeProjectPortalController?.destroy();
       this.officeExitController?.destroy();
       this.officeVisualLayer?.destroy();
@@ -175,6 +189,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeInteractionController = undefined;
       this.officeInteractionPrompt = undefined;
       this.officeProjectPortalController = undefined;
+      this.officeEmployeeNpcRenderer = undefined;
       this.officeExitController = undefined;
       this.officeVisualLayer = undefined;
       this.officeTilemapLayers = undefined;

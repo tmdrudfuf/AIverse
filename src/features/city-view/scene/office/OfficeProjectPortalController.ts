@@ -4,12 +4,14 @@ import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
+import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { MockProjectTaskProvider } from "./tasks/MockProjectTaskProvider";
 import { ProjectTaskService } from "./tasks/ProjectTaskService";
@@ -38,6 +40,7 @@ export class OfficeProjectPortalController {
   private repositoryRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
+  private employeeNpcBootstrapRequestVersion = 0;
   private taskAnalysisRequestVersion = 0;
   private employeeRecommendationRequestVersion = 0;
   private projectManagerRequestVersion = 0;
@@ -111,6 +114,63 @@ export class OfficeProjectPortalController {
     return this.state.isOpen;
   }
 
+  async initializeEmployeeSimulationSnapshots() {
+    if (this.state.employees.length > 0) {
+      this.refreshEmployeeSimulationSnapshots();
+      return;
+    }
+
+    const requestVersion = this.employeeNpcBootstrapRequestVersion + 1;
+    this.employeeNpcBootstrapRequestVersion = requestVersion;
+
+    const employees = await this.employeeService.getEmployees();
+    if (this.employeeNpcBootstrapRequestVersion !== requestVersion) return;
+
+    this.state.employees = employees;
+    this.refreshEmployeeSimulationSnapshots();
+  }
+
+  getEmployeeSimulationSnapshots(): ReadonlyArray<EmployeeSimulationSnapshot> {
+    return this.employeeSimulationService.getSnapshots(this.state.employeeSimulations);
+  }
+
+  getVisibleOfficeEmployees(): ReadonlyArray<EmployeeSimulationSnapshot> {
+    return this.getEmployeeSimulationSnapshots();
+  }
+
+  getEmployeeNpcViewModels(): EmployeeNpcViewModel[] {
+    if (this.state.employees.length > 0) {
+      this.refreshEmployeeSimulationSnapshots();
+    }
+
+    const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
+    const tasksById = new Map(getAllLoadedTasks(this.state.taskCollections).map((task) => [task.id, task]));
+
+    return Array.from(this.getVisibleOfficeEmployees())
+      .sort((left: EmployeeSimulationSnapshot, right: EmployeeSimulationSnapshot) => left.employeeId.localeCompare(right.employeeId))
+      .map((snapshot: EmployeeSimulationSnapshot, index: number) => {
+        const employee = employeesById.get(snapshot.employeeId);
+        const currentTask = snapshot.currentTaskId ? tasksById.get(snapshot.currentTaskId) : undefined;
+
+        return {
+          employeeId: snapshot.employeeId,
+          displayName: employee?.name ?? snapshot.employeeId,
+          displayLabel: snapshot.displayLabel,
+          state: snapshot.currentState,
+          currentTaskTitle: currentTask?.title,
+          positionHint: {
+            zone: getNpcPositionZone(snapshot.currentState),
+            slot: index,
+          },
+          placeholderStyle: {
+            fillColor: parseNpcColor(employee?.avatarColor) ?? 0x64748b,
+            borderColor: 0xf8fafc,
+            labelColor: "#f8fafc",
+          },
+        };
+      });
+  }
+
   close() {
     if (!this.state.isOpen) return;
 
@@ -135,6 +195,7 @@ export class OfficeProjectPortalController {
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
     this.employeeRequestVersion += 1;
+    this.employeeNpcBootstrapRequestVersion += 1;
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
     this.projectManagerRequestVersion += 1;
@@ -853,6 +914,22 @@ function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"
 
 function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
   return tasks.flatMap((task) => task.activityLog ?? []);
+}
+
+function getNpcPositionZone(state: EmployeeSimulationSnapshot["currentState"]): EmployeeNpcPositionZone {
+  if (state === "working") return "collaboration";
+  if (state === "assigned") return "desk";
+  if (state === "unavailable") return "review";
+  return "idle";
+}
+
+function parseNpcColor(value?: string) {
+  if (!value) return undefined;
+
+  const normalized = value.startsWith("#") ? value.slice(1) : value;
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return undefined;
+
+  return Number.parseInt(normalized, 16);
 }
 
 function createLoadingRepositorySummary(): GitHubRepositorySummary {
