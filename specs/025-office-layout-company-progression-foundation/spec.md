@@ -25,6 +25,7 @@ As a player watching employees in the Daily Proof office, I want employee behavi
 3. Given employee movement indicates travel, when the state machine updates, then the employee can resolve to walking without mutating NPC movement state.
 4. Given employee simulation indicates work, when the state machine updates, then the employee can resolve to working without starting or completing a work session.
 5. Given schedule or context indicates break, conversation, or end-of-day intent, when the state machine updates, then the employee can resolve to taking_break, talking, or going_home without invoking external providers.
+6. Given the Employee AI state foundation is implemented, when automated tests run, then service-level state resolution, transitions, snapshot stability, and controller preview integration edge cases are verified without requiring Phaser runtime behavior or external providers.
 
 ## Requirements
 
@@ -47,6 +48,8 @@ As a player watching employees in the Daily Proof office, I want employee behavi
 - FR-016: Employee AI state machine logic MUST validate transitions before applying them and preserve current state on rejected transitions.
 - FR-017: Employee AI state machine logic MUST expose helper methods equivalent to getCurrentState(), canTransitionTo(), transitionTo(), and update().
 - FR-018: Employee AI state machine integration MUST remain optional and read-only from existing gameplay systems, avoiding changes to NPC movement, workstation occupancy, daily schedule, conversations, work sessions, and project portal behavior.
+- FR-019: Employee AI state foundation tests MUST cover deterministic initial state resolution, transition acceptance/rejection, snapshot cloning/stability, timestamp handling, and sorted multi-employee updates.
+- FR-020: Employee AI controller integration tests MUST cover read-only snapshot composition and preview timestamp freshness without requiring a live Phaser scene, network, provider, LLM, or external service.
 
 ### Non-Goals
 - No multi-floor navigation, elevators, stairs, pathfinding, furniture sprites, purchase/build mode, economy, payroll, real AI calls, map editor, save/load persistence, or floor switching gameplay.
@@ -61,6 +64,8 @@ As a player watching employees in the Daily Proof office, I want employee behavi
 - SC-006: Employee AI state snapshots can be created and updated deterministically for existing office employees without changing current visible behavior.
 - SC-007: Review can verify the employee AI foundation has no Phaser dependency and no external AI/provider calls.
 - SC-008: Invalid employee AI transitions are rejected in a predictable way while valid transitions produce stable transition metadata.
+- SC-009: Automated tests can verify EmployeeAIService state resolution, transition metadata, snapshot immutability, sorted output, and timestamp behavior.
+- SC-010: Automated tests can verify getEmployeeAIStateSnapshots() preview composition and timestamp freshness without mutating existing office systems.
 
 ## Assumptions
 - The initial implementation can be deterministic and mock-first.
@@ -68,3 +73,4 @@ As a player watching employees in the Daily Proof office, I want employee behavi
 - Company unlock criteria can start as placeholder milestones and become tied to tasks, revenue, headcount, or simulation later.
 - FloorCount is included now for future expansion, but active gameplay remains one floor in this phase.
 - Employee AI state can initially derive from existing simulation, movement, schedule, and conversation context without owning those systems or replacing their behavior.
+- Employee AI tests can use lightweight mocks or stubs for controller dependencies rather than a live Phaser scene.
