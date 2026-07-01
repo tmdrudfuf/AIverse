@@ -74,20 +74,121 @@ describe("OfficeProjectPortalController employee AI integration", () => {
       },
     });
   });
+
+  it("uses the latest known movement timestamp for Employee AI preview movement", () => {
+    const state = createProjectPortalState();
+    state.employees = [
+      createEmployee({
+        id: "employee-moving",
+        name: "Mina Moving",
+        status: "Idle",
+      }),
+    ];
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    const seededTimestamp = "2026-01-01T09:30:00.000Z";
+    internals.employeeNpcMovementService.deriveSnapshots(
+      [
+        {
+          employeeId: "employee-moving",
+          currentState: "assigned",
+          lastStateChangeAt: seededTimestamp,
+          displayLabel: "Mina Moving - Assigned",
+        },
+      ],
+      seededTimestamp,
+      {
+        "employee-moving": { zone: "workstation", slot: 0 },
+      },
+    );
+
+    const snapshots = controller.getEmployeeAIStateSnapshots();
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]).toMatchObject({
+      employeeId: "employee-moving",
+      currentState: "walking",
+      lastUpdatedAt: seededTimestamp,
+      contextSummary: {
+        movementState: "moving",
+      },
+    });
+  });
+
+  it("does not mutate office services or portal collections while previewing Employee AI state", () => {
+    const state = createProjectPortalState();
+    state.employees = [
+      createEmployee({
+        id: "employee-readonly",
+        name: "Riley Readonly",
+        status: "Working",
+        assignedTaskId: "task-readonly",
+        currentProjectId: "daily-proof",
+      }),
+    ];
+    state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [
+        createTask({
+          id: "task-readonly",
+          assigneeId: "employee-readonly",
+          assignee: "Riley Readonly",
+          status: "In Progress",
+        }),
+      ],
+    };
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    const visibleEmployees = [
+      {
+        employeeId: "employee-readonly",
+        currentState: "working" as const,
+        currentTaskId: "task-readonly",
+        currentProjectId: "daily-proof",
+        lastStateChangeAt: "2026-01-01T09:00:00.000Z",
+        displayLabel: "Riley Readonly - Working",
+      },
+    ];
+    internals.workstationOccupancyService.deriveSnapshots(visibleEmployees);
+    internals.employeeDailyScheduleService.deriveSnapshots(visibleEmployees);
+    internals.employeeNpcMovementService.deriveSnapshots(visibleEmployees);
+
+    const beforeMovementSnapshots = internals.employeeNpcMovementService.getSnapshots();
+    const beforeWorkstationSnapshots = internals.workstationOccupancyService.getSnapshots();
+    const beforeScheduleSnapshots = internals.employeeDailyScheduleService.getSnapshots();
+    const beforeEmployees = state.employees.map((employee) => ({ ...employee }));
+    const beforeTaskCollections = structuredClone(state.taskCollections);
+    const beforeWorkSessions = structuredClone(state.workSessions);
+    const beforeProgression = internals.companyProgressionService.getProgressionSnapshot();
+    const beforeLayout = internals.officeLayoutService.getActiveLayout(beforeProgression.layoutId);
+
+    controller.getEmployeeAIStateSnapshots();
+
+    expect(internals.employeeNpcMovementService.getSnapshots()).toEqual(beforeMovementSnapshots);
+    expect(internals.workstationOccupancyService.getSnapshots()).toEqual(beforeWorkstationSnapshots);
+    expect(internals.employeeDailyScheduleService.getSnapshots()).toEqual(beforeScheduleSnapshots);
+    expect(state.employees).toEqual(beforeEmployees);
+    expect(state.taskCollections).toEqual(beforeTaskCollections);
+    expect(state.workSessions).toEqual(beforeWorkSessions);
+    expect(internals.companyProgressionService.getProgressionSnapshot()).toEqual(beforeProgression);
+    expect(internals.officeLayoutService.getActiveLayout(beforeProgression.layoutId)).toEqual(beforeLayout);
+  });
 });
+
+type ControllerInternals = {
+  state: ProjectPortalState;
+  employeeAIService: EmployeeAIService;
+  employeeSimulationService: EmployeeSimulationService;
+  employeeNpcMovementService: EmployeeNpcMovementService;
+  workstationOccupancyService: WorkstationOccupancyService;
+  employeeDailyScheduleService: EmployeeDailyScheduleService;
+  companyProgressionService: CompanyProgressionService;
+  officeLayoutService: OfficeLayoutService;
+};
 
 function createControllerHarness(state: ProjectPortalState): OfficeProjectPortalController {
   const controller = Object.create(OfficeProjectPortalController.prototype) as OfficeProjectPortalController;
-  const harness = controller as unknown as {
-    state: ProjectPortalState;
-    employeeAIService: EmployeeAIService;
-    employeeSimulationService: EmployeeSimulationService;
-    employeeNpcMovementService: EmployeeNpcMovementService;
-    workstationOccupancyService: WorkstationOccupancyService;
-    employeeDailyScheduleService: EmployeeDailyScheduleService;
-    companyProgressionService: CompanyProgressionService;
-    officeLayoutService: OfficeLayoutService;
-  };
+  const harness = getControllerInternals(controller);
 
   harness.state = state;
   harness.employeeAIService = new EmployeeAIService();
@@ -99,6 +200,10 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.officeLayoutService = new OfficeLayoutService();
 
   return controller;
+}
+
+function getControllerInternals(controller: OfficeProjectPortalController): ControllerInternals {
+  return controller as unknown as ControllerInternals;
 }
 
 function createEmployee(overrides: Partial<Employee> & Pick<Employee, "id" | "name" | "status">): Employee {
