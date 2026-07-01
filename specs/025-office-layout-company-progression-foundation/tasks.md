@@ -45,6 +45,18 @@
 - [x] T032 Manually review City to Office transition, office tilemap, computer interaction, Project Portal, Task Detail, Employee Assignment, Work Session start/complete, Activity Log, Office NPC placeholders, NPC movement snapshots, workstation occupancy snapshots, daily schedule snapshots, deterministic conversation, and renderer cleanup.
 - [x] T033 Review architecture checklist: Phaser view-only, progression/layout services have no Phaser dependency, existing NPC systems can consume metadata later, Level 1 startup office metadata exists, no multi-floor gameplay or external calls, small isolated PR.
 
+## Phase 32: Employee AI State Machine Foundation
+- [x] T034 Confirm existing employee, simulation, NPC movement, schedule, layout, progression, and controller files before Phase 32 implementation.
+- [x] T035 Add `EmployeeAITypes.ts` with EmployeeAIState, EmployeeAIContext, EmployeeAITransition, EmployeeAIConfig, EmployeeAISnapshot, and EmployeeAIUpdateResult types in `src/features/city-view/scene/office/employees/EmployeeAITypes.ts`.
+- [x] T036 Add `EmployeeAIService.ts` in `src/features/city-view/scene/office/employees/EmployeeAIService.ts` without Phaser, provider, external API, or random behavior dependencies.
+- [x] T037 Implement deterministic initial state creation for idle, walking, working, talking, taking_break, and going_home in `EmployeeAIService.ts`.
+- [x] T038 Implement transition validation and helper methods getCurrentState(), canTransitionTo(), transitionTo(), and update() in `EmployeeAIService.ts`.
+- [x] T039 Integrate EmployeeAIService lightly in `src/features/city-view/scene/office/OfficeProjectPortalController.ts` with read-only state snapshot exposure.
+- [x] T040 Ensure Phase 32 does not change NPC movement, workstation occupancy, daily schedule, conversation, project portal, task, work-session, renderer, progression, or layout behavior.
+- [x] T041 Run `npx tsc --noEmit` for Phase 32.
+- [x] T042 Run `npm run build` for Phase 32.
+- [x] T043 Run `git diff --check` for Phase 32.
+
 ## Deferred Explicitly Out Of Scope
 - Multi-floor navigation
 - Elevators and stairs
@@ -56,3 +68,7 @@
 - Real AI/OpenAI/Codex/MCP/GitHub calls
 - Map editor
 - Save/load persistence
+- Phase 32 autonomous task assignment
+- Phase 32 employee productivity decisions
+- Phase 32 real LLM/provider execution
+- Phase 32 behavior-driven rendering changes

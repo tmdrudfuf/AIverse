@@ -3,6 +3,8 @@
 ## Summary
 Design a lightweight office layout and company progression foundation that represents Daily Proof as a small one-floor startup office at Level 1 and prepares metadata for larger one-floor offices, departmental growth, and future headquarters/multi-floor expansion. This architect phase only creates Spec Kit artifacts; no source implementation is included.
 
+Phase 32 extends this foundation with a deterministic local employee AI state machine that can describe office employee behavior states without connecting real AI, providers, LLMs, or renderer-driven behavior.
+
 ## Technical Context
 - Next.js, TypeScript, Phaser project.
 - Office scene files live under `src/features/city-view/scene/office/`.
@@ -11,6 +13,7 @@ Design a lightweight office layout and company progression foundation that repre
 - WorkstationOccupancyService owns workstation assignment/occupancy.
 - EmployeeDailyScheduleService owns schedule snapshots.
 - EmployeeConversationService owns deterministic dialogue.
+- EmployeeAIService owns local deterministic employee behavior state metadata only.
 - OfficeEmployeeNpcRenderer owns Phaser display objects only.
 - Phaser remains view-only: renderers consume view models and own display objects only.
 
@@ -21,14 +24,18 @@ Design a lightweight office layout and company progression foundation that repre
 - Company progression and layout metadata must live in non-Phaser services/models.
 - Existing NPC systems can consume layout metadata later but must not own progression or duplicate layout state.
 - No external APIs, provider calls, real AI execution, multi-floor navigation, economy, build mode, pathfinding, map editor, save/load, or gameplay changes.
+- Employee AI state machine logic must remain local, deterministic, and non-Phaser.
 
 ## Proposed File Structure
 - `src/features/city-view/scene/office/progression/CompanyProgressionTypes.ts`
 - `src/features/city-view/scene/office/progression/CompanyProgressionService.ts`
 - `src/features/city-view/scene/office/layout/OfficeLayoutTypes.ts`
 - `src/features/city-view/scene/office/layout/OfficeLayoutService.ts`
+- `src/features/city-view/scene/office/employees/EmployeeAITypes.ts`
+- `src/features/city-view/scene/office/employees/EmployeeAIService.ts`
 - Existing integration points, if implementation proceeds:
   - `OfficeProjectPortalController.ts` can own service instances and expose progression/layout snapshots.
+  - `OfficeProjectPortalController.ts` can expose employee AI state snapshots without changing current office rendering or simulation behavior.
   - `WorkstationOccupancyService.ts` can later accept workstation slots from OfficeLayoutService.
   - `EmployeeNpcMovementService.ts` can later consume layout position hints.
   - `EmployeeDailyScheduleService.ts` can later map schedule intents to layout zones.
@@ -41,6 +48,7 @@ Design a lightweight office layout and company progression foundation that repre
 - Future levels should be represented as metadata but not unlocked as playable multi-floor spaces yet.
 - Layout zones and slots are the future bridge for workstation occupancy, movement, schedule, and renderer placement.
 - The tilemap remains the current visual environment until a later implementation phase explicitly updates rendering.
+- Employee AI state machine metadata is advisory foundation data and must not replace EmployeeSimulationService, EmployeeNpcMovementService, EmployeeDailyScheduleService, EmployeeConversationService, or renderer behavior in Phase 32.
 
 ## Company Progression Model
 Recommended company stage:
@@ -157,12 +165,41 @@ Controllers may expose:
 - `getActiveOfficeLayout()`
 - `getOfficeZoneSnapshots()`
 - `getOfficeLayoutPositionHints()`
+- `getEmployeeAIStateSnapshots()`
 
 Controller responsibilities:
 - Compose progression and layout service outputs.
 - Keep output one-way for renderer and existing NPC systems.
 - Avoid Phaser object creation and renderer lifecycle work.
 - Avoid introducing save/load, economy, payroll, or external integration behavior.
+
+## Employee AI State Model
+Recommended employee AI states:
+- `idle`
+- `walking`
+- `working`
+- `talking`
+- `taking_break`
+- `going_home`
+
+Recommended employee AI metadata:
+- `EmployeeAIState`
+- `EmployeeAIContext`
+- `EmployeeAITransition`
+- `EmployeeAIConfig`
+- `EmployeeAIUpdateResult`
+
+`EmployeeAIService` may:
+- create initial employee AI state snapshots
+- validate state transitions
+- expose current state
+- transition to allowed states
+- update snapshots from deterministic simulation, movement, schedule, conversation, layout, and progression context
+
+`EmployeeAIService` must not:
+- import Phaser
+- call external APIs, providers, LLMs, Codex, OpenAI, GitHub, or MCP
+- assign tasks, start work sessions, complete work, mutate schedules, mutate movement, or render behavior
 
 ## Renderer Responsibilities
 Renderers may later:
@@ -184,6 +221,7 @@ Renderers must not:
 - EmployeeNpcMovementService should eventually map logical movement targets to layout position hints.
 - EmployeeDailyScheduleService should eventually resolve schedule intents to layout zones such as meeting areas and break areas.
 - EmployeeConversationService should remain independent but may use zone labels later for contextual dialogue.
+- EmployeeAIService should consume existing snapshots as read-only context and remain independent from provider execution.
 - Existing NPC rendering should remain stable during the foundation implementation.
 
 ## Risk Review
@@ -193,6 +231,7 @@ Renderers must not:
 - Future multi-floor expansion: include floorCount and floorId metadata now, but avoid floor navigation logic.
 - Workstation slot migration: make slot metadata compatible with current WorkstationOccupancyService but do not force migration beyond the small PR.
 - Unlock criteria complexity: start with deterministic mock milestones and avoid economy/payroll dependencies.
+- Employee AI ownership creep: keep AI state advisory and local so it does not duplicate or mutate simulation, movement, schedule, or conversation ownership.
 
 ## Validation Plan For Implementation Phase
 - `npx tsc --noEmit`
