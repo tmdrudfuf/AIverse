@@ -5,6 +5,8 @@ Design a lightweight office layout and company progression foundation that repre
 
 Phase 32 extends this foundation with a deterministic local employee AI state machine that can describe office employee behavior states without connecting real AI, providers, LLMs, or renderer-driven behavior.
 
+Phase 33 adds focused automated test coverage for the Employee AI state foundation, covering service-level state resolution, transition metadata, snapshot stability, and controller preview integration edge cases without changing gameplay behavior.
+
 ## Technical Context
 - Next.js, TypeScript, Phaser project.
 - Office scene files live under `src/features/city-view/scene/office/`.
@@ -25,6 +27,7 @@ Phase 32 extends this foundation with a deterministic local employee AI state ma
 - Existing NPC systems can consume layout metadata later but must not own progression or duplicate layout state.
 - No external APIs, provider calls, real AI execution, multi-floor navigation, economy, build mode, pathfinding, map editor, save/load, or gameplay changes.
 - Employee AI state machine logic must remain local, deterministic, and non-Phaser.
+- Employee AI tests must remain local and deterministic, with no provider, network, LLM, renderer, or Phaser runtime dependency.
 
 ## Proposed File Structure
 - `src/features/city-view/scene/office/progression/CompanyProgressionTypes.ts`
@@ -33,6 +36,8 @@ Phase 32 extends this foundation with a deterministic local employee AI state ma
 - `src/features/city-view/scene/office/layout/OfficeLayoutService.ts`
 - `src/features/city-view/scene/office/employees/EmployeeAITypes.ts`
 - `src/features/city-view/scene/office/employees/EmployeeAIService.ts`
+- `src/features/city-view/scene/office/employees/EmployeeAIService.test.ts`
+- `src/features/city-view/scene/office/OfficeProjectPortalController.employee-ai.test.ts`
 - Existing integration points, if implementation proceeds:
   - `OfficeProjectPortalController.ts` can own service instances and expose progression/layout snapshots.
   - `OfficeProjectPortalController.ts` can expose employee AI state snapshots without changing current office rendering or simulation behavior.
@@ -201,6 +206,23 @@ Recommended employee AI metadata:
 - call external APIs, providers, LLMs, Codex, OpenAI, GitHub, or MCP
 - assign tasks, start work sessions, complete work, mutate schedules, mutate movement, or render behavior
 
+## Employee AI Test Coverage
+Recommended service-level tests:
+- deterministic initial state resolution for idle, walking, working, talking, taking_break, and going_home
+- accepted transition metadata for fromState, toState, reason, occurredAt, and accepted
+- rejected transitions preserving the previous snapshot
+- `getCurrentState()`, `canTransitionTo()`, `transitionTo()`, `update()`, `updateMany()`, and `getSnapshots()` behavior
+- timestamp fallback and context-provided timestamp behavior
+- sorted `updateMany()` and `getSnapshots()` results
+- clone immutability for snapshots, transitions, and context summaries
+
+Recommended controller integration tests:
+- `getEmployeeAIStateSnapshots()` composes simulation, workstation, schedule, movement, progression, and layout context read-only
+- AI preview movement uses the latest known movement timestamp fallback strategy instead of a stale fixed preview timestamp
+- employee AI preview does not mutate NPC movement, workstation occupancy, daily schedule, conversation, work-session, project portal, renderer, progression, or layout behavior
+
+Test implementation should use a lightweight TypeScript-compatible test runner and avoid requiring a live Phaser scene, browser, network, provider, LLM, or external service.
+
 ## Renderer Responsibilities
 Renderers may later:
 - consume layout view models or position hints
@@ -239,6 +261,7 @@ Renderers must not:
 - `git diff --check`
 - `git diff --cached --check`
 - `npm run lint` if available, non-blocking for the known Next.js lint issue
+- Employee AI test phase: `npm test` or the project-specific test script added by Phase 33
 - Manual regression: City to Office transition, office tilemap, computer interaction, Project Portal, Task Detail, Employee Assignment, Work Session start/complete, Activity Log, Office NPC placeholders, NPC movement snapshots, workstation occupancy snapshots, daily schedule snapshots, deterministic conversation, NPC renderer cleanup
 
 ## Review Checklist
