@@ -58,7 +58,7 @@
 - [x] T043 Run `git diff --check` for Phase 32.
 
 ## Phase 33: Employee AI State Foundation Tests
-- [ ] T044 Confirm current package scripts in `package.json`, TypeScript config in `tsconfig.json`, EmployeeAIService in `src/features/city-view/scene/office/employees/EmployeeAIService.ts`, EmployeeAITypes in `src/features/city-view/scene/office/employees/EmployeeAITypes.ts`, and OfficeProjectPortalController integration in `src/features/city-view/scene/office/OfficeProjectPortalController.ts` before adding Employee AI tests.
+- [x] T044 Confirm current package scripts in `package.json`, TypeScript config in `tsconfig.json`, EmployeeAIService in `src/features/city-view/scene/office/employees/EmployeeAIService.ts`, EmployeeAITypes in `src/features/city-view/scene/office/employees/EmployeeAITypes.ts`, and OfficeProjectPortalController integration in `src/features/city-view/scene/office/OfficeProjectPortalController.ts` before adding Employee AI tests.
 - [ ] T045 Add lightweight TypeScript-compatible test tooling and a test script in `package.json` and `package-lock.json` without introducing browser, provider, LLM, network, or live Phaser runtime requirements.
 - [ ] T046 [P] Add service-level state resolution tests for idle, walking, working, talking, taking_break, and going_home in `src/features/city-view/scene/office/employees/EmployeeAIService.test.ts`.
 - [ ] T047 Add transition validation tests for accepted transition metadata, rejected transition preservation, unknown employee transition checks, and custom allowedTransitions config in `src/features/city-view/scene/office/employees/EmployeeAIService.test.ts`.
