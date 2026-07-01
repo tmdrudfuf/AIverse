@@ -134,9 +134,115 @@ describe("EmployeeAIService transition validation", () => {
   });
 });
 
+describe("EmployeeAIService snapshot stability", () => {
+  it("captures context summaries and context-provided timestamps", () => {
+    const service = new EmployeeAIService();
+
+    const snapshot = service.createInitialState(createContext({
+      companyLevel: 2,
+      employeeId: "employee-summary",
+      layoutId: "layout-small-office",
+      movementState: "arrived",
+      scheduleState: "focused",
+      simulationState: "working",
+      targetZone: "workstation",
+      updatedAt: "2026-01-01T10:15:00.000Z",
+    }));
+
+    expect(snapshot.lastUpdatedAt).toBe("2026-01-01T10:15:00.000Z");
+    expect(snapshot.contextSummary).toEqual({
+      simulationState: "working",
+      movementZone: "workstation",
+      movementState: "arrived",
+      scheduleState: "focused",
+      layoutId: "layout-small-office",
+      companyLevel: 2,
+    });
+  });
+
+  it("uses the default timestamp when context has none", () => {
+    const service = new EmployeeAIService();
+
+    const snapshot = service.createInitialState(createContext({
+      simulationState: "idle",
+      updatedAt: undefined,
+    }));
+
+    expect(snapshot.lastUpdatedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("keeps the previous timestamp when updating the same state without a new timestamp", () => {
+    const service = new EmployeeAIService();
+    service.createInitialState(createContext({
+      employeeId: "employee-same-state",
+      simulationState: "idle",
+      updatedAt: "2026-01-01T11:00:00.000Z",
+    }));
+
+    const result = service.update(createContext({
+      employeeId: "employee-same-state",
+      scheduleState: "available",
+      simulationState: "idle",
+      updatedAt: undefined,
+    }));
+
+    expect(result.snapshot.lastUpdatedAt).toBe("2026-01-01T11:00:00.000Z");
+  });
+
+  it("sorts updateMany results and snapshots by employee id", () => {
+    const service = new EmployeeAIService();
+
+    const results = service.updateMany([
+      createContext({ employeeId: "employee-c", simulationState: "working" }),
+      createContext({ employeeId: "employee-a", movementState: "moving" }),
+      createContext({ employeeId: "employee-b", scheduleState: "leaving" }),
+    ]);
+
+    expect(results.map((result) => result.employeeId)).toEqual(["employee-a", "employee-b", "employee-c"]);
+    expect(service.getSnapshots().map((snapshot) => snapshot.employeeId)).toEqual([
+      "employee-a",
+      "employee-b",
+      "employee-c",
+    ]);
+  });
+
+  it("returns cloned snapshots, transitions, and context summaries", () => {
+    const service = new EmployeeAIService();
+    const initialSnapshot = service.createInitialState(createContext({
+      employeeId: "employee-clone",
+      simulationState: "idle",
+    }));
+    const transitionResult = service.transitionTo(
+      "employee-clone",
+      "working",
+      createContext({
+        employeeId: "employee-clone",
+        simulationState: "working",
+        updatedAt: "2026-01-01T12:00:00.000Z",
+      }),
+    );
+
+    initialSnapshot.contextSummary.simulationState = "working";
+    if (transitionResult.snapshot.lastTransition) {
+      transitionResult.snapshot.lastTransition.reason = "mutated";
+    }
+    transitionResult.snapshot.contextSummary.simulationState = "idle";
+
+    const storedSnapshot = service.getSnapshots()[0];
+
+    expect(storedSnapshot.currentState).toBe("working");
+    expect(storedSnapshot.lastTransition?.reason).toBe("manual_transition");
+    expect(storedSnapshot.contextSummary.simulationState).toBe("working");
+    expect(storedSnapshot.contextSummary).not.toBe(transitionResult.snapshot.contextSummary);
+    expect(storedSnapshot.lastTransition).not.toBe(transitionResult.snapshot.lastTransition);
+  });
+});
+
 function createContext(options: {
+  companyLevel?: number;
   employeeId?: string;
   isConversationActive?: boolean;
+  layoutId?: string;
   movementState?: EmployeeNpcMovementState;
   scheduleState?: EmployeeScheduleState;
   simulationState?: EmployeeSimulationState;
@@ -169,6 +275,30 @@ function createContext(options: {
           positionIntent: { zone: options.targetZone ?? "idleSpot" },
         }
       : undefined,
+    companyProgression: options.companyLevel
+      ? {
+          companyLevel: options.companyLevel,
+          companyStage: "smallOffice",
+          floorCount: 1,
+          layoutId: options.layoutId ?? "layout-small-office",
+          maxEmployees: 8,
+          requiredMilestones: [],
+          unlockedOfficeZones: [],
+        }
+      : undefined,
+    officeLayout: options.layoutId
+      ? {
+          layoutId: options.layoutId,
+          stage: "smallOffice",
+          floorId: "floor-1",
+          zones: [],
+          furnitureSlots: [],
+          workstationSlots: [],
+          meetingSlots: [],
+          breakAreaSlots: [],
+          entryExitPoints: [],
+        }
+      : undefined,
     simulationSnapshot: options.simulationState
       ? {
           employeeId,
@@ -177,6 +307,6 @@ function createContext(options: {
           displayLabel: `${employeeId} ${options.simulationState}`,
         }
       : undefined,
-    updatedAt: options.updatedAt ?? "2026-01-01T09:00:00.000Z",
+    updatedAt: options.updatedAt,
   };
 }
