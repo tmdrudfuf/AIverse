@@ -67,7 +67,7 @@
 - [x] T050 Add controller edge case tests proving Employee AI preview movement uses the latest known movement timestamp strategy and does not mutate NPC movement, workstation occupancy, daily schedule, conversation, work-session, project portal, renderer, progression, or layout behavior in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-ai.test.ts`.
 - [x] T051 Run the Employee AI test script added in `package.json` and verify the command output before marking Phase 33 tests complete.
 - [x] T052 Run `npx tsc --noEmit` for Phase 33.
-- [ ] T053 Run `npm run build` for Phase 33.
+- [x] T053 Run `npm run build` for Phase 33.
 - [ ] T054 Run `git diff --check` for Phase 33.
 - [ ] T055 Run `git diff --cached --check` for Phase 33.
 
