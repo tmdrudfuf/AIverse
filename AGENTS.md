@@ -4,6 +4,16 @@ when you need to read code, you don't need to ask permission for it
 
 This repository uses GitHub Spec Kit for spec-driven development with Codex CLI.
 
+## Permanent Instructions
+
+- Follow the Spec Kit workflow.
+- Inspect relevant files before editing.
+- Make the smallest correct change.
+- Prefer readable and maintainable code.
+- Preserve the existing architecture and coding style.
+- Do not make unrelated refactors.
+- Use concise responses unless more detail is requested.
+
 ## Required Workflow
 
 All product changes must follow this order:
@@ -22,6 +32,25 @@ Do not implement application features directly from a prompt unless the active f
 - Keep specs focused on user value and acceptance criteria.
 - Keep plans focused on technical approach, validation, and architectural fit.
 - Keep tasks small, ordered, independently verifiable, and tied to user stories.
+
+## Validation
+
+Run these validations after every implementation:
+
+- `npx tsc --noEmit`
+- `npm run build`
+- `git diff --check`
+- `git diff --cached --check`
+
+Fix any validation failures before finishing.
+
+## Completion Expectations
+
+- Explain what changed.
+- Explain why.
+- List files modified.
+- Include validation results.
+- Commit only after all validations pass.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
