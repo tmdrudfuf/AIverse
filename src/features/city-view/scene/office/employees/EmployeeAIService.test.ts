@@ -40,6 +40,100 @@ describe("EmployeeAIService state resolution", () => {
   });
 });
 
+describe("EmployeeAIService transition validation", () => {
+  it("records accepted transition metadata", () => {
+    const service = new EmployeeAIService();
+    service.createInitialState(createContext({
+      employeeId: "employee-transition",
+      simulationState: "idle",
+      updatedAt: "2026-01-01T09:00:00.000Z",
+    }));
+
+    const result = service.transitionTo(
+      "employee-transition",
+      "working",
+      createContext({
+        employeeId: "employee-transition",
+        simulationState: "working",
+        updatedAt: "2026-01-01T09:05:00.000Z",
+      }),
+      "test_transition",
+    );
+
+    expect(result.transition).toEqual({
+      employeeId: "employee-transition",
+      fromState: "idle",
+      toState: "working",
+      reason: "test_transition",
+      occurredAt: "2026-01-01T09:05:00.000Z",
+      accepted: true,
+    });
+    expect(result.snapshot.currentState).toBe("working");
+    expect(result.snapshot.previousState).toBe("idle");
+    expect(result.snapshot.lastTransition).toEqual(result.transition);
+    expect(service.getCurrentState("employee-transition")).toBe("working");
+  });
+
+  it("preserves the current snapshot when a transition is rejected", () => {
+    const service = new EmployeeAIService({
+      allowedTransitions: {
+        idle: ["walking"],
+      },
+    });
+    const initialSnapshot = service.createInitialState(createContext({
+      employeeId: "employee-rejected",
+      simulationState: "idle",
+      updatedAt: "2026-01-01T09:00:00.000Z",
+    }));
+
+    const result = service.transitionTo(
+      "employee-rejected",
+      "working",
+      createContext({
+        employeeId: "employee-rejected",
+        simulationState: "working",
+        updatedAt: "2026-01-01T09:10:00.000Z",
+      }),
+      "blocked_transition",
+    );
+
+    expect(result.transition).toBeUndefined();
+    expect(result.rejectedTransition).toEqual({
+      employeeId: "employee-rejected",
+      fromState: "idle",
+      toState: "working",
+      reason: "blocked_transition",
+      occurredAt: "2026-01-01T09:10:00.000Z",
+      accepted: false,
+    });
+    expect(result.snapshot).toEqual(initialSnapshot);
+    expect(service.getSnapshots()).toEqual([initialSnapshot]);
+    expect(service.getCurrentState("employee-rejected")).toBe("idle");
+  });
+
+  it("rejects transition checks for unknown employees", () => {
+    const service = new EmployeeAIService();
+
+    expect(service.getCurrentState("missing-employee")).toBeUndefined();
+    expect(service.canTransitionTo("missing-employee", "working")).toBe(false);
+  });
+
+  it("uses custom allowedTransitions config", () => {
+    const service = new EmployeeAIService({
+      allowedTransitions: {
+        idle: ["talking"],
+      },
+    });
+    service.createInitialState(createContext({
+      employeeId: "employee-custom",
+      simulationState: "idle",
+    }));
+
+    expect(service.canTransitionTo("employee-custom", "talking")).toBe(true);
+    expect(service.canTransitionTo("employee-custom", "working")).toBe(false);
+  });
+});
+
 function createContext(options: {
   employeeId?: string;
   isConversationActive?: boolean;
@@ -47,6 +141,7 @@ function createContext(options: {
   scheduleState?: EmployeeScheduleState;
   simulationState?: EmployeeSimulationState;
   targetZone?: OfficeNpcLogicalPosition;
+  updatedAt?: string;
 }): EmployeeAIContext {
   const employeeId = options.employeeId ?? "employee-1";
 
@@ -82,6 +177,6 @@ function createContext(options: {
           displayLabel: `${employeeId} ${options.simulationState}`,
         }
       : undefined,
-    updatedAt: "2026-01-01T09:00:00.000Z",
+    updatedAt: options.updatedAt ?? "2026-01-01T09:00:00.000Z",
   };
 }
