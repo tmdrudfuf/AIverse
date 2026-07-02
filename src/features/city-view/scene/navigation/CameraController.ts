@@ -1,7 +1,7 @@
 import { MAX_ZOOM, MIN_ZOOM, ZOOM_SMOOTHING } from "../config/navigationConfig";
 import type { Point, WorldBounds } from "../shared/geometry";
 import type { PhaserScene } from "../shared/phaserTypes";
-import type { CameraTarget, NavigationIntent, NavigationState } from "./navigationTypes";
+import type { CameraFocusOptions, NavigationIntent, NavigationState } from "./navigationTypes";
 
 export class CameraController {
   constructor(
@@ -35,11 +35,12 @@ export class CameraController {
     this.state.targetZoom = clampZoom(zoom, this.state.bounds, camera.width, camera.height);
   }
 
-  focusWorldPoint(point: Point, options: { preferredZoom?: number; targetId?: string } = {}) {
+  focusWorldPoint(point: Point, options: CameraFocusOptions = {}) {
     this.state.activeCameraTarget = {
       id: options.targetId ?? "manual-focus-target",
       position: point,
       preferredZoom: options.preferredZoom,
+      boundsMode: options.boundsMode,
     };
 
     if (options.preferredZoom !== undefined) this.setZoomTarget(options.preferredZoom);

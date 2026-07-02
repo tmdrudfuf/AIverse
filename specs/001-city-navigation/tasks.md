@@ -136,7 +136,7 @@ Each task uses this format:
 
 **Independent Test**: Review module boundaries and confirm navigation is camera/view control only, with no excluded future systems implemented.
 
-- [ ] T022 [US4] Add camera target and focus extension types without implementing future entities
+- [X] T022 [US4] Add camera target and focus extension types without implementing future entities
   - Files likely affected: `src/features/city-view/scene/navigation/navigationTypes.ts`, `src/features/city-view/scene/navigation/CameraController.ts`
   - Acceptance criteria: Defines generic camera target/focus input types for future use; no Founder, Building, NPC, AI Agent, interior, AI integration, or ECS behavior is implemented.
 

@@ -10,11 +10,24 @@ export type NavigationIntent = {
   source: NavigationIntentSource;
 };
 
+export type CameraBoundsMode = "clamp" | "free";
+
 export type CameraTarget = {
   id: string;
   position: Point;
   preferredZoom?: number;
-  boundsMode?: "clamp" | "free";
+  boundsMode?: CameraBoundsMode;
+};
+
+export type CameraFocusOptions = {
+  targetId?: string;
+  preferredZoom?: number;
+  boundsMode?: CameraBoundsMode;
+};
+
+export type CameraFocusRequest = {
+  point: Point;
+  options?: CameraFocusOptions;
 };
 
 export type NavigationState = {
