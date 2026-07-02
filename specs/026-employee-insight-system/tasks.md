@@ -83,11 +83,11 @@
 
 **Independent Test**: Place the player near multiple employees and confirm nearest employee wins with deterministic tie behavior.
 
-- [ ] T013 [US3] Add controller or service tests for multi-employee source ordering and selected insight stability in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
+- [X] T013 [US3] Add controller or service tests for multi-employee source ordering and selected insight stability in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`
   - Acceptance criteria: Tests cover nearest employee updates and deterministic tie-break behavior.
 
-- [ ] T014 [US3] Ensure EmployeeInsightService selection remains stable across equivalent distances in `src/features/city-view/scene/office/insight/EmployeeInsightService.ts`.
+- [X] T014 [US3] Ensure EmployeeInsightService selection remains stable across equivalent distances in `src/features/city-view/scene/office/insight/EmployeeInsightService.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.ts`
   - Acceptance criteria: Equal distances resolve by employee id and card updates only when selected employee or source data changes.
 

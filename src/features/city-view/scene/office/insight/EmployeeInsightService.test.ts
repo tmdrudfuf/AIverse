@@ -92,6 +92,33 @@ describe("EmployeeInsightService nearest target selection", () => {
 
     expect(state.target?.employeeId).toBe("employee-a");
   });
+
+  it("updates selection when another employee becomes nearest", () => {
+    const service = new EmployeeInsightService({ proximityRadius: 20 });
+    const sources = [
+      createSource({ employeeId: "employee-left", movementPosition: { x: -5, y: 0 } }),
+      createSource({ employeeId: "employee-right", movementPosition: { x: 5, y: 0 } }),
+    ];
+
+    const leftState = service.getInsightState({ x: -4, y: 0 }, sources);
+    const rightState = service.getInsightState({ x: 4, y: 0 }, sources);
+
+    expect(leftState.target?.employeeId).toBe("employee-left");
+    expect(rightState.target?.employeeId).toBe("employee-right");
+  });
+
+  it("keeps equivalent-distance selection stable across source ordering", () => {
+    const service = new EmployeeInsightService({ proximityRadius: 20 });
+    const employeeA = createSource({ employeeId: "employee-a", movementPosition: { x: -6, y: 0 } });
+    const employeeB = createSource({ employeeId: "employee-b", movementPosition: { x: 6, y: 0 } });
+
+    const orderedState = service.getInsightState({ x: 0, y: 0 }, [employeeA, employeeB]);
+    const reversedState = service.getInsightState({ x: 0, y: 0 }, [employeeB, employeeA]);
+
+    expect(orderedState.target?.employeeId).toBe("employee-a");
+    expect(reversedState.target?.employeeId).toBe("employee-a");
+    expect(orderedState.viewModel?.employeeId).toBe(reversedState.viewModel?.employeeId);
+  });
 });
 
 describe("EmployeeInsightService view model derivation", () => {
