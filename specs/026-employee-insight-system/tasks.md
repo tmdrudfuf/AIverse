@@ -97,11 +97,11 @@
 
 **Independent Test**: Review code and behavior to confirm no dialogue text, choices, or interaction key are introduced by Employee Insight.
 
-- [ ] T015 [US4] Add regression tests proving Employee Insight does not call EmployeeConversationService or require conversation view models in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`.
+- [X] T015 [US4] Add regression tests proving Employee Insight does not call EmployeeConversationService or require conversation view models in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`
   - Acceptance criteria: Tests prove insight source composition is independent from dialogue creation and does not mutate conversation behavior.
 
-- [ ] T016 [US4] Review and document dialogue boundary comments in `src/features/city-view/scene/office/insight/EmployeeInsightTypes.ts`.
+- [X] T016 [US4] Review and document dialogue boundary comments in `src/features/city-view/scene/office/insight/EmployeeInsightTypes.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightTypes.ts`
   - Acceptance criteria: Brief comments identify passive observation boundaries without describing dialogue as implemented.
 

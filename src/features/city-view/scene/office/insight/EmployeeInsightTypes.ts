@@ -33,6 +33,7 @@ export type EmployeeInsightPosition = {
   positionHint?: EmployeeNpcMovementPositionHint;
 };
 
+// Source data is read-only simulation context. It should expose existing state, not create dialogue or UI-only state.
 export type EmployeeInsightSource = {
   employeeId: string;
   name: string;
@@ -60,6 +61,7 @@ export type EmployeeInsightTarget = {
   source: EmployeeInsightSource;
 };
 
+// Card data is passive display data only. It must not include choices, prompts, or dialogue routing.
 export type EmployeeInsightViewModel = {
   employeeId: string;
   titleName: string;
@@ -87,5 +89,5 @@ export type EmployeeInsightPlayerPosition = {
   y: number;
 };
 
-// Passive observation only: dialogue systems may consume similar context later, but insight owns no dialogue flow.
+// Passive observation only: future dialogue may consume similar context later, but insight owns no dialogue flow.
 export type EmployeeInsightThinkingText = string;
