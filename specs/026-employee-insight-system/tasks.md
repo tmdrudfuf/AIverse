@@ -47,19 +47,19 @@
 
 **Independent Test**: Move near a visible employee in the office and confirm the card appears with work information while movement remains available.
 
-- [ ] T007 [P] [US1] Add controller integration tests for composing insight source data from Employee AI, simulation, movement, workstation, schedule, project/task, and progression state in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`.
+- [X] T007 [P] [US1] Add controller integration tests for composing insight source data from Employee AI, simulation, movement, workstation, schedule, project/task, and progression state in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`
   - Acceptance criteria: Tests prove read-only source composition and no mutation of existing snapshots.
 
-- [ ] T008 [US1] Expose read-only employee insight source data from `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
+- [X] T008 [US1] Expose read-only employee insight source data from `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.ts`, `src/features/city-view/scene/office/insight/EmployeeInsightTypes.ts`
   - Acceptance criteria: Controller returns source data needed by EmployeeInsightService without changing Employee AI, schedule, project/task, progression, movement, workstation, or conversation state.
 
-- [ ] T009 [P] [US1] Create non-blocking Phaser overlay renderer in `src/features/city-view/scene/office/insight/EmployeeInsightOverlay.ts`.
+- [X] T009 [P] [US1] Create non-blocking Phaser overlay renderer in `src/features/city-view/scene/office/insight/EmployeeInsightOverlay.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightOverlay.ts`
   - Acceptance criteria: Renders one screen-space card from EmployeeInsightViewModel; has show/update/hide/destroy methods; does not consume input or manage business rules.
 
-- [ ] T010 [US1] Wire EmployeeInsightService and EmployeeInsightOverlay into `src/features/city-view/scene/office/CompanyOfficeScene.ts`.
+- [X] T010 [US1] Wire EmployeeInsightService and EmployeeInsightOverlay into `src/features/city-view/scene/office/CompanyOfficeScene.ts`.
   - Files likely affected: `src/features/city-view/scene/office/CompanyOfficeScene.ts`
   - Acceptance criteria: Scene passes current player position and controller source data each update; card appears automatically near an employee; movement remains active; cleanup destroys overlay.
 
