@@ -38,7 +38,7 @@ export class EmployeeKnowledgeOverlay {
       fontStyle: "bold",
     });
 
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 8; index += 1) {
       this.rowTexts.push(scene.add.text(CARD_X + CARD_PADDING, CARD_Y + ROW_START_Y + index * ROW_GAP, "", {
         fontFamily: "monospace",
         fontSize: "11px",
@@ -128,12 +128,17 @@ export class EmployeeKnowledgeOverlay {
 }
 
 function createRows(viewModel: EmployeeKnowledgeViewModel): KnowledgeRow[] {
+  const scheduleLabel = viewModel.scheduleSummary
+    ? viewModel.scheduleSummary.currentBlockLabel ?? viewModel.scheduleSummary.currentScheduleState
+    : undefined;
+
   return [
     { label: "Role", value: viewModel.roleLabel },
     { label: "State", value: viewModel.aiStateLabel },
     { label: "Task", value: viewModel.taskLabel },
     { label: "Progress", value: viewModel.progressLabel },
     { label: "Project", value: viewModel.projectLabel },
+    ...(scheduleLabel ? [{ label: "Schedule", value: scheduleLabel }] : []),
     ...(viewModel.plannedNextActivityText ? [{ label: "Next", value: viewModel.plannedNextActivityText }] : []),
   ];
 }

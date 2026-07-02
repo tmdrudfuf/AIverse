@@ -96,6 +96,55 @@ describe("EmployeeKnowledgeService schedule, confidence, and fallbacks", () => {
     expect(state.viewModel?.plannedNextActivityText).toBe("Next: Team Sync.");
   });
 
+  it("derives schedule context for work, break, conversation, and walking states", () => {
+    const service = new EmployeeKnowledgeService();
+
+    const work = service.getKnowledgeState(createKnowledgeSource({
+      aiState: "working",
+      scheduleBlocks: { current: { label: "Focus Work", type: "focusWork" } },
+      scheduleState: "focused",
+    }));
+    const breakState = service.getKnowledgeState(createKnowledgeSource({
+      aiState: "taking_break",
+      currentProject: null,
+      currentTask: null,
+      scheduleBlocks: { current: { label: "Coffee Break", type: "break" } },
+      scheduleState: "onBreak",
+    }));
+    const conversation = service.getKnowledgeState(createKnowledgeSource({
+      aiState: "talking",
+      currentProject: null,
+      currentTask: null,
+      scheduleBlocks: { current: { label: "Team Sync", type: "meeting" } },
+      scheduleState: "inMeeting",
+    }));
+    const walking = service.getKnowledgeState(createKnowledgeSource({
+      aiState: "walking",
+      currentProject: null,
+      currentTask: null,
+      movementZone: "meetingArea",
+      scheduleBlocks: {
+        current: { label: "Move to Sync", type: "meeting" },
+        next: { label: "Team Sync", type: "meeting" },
+      },
+      scheduleState: "inMeeting",
+    }));
+    const unavailable = service.getKnowledgeState(createKnowledgeSource({
+      scheduleSnapshot: null,
+    }));
+
+    expect(work.viewModel?.scheduleSummary?.currentBlockLabel).toBe("Focus Work");
+    expect(breakState.viewModel?.scheduleSummary?.currentBlockLabel).toBe("Coffee Break");
+    expect(conversation.viewModel?.scheduleSummary?.currentScheduleState).toBe("inMeeting");
+    expect(walking.viewModel?.scheduleSummary).toMatchObject({
+      currentBlockLabel: "Move to Sync",
+      nextBlockLabel: "Team Sync",
+      plannedNextActivityText: "Next: Team Sync.",
+    });
+    expect(unavailable.viewModel?.scheduleSummary).toBeUndefined();
+    expect(unavailable.viewModel?.plannedNextActivityText).toBeUndefined();
+  });
+
   it("omits optional confidence and schedule fields when source data is unavailable", () => {
     const service = new EmployeeKnowledgeService({
       fallbackProgressLabel: "No progress",

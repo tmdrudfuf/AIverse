@@ -73,15 +73,15 @@
 
 **Independent Test**: Observe an employee during a schedule block and confirm the panel describes current schedule context and planned next activity when source data exists.
 
-- [ ] T012 [P] [US2] Add service tests for current schedule block and planned next activity labels in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
+- [X] T012 [P] [US2] Add service tests for current schedule block and planned next activity labels in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`
   - Acceptance criteria: Tests cover work, break, conversation, walking, and unavailable schedule scenarios.
 
-- [ ] T013 [US2] Extend EmployeeKnowledgeService schedule derivation in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`.
+- [X] T013 [US2] Extend EmployeeKnowledgeService schedule derivation in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`, `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`
   - Acceptance criteria: Panel view model includes current schedule and planned next activity derived from schedule snapshots without fake data.
 
-- [ ] T014 [US2] Render schedule and planned next activity sections in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`.
+- [X] T014 [US2] Render schedule and planned next activity sections in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`
   - Acceptance criteria: Optional schedule content appears only when source data or unavailable fallback is defined; layout remains non-blocking.
 
