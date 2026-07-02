@@ -109,23 +109,23 @@
 
 **Purpose**: Verify behavior, test coverage, and non-regression boundaries.
 
-- [ ] T017 Run employee insight automated tests with `npm test`.
+- [X] T017 Run employee insight automated tests with `npm test`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`, `src/features/city-view/scene/office/OfficeProjectPortalController.employee-insight.test.ts`
   - Acceptance criteria: Employee insight tests and existing tests pass.
 
-- [ ] T018 Run TypeScript validation with `npx tsc --noEmit`.
+- [X] T018 Run TypeScript validation with `npx tsc --noEmit`.
   - Files likely affected: `src/features/city-view/scene/office/`
   - Acceptance criteria: TypeScript validation passes with no introduced errors.
 
-- [ ] T019 Run production build with `npm run build`.
+- [X] T019 Run production build with `npm run build`.
   - Files likely affected: `src/app/`, `src/features/city-view/`
   - Acceptance criteria: Build passes; Phaser client boundaries remain valid.
 
-- [ ] T020 Complete manual browser validation from `specs/026-employee-insight-system/quickstart.md`.
+- [X] T020 Complete manual browser validation from `specs/026-employee-insight-system/quickstart.md`.
   - Files likely affected: `specs/026-employee-insight-system/quickstart.md`
   - Acceptance criteria: Card appears/disappears by proximity, is non-blocking, hides for project portal, and contains no dialogue or interaction-key prompt.
 
-- [ ] T021 Review architecture checklist: no external AI calls, no dialogue coupling, no mutation of Employee AI/schedule/project/progression state, no broad renderer refactor, configurable radius exists.
+- [X] T021 Review architecture checklist: no external AI calls, no dialogue coupling, no mutation of Employee AI/schedule/project/progression state, no broad renderer refactor, configurable radius exists.
   - Files likely affected: `specs/026-employee-insight-system/tasks.md`
   - Acceptance criteria: Review confirms feature boundaries and notes any blocker before completion.
 
