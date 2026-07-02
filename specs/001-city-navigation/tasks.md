@@ -176,7 +176,7 @@ Each task uses this format:
   - Files likely affected: `specs/001-city-navigation/checklists/manual-test.md`
   - Acceptance criteria: Checklist covers WASD, arrow keys, diagonal movement, opposite-key behavior, smooth held movement, camera bounds, zoom in, zoom out, zoom limits, movement while zooming, page-scroll prevention, and explicit absence of Founder/building entry/NPC/AI integration.
 
-- [ ] T030 Complete manual browser validation against `specs/001-city-navigation/checklists/manual-test.md`
+- [X] T030 Complete manual browser validation against `specs/001-city-navigation/checklists/manual-test.md`
   - Files likely affected: `specs/001-city-navigation/checklists/manual-test.md`
   - Acceptance criteria: Each manual checklist item is marked pass/fail with notes; failures are either fixed before completion or documented as blockers; validation confirms no Founder, building entry, NPCs, AI integration, or ECS implementation was added.
 
