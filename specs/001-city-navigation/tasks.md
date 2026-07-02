@@ -152,7 +152,7 @@ Each task uses this format:
 
 **Purpose**: Keep the visible city controls aligned with the implemented navigation behavior.
 
-- [ ] T025 Update navigation hints in `src/features/city-view/CityView.tsx`
+- [X] T025 Update navigation hints in `src/features/city-view/CityView.tsx`
   - Files likely affected: `src/features/city-view/CityView.tsx`
   - Acceptance criteria: UI hint text accurately lists movement and zoom controls; hint remains concise and does not describe Founder, building entry, NPC, AI Agent, AI integration, or future-only controls.
 

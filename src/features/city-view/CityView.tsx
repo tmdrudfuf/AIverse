@@ -12,7 +12,7 @@ export function CityView() {
           <div><p>SPRINT 04</p><h2 id="city-view-title">Company District</h2></div>
           <div className="city-view-controls">
             <div className="city-view-key"><span><i className="active-key" /> ACTIVE COMPANY</span><span><i className="future-key" /> FUTURE SITE</span></div>
-            <div className="city-view-hint"><span>Move: WASD / Arrow Keys</span><span>Zoom: Q / E / Mouse Wheel</span></div>
+            <div className="city-view-hint"><span>Move: WASD / Arrows</span><span>Zoom: Q / E / Wheel</span></div>
           </div>
         </div>
         <CitySceneCanvas />
