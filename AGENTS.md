@@ -54,5 +54,5 @@ Fix any validation failures before finishing.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/026-employee-insight-system/plan.md
+shell commands, and other important information, read specs/027-employee-knowledge-system/plan.md
 <!-- SPECKIT END -->
