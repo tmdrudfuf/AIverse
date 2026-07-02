@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { Employee } from "./employees/EmployeeTypes";
@@ -160,6 +160,51 @@ describe("OfficeProjectPortalController employee insight integration", () => {
     expect(state.taskCollections).toEqual(beforeTaskCollections);
     expect(state.workSessions).toEqual(beforeWorkSessions);
   });
+
+  it("does not call conversation services or require conversation view models for insight sources", () => {
+    const state = createProjectPortalState();
+    state.employees = [
+      createEmployee({
+        id: "employee-observed",
+        name: "Olive Observed",
+        status: "Working",
+        assignedTaskId: "task-observed",
+        currentProjectId: "daily-proof",
+      }),
+    ];
+    state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [
+        createTask({
+          id: "task-observed",
+          assigneeId: "employee-observed",
+          assignee: "Olive Observed",
+          status: "In Progress",
+        }),
+      ],
+    };
+
+    const controller = createControllerHarness(state);
+    const conversationService = {
+      createConversation: vi.fn(() => {
+        throw new Error("Employee Insight must not create conversations.");
+      }),
+      createConversationViewModel: vi.fn(() => {
+        throw new Error("Employee Insight must not create conversation view models.");
+      }),
+    };
+    getControllerInternals(controller).employeeConversationService = conversationService;
+
+    const sources = controller.getEmployeeInsightSources();
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({
+      employeeId: "employee-observed",
+      currentTask: { id: "task-observed" },
+    });
+    expect(conversationService.createConversation).not.toHaveBeenCalled();
+    expect(conversationService.createConversationViewModel).not.toHaveBeenCalled();
+  });
 });
 
 type ControllerInternals = {
@@ -169,6 +214,10 @@ type ControllerInternals = {
   employeeNpcMovementService: EmployeeNpcMovementService;
   workstationOccupancyService: WorkstationOccupancyService;
   employeeDailyScheduleService: EmployeeDailyScheduleService;
+  employeeConversationService?: {
+    createConversation: ReturnType<typeof vi.fn>;
+    createConversationViewModel: ReturnType<typeof vi.fn>;
+  };
   companyProgressionService: CompanyProgressionService;
   officeLayoutService: OfficeLayoutService;
 };
