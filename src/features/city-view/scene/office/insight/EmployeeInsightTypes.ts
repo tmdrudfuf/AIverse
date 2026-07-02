@@ -1,7 +1,7 @@
 import type { EmployeeAISnapshot, EmployeeAIState } from "../employees/EmployeeAITypes";
 import type { EmployeeRole } from "../employees/EmployeeTypes";
 import type { EmployeeSimulationSnapshot, EmployeeSimulationState } from "../employees/EmployeeSimulationTypes";
-import type { EmployeeNpcMovementPosition, EmployeeNpcMovementSnapshot } from "../npc/EmployeeNpcMovementTypes";
+import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "../npc/EmployeeNpcMovementTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { CompanyProgressionSnapshot } from "../progression/CompanyProgressionTypes";
 import type { EmployeeDailyScheduleSnapshot, EmployeeScheduleState } from "../schedules/EmployeeDailyScheduleTypes";
@@ -27,6 +27,12 @@ export type EmployeeInsightMood = {
   tone?: "positive" | "neutral" | "strained";
 };
 
+export type EmployeeInsightPosition = {
+  x: number;
+  y: number;
+  positionHint?: EmployeeNpcMovementPositionHint;
+};
+
 export type EmployeeInsightSource = {
   employeeId: string;
   name: string;
@@ -41,7 +47,7 @@ export type EmployeeInsightSource = {
   mood?: EmployeeInsightMood;
   scheduleState?: EmployeeScheduleState;
   scheduleSnapshot?: EmployeeDailyScheduleSnapshot;
-  movementPosition?: EmployeeNpcMovementPosition;
+  movementPosition?: EmployeeInsightPosition;
   movementSnapshot?: EmployeeNpcMovementSnapshot;
   workstationState?: WorkstationState;
   workstationSnapshot?: WorkstationSnapshot;
