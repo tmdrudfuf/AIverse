@@ -69,11 +69,11 @@
 
 **Independent Test**: Move near an employee to show the card, then leave the radius and confirm the card hides without input.
 
-- [ ] T011 [P] [US2] Add service tests for hidden state when no employees are in range and when a blocking overlay suppresses insight in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
+- [X] T011 [P] [US2] Add service tests for hidden state when no employees are in range and when a blocking overlay suppresses insight in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`
   - Acceptance criteria: Tests cover hide conditions without relying on Phaser rendering.
 
-- [ ] T012 [US2] Implement automatic hide handling in `src/features/city-view/scene/office/CompanyOfficeScene.ts`.
+- [X] T012 [US2] Implement automatic hide handling in `src/features/city-view/scene/office/CompanyOfficeScene.ts`.
   - Files likely affected: `src/features/city-view/scene/office/CompanyOfficeScene.ts`, `src/features/city-view/scene/office/insight/EmployeeInsightOverlay.ts`
   - Acceptance criteria: Overlay hides when no employee is eligible or when project portal is open; no interaction key or dismissal state is introduced.
 

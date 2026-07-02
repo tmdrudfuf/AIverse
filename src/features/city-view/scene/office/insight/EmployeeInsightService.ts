@@ -4,6 +4,7 @@ import type {
   EmployeeInsightPlayerPosition,
   EmployeeInsightSource,
   EmployeeInsightState,
+  EmployeeInsightStateOptions,
   EmployeeInsightTarget,
   EmployeeInsightViewModel,
 } from "./EmployeeInsightTypes";
@@ -21,7 +22,10 @@ export class EmployeeInsightService {
   getInsightState(
     playerPosition: EmployeeInsightPlayerPosition,
     sources: ReadonlyArray<EmployeeInsightSource>,
+    options: EmployeeInsightStateOptions = {},
   ): EmployeeInsightState {
+    if (this.config.hideWhenBlockingOverlayOpen && options.isBlockingOverlayOpen) return {};
+
     const target = this.getNearestTarget(playerPosition, sources);
     if (!target) return {};
 

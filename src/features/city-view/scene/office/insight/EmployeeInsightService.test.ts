@@ -44,6 +44,41 @@ describe("EmployeeInsightService nearest target selection", () => {
     expect(state).toEqual({});
   });
 
+  it("returns hidden state when no employee sources exist", () => {
+    const service = new EmployeeInsightService({ proximityRadius: 4 });
+
+    const state = service.getInsightState({ x: 0, y: 0 }, []);
+
+    expect(state).toEqual({});
+  });
+
+  it("returns hidden state when a blocking overlay suppresses insight", () => {
+    const service = new EmployeeInsightService({ proximityRadius: 10 });
+
+    const state = service.getInsightState(
+      { x: 0, y: 0 },
+      [createSource({ employeeId: "employee-near", movementPosition: { x: 1, y: 0 } })],
+      { isBlockingOverlayOpen: true },
+    );
+
+    expect(state).toEqual({});
+  });
+
+  it("can ignore blocking overlay suppression when configured off", () => {
+    const service = new EmployeeInsightService({
+      hideWhenBlockingOverlayOpen: false,
+      proximityRadius: 10,
+    });
+
+    const state = service.getInsightState(
+      { x: 0, y: 0 },
+      [createSource({ employeeId: "employee-near", movementPosition: { x: 1, y: 0 } })],
+      { isBlockingOverlayOpen: true },
+    );
+
+    expect(state.target?.employeeId).toBe("employee-near");
+  });
+
   it("resolves equal-distance ties by employee id", () => {
     const service = new EmployeeInsightService({ proximityRadius: 10 });
 
