@@ -51,19 +51,19 @@
 
 **Independent Test**: Move near a visible employee and confirm Employee Knowledge appears for the same employee with identity, current state, Thinking, Why, Current Goal, and work context while movement remains available.
 
-- [ ] T008 [P] [US1] Add controller integration tests for composing Employee Knowledge source data from Insight, Employee AI, schedule, project/task, conversation, progression, movement, and workstation state in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`.
+- [X] T008 [P] [US1] Add controller integration tests for composing Employee Knowledge source data from Insight, Employee AI, schedule, project/task, conversation, progression, movement, and workstation state in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`
   - Acceptance criteria: Tests prove source composition is read-only and follows the current Employee Insight target/source.
 
-- [ ] T009 [US1] Expose read-only Employee Knowledge source data from `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
+- [X] T009 [US1] Expose read-only Employee Knowledge source data from `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.ts`, `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`
   - Acceptance criteria: Controller returns data needed by EmployeeKnowledgeService without mutating Employee AI, schedule, project/task, progression, conversation, movement, workstation, or Insight state.
 
-- [ ] T010 [P] [US1] Create non-blocking Phaser knowledge overlay renderer in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`.
+- [X] T010 [P] [US1] Create non-blocking Phaser knowledge overlay renderer in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`
   - Acceptance criteria: Renders one read-only panel from EmployeeKnowledgeViewModel; has show/update/hide/destroy methods; does not consume input or own business rules.
 
-- [ ] T011 [US1] Wire EmployeeKnowledgeService and EmployeeKnowledgeOverlay into `src/features/city-view/scene/office/CompanyOfficeScene.ts`.
+- [X] T011 [US1] Wire EmployeeKnowledgeService and EmployeeKnowledgeOverlay into `src/features/city-view/scene/office/CompanyOfficeScene.ts`.
   - Files likely affected: `src/features/city-view/scene/office/CompanyOfficeScene.ts`
   - Acceptance criteria: Scene derives knowledge for the same observed employee as Employee Insight, updates during office ticks, hides for blocking overlays, and destroys overlay cleanly.
 

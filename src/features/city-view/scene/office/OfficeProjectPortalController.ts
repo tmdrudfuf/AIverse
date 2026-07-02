@@ -16,7 +16,8 @@ import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationT
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
-import type { EmployeeInsightSource } from "./insight/EmployeeInsightTypes";
+import type { EmployeeInsightSource, EmployeeInsightTarget } from "./insight/EmployeeInsightTypes";
+import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
@@ -312,6 +313,18 @@ export class OfficeProjectPortalController {
         companyProgression: previewState.companyProgression,
       };
     });
+  }
+
+  getEmployeeKnowledgeSource(insightTarget: EmployeeInsightTarget | undefined): EmployeeKnowledgeSource | undefined {
+    if (!insightTarget) return undefined;
+
+    const { context } = this.createPreviewEmployeeConversationContext(insightTarget.employeeId);
+
+    return {
+      insightTarget,
+      insightSource: insightTarget.source,
+      conversationContext: context,
+    };
   }
 
   getEmployeeMovementSnapshots(
