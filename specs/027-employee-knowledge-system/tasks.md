@@ -109,11 +109,11 @@
 
 **Independent Test**: Review code and behavior to confirm no dialogue choices, memory persistence, relationship mutations, management commands, or direct employee controls are introduced.
 
-- [ ] T018 [P] [US4] Add regression tests proving Employee Knowledge does not call dialogue creation, assign tasks, alter schedules, or mutate conversation state in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`.
+- [X] T018 [P] [US4] Add regression tests proving Employee Knowledge does not call dialogue creation, assign tasks, alter schedules, or mutate conversation state in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`
   - Acceptance criteria: Tests prove knowledge source composition is read-only and separate from influence systems.
 
-- [ ] T019 [US4] Document read-only future-extension boundaries in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`.
+- [X] T019 [US4] Document read-only future-extension boundaries in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`
   - Acceptance criteria: Brief comments identify passive understanding boundaries without implementing dialogue, memory, relationship, management, economy, multiplayer, or save/load systems.
 

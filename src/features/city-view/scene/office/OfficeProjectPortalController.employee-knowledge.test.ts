@@ -98,6 +98,35 @@ describe("OfficeProjectPortalController employee knowledge integration", () => {
     expect(conversationService.createConversationViewModel).not.toHaveBeenCalled();
   });
 
+  it("does not assign work, alter schedules, or mutate conversation state while composing knowledge", () => {
+    const state = createKnowledgeState();
+    const controller = createControllerHarness(state);
+    const insightSource = expectDefined(controller.getEmployeeInsightSources()[0]);
+    const insightTarget: EmployeeInsightTarget = {
+      employeeId: insightSource.employeeId,
+      distance: 8,
+      source: insightSource,
+    };
+    const conversationService = {
+      createConversation: vi.fn(() => undefined),
+      createConversationViewModel: vi.fn(() => undefined),
+    };
+    getControllerInternals(controller).employeeConversationService = conversationService;
+    const beforeEmployees = structuredClone(state.employees);
+    const beforeTaskCollections = structuredClone(state.taskCollections);
+    const beforeWorkSessions = structuredClone(state.workSessions);
+    const beforeEmployeeSimulations = structuredClone(state.employeeSimulations);
+
+    controller.getEmployeeKnowledgeSource(insightTarget);
+
+    expect(state.employees).toEqual(beforeEmployees);
+    expect(state.taskCollections).toEqual(beforeTaskCollections);
+    expect(state.workSessions).toEqual(beforeWorkSessions);
+    expect(state.employeeSimulations).toEqual(beforeEmployeeSimulations);
+    expect(conversationService.createConversation).not.toHaveBeenCalled();
+    expect(conversationService.createConversationViewModel).not.toHaveBeenCalled();
+  });
+
   it("exposes recent activity sources without duplicating persisted history", () => {
     const state = createKnowledgeState();
     const activity = {

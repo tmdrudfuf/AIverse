@@ -97,7 +97,9 @@ export type EmployeeKnowledgeTimelineItem = {
 };
 
 // Knowledge is a read-only understanding layer over Insight and simulation context.
-// It must not own dialogue flow, memory, relationships, management, or employee control.
+// Future dialogue, memory, relationships, management, economy, multiplayer, and
+// save/load systems may consume this context, but Knowledge must not own or
+// mutate those systems unless a later Spec explicitly changes that boundary.
 export type EmployeeKnowledgeSource = {
   insightTarget?: EmployeeInsightTarget;
   insightSource: EmployeeInsightSource;
