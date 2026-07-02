@@ -156,7 +156,7 @@ Each task uses this format:
   - Files likely affected: `src/features/city-view/CityView.tsx`
   - Acceptance criteria: UI hint text accurately lists movement and zoom controls; hint remains concise and does not describe Founder, building entry, NPC, AI Agent, AI integration, or future-only controls.
 
-- [ ] T026 Verify city canvas accessibility label remains accurate in `src/features/city-view/CitySceneCanvas.tsx`
+- [X] T026 Verify city canvas accessibility label remains accurate in `src/features/city-view/CitySceneCanvas.tsx`
   - Files likely affected: `src/features/city-view/CitySceneCanvas.tsx`
   - Acceptance criteria: Accessible label describes the top-down city view without implying interactive building entry, NPCs, Founder controls, or AI activity; label remains suitable for a visual canvas.
 

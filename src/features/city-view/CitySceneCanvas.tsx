@@ -23,5 +23,5 @@ export default function CitySceneCanvas() {
     return () => { disposed = true; game.current?.destroy(true); game.current = null; };
   }, []);
 
-  return <div ref={host} className="city-scene-canvas" role="img" aria-label="Pixel-art city with roads, sidewalks, grass, trees, Daily Proof Inc., AI Lab, and Portfolio Studio" />;
+  return <div ref={host} className="city-scene-canvas" role="img" aria-label="Top-down pixel-art city with roads, sidewalks, grass, trees, Daily Proof Inc., AI Lab, and Portfolio Studio" />;
 }
