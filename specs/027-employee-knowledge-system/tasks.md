@@ -29,19 +29,19 @@
 
 **Purpose**: Build deterministic, testable knowledge derivation before rendering or scene integration.
 
-- [ ] T004 [P] Add service tests for Why and Current Goal derivation in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
+- [X] T004 [P] Add service tests for Why and Current Goal derivation in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`
   - Acceptance criteria: Tests cover working, walking, break, idle, conversation, and missing-task cases using existing source data.
 
-- [ ] T005 [P] Add service tests for schedule summary, planned next activity, optional confidence, and missing-data fallbacks in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
+- [X] T005 [P] Add service tests for schedule summary, planned next activity, optional confidence, and missing-data fallbacks in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`
   - Acceptance criteria: Tests prove optional rows are omitted or marked unavailable without fake state.
 
-- [ ] T006 [P] Add service tests for recent activity timeline derivation from existing activity sources in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
+- [X] T006 [P] Add service tests for recent activity timeline derivation from existing activity sources in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`
   - Acceptance criteria: Tests cover ordering, item limits, source labels, and no generated history when sources are empty.
 
-- [ ] T007 Implement deterministic EmployeeKnowledgeService in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`.
+- [X] T007 Implement deterministic EmployeeKnowledgeService in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`, `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`, `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeConfig.ts`
   - Acceptance criteria: Derives Why, Current Goal, Planned Next Activity, optional schedule/timeline/confidence fields, and stable fallbacks from existing source data; has no Phaser, mutation, or provider dependencies.
 
