@@ -8,6 +8,8 @@ import type {
   EmployeeConversationViewModel,
   NearbyEmployeeConversationTarget,
 } from "./conversations/EmployeeConversationTypes";
+import { EmployeeAIService } from "./employees/EmployeeAIService";
+import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
 import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
@@ -15,12 +17,16 @@ import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
+import { OfficeLayoutService } from "./layout/OfficeLayoutService";
+import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import type { CompanyProgressionSnapshot } from "./progression/CompanyProgressionTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type {
   EmployeeDailyScheduleSnapshot,
@@ -67,6 +73,9 @@ export class OfficeProjectPortalController {
   private readonly workstationOccupancyService: WorkstationOccupancyService;
   private readonly employeeDailyScheduleService: EmployeeDailyScheduleService;
   private readonly employeeConversationService: EmployeeConversationService;
+  private readonly employeeAIService: EmployeeAIService;
+  private readonly companyProgressionService: CompanyProgressionService;
+  private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -89,6 +98,9 @@ export class OfficeProjectPortalController {
     this.workstationOccupancyService = new WorkstationOccupancyService();
     this.employeeDailyScheduleService = new EmployeeDailyScheduleService();
     this.employeeConversationService = new EmployeeConversationService();
+    this.employeeAIService = new EmployeeAIService();
+    this.companyProgressionService = new CompanyProgressionService();
+    this.officeLayoutService = new OfficeLayoutService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -185,6 +197,71 @@ export class OfficeProjectPortalController {
     const visibleEmployees = this.getVisibleOfficeEmployees();
     this.employeeDailyScheduleService.deriveSnapshots(visibleEmployees);
     return this.employeeDailyScheduleService.getSnapshots();
+  }
+
+  getCompanyProgressionSnapshot(): CompanyProgressionSnapshot {
+    return this.companyProgressionService.getProgressionSnapshot({
+      activeEmployees: this.state.employees.length,
+      completedProjects: getAllLoadedTasks(this.state.taskCollections).filter((task) => task.status === "Done").length,
+    });
+  }
+
+  getActiveOfficeLayout(): OfficeLayoutSnapshot {
+    const progression = this.getCompanyProgressionSnapshot();
+    return this.officeLayoutService.getActiveLayout(progression.layoutId);
+  }
+
+  getOfficeZoneSnapshots(): ReadonlyArray<OfficeLayoutZone> {
+    return this.getActiveOfficeLayout().zones;
+  }
+
+  getOfficeLayoutPositionHints(): ReadonlyArray<OfficeLayoutPositionHint> {
+    const progression = this.getCompanyProgressionSnapshot();
+    return this.officeLayoutService.getPositionHints(progression.layoutId);
+  }
+
+  getEmployeeAIStateSnapshots(): ReadonlyArray<EmployeeAISnapshot> {
+    if (this.state.employees.length > 0) {
+      this.refreshEmployeeSimulationSnapshots();
+    }
+
+    const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
+    const employeeSnapshots = Array.from(this.getVisibleOfficeEmployees()).sort((left, right) =>
+      left.employeeId.localeCompare(right.employeeId),
+    );
+    const workstationSnapshots = this.workstationOccupancyService.previewSnapshots(employeeSnapshots);
+    const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
+    const scheduleSnapshots = this.employeeDailyScheduleService.previewSnapshots(employeeSnapshots);
+    const scheduleTargetHints = createScheduleTargetHints(scheduleSnapshots, employeeSnapshots, workstationTargetHints);
+    const targetPositionHints = {
+      ...scheduleTargetHints,
+      ...workstationTargetHints,
+    };
+    const employeeAIPreviewTimestamp = getLatestMovementTimestamp(
+      this.employeeNpcMovementService.getSnapshots(),
+      CONVERSATION_PREVIEW_TIMESTAMP,
+    );
+    const movementSnapshots = this.employeeNpcMovementService.previewSnapshots(
+      employeeSnapshots,
+      employeeAIPreviewTimestamp,
+      targetPositionHints,
+    );
+    const scheduleByEmployeeId = new Map(scheduleSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+    const movementByEmployeeId = new Map(movementSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+    const companyProgression = this.getCompanyProgressionSnapshot();
+    const officeLayout = this.officeLayoutService.getActiveLayout(companyProgression.layoutId);
+
+    return this.employeeAIService.updateMany(employeeSnapshots.map((snapshot) => ({
+      employeeId: snapshot.employeeId,
+      employee: employeesById.get(snapshot.employeeId),
+      simulationSnapshot: snapshot,
+      movementSnapshot: movementByEmployeeId.get(snapshot.employeeId),
+      scheduleSnapshot: scheduleByEmployeeId.get(snapshot.employeeId),
+      companyProgression,
+      officeLayout,
+      officeZones: officeLayout.zones,
+      updatedAt: employeeAIPreviewTimestamp,
+    }))).map((result) => result.snapshot);
   }
 
   getEmployeeMovementSnapshots(
@@ -1055,12 +1132,16 @@ export class OfficeProjectPortalController {
 
   private createPreviewEmployeeConversationState() {
     const tasks = getAllLoadedTasks(this.state.taskCollections);
+    const conversationPreviewTimestamp = getLatestMovementTimestamp(
+      this.employeeNpcMovementService.getSnapshots(),
+      CONVERSATION_PREVIEW_TIMESTAMP,
+    );
     const employeeSnapshots = Object.values(this.employeeSimulationService.deriveSnapshots(
       this.state.employees,
       tasks,
       this.state.workSessions,
       this.state.employeeSimulations,
-      CONVERSATION_PREVIEW_TIMESTAMP,
+      conversationPreviewTimestamp,
     )).sort((left, right) => left.employeeId.localeCompare(right.employeeId));
     const workstationSnapshots = this.workstationOccupancyService.previewSnapshots(employeeSnapshots);
     const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
@@ -1072,7 +1153,7 @@ export class OfficeProjectPortalController {
     };
     const movementSnapshots = this.employeeNpcMovementService.previewSnapshots(
       employeeSnapshots,
-      CONVERSATION_PREVIEW_TIMESTAMP,
+      conversationPreviewTimestamp,
       targetPositionHints,
     );
 
@@ -1171,6 +1252,19 @@ function createSchedulePositionHint(
     zone: positionIntent.zone,
     slot: positionIntent.slot ?? fallbackSlot,
   };
+}
+
+function getLatestMovementTimestamp(
+  movementSnapshots: ReadonlyArray<EmployeeNpcMovementSnapshot>,
+  fallbackTimestamp: string,
+) {
+  return movementSnapshots.reduce((latestTimestamp, snapshot) => {
+    const latestTime = Date.parse(latestTimestamp);
+    const snapshotTime = Date.parse(snapshot.lastUpdatedAt);
+    if (!Number.isFinite(snapshotTime)) return latestTimestamp;
+    if (!Number.isFinite(latestTime)) return snapshot.lastUpdatedAt;
+    return snapshotTime > latestTime ? snapshot.lastUpdatedAt : latestTimestamp;
+  }, fallbackTimestamp);
 }
 
 function getNpcPositionZone(state: EmployeeSimulationSnapshot["currentState"]): EmployeeNpcPositionZone {
