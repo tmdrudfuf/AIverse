@@ -16,12 +16,14 @@ import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationT
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
+import type { EmployeeInsightSource } from "./insight/EmployeeInsightTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
+import { resolveEmployeeNpcWorldPosition } from "./npc/EmployeeNpcPositionResolver";
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
@@ -262,6 +264,54 @@ export class OfficeProjectPortalController {
       officeZones: officeLayout.zones,
       updatedAt: employeeAIPreviewTimestamp,
     }))).map((result) => result.snapshot);
+  }
+
+  getEmployeeInsightSources(): ReadonlyArray<EmployeeInsightSource> {
+    const previewState = this.createPreviewEmployeeInsightState();
+    const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
+    const tasksById = new Map(previewState.tasks.map((task) => [task.id, task]));
+    const projectsById = new Map(this.state.projects.map((project) => [project.id, project]));
+    const aiByEmployeeId = new Map(previewState.aiSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+    const scheduleByEmployeeId = new Map(previewState.scheduleSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+    const movementByEmployeeId = new Map(previewState.movementSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+
+    return previewState.employeeSnapshots.map((snapshot) => {
+      const employee = employeesById.get(snapshot.employeeId);
+      const currentTask = snapshot.currentTaskId ? tasksById.get(snapshot.currentTaskId) : undefined;
+      const projectId = currentTask?.projectId ?? snapshot.currentProjectId ?? employee?.currentProjectId;
+      const currentProject = projectId ? projectsById.get(projectId) : undefined;
+      const movementSnapshot = movementByEmployeeId.get(snapshot.employeeId);
+      const workstationSnapshot = previewState.workstationSnapshots
+        .find((item) => item.assignedEmployeeId === snapshot.employeeId || item.occupiedByEmployeeId === snapshot.employeeId);
+      const scheduleSnapshot = scheduleByEmployeeId.get(snapshot.employeeId);
+      const aiSnapshot = aiByEmployeeId.get(snapshot.employeeId);
+      const movementPosition = movementSnapshot
+        ? {
+            ...resolveEmployeeNpcWorldPosition(movementSnapshot.positionHint),
+            positionHint: movementSnapshot.positionHint,
+          }
+        : undefined;
+
+      return {
+        employeeId: snapshot.employeeId,
+        name: employee?.name ?? snapshot.employeeId,
+        role: employee?.role ?? "Engineer",
+        aiState: aiSnapshot?.currentState ?? "idle",
+        aiSnapshot,
+        simulationState: snapshot.currentState,
+        simulationSnapshot: snapshot,
+        currentTask,
+        currentProject,
+        workProgress: createInsightProgress(currentTask),
+        scheduleState: scheduleSnapshot?.scheduleState,
+        scheduleSnapshot,
+        movementPosition,
+        movementSnapshot,
+        workstationState: workstationSnapshot?.state,
+        workstationSnapshot,
+        companyProgression: previewState.companyProgression,
+      };
+    });
   }
 
   getEmployeeMovementSnapshots(
@@ -1165,6 +1215,60 @@ export class OfficeProjectPortalController {
       movementSnapshots,
     };
   }
+
+  private createPreviewEmployeeInsightState() {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    const insightPreviewTimestamp = getLatestMovementTimestamp(
+      this.employeeNpcMovementService.getSnapshots(),
+      CONVERSATION_PREVIEW_TIMESTAMP,
+    );
+    const employeeSnapshots = Object.values(this.employeeSimulationService.deriveSnapshots(
+      this.state.employees,
+      tasks,
+      this.state.workSessions,
+      this.state.employeeSimulations,
+      insightPreviewTimestamp,
+    )).sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+    const workstationSnapshots = this.workstationOccupancyService.previewSnapshots(employeeSnapshots);
+    const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
+    const scheduleSnapshots = this.employeeDailyScheduleService.previewSnapshots(employeeSnapshots);
+    const scheduleTargetHints = createScheduleTargetHints(scheduleSnapshots, employeeSnapshots, workstationTargetHints);
+    const targetPositionHints = {
+      ...scheduleTargetHints,
+      ...workstationTargetHints,
+    };
+    const movementSnapshots = this.employeeNpcMovementService.previewSnapshots(
+      employeeSnapshots,
+      insightPreviewTimestamp,
+      targetPositionHints,
+    );
+    const scheduleByEmployeeId = new Map(scheduleSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+    const movementByEmployeeId = new Map(movementSnapshots.map((snapshot) => [snapshot.employeeId, snapshot]));
+    const companyProgression = this.getCompanyProgressionSnapshot();
+    const officeLayout = this.officeLayoutService.getActiveLayout(companyProgression.layoutId);
+    const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
+    const aiSnapshots = this.employeeAIService.updateMany(employeeSnapshots.map((snapshot) => ({
+      employeeId: snapshot.employeeId,
+      employee: employeesById.get(snapshot.employeeId),
+      simulationSnapshot: snapshot,
+      movementSnapshot: movementByEmployeeId.get(snapshot.employeeId),
+      scheduleSnapshot: scheduleByEmployeeId.get(snapshot.employeeId),
+      companyProgression,
+      officeLayout,
+      officeZones: officeLayout.zones,
+      updatedAt: insightPreviewTimestamp,
+    }))).map((result) => result.snapshot);
+
+    return {
+      tasks,
+      employeeSnapshots,
+      workstationSnapshots,
+      scheduleSnapshots,
+      movementSnapshots,
+      companyProgression,
+      aiSnapshots,
+    };
+  }
 }
 
 type SelectedTaskAction = "assign_employee" | "start_work" | "move_to_review" | "mark_done" | "completed";
@@ -1185,6 +1289,23 @@ function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"
 
 function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
   return tasks.flatMap((task) => task.activityLog ?? []);
+}
+
+function createInsightProgress(task: ProjectTask | undefined) {
+  if (!task) return undefined;
+
+  return {
+    label: task.status,
+    status: task.status,
+    percent: getTaskStatusProgressPercent(task.status),
+  };
+}
+
+function getTaskStatusProgressPercent(status: TaskStatus) {
+  if (status === "Done") return 100;
+  if (status === "Review") return 80;
+  if (status === "In Progress") return 50;
+  return 0;
 }
 
 function isResolvedConversationPlayerPosition(

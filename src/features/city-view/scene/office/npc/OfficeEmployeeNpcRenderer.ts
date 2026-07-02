@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import type { PhaserScene } from "../../shared/phaserTypes";
-import type { EmployeeNpcPositionHint, EmployeeNpcViewModel } from "./EmployeeNpcTypes";
+import type { EmployeeNpcViewModel } from "./EmployeeNpcTypes";
+import { resolveEmployeeNpcWorldPosition } from "./EmployeeNpcPositionResolver";
 
 type RenderedEmployeeNpc = {
   container: Phaser.GameObjects.Container;
@@ -14,27 +15,6 @@ const DEFAULT_STYLE = {
   borderColor: 0xe2e8f0,
   labelColor: "#f8fafc",
 };
-
-const ZONE_ANCHORS: Record<EmployeeNpcPositionHint["zone"], { x: number; y: number }> = {
-  desk: { x: 248, y: 182 },
-  collaboration: { x: 328, y: 202 },
-  review: { x: 288, y: 146 },
-  idle: { x: 210, y: 232 },
-  entrance: { x: 160, y: 270 },
-  workstation: { x: 248, y: 182 },
-  meetingArea: { x: 328, y: 202 },
-  breakArea: { x: 288, y: 146 },
-  idleSpot: { x: 210, y: 232 },
-};
-
-const SLOT_OFFSETS = [
-  { x: 0, y: 0 },
-  { x: 44, y: 0 },
-  { x: 0, y: 54 },
-  { x: 44, y: 54 },
-  { x: 88, y: 0 },
-  { x: 88, y: 54 },
-];
 
 export class OfficeEmployeeNpcRenderer {
   private readonly renderedNpcs = new Map<string, RenderedEmployeeNpc>();
@@ -65,7 +45,7 @@ export class OfficeEmployeeNpcRenderer {
   private renderNpc(viewModel: EmployeeNpcViewModel) {
     const existingNpc = this.renderedNpcs.get(viewModel.employeeId);
     const renderedNpc = existingNpc ?? this.createNpc(viewModel);
-    const targetPosition = resolveNpcPosition(viewModel.positionHint);
+    const targetPosition = resolveEmployeeNpcWorldPosition(viewModel.positionHint);
     const position = existingNpc && viewModel.movementState === "moving"
       ? interpolatePosition(renderedNpc.container.x, renderedNpc.container.y, targetPosition)
       : targetPosition;
@@ -110,15 +90,6 @@ export class OfficeEmployeeNpcRenderer {
     this.renderedNpcs.set(viewModel.employeeId, renderedNpc);
     return renderedNpc;
   }
-}
-
-function resolveNpcPosition(positionHint: EmployeeNpcPositionHint) {
-  const anchor = ZONE_ANCHORS[positionHint.zone];
-  const offset = SLOT_OFFSETS[positionHint.slot % SLOT_OFFSETS.length] ?? SLOT_OFFSETS[0];
-  return {
-    x: anchor.x + offset.x,
-    y: anchor.y + offset.y,
-  };
 }
 
 function interpolatePosition(currentX: number, currentY: number, target: { x: number; y: number }) {
