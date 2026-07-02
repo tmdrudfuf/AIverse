@@ -122,7 +122,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           enterPressed,
         });
         this.refreshEmployeeNpcRenderer();
-        this.employeeInsightOverlay?.hide();
+        this.refreshEmployeeInsightOverlay({ isBlockingOverlayOpen: true });
         return;
       }
 
@@ -162,12 +162,13 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeEmployeeNpcRenderer?.render(viewModels);
     }
 
-    private refreshEmployeeInsightOverlay() {
+    private refreshEmployeeInsightOverlay(options: { isBlockingOverlayOpen?: boolean } = {}) {
       if (!this.founderEntity || !this.employeeInsightService || !this.employeeInsightOverlay) return;
 
       const insightState = this.employeeInsightService.getInsightState(
         this.founderEntity.position,
         this.officeProjectPortalController?.getEmployeeInsightSources() ?? [],
+        options,
       );
 
       if (insightState.viewModel) {

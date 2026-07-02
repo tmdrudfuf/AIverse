@@ -78,6 +78,10 @@ export type EmployeeInsightState = {
   viewModel?: EmployeeInsightViewModel;
 };
 
+export type EmployeeInsightStateOptions = {
+  isBlockingOverlayOpen?: boolean;
+};
+
 export type EmployeeInsightPlayerPosition = {
   x: number;
   y: number;
