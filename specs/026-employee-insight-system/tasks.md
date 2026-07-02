@@ -29,15 +29,15 @@
 
 **Purpose**: Build deterministic, testable insight derivation before rendering or scene integration.
 
-- [ ] T004 [P] Add nearest-target service tests for radius inclusion, radius exclusion, and deterministic ties in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
+- [X] T004 [P] Add nearest-target service tests for radius inclusion, radius exclusion, and deterministic ties in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`
   - Acceptance criteria: Tests fail before service implementation and cover nearest eligible employee selection.
 
-- [ ] T005 [P] Add view-model service tests for required fields, fallback task/project/progress values, optional mood, and non-dialogue Thinking text in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
+- [X] T005 [P] Add view-model service tests for required fields, fallback task/project/progress values, optional mood, and non-dialogue Thinking text in `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.test.ts`
   - Acceptance criteria: Tests fail before service implementation and cover required card content.
 
-- [ ] T006 Implement deterministic EmployeeInsightService in `src/features/city-view/scene/office/insight/EmployeeInsightService.ts`.
+- [X] T006 Implement deterministic EmployeeInsightService in `src/features/city-view/scene/office/insight/EmployeeInsightService.ts`.
   - Files likely affected: `src/features/city-view/scene/office/insight/EmployeeInsightService.ts`, `src/features/city-view/scene/office/insight/EmployeeInsightTypes.ts`, `src/features/city-view/scene/office/insight/EmployeeInsightConfig.ts`
   - Acceptance criteria: Selects nearest employee inside radius, resolves ties by employee id, builds one card view model, generates local non-dialogue Thinking text, and has no Phaser or provider dependencies.
 
