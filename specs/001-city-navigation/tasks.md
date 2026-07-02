@@ -140,7 +140,7 @@ Each task uses this format:
   - Files likely affected: `src/features/city-view/scene/navigation/navigationTypes.ts`, `src/features/city-view/scene/navigation/CameraController.ts`
   - Acceptance criteria: Defines generic camera target/focus input types for future use; no Founder, Building, NPC, AI Agent, interior, AI integration, or ECS behavior is implemented.
 
-- [ ] T023 [US4] Keep building visuals non-interactive during layer separation
+- [X] T023 [US4] Keep building visuals non-interactive during layer separation
   - Files likely affected: `src/features/city-view/scene/layers/CityBuildingLayer.ts`, `src/features/city-view/scene/CityWorldScene.ts`
   - Acceptance criteria: Buildings remain visual landmarks only; no click handlers, hover inspection, entry transitions, selection state, or building data model is added.
 
