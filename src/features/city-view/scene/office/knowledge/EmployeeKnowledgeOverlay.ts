@@ -24,6 +24,7 @@ export class EmployeeKnowledgeOverlay {
   private readonly rowTexts: Phaser.GameObjects.Text[] = [];
   private readonly whyText: Phaser.GameObjects.Text;
   private readonly goalText: Phaser.GameObjects.Text;
+  private readonly timelineText: Phaser.GameObjects.Text;
   private readonly objects: OverlayObject[] = [];
 
   constructor(private readonly scene: PhaserScene) {
@@ -60,12 +61,20 @@ export class EmployeeKnowledgeOverlay {
       wordWrap: { width: CARD_WIDTH - CARD_PADDING * 2 },
     });
 
+    this.timelineText = scene.add.text(CARD_X + CARD_PADDING, CARD_Y + 224, "", {
+      fontFamily: "monospace",
+      fontSize: "11px",
+      color: "#c4b5fd",
+      wordWrap: { width: CARD_WIDTH - CARD_PADDING * 2 },
+    });
+
     this.objects.push(
       this.background,
       this.titleText,
       ...this.rowTexts,
       this.whyText,
       this.goalText,
+      this.timelineText,
     );
     this.objects.forEach((object) => {
       object.setDepth(5001);
@@ -81,7 +90,9 @@ export class EmployeeKnowledgeOverlay {
     const rows = createRows(viewModel);
     const whyY = ROW_START_Y + rows.length * ROW_GAP + SECTION_GAP;
     const goalY = whyY + 42;
-    const cardHeight = goalY + 48;
+    const timelineY = goalY + 42;
+    const timelineText = createTimelineText(viewModel);
+    const cardHeight = timelineText ? timelineY + 70 : goalY + 48;
     const origin = this.getCardOrigin();
 
     this.background.setPosition(origin.x, origin.y);
@@ -100,6 +111,9 @@ export class EmployeeKnowledgeOverlay {
     this.whyText.setText(`Why: ${viewModel.whyText}`);
     this.goalText.setPosition(origin.x + CARD_PADDING, origin.y + goalY);
     this.goalText.setText(`Goal: ${viewModel.currentGoalText}`);
+    this.timelineText.setPosition(origin.x + CARD_PADDING, origin.y + timelineY);
+    this.timelineText.setText(timelineText);
+    this.timelineText.setVisible(Boolean(timelineText));
 
     this.setVisible(true);
   }
@@ -125,6 +139,17 @@ export class EmployeeKnowledgeOverlay {
       y: camera.scrollY + CARD_Y / zoom,
     };
   }
+}
+
+function createTimelineText(viewModel: EmployeeKnowledgeViewModel) {
+  if (viewModel.recentActivityTimeline.length === 0) return "";
+
+  const items = viewModel.recentActivityTimeline
+    .slice(0, 3)
+    .map((item) => `${item.timeLabel} ${item.label}`)
+    .join("\n");
+
+  return `Recent:\n${items}`;
 }
 
 function createRows(viewModel: EmployeeKnowledgeViewModel): KnowledgeRow[] {

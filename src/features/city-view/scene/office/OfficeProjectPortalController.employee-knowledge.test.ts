@@ -97,6 +97,59 @@ describe("OfficeProjectPortalController employee knowledge integration", () => {
     expect(conversationService.createConversation).not.toHaveBeenCalled();
     expect(conversationService.createConversationViewModel).not.toHaveBeenCalled();
   });
+
+  it("exposes recent activity sources without duplicating persisted history", () => {
+    const state = createKnowledgeState();
+    const activity = {
+      id: "activity-1",
+      taskId: "task-active",
+      type: "work_started" as const,
+      message: "Started knowledge work",
+      createdAt: "2026-01-01T09:00:00.000Z",
+      actorId: "employee-working",
+      actorName: "Alex Working",
+    };
+    state.taskCollections["daily-proof"]?.tasks[0]?.activityLog?.push(activity);
+    const workSession = {
+      id: "session-1",
+      taskId: "task-active",
+      projectId: "daily-proof",
+      employeeId: "employee-working",
+      employeeName: "Alex Working",
+      provider: "placeholder" as const,
+      status: "finished" as const,
+      startedAt: "2026-01-01T09:10:00.000Z",
+      finishedAt: "2026-01-01T09:30:00.000Z",
+      summary: "Finished knowledge source composition.",
+    };
+    state.workSessions = { "task-active": [workSession] };
+    const controller = createControllerHarness(state);
+    const insightSource = expectDefined(controller.getEmployeeInsightSources()
+      .find((source) => source.employeeId === "employee-working"));
+    const insightTarget: EmployeeInsightTarget = {
+      employeeId: insightSource.employeeId,
+      distance: 8,
+      source: insightSource,
+    };
+
+    const source = controller.getEmployeeKnowledgeSource(insightTarget);
+
+    expect(source?.activitySources?.map((item) => item.kind)).toEqual([
+      "task_activity",
+      "work_session",
+      "schedule",
+    ]);
+    expect(source?.activitySources?.[0]).toMatchObject({
+      kind: "task_activity",
+      activity,
+    });
+    expect(source?.activitySources?.[1]).toMatchObject({
+      kind: "work_session",
+      workSession,
+    });
+    expect(source?.activitySources?.[0]).toHaveProperty("activity", activity);
+    expect(source?.activitySources?.[1]).toHaveProperty("workSession", workSession);
+  });
 });
 
 type ControllerInternals = {
@@ -150,13 +203,14 @@ function createKnowledgeState() {
   state.taskCollections["daily-proof"] = {
     projectId: "daily-proof",
     tasks: [
-      createTask({
-        id: "task-active",
-        title: "Build employee knowledge panel",
-        assigneeId: "employee-working",
-        assignee: "Alex Working",
-        status: "In Progress",
-      }),
+        createTask({
+          id: "task-active",
+          title: "Build employee knowledge panel",
+          assigneeId: "employee-working",
+          assignee: "Alex Working",
+          status: "In Progress",
+          activityLog: [],
+        }),
     ],
   };
 

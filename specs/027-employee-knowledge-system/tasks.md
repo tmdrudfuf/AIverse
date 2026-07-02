@@ -91,15 +91,15 @@
 
 **Independent Test**: Observe an employee with recent activity and confirm the panel shows a short newest-first timeline; observe an employee without recent activity and confirm no fake history appears.
 
-- [ ] T015 [P] [US3] Add controller integration tests for exposing recent activity sources without duplicating history in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`.
+- [X] T015 [P] [US3] Add controller integration tests for exposing recent activity sources without duplicating history in `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`
   - Acceptance criteria: Tests prove timeline inputs reference existing task, work session, schedule, conversation, AI, or progression data.
 
-- [ ] T016 [US3] Expose recent activity source data for Employee Knowledge in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
+- [X] T016 [US3] Expose recent activity source data for Employee Knowledge in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
   - Files likely affected: `src/features/city-view/scene/office/OfficeProjectPortalController.ts`, `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeTypes.ts`
   - Acceptance criteria: Source data remains read-only and does not create a parallel persisted activity log.
 
-- [ ] T017 [US3] Implement timeline derivation and rendering in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts` and `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`.
+- [X] T017 [US3] Implement timeline derivation and rendering in `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts` and `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.ts`, `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeOverlay.ts`
   - Acceptance criteria: Timeline is concise, ordered, source-labeled, and omitted or unavailable when no real source activity exists.
 

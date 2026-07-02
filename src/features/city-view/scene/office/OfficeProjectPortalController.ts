@@ -324,6 +324,10 @@ export class OfficeProjectPortalController {
       insightTarget,
       insightSource: insightTarget.source,
       conversationContext: context,
+      activitySources: createKnowledgeActivitySources(
+        insightTarget.source,
+        this.state.workSessions,
+      ),
     };
   }
 
@@ -1312,6 +1316,45 @@ function createInsightProgress(task: ProjectTask | undefined) {
     status: task.status,
     percent: getTaskStatusProgressPercent(task.status),
   };
+}
+
+function createKnowledgeActivitySources(
+  insightSource: EmployeeInsightSource,
+  workSessions: ProjectPortalState["workSessions"],
+) {
+  const employeeWorkSessions = Object.values(workSessions)
+    .flat()
+    .filter((session) => session.employeeId === insightSource.employeeId);
+
+  return [
+    ...(insightSource.currentTask?.activityLog ?? []).map((activity) => ({
+      kind: "task_activity" as const,
+      activity,
+    })),
+    ...employeeWorkSessions.map((workSession) => ({
+      kind: "work_session" as const,
+      workSession,
+    })),
+    ...(insightSource.aiSnapshot?.lastTransition
+      ? [{
+          kind: "ai_transition" as const,
+          employeeId: insightSource.employeeId,
+          fromState: insightSource.aiSnapshot.lastTransition.fromState,
+          toState: insightSource.aiSnapshot.lastTransition.toState,
+          reason: insightSource.aiSnapshot.lastTransition.reason,
+          occurredAt: insightSource.aiSnapshot.lastTransition.occurredAt,
+        }]
+      : []),
+    ...(insightSource.scheduleSnapshot?.currentBlock
+      ? [{
+          kind: "schedule" as const,
+          employeeId: insightSource.employeeId,
+          scheduleState: insightSource.scheduleSnapshot.scheduleState,
+          label: insightSource.scheduleSnapshot.currentBlock.label,
+          occurredAt: insightSource.scheduleSnapshot.lastUpdatedAt,
+        }]
+      : []),
+  ];
 }
 
 function getTaskStatusProgressPercent(status: TaskStatus) {
