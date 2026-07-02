@@ -57,6 +57,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.navigationInputController.setup(this, this.navigationState);
       this.events.once("shutdown", () => this.destroyNavigationControllers());
 
+      // Compose exterior scene layers/controllers here; future systems should keep domain state outside Phaser.
       const tilemapLayers = createCityTilemapLayer(this);
       const cityCollisionMap = new CityCollisionMap(tilemapLayers.collision);
       this.navigationMovementResolver = new NavigationMovementResolver(cityCollisionMap);
