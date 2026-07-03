@@ -69,8 +69,9 @@ describe("CompanyDashboardTypes provider-neutral helpers", () => {
       },
       companySummary: "Company dashboard data is not available yet.",
     });
-    expect(snapshot.sections).toHaveLength(13);
+    expect(snapshot.sections).toHaveLength(14);
     expect(snapshot.sections.every((section) => section.status === "unavailable")).toBe(true);
+    expect(snapshot.companyFocus).toBeUndefined();
     expect(snapshot.sourceAvailability).toEqual(sourceAvailability);
     expect(snapshot.sourceAvailability).not.toBe(sourceAvailability);
   });

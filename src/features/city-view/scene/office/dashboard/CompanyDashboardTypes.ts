@@ -1,5 +1,6 @@
 import type { EmployeeAIState } from "../employees/EmployeeAITypes";
 import type { EmployeeRole } from "../employees/EmployeeTypes";
+import type { CompanyFocusSummary } from "../influence/CompanyInfluencePlanningTypes";
 import type { EmployeeScheduleState } from "../schedules/EmployeeDailyScheduleTypes";
 import type { ProjectPortalProjectStatus } from "../OfficeProjectPortalTypes";
 import type { TaskStatus } from "../tasks/ProjectTaskTypes";
@@ -39,6 +40,7 @@ export type CompanyDashboardSectionId =
   | "current_bottlenecks"
   | "recent_company_activity"
   | "recent_conversations"
+  | "company_focus"
   | "company_summary"
   | "recent_productivity"
   | "current_risks";
@@ -205,6 +207,7 @@ export type CompanyDashboardSnapshot = {
   bottlenecks: BottleneckSummary[];
   activity: CompanyActivityItem[];
   conversations: ConversationDashboardSummary;
+  companyFocus?: CompanyFocusSummary;
   productivity: ProductivitySummary;
   risks: RiskSummary[];
   companySummary: string;
@@ -304,6 +307,7 @@ export function createEmptyCompanyDashboardSnapshot(
       recentCount: 0,
       highlights: [],
     },
+    companyFocus: undefined,
     productivity: {
       completedTaskCount: 0,
       activeWorkSessionCount: 0,
@@ -328,6 +332,7 @@ function createDefaultUnavailableSections(): CompanyDashboardSectionAvailability
     createUnavailableCompanyDashboardSection("current_bottlenecks", "Current Bottlenecks", ["employee_ai", "projects"]),
     createUnavailableCompanyDashboardSection("recent_company_activity", "Recent Company Activity", ["task_activity", "work_session"]),
     createUnavailableCompanyDashboardSection("recent_conversations", "Recent Conversations", ["conversation"]),
+    createUnavailableCompanyDashboardSection("company_focus", "Company Focus", ["company_progression"]),
     createUnavailableCompanyDashboardSection("company_summary", "Company Summary", ["company_progression", "projects"]),
     createUnavailableCompanyDashboardSection("recent_productivity", "Recent Productivity", ["task_activity", "work_session"]),
     createUnavailableCompanyDashboardSection("current_risks", "Current Risks", ["employee_ai", "projects", "company_progression"]),

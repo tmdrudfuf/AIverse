@@ -6,6 +6,8 @@ import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPo
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
+const DASHBOARD_SECTION_Y = 306;
+const DASHBOARD_ROW_GAP = 24;
 
 export class OfficeProjectPortalView {
   private readonly content: Phaser.GameObjects.Container;
@@ -64,6 +66,11 @@ export class OfficeProjectPortalView {
       return;
     }
 
+    if (state.viewMode === "influence-planning") {
+      this.renderInfluencePlanning(state);
+      return;
+    }
+
     if (state.viewMode === "workspace") {
       this.renderWorkspace(state);
       return;
@@ -104,11 +111,13 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.bottleneckText, 38), mutedStyle());
     this.addText(this.panelX + 360, this.panelY + 170, wrapText(dashboardRows.riskText, 36), mutedStyle());
     this.addText(this.panelX + 44, this.panelY + 194, wrapText(dashboardRows.productivityText, 82), mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 218, wrapText(dashboardRows.summaryText, 82), mutedStyle());
-    this.addText(this.panelX + 28, this.panelY + 258, "Projects", headingStyle());
+    const focusMarker = state.selectedProjectIndex < 0 ? ">" : " ";
+    this.addText(this.panelX + 44, this.panelY + 218, wrapText(`${focusMarker} ${dashboardRows.focusText}`, 82), rowStyle(true, state.selectedProjectIndex < 0));
+    this.addText(this.panelX + 44, this.panelY + 242, wrapText(dashboardRows.summaryText, 82), mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + DASHBOARD_SECTION_Y, "Projects", headingStyle());
 
     state.projects.forEach((project, index) => {
-      const rowY = this.panelY + 290 + index * 30;
+      const rowY = this.panelY + DASHBOARD_SECTION_Y + 30 + index * DASHBOARD_ROW_GAP;
       const marker = index === state.selectedProjectIndex ? ">" : " ";
       const statusColumn = project.status.padEnd(11, " ");
       this.addText(
@@ -119,13 +128,39 @@ export class OfficeProjectPortalView {
       );
     });
 
-    this.addText(this.panelX + 390, this.panelY + 258, "Linked Services", headingStyle());
+    this.addText(this.panelX + 390, this.panelY + DASHBOARD_SECTION_Y, "Linked Services", headingStyle());
     state.services.forEach((service, index) => {
-      const rowY = this.panelY + 290 + index * 24;
+      const rowY = this.panelY + DASHBOARD_SECTION_Y + 30 + index * DASHBOARD_ROW_GAP;
       this.addText(this.panelX + 406, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
 
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Up/Down select  Enter/Space open  Esc close", instructionStyle()).setOrigin(1, 0.5);
+  }
+
+  private renderInfluencePlanning(state: ProjectPortalState) {
+    const focusSummary = state.companyFocusSummary;
+    const options = focusSummary?.options ?? [];
+
+    this.addText(this.panelX + 28, this.panelY + 24, "Company Influence Planning", titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 64, "Current Focus", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 94, wrapText(focusSummary?.summary ?? "No company focus selected.", 78), bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 142, "Focus Options", headingStyle());
+
+    options.forEach((option, index) => {
+      const rowY = this.panelY + 178 + index * 38;
+      const marker = index === state.selectedInfluenceFocusIndex ? ">" : " ";
+      const activeMarker = option.id === focusSummary?.currentFocus?.id ? "*" : " ";
+      this.addText(
+        this.panelX + 44,
+        rowY,
+        `${marker} ${activeMarker} ${option.label}`,
+        rowStyle(true, index === state.selectedInfluenceFocusIndex),
+      );
+      this.addText(this.panelX + 78, rowY + 20, wrapText(option.description, 72), mutedStyle());
+    });
+
+    this.addText(this.panelX + 28, this.panelY + 386, "Advisory only. Employees and tasks remain autonomous.", mutedStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc dashboard  Up/Down select  Enter/Space choose", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderDetail(state: ProjectPortalState) {

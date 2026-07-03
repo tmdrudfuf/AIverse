@@ -22,6 +22,8 @@ import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { EmployeeInsightSource, EmployeeInsightTarget } from "./insight/EmployeeInsightTypes";
+import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
+import type { CompanyFocusId, CompanyFocusSummary } from "./influence/CompanyInfluencePlanningTypes";
 import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
@@ -86,6 +88,7 @@ export class OfficeProjectPortalController {
   private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
   private readonly companyDashboardProvider: CompanyDashboardProvider;
+  private readonly companyInfluencePlanningService: CompanyInfluencePlanningService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
   private repositoryRequestVersion = 0;
@@ -114,6 +117,7 @@ export class OfficeProjectPortalController {
     const companyDashboardProvider = getEnabledCompanyDashboardProvider(createCompanyDashboardProviderRegistry());
     if (!companyDashboardProvider) throw new Error("Company dashboard provider is not configured.");
     this.companyDashboardProvider = companyDashboardProvider;
+    this.companyInfluencePlanningService = new CompanyInfluencePlanningService();
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
   }
@@ -124,7 +128,7 @@ export class OfficeProjectPortalController {
     this.state.isOpen = true;
     this.state.justOpened = true;
     this.state.viewMode = "list";
-    this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, 0, this.state.projects.length - 1);
+    this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, -1, this.state.projects.length - 1);
     this.state.selectedProjectId = this.state.projects[this.state.selectedProjectIndex]?.id ?? "";
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
@@ -166,6 +170,11 @@ export class OfficeProjectPortalController {
 
     if (this.state.viewMode === "task-detail") {
       this.updateTaskDetailInput(input);
+      return;
+    }
+
+    if (this.state.viewMode === "influence-planning") {
+      this.updateInfluencePlanningInput(input);
       return;
     }
 
@@ -345,15 +354,36 @@ export class OfficeProjectPortalController {
     const employeeInsightSources = this.getEmployeeInsightSources();
     const tasks = getAllLoadedTasks(this.state.taskCollections);
 
-    return this.companyDashboardProvider.getSnapshot({
-      employeeInsightSources,
-      employees: this.state.employees,
-      projects: this.state.projects,
-      tasks,
-      workSessions: Object.values(this.state.workSessions).flat(),
-      workstations: this.getWorkstationSnapshots(),
-      companyProgression: this.getCompanyProgressionSnapshot(),
-    });
+    return {
+      ...this.companyDashboardProvider.getSnapshot({
+        employeeInsightSources,
+        employees: this.state.employees,
+        projects: this.state.projects,
+        tasks,
+        workSessions: Object.values(this.state.workSessions).flat(),
+        workstations: this.getWorkstationSnapshots(),
+        companyProgression: this.getCompanyProgressionSnapshot(),
+      }),
+      companyFocus: this.getCompanyFocusSummary(),
+    };
+  }
+
+  getCompanyFocusOptions() {
+    return this.getCompanyInfluencePlanningService().getFocusOptions();
+  }
+
+  getCompanyFocusSummary(): CompanyFocusSummary {
+    const service = this.getCompanyInfluencePlanningService();
+    this.state.companyFocusSummary = service.createFocusSummary(this.state.companyInfluencePlan);
+    return this.state.companyFocusSummary;
+  }
+
+  setCompanyFocus(focusId: CompanyFocusId | string, updatedAt?: string) {
+    const service = this.getCompanyInfluencePlanningService();
+    this.state.companyInfluencePlan = service.selectFocus(this.state.companyInfluencePlan, focusId, updatedAt);
+    this.state.companyFocusSummary = service.createFocusSummary(this.state.companyInfluencePlan);
+    this.syncCompanyFocusToDashboardSnapshot();
+    return this.state.companyFocusSummary;
   }
 
   getEmployeeMovementSnapshots(
@@ -494,6 +524,11 @@ export class OfficeProjectPortalController {
     if (input.downPressed) this.moveProjectSelection(1);
 
     if (input.actionPressed || input.enterPressed) {
+      if (this.state.selectedProjectIndex < 0) {
+        this.openInfluencePlanning();
+        return;
+      }
+
       this.state.viewMode = "detail";
       this.view.render(this.state);
     }
@@ -629,6 +664,37 @@ export class OfficeProjectPortalController {
     if (input.actionPressed || input.enterPressed) {
       this.assignSelectedEmployeeToSelectedTask();
     }
+  }
+
+  private updateInfluencePlanningInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "list";
+      this.syncCompanyFocusToDashboardSnapshot();
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.upPressed) this.moveInfluenceFocusSelection(-1);
+    if (input.downPressed) this.moveInfluenceFocusSelection(1);
+
+    if (input.actionPressed || input.enterPressed) {
+      const focus = this.getCompanyFocusOptions()[this.state.selectedInfluenceFocusIndex];
+      if (!focus) return;
+
+      this.setCompanyFocus(focus.id);
+      this.view.render(this.state);
+    }
+  }
+
+  private openInfluencePlanning() {
+    const options = this.getCompanyFocusOptions();
+    const activeFocusId = this.state.companyInfluencePlan.selectedFocusId;
+    const activeIndex = activeFocusId ? options.findIndex((option) => option.id === activeFocusId) : -1;
+    this.state.selectedInfluenceFocusIndex = activeIndex >= 0
+      ? activeIndex
+      : clamp(this.state.selectedInfluenceFocusIndex, 0, Math.max(options.length - 1, 0));
+    this.state.viewMode = "influence-planning";
+    this.view.render(this.state);
   }
 
   private async openRepositoryDetail(projectId: string) {
@@ -956,7 +1022,7 @@ export class OfficeProjectPortalController {
   }
 
   private moveProjectSelection(delta: number) {
-    const nextIndex = clamp(this.state.selectedProjectIndex + delta, 0, this.state.projects.length - 1);
+    const nextIndex = clamp(this.state.selectedProjectIndex + delta, -1, this.state.projects.length - 1);
     if (nextIndex === this.state.selectedProjectIndex) return;
 
     this.state.selectedProjectIndex = nextIndex;
@@ -1014,6 +1080,26 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
+  private moveInfluenceFocusSelection(delta: number) {
+    const options = this.getCompanyFocusOptions();
+    if (options.length === 0) return;
+
+    const nextIndex = clamp(this.state.selectedInfluenceFocusIndex + delta, 0, options.length - 1);
+    if (nextIndex === this.state.selectedInfluenceFocusIndex) return;
+
+    this.state.selectedInfluenceFocusIndex = nextIndex;
+    this.view.render(this.state);
+  }
+
+  private getCompanyInfluencePlanningService() {
+    if (!this.companyInfluencePlanningService) {
+      (this as unknown as { companyInfluencePlanningService: CompanyInfluencePlanningService }).companyInfluencePlanningService =
+        new CompanyInfluencePlanningService();
+    }
+
+    return this.companyInfluencePlanningService;
+  }
+
   private refreshEmployeeSimulationSnapshots() {
     const tasks = getAllLoadedTasks(this.state.taskCollections);
     this.state.employeeSimulations = this.employeeSimulationService.deriveSnapshots(
@@ -1056,6 +1142,15 @@ export class OfficeProjectPortalController {
 
   private refreshCompanyDashboardSnapshot() {
     this.state.companyDashboardSnapshot = this.getCompanyDashboardSnapshot();
+  }
+
+  private syncCompanyFocusToDashboardSnapshot() {
+    if (!this.state.companyDashboardSnapshot) return;
+
+    this.state.companyDashboardSnapshot = {
+      ...this.state.companyDashboardSnapshot,
+      companyFocus: this.state.companyFocusSummary,
+    };
   }
 
   private async prepareProjectManagementSuggestion(projectId: string) {

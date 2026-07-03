@@ -13,6 +13,7 @@ export type CompanyDashboardPanelRows = {
   bottleneckText: string;
   conversationText: string;
   productivityText: string;
+  focusText: string;
   riskText: string;
   summaryText: string;
   activityText: string;
@@ -33,6 +34,7 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
       bottleneckText: "Bottlenecks: None visible",
       conversationText: "Conversations: None recent",
       productivityText: "Productivity: Unavailable",
+      focusText: "Focus: None selected",
       riskText: "Risks: None visible",
       summaryText: "No company simulation data is available yet.",
       activityText: "Activity: No recent company activity",
@@ -54,6 +56,9 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
       : "Bottlenecks: None visible",
     conversationText: `Conversations: ${snapshot.conversations.recentCount} recent`,
     productivityText: `Productivity: ${snapshot.productivity.recentProgressLabel}`,
+    focusText: snapshot.companyFocus?.currentFocus?.label
+      ? `Focus: ${snapshot.companyFocus.currentFocus.label}`
+      : "Focus: None selected",
     riskText: snapshot.risks[0]?.label ? `Risk: ${snapshot.risks[0].label}` : "Risks: None visible",
     summaryText: snapshot.companySummary,
     activityText: snapshot.activity[0]?.label ?? "Activity: No recent company activity",
