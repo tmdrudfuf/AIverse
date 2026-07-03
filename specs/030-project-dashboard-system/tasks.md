@@ -31,11 +31,11 @@
 
 **Independent Test**: Open the Company Dashboard, select one project, verify the Project Dashboard opens for that project, and return to the Company Dashboard.
 
-- [ ] T009 [US1] Add local selected Project Dashboard view state to `src/features/city-view/scene/office/OfficeProjectPortalTypes.ts`.
-- [ ] T010 [US1] Initialize and reset selected Project Dashboard state in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
-- [ ] T011 [US1] Add controller methods to list project dashboard entries, open one selected project dashboard, return to Company Dashboard, and get the selected project dashboard snapshot in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
-- [ ] T012 [US1] Add portal view support for opening one project dashboard and returning to the Company Dashboard in `src/features/city-view/scene/office/OfficeProjectPortalView.ts`.
-- [ ] T013 [US1] Add controller/view tests covering project selection, selected project identity, missing project handling, return behavior, and close/reopen behavior in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`.
+- [x] T009 [US1] Add local selected Project Dashboard view state to `src/features/city-view/scene/office/OfficeProjectPortalTypes.ts`.
+- [x] T010 [US1] Initialize and reset selected Project Dashboard state in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
+- [x] T011 [US1] Add controller methods to list project dashboard entries, open one selected project dashboard, return to Company Dashboard, and get the selected project dashboard snapshot in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`.
+- [x] T012 [US1] Add portal view support for opening one project dashboard and returning to the Company Dashboard in `src/features/city-view/scene/office/OfficeProjectPortalView.ts`.
+- [x] T013 [US1] Add controller/view tests covering project selection, selected project identity, missing project handling, return behavior, and close/reopen behavior in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`.
 
 ---
 

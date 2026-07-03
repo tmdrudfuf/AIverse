@@ -138,6 +138,7 @@ export function createProjectPortalState(): ProjectPortalState {
     selectedWorkspaceSectionIndex: 0,
     selectedTaskIndex: 0,
     selectedEmployeeIndex: 0,
+    selectedProjectDashboardProjectId: undefined,
     selectedInfluenceFocusIndex: 0,
     projects: PROJECTS.map((project) => ({
       ...project,
@@ -155,6 +156,7 @@ export function createProjectPortalState(): ProjectPortalState {
     employeeSimulations: {},
     employeeAssignments: {},
     workSessions: {},
+    projectDashboardSnapshot: undefined,
     companyInfluencePlan: influencePlanningService.createInitialState(),
     companyFocusSummary: influencePlanningService.createFocusSummary(influencePlanningService.createInitialState()),
   };
