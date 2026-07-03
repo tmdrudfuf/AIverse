@@ -8,7 +8,11 @@ import type {
   EmployeeConversationViewModel,
   NearbyEmployeeConversationTarget,
 } from "./conversations/EmployeeConversationTypes";
-import { InternalSimulationDashboardProvider } from "./dashboard/InternalSimulationDashboardProvider";
+import {
+  createCompanyDashboardProviderRegistry,
+  getEnabledCompanyDashboardProvider,
+} from "./dashboard/CompanyDashboardProviderRegistry";
+import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
 import { EmployeeService } from "./employees/EmployeeService";
@@ -81,7 +85,7 @@ export class OfficeProjectPortalController {
   private readonly companyProgressionService: CompanyProgressionService;
   private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
-  private readonly companyDashboardProvider: InternalSimulationDashboardProvider;
+  private readonly companyDashboardProvider: CompanyDashboardProvider;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
   private repositoryRequestVersion = 0;
@@ -107,7 +111,9 @@ export class OfficeProjectPortalController {
     this.companyProgressionService = new CompanyProgressionService();
     this.officeLayoutService = new OfficeLayoutService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
-    this.companyDashboardProvider = new InternalSimulationDashboardProvider();
+    const companyDashboardProvider = getEnabledCompanyDashboardProvider(createCompanyDashboardProviderRegistry());
+    if (!companyDashboardProvider) throw new Error("Company dashboard provider is not configured.");
+    this.companyDashboardProvider = companyDashboardProvider;
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
   }

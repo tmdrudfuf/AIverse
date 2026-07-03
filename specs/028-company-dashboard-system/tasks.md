@@ -72,10 +72,10 @@
 
 **Purpose**: Preserve provider extensibility without implementing external integrations.
 
-- [ ] T024 Add provider registry or selection boundary only if needed by existing architecture.
-- [ ] T025 Ensure UI imports only provider-neutral contracts and never the Internal Simulation provider implementation.
-- [ ] T026 Document future connector boundaries in code comments only where they clarify extension points.
-- [ ] T027 Add tests or static checks for provider boundary behavior where practical.
+- [x] T024 Add provider registry or selection boundary only if needed by existing architecture.
+- [x] T025 Ensure UI imports only provider-neutral contracts and never the Internal Simulation provider implementation.
+- [x] T026 Document future connector boundaries in code comments only where they clarify extension points.
+- [x] T027 Add tests or static checks for provider boundary behavior where practical.
 
 ---
 

@@ -212,6 +212,7 @@ export type CompanyDashboardSnapshot = {
 
 export type CompanyDashboardProviderContext = {
   generatedAt?: string;
+  [sourceKey: string]: unknown;
 };
 
 export type CompanyDashboardProvider = {
