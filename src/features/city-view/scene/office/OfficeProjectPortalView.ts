@@ -1,4 +1,5 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -89,11 +90,25 @@ export class OfficeProjectPortalView {
   }
 
   private renderList(state: ProjectPortalState) {
-    this.addText(this.panelX + 28, this.panelY + 24, "Project Portal", titleStyle());
-    this.addText(this.panelX + 28, this.panelY + 78, "Projects", headingStyle());
+    const dashboardRows = createCompanyDashboardPanelRows(state.companyDashboardSnapshot);
+
+    this.addText(this.panelX + 28, this.panelY + 24, dashboardRows.title, titleStyle());
+    this.addText(this.panelX + 44, this.panelY + 66, dashboardRows.healthText, bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 92, dashboardRows.employeeText, bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 118, wrapText(dashboardRows.employeeStateText, 40), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 144, wrapText(dashboardRows.roleText, 40), mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 66, dashboardRows.projectText, bodyStyle());
+    this.addText(this.panelX + 360, this.panelY + 92, dashboardRows.projectProgressText, bodyStyle());
+    this.addText(this.panelX + 360, this.panelY + 118, dashboardRows.workloadText, mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 144, dashboardRows.occupancyText, mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.bottleneckText, 38), mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 170, wrapText(dashboardRows.riskText, 36), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 194, wrapText(dashboardRows.productivityText, 82), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 218, wrapText(dashboardRows.summaryText, 82), mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + 258, "Projects", headingStyle());
 
     state.projects.forEach((project, index) => {
-      const rowY = this.panelY + 112 + index * 38;
+      const rowY = this.panelY + 290 + index * 30;
       const marker = index === state.selectedProjectIndex ? ">" : " ";
       const statusColumn = project.status.padEnd(11, " ");
       this.addText(
@@ -104,10 +119,10 @@ export class OfficeProjectPortalView {
       );
     });
 
-    this.addText(this.panelX + 28, this.panelY + 252, "Linked Services", headingStyle());
+    this.addText(this.panelX + 390, this.panelY + 258, "Linked Services", headingStyle());
     state.services.forEach((service, index) => {
-      const rowY = this.panelY + 286 + index * 26;
-      this.addText(this.panelX + 44, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
+      const rowY = this.panelY + 290 + index * 24;
+      this.addText(this.panelX + 406, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
 
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Up/Down select  Enter/Space open  Esc close", instructionStyle()).setOrigin(1, 0.5);

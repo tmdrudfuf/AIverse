@@ -1,5 +1,6 @@
 import type { EmployeeRecommendationResult, TaskAnalysis } from "./ai/AITypes";
 import type { ProjectManagementSuggestion } from "./ai/AIProjectManagerTypes";
+import type { CompanyDashboardSnapshot } from "./dashboard/CompanyDashboardTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -93,4 +94,5 @@ export type ProjectPortalState = {
   employeeSimulations: Record<string, EmployeeSimulationSnapshot>;
   employeeAssignments: Record<string, string>;
   workSessions: Record<string, WorkSession[]>;
+  companyDashboardSnapshot?: CompanyDashboardSnapshot;
 };
