@@ -18,10 +18,10 @@
 
 **Purpose**: Add provider-neutral project detail models and the internal simulation provider foundation.
 
-- [ ] T005 [P] Add provider-neutral Project Dashboard types in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardTypes.ts`.
-- [ ] T006 Add `InternalSimulationProjectDashboardProvider` to derive project detail snapshots from existing internal simulation data in `src/features/city-view/scene/office/project-dashboard/InternalSimulationProjectDashboardProvider.ts`.
-- [ ] T007 [P] Add provider tests for project list derivation, selected project snapshot derivation, missing project handling, empty task/employee/blocker states, health derivation, and future source metadata boundaries in `src/features/city-view/scene/office/project-dashboard/InternalSimulationProjectDashboardProvider.test.ts`.
-- [ ] T008 Verify the provider layer does not import GitHub, external provider, credential, issue creation, task mutation, management, economy, payroll, dialogue, relationship, quest, multiplayer, or save/load systems.
+- [x] T005 [P] Add provider-neutral Project Dashboard types in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardTypes.ts`.
+- [x] T006 Add `InternalSimulationProjectDashboardProvider` to derive project detail snapshots from existing internal simulation data in `src/features/city-view/scene/office/project-dashboard/InternalSimulationProjectDashboardProvider.ts`.
+- [x] T007 [P] Add provider tests for project list derivation, selected project snapshot derivation, missing project handling, empty task/employee/blocker states, health derivation, and future source metadata boundaries in `src/features/city-view/scene/office/project-dashboard/InternalSimulationProjectDashboardProvider.test.ts`.
+- [x] T008 Verify the provider layer does not import GitHub, external provider, credential, issue creation, task mutation, management, economy, payroll, dialogue, relationship, quest, multiplayer, or save/load systems.
 
 ---
 
