@@ -121,23 +121,24 @@
 
 **Purpose**: Verify behavior, test coverage, and non-regression boundaries.
 
-- [ ] T020 Run Employee Knowledge automated tests with `npm test`.
+- [X] T020 Run Employee Knowledge automated tests with `npm test`.
   - Files likely affected: `src/features/city-view/scene/office/knowledge/EmployeeKnowledgeService.test.ts`, `src/features/city-view/scene/office/OfficeProjectPortalController.employee-knowledge.test.ts`
   - Acceptance criteria: Employee Knowledge tests and existing tests pass.
 
-- [ ] T021 Run TypeScript validation with `npx tsc --noEmit`.
+- [X] T021 Run TypeScript validation with `npx tsc --noEmit`.
   - Files likely affected: `src/features/city-view/scene/office/`
   - Acceptance criteria: TypeScript validation passes with no introduced errors.
 
-- [ ] T022 Run production build with `npm run build`.
+- [X] T022 Run production build with `npm run build`.
   - Files likely affected: `src/app/`, `src/features/city-view/`
   - Acceptance criteria: Build passes; Phaser client boundaries remain valid.
 
-- [ ] T023 Complete manual browser validation from `specs/027-employee-knowledge-system/quickstart.md`.
+- [X] T023 Complete manual browser validation from `specs/027-employee-knowledge-system/quickstart.md`.
   - Files likely affected: `specs/027-employee-knowledge-system/quickstart.md`
   - Acceptance criteria: Knowledge follows Employee Insight target, updates by simulation state, remains non-blocking, hides with blocking overlays, and contains no dialogue or control affordance.
+  - Validation notes: Manual browser validation passed locally on `http://localhost:3000` using `npx next dev -p 3000`; Employee Knowledge followed the Employee Insight target, showed read-only Why, Goal, schedule/next activity, and recent activity where available, hid when moving away, did not compete with blocking overlays, and introduced no dialogue or control affordances.
 
-- [ ] T024 Review architecture checklist: no duplicated simulation state, no external AI calls, no dialogue coupling, no employee direct control, no fake confidence, no fake timeline, and no broad office renderer refactor.
+- [X] T024 Review architecture checklist: no duplicated simulation state, no external AI calls, no dialogue coupling, no employee direct control, no fake confidence, no fake timeline, and no broad office renderer refactor.
   - Files likely affected: `specs/027-employee-knowledge-system/tasks.md`
   - Acceptance criteria: Review confirms feature boundaries and notes any blocker before completion.
 
