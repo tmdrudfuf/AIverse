@@ -50,7 +50,7 @@ All commands must pass before the feature is considered complete.
    - Company Dashboard opens.
    - Company Influence focus, if present, still displays correctly.
 
-5. Open one Project Dashboard from a Company Dashboard project entry.
+5. Open one Project Dashboard by selecting a Company Dashboard project entry and pressing Enter/Space.
 
 6. Verify the Project Dashboard shows read-only project detail:
 

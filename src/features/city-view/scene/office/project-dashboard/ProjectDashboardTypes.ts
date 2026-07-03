@@ -113,6 +113,7 @@ export type ProjectDashboardRelatedFocus = {
 };
 
 export type ProjectDashboardSourceMetadata = {
+  // Metadata only: future providers can map into this shape without making the dashboard call external systems.
   sourceType: ProjectDashboardSourceType;
   sourceId: string;
   externalUrl?: string;

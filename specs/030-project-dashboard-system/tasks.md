@@ -70,9 +70,9 @@
 
 **Independent Test**: Review contracts, types, tests, and UI imports to confirm future source metadata exists, the UI is provider-neutral, and no GitHub/external integration behavior exists.
 
-- [ ] T021 [US4] Add minimal extension comments where helpful in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardTypes.ts`.
-- [ ] T022 [US4] Confirm Project Dashboard UI consumes provider-neutral snapshot data and does not import the internal simulation provider directly in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
-- [ ] T023 [US4] Update `specs/030-project-dashboard-system/quickstart.md` if final controls differ from the planned manual validation flow.
+- [x] T021 [US4] Add minimal extension comments where helpful in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardTypes.ts`.
+- [x] T022 [US4] Confirm Project Dashboard UI consumes provider-neutral snapshot data and does not import the internal simulation provider directly in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
+- [x] T023 [US4] Update `specs/030-project-dashboard-system/quickstart.md` if final controls differ from the planned manual validation flow.
 
 ---
 
