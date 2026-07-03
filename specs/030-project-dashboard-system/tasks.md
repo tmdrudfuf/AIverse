@@ -58,9 +58,9 @@
 
 **Independent Test**: Snapshot relevant state before and after opening/closing Project Dashboard and verify only local selected-view state changes.
 
-- [ ] T018 [US3] Add regression tests that opening, viewing, returning from, and closing Project Dashboard do not mutate project task status, employee AI, schedule, work-session, company influence, company progression, NPC, Insight, Knowledge, or conversation state in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`.
-- [ ] T019 [US3] Add tests or assertions that no task assignment, task editing, issue creation, GitHub connection, management, dialogue, or direct employee-control affordance is exposed in Project Dashboard UI files.
-- [ ] T020 [US3] Review implementation imports and update code if any project dashboard path depends on forbidden mutation, external provider, credential, or management modules.
+- [x] T018 [US3] Add regression tests that opening, viewing, returning from, and closing Project Dashboard do not mutate project task status, employee AI, schedule, work-session, company influence, company progression, NPC, Insight, Knowledge, or conversation state in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`.
+- [x] T019 [US3] Add tests or assertions that no task assignment, task editing, issue creation, GitHub connection, management, dialogue, or direct employee-control affordance is exposed in Project Dashboard UI files.
+- [x] T020 [US3] Review implementation imports and update code if any project dashboard path depends on forbidden mutation, external provider, credential, or management modules.
 
 ---
 

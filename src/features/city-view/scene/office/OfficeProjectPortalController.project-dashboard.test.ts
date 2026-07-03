@@ -4,6 +4,7 @@ import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { InternalSimulationDashboardProvider } from "./dashboard/InternalSimulationDashboardProvider";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
+import type { Employee } from "./employees/EmployeeTypes";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
@@ -86,6 +87,65 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.viewMode).toBe("list");
     expect(state.selectedProjectDashboardProjectId).toBeUndefined();
     expect(state.projectDashboardSnapshot).toBeUndefined();
+  });
+
+  it("does not mutate project, task, employee, schedule, work-session, influence, progression, NPC, insight, knowledge, or conversation state", async () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.employees = [createEmployee()];
+    state.companyInfluencePlan = {
+      selectedFocusId: "project-risk",
+      updatedAt: "2026-01-01T09:00:00.000Z",
+    };
+    state.taskCollections["daily-proof"] = createTaskCollection();
+    state.workSessions["task-dashboard"] = [{
+      id: "session-dashboard",
+      taskId: "task-dashboard",
+      projectId: "daily-proof",
+      employeeId: "employee-1",
+      employeeName: "Ada",
+      provider: "placeholder",
+      status: "running",
+      startedAt: "2026-01-01T10:00:00.000Z",
+    }];
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+
+    const beforeProjects = structuredClone(state.projects);
+    const beforeTasks = structuredClone(state.taskCollections);
+    const beforeEmployees = structuredClone(state.employees);
+    const beforeWorkSessions = structuredClone(state.workSessions);
+    const beforeInfluence = structuredClone(state.companyInfluencePlan);
+    const beforeProgression = internals.companyProgressionService.getProgressionSnapshot();
+    const beforeMovement = internals.employeeNpcMovementService.getSnapshots();
+    const beforeSchedule = internals.employeeDailyScheduleService.getSnapshots();
+    const beforeWorkstations = internals.workstationOccupancyService.getSnapshots();
+    internals.aiService.analyzeTask = vi.fn(async () => {
+      throw new Error("Project Dashboard must not analyze tasks.");
+    });
+    internals.aiService.recommendEmployeeForTask = vi.fn(async () => {
+      throw new Error("Project Dashboard must not recommend employees.");
+    });
+    internals.aiProjectManagerService.createProjectManagementSuggestion = vi.fn(async () => {
+      throw new Error("Project Dashboard must not create management suggestions.");
+    });
+
+    controller.updateInput(createInput({ enterPressed: true }));
+    await flushPromises();
+
+    expect(state.projects).toEqual(beforeProjects);
+    expect(state.taskCollections).toEqual(beforeTasks);
+    expect(state.employees).toEqual(beforeEmployees);
+    expect(state.workSessions).toEqual(beforeWorkSessions);
+    expect(state.companyInfluencePlan).toEqual(beforeInfluence);
+    expect(internals.companyProgressionService.getProgressionSnapshot()).toEqual(beforeProgression);
+    expect(internals.employeeNpcMovementService.getSnapshots()).toEqual(beforeMovement);
+    expect(internals.employeeDailyScheduleService.getSnapshots()).toEqual(beforeSchedule);
+    expect(internals.workstationOccupancyService.getSnapshots()).toEqual(beforeWorkstations);
+    expect(internals.aiService.analyzeTask).not.toHaveBeenCalled();
+    expect(internals.aiService.recommendEmployeeForTask).not.toHaveBeenCalled();
+    expect(internals.aiProjectManagerService.createProjectManagementSuggestion).not.toHaveBeenCalled();
   });
 });
 
@@ -184,6 +244,20 @@ function createTaskCollection(): TaskCollection {
       createdAt: "2026-01-01T09:00:00.000Z",
       updatedAt: "2026-01-01T10:00:00.000Z",
     }],
+  };
+}
+
+function createEmployee(): Employee {
+  return {
+    id: "employee-1",
+    name: "Ada",
+    role: "Engineer",
+    status: "Working",
+    avatarColor: "#64748b",
+    capabilities: ["TypeScript"],
+    description: "Project dashboard test employee",
+    assignedTaskId: "task-dashboard",
+    currentProjectId: "daily-proof",
   };
 }
 
