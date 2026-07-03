@@ -54,5 +54,5 @@ Fix any validation failures before finishing.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/029-company-influence-planning-system/plan.md
+shell commands, and other important information, read specs/030-project-dashboard-system/plan.md
 <!-- SPECKIT END -->
