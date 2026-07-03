@@ -3,7 +3,6 @@ import type { EmployeeRole } from "../employees/EmployeeTypes";
 import type { EmployeeScheduleState } from "../schedules/EmployeeDailyScheduleTypes";
 import type { ProjectPortalProjectStatus } from "../OfficeProjectPortalTypes";
 import type { TaskStatus } from "../tasks/ProjectTaskTypes";
-import type { WorkSessionStatus } from "../work-sessions/WorkSessionTypes";
 
 export const INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID = "internal-simulation";
 

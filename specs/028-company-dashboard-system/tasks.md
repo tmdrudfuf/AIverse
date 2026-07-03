@@ -28,10 +28,10 @@
 
 **Purpose**: Derive dashboard data from existing simulation systems only.
 
-- [ ] T008 Implement `InternalSimulationDashboardProvider` using existing Employee AI, Schedule, Projects, Company Progression, Office Layout, Conversation, Insight, Knowledge, and activity data where available.
-- [ ] T009 Add empty/unavailable states for missing employees, projects, occupancy, conversation, productivity, and risk data.
-- [ ] T010 Add deterministic company summary derivation from available provider data without external AI integration.
-- [ ] T011 Add tests for populated snapshots, partial data, empty data, and source freshness behavior.
+- [x] T008 Implement `InternalSimulationDashboardProvider` using existing Employee AI, Schedule, Projects, Company Progression, Office Layout, Conversation, Insight, Knowledge, and activity data where available.
+- [x] T009 Add empty/unavailable states for missing employees, projects, occupancy, conversation, productivity, and risk data.
+- [x] T010 Add deterministic company summary derivation from available provider data without external AI integration.
+- [x] T011 Add tests for populated snapshots, partial data, empty data, and source freshness behavior.
 
 ---
 
