@@ -50,10 +50,10 @@
 
 **Purpose**: Expand the dashboard's understanding layer while remaining read-only.
 
-- [ ] T016 Add employee state, role, current work, mood where available, and AI state distribution sections.
-- [ ] T017 Add project progress, active work, stalled work, and current project focus sections.
-- [ ] T018 Add workload and office occupancy detail from existing systems where available.
-- [ ] T019 Add tests for employee/project/workload/occupancy derivation and empty states.
+- [x] T016 Add employee state, role, current work, mood where available, and AI state distribution sections.
+- [x] T017 Add project progress, active work, stalled work, and current project focus sections.
+- [x] T018 Add workload and office occupancy detail from existing systems where available.
+- [x] T019 Add tests for employee/project/workload/occupancy derivation and empty states.
 
 ---
 

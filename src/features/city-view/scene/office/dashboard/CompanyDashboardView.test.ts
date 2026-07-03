@@ -25,6 +25,14 @@ describe("CompanyDashboardView read-only rows", () => {
         ).employees,
         totalEmployees: 3,
         activeEmployees: 2,
+        byRole: [
+          { role: "Engineer" as const, count: 2 },
+          { role: "QA" as const, count: 1 },
+        ],
+        byState: [
+          { state: "idle" as const, count: 1 },
+          { state: "working" as const, count: 2 },
+        ],
       },
       projects: {
         ...createEmptyCompanyDashboardSnapshot(
@@ -42,6 +50,13 @@ describe("CompanyDashboardView read-only rows", () => {
         activeWorkSessionCount: 1,
         unassignedTaskCount: 4,
       },
+      occupancy: {
+        presentEmployees: 3,
+        occupiedWorkstations: 2,
+        availableWorkstations: 1,
+        reservedWorkstations: 0,
+        unavailableWorkstations: 0,
+      },
       activity: [{
         id: "activity-1",
         timestamp: "2026-01-01T09:00:00.000Z",
@@ -55,8 +70,12 @@ describe("CompanyDashboardView read-only rows", () => {
       title: "AI Company Command Center",
       healthText: "Health: smallOffice is stable",
       employeeText: "Employees: 2/3 active",
+      employeeStateText: "States: idle 1, working 2",
+      roleText: "Roles: Engineer 2, QA 1",
       projectText: "Projects: 1/2 active",
+      projectProgressText: "Progress: 0% average",
       workloadText: "Workload: 4 unassigned, 1 running",
+      occupancyText: "Office: 2 occupied, 1 open",
       activityText: "Started dashboard work",
     });
   });

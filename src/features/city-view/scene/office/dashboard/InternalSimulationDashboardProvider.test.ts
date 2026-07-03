@@ -102,6 +102,56 @@ describe("InternalSimulationDashboardProvider", () => {
     expect(snapshot.conversations.highlights).toEqual([]);
   });
 
+  it("derives employee, project, workload, and occupancy detail from source snapshots", () => {
+    const provider = new InternalSimulationDashboardProvider();
+
+    const snapshot = provider.getSnapshot({
+      employeeInsightSources: [
+        createInsightSource({ employeeId: "employee-1", aiState: "working", role: "Engineer" }),
+        createInsightSource({ employeeId: "employee-2", aiState: "working", role: "Designer" }),
+        createInsightSource({ employeeId: "employee-3", aiState: "idle", role: "Engineer" }),
+      ],
+      projects: [createProject()],
+      tasks: [
+        createTask({ id: "task-1", assigneeId: "employee-1", status: "In Progress" }),
+        createTask({ id: "task-2", assigneeId: "employee-1", status: "Review" }),
+        createTask({ id: "task-3", status: "Todo" }),
+      ],
+      workSessions: [createWorkSession({ employeeId: "employee-2", status: "running" })],
+    });
+
+    expect(snapshot.employees.byState).toEqual([
+      { state: "idle", count: 1 },
+      { state: "working", count: 2 },
+    ]);
+    expect(snapshot.employees.byRole).toEqual([
+      { role: "Designer", count: 1 },
+      { role: "Engineer", count: 2 },
+    ]);
+    expect(snapshot.employees.currentWork[0]).toMatchObject({
+      employeeId: "employee-1",
+      currentTaskTitle: "Build dashboard",
+      currentProjectName: "Daily Proof",
+      progressPercent: 50,
+    });
+    expect(snapshot.projects.projects[0]).toMatchObject({
+      projectId: "daily-proof",
+      activeTaskCount: 6,
+      progressPercent: 47,
+    });
+    expect(snapshot.workload).toMatchObject({
+      assignedTaskCount: 5,
+      unassignedTaskCount: 1,
+      activeWorkSessionCount: 1,
+      availableEmployeeCount: 1,
+    });
+    expect(snapshot.workload.overloadedEmployees.map((employee) => employee.employeeId)).toEqual(["employee-1"]);
+    expect(snapshot.occupancy).toMatchObject({
+      presentEmployees: 3,
+      occupiedWorkstations: 3,
+    });
+  });
+
   it("uses the latest known source timestamp when generatedAt is not supplied", () => {
     const provider = new InternalSimulationDashboardProvider();
 
@@ -120,6 +170,7 @@ function createInsightSource(options: {
   aiState: EmployeeInsightSource["aiState"];
   employeeId: string;
   includeCurrentTask?: boolean;
+  mood?: EmployeeInsightSource["mood"];
   name?: string;
   role?: EmployeeInsightSource["role"];
 }): EmployeeInsightSource {
@@ -132,6 +183,7 @@ function createInsightSource(options: {
     currentTask: options.includeCurrentTask === false
       ? undefined
       : createTask({ id: `task-${options.employeeId}`, assigneeId: options.employeeId, status: "In Progress" }),
+    mood: options.mood,
     workProgress: { label: "In Progress", percent: 50, status: "In Progress" },
     workstationSnapshot: {
       workstationId: `workstation-${options.employeeId}`,

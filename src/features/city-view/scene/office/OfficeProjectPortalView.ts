@@ -95,9 +95,13 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 28, this.panelY + 24, dashboardRows.title, titleStyle());
     this.addText(this.panelX + 44, this.panelY + 66, dashboardRows.healthText, bodyStyle());
     this.addText(this.panelX + 44, this.panelY + 92, dashboardRows.employeeText, bodyStyle());
-    this.addText(this.panelX + 44, this.panelY + 118, dashboardRows.projectText, bodyStyle());
-    this.addText(this.panelX + 44, this.panelY + 144, dashboardRows.workloadText, bodyStyle());
-    this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.activityText, 70), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 118, wrapText(dashboardRows.employeeStateText, 40), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 144, wrapText(dashboardRows.roleText, 40), mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 66, dashboardRows.projectText, bodyStyle());
+    this.addText(this.panelX + 360, this.panelY + 92, dashboardRows.projectProgressText, bodyStyle());
+    this.addText(this.panelX + 360, this.panelY + 118, dashboardRows.workloadText, mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 144, dashboardRows.occupancyText, mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.activityText, 82), mutedStyle());
     this.addText(this.panelX + 28, this.panelY + 208, "Projects", headingStyle());
 
     state.projects.forEach((project, index) => {
