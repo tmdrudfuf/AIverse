@@ -61,10 +61,10 @@
 
 **Purpose**: Surface higher-level understanding from existing simulation signals.
 
-- [ ] T020 Add current bottlenecks and current risks sections using derived provider observations.
-- [ ] T021 Add recent company activity and recent conversations summary sections.
-- [ ] T022 Add recent productivity and company summary presentation.
-- [ ] T023 Add tests for bottleneck/risk/activity/conversation/productivity summary derivation and no-fabrication empty states.
+- [x] T020 Add current bottlenecks and current risks sections using derived provider observations.
+- [x] T021 Add recent company activity and recent conversations summary sections.
+- [x] T022 Add recent productivity and company summary presentation.
+- [x] T023 Add tests for bottleneck/risk/activity/conversation/productivity summary derivation and no-fabrication empty states.
 
 ---
 

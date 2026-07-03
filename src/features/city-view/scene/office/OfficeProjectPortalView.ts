@@ -101,11 +101,14 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 360, this.panelY + 92, dashboardRows.projectProgressText, bodyStyle());
     this.addText(this.panelX + 360, this.panelY + 118, dashboardRows.workloadText, mutedStyle());
     this.addText(this.panelX + 360, this.panelY + 144, dashboardRows.occupancyText, mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.activityText, 82), mutedStyle());
-    this.addText(this.panelX + 28, this.panelY + 208, "Projects", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.bottleneckText, 38), mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 170, wrapText(dashboardRows.riskText, 36), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 194, wrapText(dashboardRows.productivityText, 82), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 218, wrapText(dashboardRows.summaryText, 82), mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + 258, "Projects", headingStyle());
 
     state.projects.forEach((project, index) => {
-      const rowY = this.panelY + 240 + index * 34;
+      const rowY = this.panelY + 290 + index * 30;
       const marker = index === state.selectedProjectIndex ? ">" : " ";
       const statusColumn = project.status.padEnd(11, " ");
       this.addText(
@@ -116,9 +119,9 @@ export class OfficeProjectPortalView {
       );
     });
 
-    this.addText(this.panelX + 390, this.panelY + 208, "Linked Services", headingStyle());
+    this.addText(this.panelX + 390, this.panelY + 258, "Linked Services", headingStyle());
     state.services.forEach((service, index) => {
-      const rowY = this.panelY + 240 + index * 26;
+      const rowY = this.panelY + 290 + index * 24;
       this.addText(this.panelX + 406, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
 

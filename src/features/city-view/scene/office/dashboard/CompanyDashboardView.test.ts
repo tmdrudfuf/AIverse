@@ -64,6 +64,32 @@ describe("CompanyDashboardView read-only rows", () => {
         label: "Started dashboard work",
         sourceSystems: ["task_activity" as const],
       }],
+      bottlenecks: [{
+        id: "bottleneck-1",
+        severity: "medium" as const,
+        label: "Employee workload is concentrated",
+        description: "One employee has multiple active assignments.",
+        sourceSystems: ["projects" as const],
+      }],
+      conversations: {
+        recentCount: 1,
+        highlights: [],
+      },
+      productivity: {
+        completedTaskCount: 1,
+        activeWorkSessionCount: 1,
+        finishedWorkSessionCount: 2,
+        failedWorkSessionCount: 0,
+        recentProgressLabel: "1 completed task(s), 2 finished work session(s).",
+      },
+      risks: [{
+        id: "risk-1",
+        severity: "medium" as const,
+        label: "Critical unfinished task",
+        reason: "A critical task is unfinished.",
+        sourceSystems: ["projects" as const],
+      }],
+      companySummary: "2 of 3 employees are active. 1 risk needs attention.",
     };
 
     expect(createCompanyDashboardPanelRows(snapshot)).toEqual({
@@ -76,6 +102,11 @@ describe("CompanyDashboardView read-only rows", () => {
       projectProgressText: "Progress: 0% average",
       workloadText: "Workload: 4 unassigned, 1 running",
       occupancyText: "Office: 2 occupied, 1 open",
+      bottleneckText: "Bottleneck: Employee workload is concentrated",
+      conversationText: "Conversations: 1 recent",
+      productivityText: "Productivity: 1 completed task(s), 2 finished work session(s).",
+      riskText: "Risk: Critical unfinished task",
+      summaryText: "2 of 3 employees are active. 1 risk needs attention.",
       activityText: "Started dashboard work",
     });
   });

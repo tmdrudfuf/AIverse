@@ -102,6 +102,45 @@ describe("InternalSimulationDashboardProvider", () => {
     expect(snapshot.conversations.highlights).toEqual([]);
   });
 
+  it("derives recent conversation and productivity summaries when source records exist", () => {
+    const provider = new InternalSimulationDashboardProvider();
+
+    const snapshot = provider.getSnapshot({
+      employeeInsightSources: [createInsightSource({ employeeId: "employee-1", aiState: "talking" })],
+      projects: [createProject()],
+      tasks: [createTask({ id: "task-done", status: "Done" })],
+      workSessions: [
+        createWorkSession({ id: "session-running", status: "running" }),
+        createWorkSession({ id: "session-finished", status: "finished" }),
+      ],
+      conversations: [{
+        employeeId: "employee-1",
+        conversationId: "conversation-1",
+        speakerName: "Ada",
+        dialogueText: "Reviewing the dashboard.",
+        dialogueType: "projectStatus",
+        sourceState: "working",
+        currentTaskTitle: "Build dashboard",
+        timestamp: "2026-01-01T12:00:00.000Z",
+      }],
+    });
+
+    expect(snapshot.conversations).toMatchObject({
+      recentCount: 1,
+      lastConversationAt: "2026-01-01T12:00:00.000Z",
+    });
+    expect(snapshot.conversations.highlights[0]).toMatchObject({
+      id: "conversation-conversation-1",
+      label: "Ada: projectStatus",
+    });
+    expect(snapshot.productivity).toMatchObject({
+      completedTaskCount: 1,
+      activeWorkSessionCount: 1,
+      finishedWorkSessionCount: 1,
+      recentProgressLabel: "1 completed task(s), 1 finished work session(s).",
+    });
+  });
+
   it("derives employee, project, workload, and occupancy detail from source snapshots", () => {
     const provider = new InternalSimulationDashboardProvider();
 
