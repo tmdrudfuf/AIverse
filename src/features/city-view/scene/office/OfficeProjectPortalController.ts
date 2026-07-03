@@ -8,6 +8,7 @@ import type {
   EmployeeConversationViewModel,
   NearbyEmployeeConversationTarget,
 } from "./conversations/EmployeeConversationTypes";
+import { InternalSimulationDashboardProvider } from "./dashboard/InternalSimulationDashboardProvider";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
 import { EmployeeService } from "./employees/EmployeeService";
@@ -80,6 +81,7 @@ export class OfficeProjectPortalController {
   private readonly companyProgressionService: CompanyProgressionService;
   private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
+  private readonly companyDashboardProvider: InternalSimulationDashboardProvider;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
   private repositoryRequestVersion = 0;
@@ -105,6 +107,7 @@ export class OfficeProjectPortalController {
     this.companyProgressionService = new CompanyProgressionService();
     this.officeLayoutService = new OfficeLayoutService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
+    this.companyDashboardProvider = new InternalSimulationDashboardProvider();
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
   }
@@ -117,6 +120,7 @@ export class OfficeProjectPortalController {
     this.state.viewMode = "list";
     this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, 0, this.state.projects.length - 1);
     this.state.selectedProjectId = this.state.projects[this.state.selectedProjectIndex]?.id ?? "";
+    this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
     this.view.show();
   }
@@ -329,6 +333,21 @@ export class OfficeProjectPortalController {
         this.state.workSessions,
       ),
     };
+  }
+
+  getCompanyDashboardSnapshot() {
+    const employeeInsightSources = this.getEmployeeInsightSources();
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+
+    return this.companyDashboardProvider.getSnapshot({
+      employeeInsightSources,
+      employees: this.state.employees,
+      projects: this.state.projects,
+      tasks,
+      workSessions: Object.values(this.state.workSessions).flat(),
+      workstations: this.getWorkstationSnapshots(),
+      companyProgression: this.getCompanyProgressionSnapshot(),
+    });
   }
 
   getEmployeeMovementSnapshots(
@@ -1027,6 +1046,10 @@ export class OfficeProjectPortalController {
       this.state.workSessions,
       this.state.employeeSimulations,
     );
+  }
+
+  private refreshCompanyDashboardSnapshot() {
+    this.state.companyDashboardSnapshot = this.getCompanyDashboardSnapshot();
   }
 
   private async prepareProjectManagementSuggestion(projectId: string) {

@@ -39,10 +39,10 @@
 
 **Purpose**: Deliver the minimum playable Company Dashboard observation interface.
 
-- [ ] T012 Add the read-only Company Dashboard UI consuming only provider-neutral snapshot data.
-- [ ] T013 Add company health, employee summary, project summary, workload, and recent activity sections.
-- [ ] T014 Integrate the dashboard into an existing company/office access surface without adding management behavior.
-- [ ] T015 Add tests or assertions that the dashboard does not render assignment, editing, dialogue, project control, or direct employee-control affordances.
+- [x] T012 Add the read-only Company Dashboard UI consuming only provider-neutral snapshot data.
+- [x] T013 Add company health, employee summary, project summary, workload, and recent activity sections.
+- [x] T014 Integrate the dashboard into an existing company/office access surface without adding management behavior.
+- [x] T015 Add tests or assertions that the dashboard does not render assignment, editing, dialogue, project control, or direct employee-control affordances.
 
 ---
 
