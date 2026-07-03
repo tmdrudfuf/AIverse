@@ -17,10 +17,10 @@
 
 **Purpose**: Define the provider-neutral dashboard contract used by UI and providers.
 
-- [ ] T004 Add `CompanyDashboardSnapshot`, section, summary, risk, bottleneck, activity, and provider types.
-- [ ] T005 Add the `CompanyDashboardProvider` interface and Internal Simulation provider identifier.
-- [ ] T006 Add unit coverage for dashboard type helpers, empty section creation, and provider-neutral snapshot shape if existing test patterns support it.
-- [ ] T007 Verify no dashboard type introduces duplicate mutable employee, project, conversation, or workload state.
+- [x] T004 Add `CompanyDashboardSnapshot`, section, summary, risk, bottleneck, activity, and provider types.
+- [x] T005 Add the `CompanyDashboardProvider` interface and Internal Simulation provider identifier.
+- [x] T006 Add unit coverage for dashboard type helpers, empty section creation, and provider-neutral snapshot shape if existing test patterns support it.
+- [x] T007 Verify no dashboard type introduces duplicate mutable employee, project, conversation, or workload state.
 
 ---
 
