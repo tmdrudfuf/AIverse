@@ -16,7 +16,8 @@ import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationT
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
-import type { EmployeeInsightSource } from "./insight/EmployeeInsightTypes";
+import type { EmployeeInsightSource, EmployeeInsightTarget } from "./insight/EmployeeInsightTypes";
+import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
@@ -312,6 +313,22 @@ export class OfficeProjectPortalController {
         companyProgression: previewState.companyProgression,
       };
     });
+  }
+
+  getEmployeeKnowledgeSource(insightTarget: EmployeeInsightTarget | undefined): EmployeeKnowledgeSource | undefined {
+    if (!insightTarget) return undefined;
+
+    const { context } = this.createPreviewEmployeeConversationContext(insightTarget.employeeId);
+
+    return {
+      insightTarget,
+      insightSource: insightTarget.source,
+      conversationContext: context,
+      activitySources: createKnowledgeActivitySources(
+        insightTarget.source,
+        this.state.workSessions,
+      ),
+    };
   }
 
   getEmployeeMovementSnapshots(
@@ -1299,6 +1316,45 @@ function createInsightProgress(task: ProjectTask | undefined) {
     status: task.status,
     percent: getTaskStatusProgressPercent(task.status),
   };
+}
+
+function createKnowledgeActivitySources(
+  insightSource: EmployeeInsightSource,
+  workSessions: ProjectPortalState["workSessions"],
+) {
+  const employeeWorkSessions = Object.values(workSessions)
+    .flat()
+    .filter((session) => session.employeeId === insightSource.employeeId);
+
+  return [
+    ...(insightSource.currentTask?.activityLog ?? []).map((activity) => ({
+      kind: "task_activity" as const,
+      activity,
+    })),
+    ...employeeWorkSessions.map((workSession) => ({
+      kind: "work_session" as const,
+      workSession,
+    })),
+    ...(insightSource.aiSnapshot?.lastTransition
+      ? [{
+          kind: "ai_transition" as const,
+          employeeId: insightSource.employeeId,
+          fromState: insightSource.aiSnapshot.lastTransition.fromState,
+          toState: insightSource.aiSnapshot.lastTransition.toState,
+          reason: insightSource.aiSnapshot.lastTransition.reason,
+          occurredAt: insightSource.aiSnapshot.lastTransition.occurredAt,
+        }]
+      : []),
+    ...(insightSource.scheduleSnapshot?.currentBlock
+      ? [{
+          kind: "schedule" as const,
+          employeeId: insightSource.employeeId,
+          scheduleState: insightSource.scheduleSnapshot.scheduleState,
+          label: insightSource.scheduleSnapshot.currentBlock.label,
+          occurredAt: insightSource.scheduleSnapshot.lastUpdatedAt,
+        }]
+      : []),
+  ];
 }
 
 function getTaskStatusProgressPercent(status: TaskStatus) {
