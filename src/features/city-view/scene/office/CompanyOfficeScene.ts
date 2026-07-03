@@ -85,11 +85,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       };
       validateOfficeLayout(this.office, this.officeCollisionMap);
 
-      this.officeVisualLayer = new OfficeVisualLayer(this, this.office);
+      const objectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);
+      this.officeVisualLayer = new OfficeVisualLayer(this, this.office, objectRegistry.getObjects());
       this.founderEntity = new FounderEntity(this, this.office.founderSpawn);
       if (this.spawnRequest?.returnFacing) this.founderEntity.setFacing(this.spawnRequest.returnFacing);
 
-      const objectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);
       this.officeInteractionController = new OfficeInteractionController(objectRegistry);
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
       this.officeProjectPortalController = new OfficeProjectPortalController(this);

@@ -31,7 +31,8 @@ export class OfficeEmployeeNpcRenderer {
       }
     });
 
-    viewModels.forEach((viewModel) => this.renderNpc(viewModel));
+    const labelOffsets = createLabelOffsets(viewModels);
+    viewModels.forEach((viewModel) => this.renderNpc(viewModel, labelOffsets.get(viewModel.employeeId) ?? DEFAULT_LABEL_OFFSET));
   }
 
   destroy() {
@@ -42,7 +43,7 @@ export class OfficeEmployeeNpcRenderer {
     this.renderedNpcs.clear();
   }
 
-  private renderNpc(viewModel: EmployeeNpcViewModel) {
+  private renderNpc(viewModel: EmployeeNpcViewModel, labelOffset: LabelOffset) {
     const existingNpc = this.renderedNpcs.get(viewModel.employeeId);
     const renderedNpc = existingNpc ?? this.createNpc(viewModel);
     const targetPosition = resolveEmployeeNpcWorldPosition(viewModel.positionHint);
@@ -55,8 +56,10 @@ export class OfficeEmployeeNpcRenderer {
     renderedNpc.container.setDepth(1100);
     renderedNpc.body.setFillStyle(style.fillColor, 1);
     renderedNpc.body.setStrokeStyle(2, style.borderColor, 1);
+    renderedNpc.nameText.setPosition(labelOffset.x, labelOffset.y);
     renderedNpc.nameText.setText(viewModel.displayName);
     renderedNpc.nameText.setColor(style.labelColor);
+    renderedNpc.stateText.setPosition(labelOffset.x, labelOffset.y + 14);
     renderedNpc.stateText.setText(formatStateLabel(viewModel));
     renderedNpc.stateText.setColor(style.labelColor);
   }
@@ -90,6 +93,43 @@ export class OfficeEmployeeNpcRenderer {
     this.renderedNpcs.set(viewModel.employeeId, renderedNpc);
     return renderedNpc;
   }
+}
+
+type LabelOffset = {
+  x: number;
+  y: number;
+};
+
+const DEFAULT_LABEL_OFFSET: LabelOffset = { x: 0, y: 22 };
+
+const CLUSTER_DISTANCE = 58;
+const LABEL_OFFSETS: LabelOffset[] = [
+  { x: 0, y: 22 },
+  { x: -42, y: 6 },
+  { x: 42, y: 6 },
+  { x: -42, y: 42 },
+  { x: 42, y: 42 },
+];
+
+function createLabelOffsets(viewModels: ReadonlyArray<EmployeeNpcViewModel>): Map<string, LabelOffset> {
+  const sortedViewModels = [...viewModels].sort((left, right) => left.employeeId.localeCompare(right.employeeId));
+  const placedLabels: Array<{ position: { x: number; y: number }; offset: LabelOffset }> = [];
+  const offsetsByEmployeeId = new Map<string, LabelOffset>();
+
+  sortedViewModels.forEach((viewModel) => {
+    const position = resolveEmployeeNpcWorldPosition(viewModel.positionHint);
+    const nearbyLabelCount = placedLabels.filter((label) => getDistance(position, label.position) <= CLUSTER_DISTANCE).length;
+    const offset = LABEL_OFFSETS[Math.min(nearbyLabelCount, LABEL_OFFSETS.length - 1)];
+
+    placedLabels.push({ position, offset });
+    offsetsByEmployeeId.set(viewModel.employeeId, offset);
+  });
+
+  return offsetsByEmployeeId;
+}
+
+function getDistance(left: { x: number; y: number }, right: { x: number; y: number }) {
+  return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
 function interpolatePosition(currentX: number, currentY: number, target: { x: number; y: number }) {

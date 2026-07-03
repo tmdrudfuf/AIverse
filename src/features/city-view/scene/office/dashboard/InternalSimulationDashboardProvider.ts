@@ -443,6 +443,7 @@ function createSectionAvailability(input: {
     createCompanyDashboardSectionAvailability("current_bottlenecks", "Current Bottlenecks", ["employee_ai", "projects"], input.bottlenecks.length > 0 ? "available" : "empty"),
     createCompanyDashboardSectionAvailability("recent_company_activity", "Recent Company Activity", ["task_activity", "work_session"], getCollectionStatus(input.activity)),
     createCompanyDashboardSectionAvailability("recent_conversations", "Recent Conversations", ["conversation"], getCollectionStatus(input.conversations)),
+    createCompanyDashboardSectionAvailability("company_focus", "Company Focus", ["company_progression"], "unavailable"),
     createCompanyDashboardSectionAvailability("company_summary", "Company Summary", ["company_progression", "projects"], "available"),
     createCompanyDashboardSectionAvailability("recent_productivity", "Recent Productivity", ["task_activity", "work_session"], input.workSessions.length > 0 || input.tasks.length > 0 ? "available" : "empty"),
     createCompanyDashboardSectionAvailability("current_risks", "Current Risks", ["employee_ai", "projects", "company_progression"], input.risks.length > 0 ? "available" : "empty"),

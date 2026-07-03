@@ -105,10 +105,34 @@ describe("CompanyDashboardView read-only rows", () => {
       bottleneckText: "Bottleneck: Employee workload is concentrated",
       conversationText: "Conversations: 1 recent",
       productivityText: "Productivity: 1 completed task(s), 2 finished work session(s).",
+      focusText: "Focus: None selected",
       riskText: "Risk: Critical unfinished task",
       summaryText: "2 of 3 employees are active. 1 risk needs attention.",
       activityText: "Started dashboard work",
     });
+  });
+
+  it("surfaces selected company focus from provider-neutral snapshot data", () => {
+    const rows = createCompanyDashboardPanelRows({
+      ...createEmptyCompanyDashboardSnapshot(
+        INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
+        "2026-01-01T00:00:00.000Z",
+      ),
+      companyFocus: {
+        isSet: true,
+        summary: "Current focus: reduce project risk by watching blockers and critical work.",
+        currentFocus: {
+          id: "project-risk",
+          label: "Reduce project risk",
+          description: "Watch blockers.",
+          advisorySummary: "Current focus: reduce project risk by watching blockers and critical work.",
+          futureMetadataTags: ["risk"],
+        },
+        options: [],
+      },
+    });
+
+    expect(rows.focusText).toBe("Focus: Reduce project risk");
   });
 
   it("does not expose management, assignment, editing, dialogue, or project-control affordances", () => {

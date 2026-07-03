@@ -4,6 +4,7 @@ import type {
   ProjectPortalState,
   ProjectWorkspace,
 } from "./OfficeProjectPortalTypes";
+import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 
 const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
   {
@@ -126,6 +127,8 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
 };
 
 export function createProjectPortalState(): ProjectPortalState {
+  const influencePlanningService = new CompanyInfluencePlanningService();
+
   return {
     isOpen: false,
     justOpened: false,
@@ -135,6 +138,7 @@ export function createProjectPortalState(): ProjectPortalState {
     selectedWorkspaceSectionIndex: 0,
     selectedTaskIndex: 0,
     selectedEmployeeIndex: 0,
+    selectedInfluenceFocusIndex: 0,
     projects: PROJECTS.map((project) => ({
       ...project,
       linkedServices: project.linkedServices.map((service) => ({ ...service })),
@@ -151,6 +155,8 @@ export function createProjectPortalState(): ProjectPortalState {
     employeeSimulations: {},
     employeeAssignments: {},
     workSessions: {},
+    companyInfluencePlan: influencePlanningService.createInitialState(),
+    companyFocusSummary: influencePlanningService.createFocusSummary(influencePlanningService.createInitialState()),
   };
 }
 
