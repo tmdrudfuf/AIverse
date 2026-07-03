@@ -45,10 +45,10 @@
 
 **Independent Test**: Open a populated project and verify all available project detail sections render from source data with readable empty states where data is missing.
 
-- [ ] T014 [US2] Add `ProjectDashboardView` for read-only project detail rendering in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
-- [ ] T015 [US2] Render project name, status, progress, active work, employees, blockers, activity, health, related focus, next suggested focus, and source metadata empty states in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
-- [ ] T016 [US2] Integrate `ProjectDashboardView` into `src/features/city-view/scene/office/OfficeProjectPortalView.ts` using existing modal/portal conventions.
-- [ ] T017 [US2] Add view tests for populated sections, partial data, unavailable project state, empty active work, empty employees, neutral blockers, and advisory focus text in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.test.ts`.
+- [x] T014 [US2] Add `ProjectDashboardView` for read-only project detail rendering in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
+- [x] T015 [US2] Render project name, status, progress, active work, employees, blockers, activity, health, related focus, next suggested focus, and source metadata empty states in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
+- [x] T016 [US2] Integrate `ProjectDashboardView` into `src/features/city-view/scene/office/OfficeProjectPortalView.ts` using existing modal/portal conventions.
+- [x] T017 [US2] Add view tests for populated sections, partial data, unavailable project state, empty active work, empty employees, neutral blockers, and advisory focus text in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.test.ts`.
 
 ---
 

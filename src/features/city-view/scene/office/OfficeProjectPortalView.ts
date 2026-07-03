@@ -3,6 +3,7 @@ import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardVie
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
@@ -169,47 +170,36 @@ export class OfficeProjectPortalView {
   }
 
   private renderProjectDashboard(state: ProjectPortalState) {
-    const snapshot = state.projectDashboardSnapshot;
+    const rows = createProjectDashboardPanelRows(state.projectDashboardSnapshot);
 
-    this.addText(this.panelX + 28, this.panelY + 24, snapshot?.project.name ?? "Project Dashboard", titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 24, rows.title, titleStyle());
 
-    if (!snapshot || !snapshot.project.isAvailable) {
-      this.addText(this.panelX + 28, this.panelY + 84, "Project unavailable", headingStyle());
-      this.addText(this.panelX + 44, this.panelY + 122, "Return to the Company Dashboard and choose another project.", bodyStyle());
+    if (!state.projectDashboardSnapshot?.project.isAvailable) {
+      this.addText(this.panelX + 28, this.panelY + 84, rows.statusText, headingStyle());
+      this.addText(this.panelX + 44, this.panelY + 122, wrapText(rows.healthText, 74), bodyStyle());
       this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc dashboard", instructionStyle()).setOrigin(1, 0.5);
       return;
     }
 
-    this.addText(this.panelX + 28, this.panelY + 68, `${snapshot.project.status} | ${snapshot.health.label}`, headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 104, `Progress: ${snapshot.progress.label}`, bodyStyle());
-    this.addText(this.panelX + 44, this.panelY + 132, wrapText(snapshot.health.reason, 74), mutedStyle());
-    this.addText(this.panelX + 28, this.panelY + 176, "Active Work", headingStyle());
+    this.addText(this.panelX + 28, this.panelY + 68, rows.statusText, headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 104, rows.progressText, bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 132, wrapText(rows.healthText, 74), mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + 176, rows.activeWorkHeading, headingStyle());
+    rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
+      const rowY = this.panelY + 210 + index * 26;
+      this.addText(this.panelX + 44, rowY, wrapText(row, 72), bodyStyle());
+    });
 
-    if (snapshot.activeWork.length === 0) {
-      this.addText(this.panelX + 44, this.panelY + 210, "No active tasks visible.", mutedStyle());
-    } else {
-      snapshot.activeWork.slice(0, 3).forEach((workItem, index) => {
-        const rowY = this.panelY + 210 + index * 26;
-        this.addText(this.panelX + 44, rowY, wrapText(`${workItem.title} - ${workItem.status} (${workItem.priority})`, 72), bodyStyle());
-      });
-    }
+    this.addText(this.panelX + 360, this.panelY + 176, rows.employeeHeading, headingStyle());
+    rows.employeeRows.slice(0, 3).forEach((row, index) => {
+      const rowY = this.panelY + 210 + index * 26;
+      this.addText(this.panelX + 376, rowY, wrapText(row, 34), bodyStyle());
+    });
 
-    this.addText(this.panelX + 360, this.panelY + 176, "Employees", headingStyle());
-    if (snapshot.employees.length === 0) {
-      this.addText(this.panelX + 376, this.panelY + 210, "No employee context visible.", mutedStyle());
-    } else {
-      snapshot.employees.slice(0, 3).forEach((employee, index) => {
-        const rowY = this.panelY + 210 + index * 26;
-        this.addText(this.panelX + 376, rowY, wrapText(`${employee.name} - ${employee.aiState}`, 34), bodyStyle());
-      });
-    }
-
-    const blockerText = snapshot.blockers[0]
-      ? `Blocker: ${snapshot.blockers[0].label}`
-      : "Blockers: None visible";
-    this.addText(this.panelX + 44, this.panelY + 314, wrapText(blockerText, 74), mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 338, wrapText(`Focus: ${snapshot.relatedFocus.summary}`, 74), mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 362, wrapText(`Next suggested focus: ${snapshot.nextSuggestedFocus ?? "None"}`, 74), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 314, wrapText(rows.blockerText, 74), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 338, wrapText(rows.activityText, 74), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 362, wrapText(rows.relatedFocusText, 74), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 386, wrapText(rows.nextSuggestedFocusText, 74), mutedStyle());
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc dashboard", instructionStyle()).setOrigin(1, 0.5);
   }
 
