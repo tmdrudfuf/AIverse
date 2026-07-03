@@ -83,13 +83,13 @@
 
 **Purpose**: Confirm the feature is playable, read-only, and ready for review.
 
-- [ ] T028 Complete manual validation using specs/028-company-dashboard-system/quickstart.md.
-- [ ] T029 Run `npm test`.
-- [ ] T030 Run `npx tsc --noEmit`.
-- [ ] T031 Run `npm run build`.
-- [ ] T032 Run `git diff --check`.
-- [ ] T033 Run `git diff --cached --check`.
-- [ ] T034 Confirm no external provider implementation, credentials, network integration, management action, editing, dialogue, project control, or direct employee-control behavior was added.
+- [x] T028 Complete manual validation using specs/028-company-dashboard-system/quickstart.md.
+- [x] T029 Run `npm test`.
+- [x] T030 Run `npx tsc --noEmit`.
+- [x] T031 Run `npm run build`.
+- [x] T032 Run `git diff --check`.
+- [x] T033 Run `git diff --cached --check`.
+- [x] T034 Confirm no external provider implementation, credentials, network integration, management action, editing, dialogue, project control, or direct employee-control behavior was added.
 
 ## Dependencies
 
