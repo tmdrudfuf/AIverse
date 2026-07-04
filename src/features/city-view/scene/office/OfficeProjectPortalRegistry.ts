@@ -5,6 +5,7 @@ import type {
   ProjectWorkspace,
 } from "./OfficeProjectPortalTypes";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
+import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 
 const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
   {
@@ -126,6 +127,20 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
   },
 };
 
+const REPOSITORY_MAPPINGS: AIverseProjectRepositoryMapping[] = [
+  {
+    projectId: "daily-proof",
+    sourceId: "github:ai-verse/daily-proof",
+    repository: {
+      owner: "ai-verse",
+      name: "daily-proof",
+      url: "https://github.com/ai-verse/daily-proof",
+      visibility: "public",
+    },
+    enabled: true,
+  },
+];
+
 export function createProjectPortalState(): ProjectPortalState {
   const influencePlanningService = new CompanyInfluencePlanningService();
 
@@ -147,6 +162,7 @@ export function createProjectPortalState(): ProjectPortalState {
     })),
     services: createLinkedServices(),
     workspaces: createWorkspaces(),
+    repositoryMappings: createRepositoryMappings(),
     repositorySummaries: {},
     taskCollections: {},
     taskAnalyses: {},
@@ -160,6 +176,13 @@ export function createProjectPortalState(): ProjectPortalState {
     companyInfluencePlan: influencePlanningService.createInitialState(),
     companyFocusSummary: influencePlanningService.createFocusSummary(influencePlanningService.createInitialState()),
   };
+}
+
+function createRepositoryMappings() {
+  return REPOSITORY_MAPPINGS.map((mapping) => ({
+    ...mapping,
+    repository: { ...mapping.repository },
+  }));
 }
 
 function createLinkedServices() {

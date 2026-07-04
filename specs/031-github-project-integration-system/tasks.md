@@ -23,10 +23,10 @@
 
 **Purpose**: Add read-only mapping and source status models without touching GitHub transport.
 
-- [ ] T010 Add AIverse project repository mapping types in the approved source location.
-- [ ] T011 Add external source status types for fresh, stale, unavailable, unauthenticated, rate-limited, offline, and unknown states.
-- [ ] T012 Add tests for mapping validation, disabled mapping, invalid mapping, and source status labels.
-- [ ] T013 Confirm mapping state does not duplicate internal project, task, employee, schedule, progression, insight, knowledge, or work-session state.
+- [X] T010 Add AIverse project repository mapping types in the approved source location.
+- [X] T011 Add external source status types for fresh, stale, unavailable, unauthenticated, rate-limited, offline, and unknown states.
+- [X] T012 Add tests for mapping validation, disabled mapping, invalid mapping, and source status labels.
+- [X] T013 Confirm mapping state does not duplicate internal project, task, employee, schedule, progression, insight, knowledge, or work-session state.
 
 ---
 
@@ -34,10 +34,10 @@
 
 **Purpose**: Map approved read-only GitHub repository data into Project Dashboard provider-neutral snapshots.
 
-- [ ] T014 Add GitHub repository snapshot/read model types for the approved vertical slice.
-- [ ] T015 Add a GitHub project dashboard provider/adapter that maps repository snapshots into provider-neutral Project Dashboard data.
-- [ ] T016 Add tests for repository identity, owner/name, default branch, URL metadata, source status, sync freshness, empty issue/PR/commit/check summaries, and latest activity.
-- [ ] T017 Confirm the provider does not expose repository mutation methods.
+- [X] T014 Add GitHub repository snapshot/read model types for the approved vertical slice.
+- [X] T015 Add a GitHub project dashboard provider/adapter that maps repository snapshots into provider-neutral Project Dashboard data.
+- [X] T016 Add tests for repository identity, owner/name, default branch, URL metadata, source status, sync freshness, empty issue/PR/commit/check summaries, and latest activity.
+- [X] T017 Confirm the provider does not expose repository mutation methods.
 
 ---
 
@@ -45,10 +45,10 @@
 
 **Purpose**: Surface GitHub read-only context through the existing Project Dashboard without making UI GitHub-specific.
 
-- [ ] T018 Integrate GitHub provider output through the existing Project Dashboard provider-neutral contract.
-- [ ] T019 Render GitHub source status and repository context using AIverse Office Terminal visual language only where provider-neutral data supports it.
-- [ ] T020 Add tests proving Project Dashboard UI does not import GitHub provider/API response types directly.
-- [ ] T021 Add tests for internal simulation fallback when GitHub data is absent, stale, unavailable, unauthorized, rate-limited, or offline.
+- [X] T018 Integrate GitHub provider output through the existing Project Dashboard provider-neutral contract.
+- [X] T019 Render GitHub source status and repository context using AIverse Office Terminal visual language only where provider-neutral data supports it.
+- [X] T020 Add tests proving Project Dashboard UI does not import GitHub provider/API response types directly.
+- [X] T021 Add tests for internal simulation fallback when GitHub data is absent, stale, unavailable, unauthorized, rate-limited, or offline.
 
 ---
 
@@ -56,9 +56,9 @@
 
 **Purpose**: Protect external and internal state from unintended mutation.
 
-- [ ] T022 Add regression tests proving GitHub refresh/display does not mutate repository, project, task, employee, schedule, work-session, company influence, progression, Insight, or Knowledge state.
-- [ ] T023 Add assertions that no issue creation, PR creation, branch creation, commit, merge, GitHub Actions modification, webhook setup, credential display, or autonomous AI coding controls appear.
-- [ ] T024 Review imports and implementation paths for forbidden external mutation, credential storage, background sync, webhook, and speculative connector framework behavior.
+- [X] T022 Add regression tests proving GitHub refresh/display does not mutate repository, project, task, employee, schedule, work-session, company influence, progression, Insight, or Knowledge state.
+- [X] T023 Add assertions that no issue creation, PR creation, branch creation, commit, merge, GitHub Actions modification, webhook setup, credential display, or autonomous AI coding controls appear.
+- [X] T024 Review imports and implementation paths for forbidden external mutation, credential storage, background sync, webhook, and speculative connector framework behavior.
 
 ---
 
@@ -66,14 +66,14 @@
 
 **Purpose**: Confirm the GitHub integration is read-only, provider-neutral, and safe.
 
-- [ ] T025 Complete manual validation using `specs/031-github-project-integration-system/quickstart.md`.
-- [ ] T026 Run `npm test`.
-- [ ] T027 Run `npx tsc --noEmit`.
-- [ ] T028 Run `npm run build`.
-- [ ] T029 Run `git diff --check`.
-- [ ] T030 Run `git diff --cached --check`.
-- [ ] T031 Confirm internal simulation remains authoritative and unchanged by GitHub source reads.
-- [ ] T032 Confirm no repository mutation or autonomous AI employee coding behavior was added.
+- [X] T025 Complete manual validation using `specs/031-github-project-integration-system/quickstart.md`.
+- [X] T026 Run `npm test`.
+- [X] T027 Run `npx tsc --noEmit`.
+- [X] T028 Run `npm run build`.
+- [X] T029 Run `git diff --check`.
+- [X] T030 Run `git diff --cached --check`.
+- [X] T031 Confirm internal simulation remains authoritative and unchanged by GitHub source reads.
+- [X] T032 Confirm no repository mutation or autonomous AI employee coding behavior was added.
 
 ## Dependencies
 

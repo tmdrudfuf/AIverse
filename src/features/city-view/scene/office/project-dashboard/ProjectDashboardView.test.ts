@@ -25,7 +25,46 @@ describe("ProjectDashboardView rows", () => {
       relatedFocusText: "Focus: Company focus is Reduce project risk.",
       nextSuggestedFocusText: "Next suggested focus: Reduce project risk",
       sourceText: "Source: internal-simulation",
+      sourceSignalRows: [],
     });
+  });
+
+  it("creates provider-neutral source rows for external repository context", () => {
+    const rows = createProjectDashboardPanelRows({
+      ...createSnapshot(),
+      externalSources: [{
+        sourceType: "github",
+        sourceId: "github:ai-verse/daily-proof",
+        displayName: "ai-verse/daily-proof",
+        mappingConfidence: "mapped",
+        statusLabel: "Fresh",
+        signals: [
+          {
+            id: "repository",
+            label: "Repository",
+            value: "ai-verse/daily-proof",
+          },
+          {
+            id: "default-branch",
+            label: "Default Branch",
+            value: "main",
+          },
+          {
+            id: "open-issues",
+            label: "Open Issues",
+            value: "0",
+          },
+        ],
+      }],
+    });
+
+    expect(rows.sourceText).toBe("Source: internal-simulation + github [Fresh]");
+    expect(rows.sourceSignalRows).toEqual([
+      "Repo ai-verse/daily-proof",
+      "Status: Fresh",
+      "Default Branch: main",
+      "Open Issues: 0",
+    ]);
   });
 
   it("creates empty rows for partial data without fabricating project activity", () => {
@@ -74,6 +113,44 @@ describe("ProjectDashboardView rows", () => {
     expect(text).not.toContain("dialogue");
     expect(text).not.toContain("control employee");
     expect(text).not.toContain("github");
+  });
+
+  it("does not expose repository mutation, credential, webhook, or autonomous coding affordances", () => {
+    const rows = createProjectDashboardPanelRows({
+      ...createSnapshot(),
+      externalSources: [{
+        sourceType: "github",
+        sourceId: "github:ai-verse/daily-proof",
+        displayName: "ai-verse/daily-proof",
+        statusLabel: "Fresh",
+        signals: [{
+          id: "open-pull-requests",
+          label: "Open Pull Requests",
+          value: "0",
+        }],
+      }],
+    });
+    const text = Object.values(rows).flat().join(" ").toLowerCase();
+
+    expect(text).not.toContain("create issue");
+    expect(text).not.toContain("create pull request");
+    expect(text).not.toContain("create branch");
+    expect(text).not.toContain("commit action");
+    expect(text).not.toContain("merge pull request");
+    expect(text).not.toContain("github actions");
+    expect(text).not.toContain("webhook");
+    expect(text).not.toContain("token");
+    expect(text).not.toContain("credential");
+    expect(text).not.toContain("autonomous coding");
+  });
+
+  it("does not import GitHub provider or API response types directly", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./ProjectDashboardView.ts", import.meta.url), "utf8");
+
+    expect(source).not.toContain("../github");
+    expect(source).not.toContain("GitHubRepository");
+    expect(source).not.toContain("GitHubProjectDashboardProvider");
   });
 });
 

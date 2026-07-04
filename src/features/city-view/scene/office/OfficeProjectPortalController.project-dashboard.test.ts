@@ -6,12 +6,14 @@ import { InternalSimulationDashboardProvider } from "./dashboard/InternalSimulat
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { Employee } from "./employees/EmployeeTypes";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
+import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjectDashboardProvider";
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
@@ -37,6 +39,12 @@ describe("OfficeProjectPortalController project dashboard", () => {
       name: "Daily Proof",
       isAvailable: true,
     });
+    expect(state.projectDashboardSnapshot?.externalSources?.[0]).toMatchObject({
+      sourceType: "github",
+      sourceId: "github:ai-verse/daily-proof",
+      statusLabel: "Fresh",
+    });
+    expect(state.repositorySummaries["daily-proof"]?.connectionStatus).toBe("connected");
     expect(state.taskCollections["daily-proof"]?.tasks.map((task) => task.id)).toEqual(["task-dashboard"]);
     expect(internals.view.render).toHaveBeenCalled();
   });
@@ -113,6 +121,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     const internals = getControllerInternals(controller);
 
     const beforeProjects = structuredClone(state.projects);
+    const beforeRepositoryMappings = structuredClone(state.repositoryMappings);
     const beforeTasks = structuredClone(state.taskCollections);
     const beforeEmployees = structuredClone(state.employees);
     const beforeWorkSessions = structuredClone(state.workSessions);
@@ -135,6 +144,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     await flushPromises();
 
     expect(state.projects).toEqual(beforeProjects);
+    expect(state.repositoryMappings).toEqual(beforeRepositoryMappings);
     expect(state.taskCollections).toEqual(beforeTasks);
     expect(state.employees).toEqual(beforeEmployees);
     expect(state.workSessions).toEqual(beforeWorkSessions);
@@ -159,6 +169,9 @@ type ControllerInternals = {
   taskService: {
     getTaskCollection: ReturnType<typeof vi.fn>;
   };
+  repositoryService: {
+    getRepositorySummary: ReturnType<typeof vi.fn>;
+  };
   employeeAIService: EmployeeAIService;
   employeeSimulationService: EmployeeSimulationService;
   employeeNpcMovementService: EmployeeNpcMovementService;
@@ -168,6 +181,7 @@ type ControllerInternals = {
   officeLayoutService: OfficeLayoutService;
   companyDashboardProvider: InternalSimulationDashboardProvider;
   projectDashboardProvider: InternalSimulationProjectDashboardProvider;
+  githubProjectDashboardProvider: GitHubProjectDashboardProvider;
   companyInfluencePlanningService: CompanyInfluencePlanningService;
   aiService: ReturnType<typeof createMockAIService>;
   aiProjectManagerService: AIProjectManagerService;
@@ -193,6 +207,9 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.taskService = {
     getTaskCollection: vi.fn(async () => createTaskCollection()),
   };
+  harness.repositoryService = {
+    getRepositorySummary: vi.fn(async () => createRepositorySummary()),
+  };
   harness.employeeAIService = new EmployeeAIService();
   harness.employeeSimulationService = new EmployeeSimulationService();
   harness.employeeNpcMovementService = new EmployeeNpcMovementService();
@@ -202,6 +219,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.officeLayoutService = new OfficeLayoutService();
   harness.companyDashboardProvider = new InternalSimulationDashboardProvider();
   harness.projectDashboardProvider = new InternalSimulationProjectDashboardProvider();
+  harness.githubProjectDashboardProvider = new GitHubProjectDashboardProvider();
   harness.companyInfluencePlanningService = new CompanyInfluencePlanningService();
   harness.aiService = createMockAIService();
   harness.aiProjectManagerService = new AIProjectManagerService(harness.aiService);
@@ -214,6 +232,28 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.projectManagerRequestVersion = 0;
 
   return controller;
+}
+
+function createRepositorySummary(): GitHubRepositorySummary {
+  return {
+    owner: "ai-verse",
+    name: "daily-proof",
+    defaultBranch: "main",
+    latestCommit: {
+      sha: "abc1234",
+      message: "Prepare Daily Proof workspace mock data",
+      authorName: "AIverse",
+      committedAt: "2026-06-26T18:00:00.000Z",
+    },
+    openIssueCount: 0,
+    openPullRequestCount: 0,
+    checkStatus: {
+      state: "passing",
+      label: "Checks passing",
+    },
+    lastUpdatedAt: "2026-06-26T18:30:00.000Z",
+    connectionStatus: "connected",
+  };
 }
 
 function getControllerInternals(controller: OfficeProjectPortalController): ControllerInternals {

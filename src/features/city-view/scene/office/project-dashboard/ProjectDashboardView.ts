@@ -14,6 +14,7 @@ export type ProjectDashboardPanelRows = {
   relatedFocusText: string;
   nextSuggestedFocusText: string;
   sourceText: string;
+  sourceSignalRows: string[];
 };
 
 export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapshot | undefined): ProjectDashboardPanelRows {
@@ -32,6 +33,7 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       relatedFocusText: "Focus: No project focus signals are visible.",
       nextSuggestedFocusText: "Next suggested focus: None",
       sourceText: "Source: Unavailable",
+      sourceSignalRows: [],
     };
   }
 
@@ -50,6 +52,7 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       relatedFocusText: "Focus: No project focus is available.",
       nextSuggestedFocusText: "Next suggested focus: None",
       sourceText: `Source: ${snapshot.source.sourceType}`,
+      sourceSignalRows: createSourceSignalRows(snapshot),
     };
   }
 
@@ -74,6 +77,32 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       : "Activity: No recent project activity",
     relatedFocusText: `Focus: ${snapshot.relatedFocus.summary}`,
     nextSuggestedFocusText: `Next suggested focus: ${snapshot.nextSuggestedFocus ?? "None"}`,
-    sourceText: `Source: ${snapshot.source.sourceType}`,
+    sourceText: createSourceText(snapshot),
+    sourceSignalRows: createSourceSignalRows(snapshot),
   };
+}
+
+function createSourceText(snapshot: ProjectDashboardSnapshot) {
+  const externalSource = snapshot.externalSources?.[0];
+  if (!externalSource) return `Source: ${snapshot.source.sourceType}`;
+
+  const status = externalSource.statusLabel ? ` [${externalSource.statusLabel}]` : "";
+  return `Source: ${snapshot.source.sourceType} + ${externalSource.sourceType}${status}`;
+}
+
+function createSourceSignalRows(snapshot: ProjectDashboardSnapshot) {
+  const source = snapshot.externalSources?.[0];
+  if (!source) return [];
+
+  const repositoryLabel = source.displayName ? `Repo ${source.displayName}` : undefined;
+  const signalRows = (source.signals ?? [])
+    .filter((signal) => signal.id !== "repository")
+    .slice(0, 3)
+    .map((signal) => `${signal.label}: ${signal.value}`);
+
+  return [
+    ...(repositoryLabel ? [repositoryLabel] : []),
+    ...(source.statusLabel ? [`Status: ${source.statusLabel}`] : []),
+    ...signalRows,
+  ].slice(0, 4);
 }

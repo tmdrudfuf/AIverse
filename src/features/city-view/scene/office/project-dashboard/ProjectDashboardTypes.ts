@@ -116,8 +116,21 @@ export type ProjectDashboardSourceMetadata = {
   // Metadata only: future providers can map into this shape without making the dashboard call external systems.
   sourceType: ProjectDashboardSourceType;
   sourceId: string;
+  displayName?: string;
   externalUrl?: string;
   mappingConfidence?: "native" | "mapped" | "unknown";
+  statusLabel?: string;
+  statusReason?: string;
+  refreshedAt?: string;
+  signals?: ProjectDashboardExternalSourceSignal[];
+};
+
+export type ProjectDashboardExternalSourceSignal = {
+  id: string;
+  label: string;
+  value: string;
+  status?: ProjectDashboardSectionStatus;
+  description?: string;
 };
 
 export type ProjectDashboardSnapshot = {
@@ -133,6 +146,7 @@ export type ProjectDashboardSnapshot = {
   relatedFocus: ProjectDashboardRelatedFocus;
   nextSuggestedFocus?: string;
   source: ProjectDashboardSourceMetadata;
+  externalSources?: ProjectDashboardSourceMetadata[];
   sections: ProjectDashboardSectionAvailability[];
 };
 

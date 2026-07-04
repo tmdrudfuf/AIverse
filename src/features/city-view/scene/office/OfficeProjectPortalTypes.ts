@@ -4,6 +4,7 @@ import type { CompanyDashboardSnapshot } from "./dashboard/CompanyDashboardTypes
 import type { Employee } from "./employees/EmployeeTypes";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
+import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
@@ -91,6 +92,7 @@ export type ProjectPortalState = {
   projects: ProjectPortalProject[];
   services: ProjectPortalServiceStatus[];
   workspaces: Record<string, ProjectWorkspace>;
+  repositoryMappings: AIverseProjectRepositoryMapping[];
   repositorySummaries: Record<string, GitHubRepositorySummary>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
