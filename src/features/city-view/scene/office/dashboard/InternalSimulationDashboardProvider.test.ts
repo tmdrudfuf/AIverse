@@ -191,6 +191,32 @@ describe("InternalSimulationDashboardProvider", () => {
     });
   });
 
+  it("includes name-only task assignments when deriving employee workload overloads", () => {
+    const provider = new InternalSimulationDashboardProvider();
+
+    const snapshot = provider.getSnapshot({
+      employeeInsightSources: [
+        createInsightSource({
+          employeeId: "employee-1",
+          aiState: "working",
+          includeCurrentTask: false,
+          name: "Ada",
+        }),
+      ],
+      projects: [createProject()],
+      tasks: [
+        createTask({ id: "task-name-1", assignee: "Ada", status: "In Progress" }),
+        createTask({ id: "task-name-2", assignee: "Ada", status: "Review" }),
+      ],
+    });
+
+    expect(snapshot.workload).toMatchObject({
+      assignedTaskCount: 2,
+      unassignedTaskCount: 0,
+    });
+    expect(snapshot.workload.overloadedEmployees.map((employee) => employee.employeeId)).toEqual(["employee-1"]);
+  });
+
   it("uses the latest known source timestamp when generatedAt is not supplied", () => {
     const provider = new InternalSimulationDashboardProvider();
 
