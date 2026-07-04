@@ -3,6 +3,7 @@ import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardVie
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
@@ -30,9 +31,9 @@ export class OfficeProjectPortalView {
 
     const shade = scene.add.rectangle(0, 0, width, height, 0x0f172a, 0.68).setOrigin(0, 0);
     const panel = scene.add.graphics();
-    panel.fillStyle(0xf8fafc, 1);
+    panel.fillStyle(0x05070b, 0.96);
     panel.fillRoundedRect(this.panelX, this.panelY, this.panelWidth, this.panelHeight, 8);
-    panel.lineStyle(2, 0x253247, 1);
+    panel.lineStyle(1, 0xcbd5e1, 0.72);
     panel.strokeRoundedRect(this.panelX, this.panelY, this.panelWidth, this.panelHeight, 8);
 
     this.content = scene.add.container(0, 0);
@@ -63,6 +64,11 @@ export class OfficeProjectPortalView {
 
     if (state.viewMode === "employee-selection") {
       this.renderEmployeeSelection(state);
+      return;
+    }
+
+    if (state.viewMode === "project-dashboard") {
+      this.renderProjectDashboard(state);
       return;
     }
 
@@ -99,21 +105,23 @@ export class OfficeProjectPortalView {
   private renderList(state: ProjectPortalState) {
     const dashboardRows = createCompanyDashboardPanelRows(state.companyDashboardSnapshot);
 
-    this.addText(this.panelX + 28, this.panelY + 24, dashboardRows.title, titleStyle());
-    this.addText(this.panelX + 44, this.panelY + 66, dashboardRows.healthText, bodyStyle());
-    this.addText(this.panelX + 44, this.panelY + 92, dashboardRows.employeeText, bodyStyle());
-    this.addText(this.panelX + 44, this.panelY + 118, wrapText(dashboardRows.employeeStateText, 40), mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 144, wrapText(dashboardRows.roleText, 40), mutedStyle());
-    this.addText(this.panelX + 360, this.panelY + 66, dashboardRows.projectText, bodyStyle());
-    this.addText(this.panelX + 360, this.panelY + 92, dashboardRows.projectProgressText, bodyStyle());
-    this.addText(this.panelX + 360, this.panelY + 118, dashboardRows.workloadText, mutedStyle());
-    this.addText(this.panelX + 360, this.panelY + 144, dashboardRows.occupancyText, mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 170, wrapText(dashboardRows.bottleneckText, 38), mutedStyle());
-    this.addText(this.panelX + 360, this.panelY + 170, wrapText(dashboardRows.riskText, 36), mutedStyle());
-    this.addText(this.panelX + 44, this.panelY + 194, wrapText(dashboardRows.productivityText, 82), mutedStyle());
+    this.addTerminalPanel(this.panelX + 20, this.panelY + 58, this.panelWidth - 40, 214);
+    this.addText(this.panelX + 28, this.panelY + 24, "AIverse Operating Terminal", titleStyle());
+    this.addText(this.panelX + 44, this.panelY + 70, `[ACTIVE] ${dashboardRows.healthText}`, bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 96, dashboardRows.employeeText, bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 122, wrapText(dashboardRows.employeeStateText, 40), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 148, wrapText(dashboardRows.roleText, 40), mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 70, dashboardRows.projectText, bodyStyle());
+    this.addText(this.panelX + 360, this.panelY + 96, dashboardRows.projectProgressText, bodyStyle());
+    this.addText(this.panelX + 360, this.panelY + 122, dashboardRows.workloadText, mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 148, dashboardRows.occupancyText, mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 176, wrapText(`[BLOCKED] ${dashboardRows.bottleneckText.replace("Bottleneck: ", "")}`, 38), mutedStyle());
+    this.addText(this.panelX + 360, this.panelY + 176, wrapText(`[RISK] ${dashboardRows.riskText.replace("Risk: ", "")}`, 36), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 200, wrapText(dashboardRows.productivityText, 82), mutedStyle());
     const focusMarker = state.selectedProjectIndex < 0 ? ">" : " ";
-    this.addText(this.panelX + 44, this.panelY + 218, wrapText(`${focusMarker} ${dashboardRows.focusText}`, 82), rowStyle(true, state.selectedProjectIndex < 0));
-    this.addText(this.panelX + 44, this.panelY + 242, wrapText(dashboardRows.summaryText, 82), mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + 224, wrapText(`${focusMarker} [FOCUS] ${dashboardRows.focusText.replace("Focus: ", "")}`, 82), rowStyle(true, state.selectedProjectIndex < 0));
+    this.addText(this.panelX + 44, this.panelY + 248, wrapText(dashboardRows.summaryText, 82), mutedStyle());
+    this.addTerminalPanel(this.panelX + 20, this.panelY + 294, this.panelWidth - 40, 100);
     this.addText(this.panelX + 28, this.panelY + DASHBOARD_SECTION_Y, "Projects", headingStyle());
 
     state.projects.forEach((project, index) => {
@@ -123,7 +131,7 @@ export class OfficeProjectPortalView {
       this.addText(
         this.panelX + 44,
         rowY,
-        `${marker} ${project.name.padEnd(14, " ")} ${statusColumn}`,
+        `${marker} ${getProjectStatusTag(project.status)} ${project.name.padEnd(14, " ")} ${statusColumn}`,
         rowStyle(project.enabled, index === state.selectedProjectIndex),
       );
     });
@@ -133,34 +141,75 @@ export class OfficeProjectPortalView {
       const rowY = this.panelY + DASHBOARD_SECTION_Y + 30 + index * DASHBOARD_ROW_GAP;
       this.addText(this.panelX + 406, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
-
-    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Up/Down select  Enter/Space open  Esc close", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderInfluencePlanning(state: ProjectPortalState) {
     const focusSummary = state.companyFocusSummary;
     const options = focusSummary?.options ?? [];
 
-    this.addText(this.panelX + 28, this.panelY + 24, "Company Influence Planning", titleStyle());
-    this.addText(this.panelX + 28, this.panelY + 64, "Current Focus", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 94, wrapText(focusSummary?.summary ?? "No company focus selected.", 78), bodyStyle());
-    this.addText(this.panelX + 28, this.panelY + 142, "Focus Options", headingStyle());
+    this.addTerminalPanel(this.panelX + 20, this.panelY + 58, this.panelWidth - 40, 330);
+    this.addText(this.panelX + 28, this.panelY + 24, "AIverse Influence Terminal", titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 70, "[FOCUS] Current Focus", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 100, wrapText(focusSummary?.summary ?? "No company focus selected.", 78), bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 148, "Focus Options", headingStyle());
 
     options.forEach((option, index) => {
-      const rowY = this.panelY + 178 + index * 38;
+      const rowY = this.panelY + 184 + index * 36;
       const marker = index === state.selectedInfluenceFocusIndex ? ">" : " ";
-      const activeMarker = option.id === focusSummary?.currentFocus?.id ? "*" : " ";
+      const activeMarker = option.id === focusSummary?.currentFocus?.id ? "[ACTIVE]" : "[IDLE]";
       this.addText(
         this.panelX + 44,
         rowY,
         `${marker} ${activeMarker} ${option.label}`,
         rowStyle(true, index === state.selectedInfluenceFocusIndex),
       );
-      this.addText(this.panelX + 78, rowY + 20, wrapText(option.description, 72), mutedStyle());
+      this.addText(this.panelX + 78, rowY + 18, wrapText(option.description, 72), mutedStyle());
     });
 
-    this.addText(this.panelX + 28, this.panelY + 386, "Advisory only. Employees and tasks remain autonomous.", mutedStyle());
-    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc dashboard  Up/Down select  Enter/Space choose", instructionStyle()).setOrigin(1, 0.5);
+    this.addText(this.panelX + 28, this.panelY + 382, "[READ-ONLY] Advisory only. Employees and tasks remain autonomous.", mutedStyle());
+  }
+
+  private renderProjectDashboard(state: ProjectPortalState) {
+    const rows = createProjectDashboardPanelRows(state.projectDashboardSnapshot);
+    const leftPanelX = this.panelX + 28;
+    const rightPanelX = this.panelX + 356;
+    const topPanelY = this.panelY + 58;
+    const sectionPanelY = this.panelY + 128;
+    const bottomPanelY = this.panelY + 292;
+
+    this.addTerminalPanel(this.panelX + 18, topPanelY, this.panelWidth - 36, 58);
+    this.addText(this.panelX + 28, this.panelY + 24, rows.title, projectTitleStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + 32, rows.sourceText, projectMetaStyle()).setOrigin(1, 0);
+
+    if (!state.projectDashboardSnapshot?.project.isAvailable) {
+      this.addText(this.panelX + 34, this.panelY + 72, `[STATUS] ${rows.statusText}`, projectStatusStyle());
+      this.addText(this.panelX + 34, this.panelY + 96, wrapText(rows.healthText, 78), projectBodyStyle());
+      return;
+    }
+
+    this.addText(this.panelX + 34, this.panelY + 70, `[STATUS] ${rows.statusText}`, projectStatusStyle());
+    this.addText(this.panelX + 34, this.panelY + 94, `[PROGRESS] ${rows.progressText.replace("Progress: ", "")}`, projectBodyStyle());
+    this.addText(this.panelX + 364, this.panelY + 70, wrapText(`[HEALTH] ${rows.healthText}`, 34), projectBodyStyle());
+
+    this.addTerminalPanel(leftPanelX - 6, sectionPanelY, 292, 148);
+    this.addTerminalPanel(rightPanelX - 6, sectionPanelY, 292, 148);
+    this.addText(leftPanelX, this.panelY + 140, rows.activeWorkHeading, projectHeadingStyle());
+    rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
+      const rowY = this.panelY + 168 + index * 32;
+      this.addText(leftPanelX + 12, rowY, wrapText(`> ${row}`, 34), projectBodyStyle());
+    });
+
+    this.addText(rightPanelX, this.panelY + 140, rows.employeeHeading, projectHeadingStyle());
+    rows.employeeRows.slice(0, 3).forEach((row, index) => {
+      const rowY = this.panelY + 168 + index * 32;
+      this.addText(rightPanelX + 12, rowY, wrapText(`> ${row}`, 32), projectBodyStyle());
+    });
+
+    this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, 88);
+    this.addText(this.panelX + 34, this.panelY + 304, wrapText(`[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, 78), projectMutedStyle());
+    this.addText(this.panelX + 34, this.panelY + 326, wrapText(`[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, 78), projectMutedStyle());
+    this.addText(this.panelX + 34, this.panelY + 348, wrapText(`[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, 78), projectMutedStyle());
+    this.addText(this.panelX + 34, this.panelY + 370, wrapText(`[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, 78), projectMutedStyle());
   }
 
   private renderDetail(state: ProjectPortalState) {
@@ -370,6 +419,18 @@ export class OfficeProjectPortalView {
     this.content.add(textObject);
     return textObject;
   }
+
+  private addTerminalPanel(x: number, y: number, width: number, height: number) {
+    const panel = this.scene.add.graphics();
+    panel.fillStyle(0x0b0f14, 0.78);
+    panel.fillRoundedRect(x, y, width, height, 5);
+    panel.lineStyle(1, 0xcbd5e1, 0.38);
+    panel.strokeRoundedRect(x, y, width, height, 5);
+    panel.lineStyle(1, 0xffffff, 0.12);
+    panel.lineBetween(x + 8, y + 8, x + width - 8, y + 8);
+    this.content.add(panel);
+    return panel;
+  }
 }
 
 function getNextActionText(project: ProjectPortalProject) {
@@ -409,6 +470,12 @@ function getTaskNextActionText(task: ProjectTask) {
   return task.assignee ? "Start Work (placeholder)" : "Assign Employee";
 }
 
+function getProjectStatusTag(status: ProjectPortalProject["status"]) {
+  if (status === "Active") return "[ACTIVE]";
+  if (status === "Planned") return "[IDLE]";
+  return "[IDLE]";
+}
+
 function getLatestWorkSession(state: ProjectPortalState, task: ProjectTask) {
   return state.workSessions[task.id]?.[0];
 }
@@ -437,37 +504,37 @@ function wrapText(text: string, maxLength: number) {
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {
   return {
-    color: "#253247",
-    fontFamily: "Arial, sans-serif",
-    fontSize: "28px",
+    color: "#f8fafc",
+    fontFamily: "Courier New, monospace",
+    fontSize: "24px",
     fontStyle: "700",
   };
 }
 
 function headingStyle(): Phaser.Types.GameObjects.Text.TextStyle {
   return {
-    color: "#0f172a",
-    fontFamily: "Arial, sans-serif",
-    fontSize: "18px",
+    color: "#e2e8f0",
+    fontFamily: "Courier New, monospace",
+    fontSize: "16px",
     fontStyle: "700",
   };
 }
 
 function bodyStyle(): Phaser.Types.GameObjects.Text.TextStyle {
   return {
-    color: "#334155",
-    fontFamily: "Arial, sans-serif",
-    fontSize: "15px",
+    color: "#f1f5f9",
+    fontFamily: "Courier New, monospace",
+    fontSize: "14px",
     lineSpacing: 4,
   };
 }
 
 function rowStyle(enabled: boolean, selected: boolean): Phaser.Types.GameObjects.Text.TextStyle {
   return {
-    backgroundColor: selected ? "rgba(37, 50, 71, 0.12)" : undefined,
-    color: selected ? "#0f172a" : enabled ? "#1f2937" : "#64748b",
+    backgroundColor: selected ? "rgba(226, 232, 240, 0.14)" : undefined,
+    color: selected ? "#ffffff" : enabled ? "#e2e8f0" : "#94a3b8",
     fontFamily: "Courier New, monospace",
-    fontSize: "16px",
+    fontSize: "14px",
     fontStyle: selected ? "700" : "400",
     padding: selected ? { x: 8, y: 3 } : undefined,
   };
@@ -475,9 +542,9 @@ function rowStyle(enabled: boolean, selected: boolean): Phaser.Types.GameObjects
 
 function mutedStyle(): Phaser.Types.GameObjects.Text.TextStyle {
   return {
-    color: "#64748b",
-    fontFamily: "Arial, sans-serif",
-    fontSize: "14px",
+    color: "#cbd5e1",
+    fontFamily: "Courier New, monospace",
+    fontSize: "13px",
   };
 }
 
@@ -486,5 +553,58 @@ function instructionStyle(): Phaser.Types.GameObjects.Text.TextStyle {
     color: "#475569",
     fontFamily: "Arial, sans-serif",
     fontSize: "15px",
+  };
+}
+
+function projectTitleStyle(): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    color: "#f8fafc",
+    fontFamily: "Courier New, monospace",
+    fontSize: "23px",
+    fontStyle: "700",
+  };
+}
+
+function projectHeadingStyle(): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    color: "#e2e8f0",
+    fontFamily: "Courier New, monospace",
+    fontSize: "15px",
+    fontStyle: "700",
+  };
+}
+
+function projectStatusStyle(): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    color: "#ffffff",
+    fontFamily: "Courier New, monospace",
+    fontSize: "15px",
+    fontStyle: "700",
+  };
+}
+
+function projectBodyStyle(): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    color: "#e2e8f0",
+    fontFamily: "Courier New, monospace",
+    fontSize: "13px",
+    lineSpacing: 3,
+  };
+}
+
+function projectMutedStyle(): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    color: "#cbd5e1",
+    fontFamily: "Courier New, monospace",
+    fontSize: "12px",
+    lineSpacing: 2,
+  };
+}
+
+function projectMetaStyle(): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    color: "#cbd5e1",
+    fontFamily: "Courier New, monospace",
+    fontSize: "12px",
   };
 }

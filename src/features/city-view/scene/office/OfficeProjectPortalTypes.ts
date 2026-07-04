@@ -5,6 +5,7 @@ import type { Employee } from "./employees/EmployeeTypes";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
+import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
@@ -20,6 +21,7 @@ export type ProjectPortalViewMode =
   | "task-list"
   | "task-detail"
   | "employee-selection"
+  | "project-dashboard"
   | "influence-planning";
 
 export type ProjectPortalServiceStatus = {
@@ -82,6 +84,7 @@ export type ProjectPortalState = {
   selectedTaskIndex: number;
   selectedTaskId?: string;
   selectedEmployeeIndex: number;
+  selectedProjectDashboardProjectId?: string;
   selectedInfluenceFocusIndex: number;
   selectedWorkSessionId?: string;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
@@ -97,6 +100,7 @@ export type ProjectPortalState = {
   employeeSimulations: Record<string, EmployeeSimulationSnapshot>;
   employeeAssignments: Record<string, string>;
   workSessions: Record<string, WorkSession[]>;
+  projectDashboardSnapshot?: ProjectDashboardSnapshot;
   companyDashboardSnapshot?: CompanyDashboardSnapshot;
   companyInfluencePlan: CompanyInfluencePlanState;
   companyFocusSummary?: CompanyFocusSummary;

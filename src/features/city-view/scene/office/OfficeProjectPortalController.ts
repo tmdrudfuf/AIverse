@@ -35,6 +35,8 @@ import { resolveEmployeeNpcWorldPosition } from "./npc/EmployeeNpcPositionResolv
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
+import type { ProjectDashboardProvider } from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import type { CompanyProgressionSnapshot } from "./progression/CompanyProgressionTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
@@ -88,6 +90,7 @@ export class OfficeProjectPortalController {
   private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
   private readonly companyDashboardProvider: CompanyDashboardProvider;
+  private readonly projectDashboardProvider: ProjectDashboardProvider;
   private readonly companyInfluencePlanningService: CompanyInfluencePlanningService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -117,6 +120,7 @@ export class OfficeProjectPortalController {
     const companyDashboardProvider = getEnabledCompanyDashboardProvider(createCompanyDashboardProviderRegistry());
     if (!companyDashboardProvider) throw new Error("Company dashboard provider is not configured.");
     this.companyDashboardProvider = companyDashboardProvider;
+    this.projectDashboardProvider = new InternalSimulationProjectDashboardProvider();
     this.companyInfluencePlanningService = new CompanyInfluencePlanningService();
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -170,6 +174,11 @@ export class OfficeProjectPortalController {
 
     if (this.state.viewMode === "task-detail") {
       this.updateTaskDetailInput(input);
+      return;
+    }
+
+    if (this.state.viewMode === "project-dashboard") {
+      this.updateProjectDashboardInput(input);
       return;
     }
 
@@ -378,6 +387,18 @@ export class OfficeProjectPortalController {
     return this.state.companyFocusSummary;
   }
 
+  getProjectDashboardListItems() {
+    return this.projectDashboardProvider.listProjects(this.createProjectDashboardContext());
+  }
+
+  getProjectDashboardSnapshot(projectId: string) {
+    this.state.projectDashboardSnapshot = this.projectDashboardProvider.getProjectSnapshot(
+      this.createProjectDashboardContext(),
+      projectId,
+    );
+    return this.state.projectDashboardSnapshot;
+  }
+
   setCompanyFocus(focusId: CompanyFocusId | string, updatedAt?: string) {
     const service = this.getCompanyInfluencePlanningService();
     this.state.companyInfluencePlan = service.selectFocus(this.state.companyInfluencePlan, focusId, updatedAt);
@@ -491,6 +512,8 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskProjectId = undefined;
     this.state.selectedTaskId = undefined;
     this.state.selectedEmployeeIndex = 0;
+    this.state.selectedProjectDashboardProjectId = undefined;
+    this.state.projectDashboardSnapshot = undefined;
     this.state.selectedWorkSessionId = undefined;
     this.repositoryRequestVersion += 1;
     this.taskRequestVersion += 1;
@@ -529,9 +552,21 @@ export class OfficeProjectPortalController {
         return;
       }
 
-      this.state.viewMode = "detail";
-      this.view.render(this.state);
+      const project = this.getSelectedProject();
+      if (!project) return;
+
+      void this.openProjectDashboard(project.id);
     }
+  }
+
+  private updateProjectDashboardInput(input: OfficeProjectPortalInput) {
+    if (!input.escapePressed) return;
+
+    this.state.viewMode = "list";
+    this.state.selectedProjectDashboardProjectId = undefined;
+    this.state.projectDashboardSnapshot = undefined;
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
   }
 
   private updateDetailInput(input: OfficeProjectPortalInput) {
@@ -697,6 +732,25 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
+  private async openProjectDashboard(projectId: string) {
+    this.state.selectedProjectDashboardProjectId = projectId;
+    this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
+    this.state.viewMode = "project-dashboard";
+    this.view.render(this.state);
+
+    if (this.state.taskCollections[projectId]) return;
+
+    const requestVersion = this.taskRequestVersion + 1;
+    this.taskRequestVersion = requestVersion;
+
+    const collection = await this.taskService.getTaskCollection(projectId);
+    if (!this.shouldApplyProjectDashboardTaskCollection(projectId, requestVersion)) return;
+
+    this.state.taskCollections[projectId] = collection;
+    this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
+    this.view.render(this.state);
+  }
+
   private async openRepositoryDetail(projectId: string) {
     const requestVersion = this.repositoryRequestVersion + 1;
     this.repositoryRequestVersion = requestVersion;
@@ -786,6 +840,15 @@ export class OfficeProjectPortalController {
       this.state.isOpen &&
       (this.state.viewMode === "task-list" || this.state.viewMode === "task-detail") &&
       this.state.selectedTaskProjectId === projectId &&
+      this.taskRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplyProjectDashboardTaskCollection(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "project-dashboard" &&
+      this.state.selectedProjectDashboardProjectId === projectId &&
       this.taskRequestVersion === requestVersion
     );
   }
@@ -1142,6 +1205,21 @@ export class OfficeProjectPortalController {
 
   private refreshCompanyDashboardSnapshot() {
     this.state.companyDashboardSnapshot = this.getCompanyDashboardSnapshot();
+  }
+
+  private createProjectDashboardContext() {
+    const employeeInsightSources = this.getEmployeeInsightSources();
+
+    return {
+      employeeInsightSources,
+      employees: this.state.employees,
+      projects: this.state.projects,
+      tasks: getAllLoadedTasks(this.state.taskCollections),
+      workSessions: Object.values(this.state.workSessions).flat(),
+      workstations: this.getWorkstationSnapshots(),
+      companyProgression: this.getCompanyProgressionSnapshot(),
+      companyFocus: this.getCompanyFocusSummary(),
+    };
   }
 
   private syncCompanyFocusToDashboardSnapshot() {
