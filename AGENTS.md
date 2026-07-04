@@ -54,5 +54,5 @@ Fix any validation failures before finishing.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/031-github-project-integration-system/plan.md
+shell commands, and other important information, read specs/032-movement-preview-timestamps/plan.md
 <!-- SPECKIT END -->
