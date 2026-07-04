@@ -36,7 +36,13 @@ import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } fro
 import type { EmployeeNpcPositionZone, EmployeeNpcViewModel } from "./npc/EmployeeNpcTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
-import type { ProjectDashboardProvider } from "./project-dashboard/ProjectDashboardTypes";
+import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjectDashboardProvider";
+import type {
+  ProjectDashboardProvider,
+  ProjectDashboardProviderContext,
+  ProjectDashboardSnapshot,
+  ProjectDashboardSourceMetadata,
+} from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import type { CompanyProgressionSnapshot } from "./progression/CompanyProgressionTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
@@ -91,6 +97,7 @@ export class OfficeProjectPortalController {
   private readonly workSessionService: WorkSessionService;
   private readonly companyDashboardProvider: CompanyDashboardProvider;
   private readonly projectDashboardProvider: ProjectDashboardProvider;
+  private readonly githubProjectDashboardProvider: GitHubProjectDashboardProvider;
   private readonly companyInfluencePlanningService: CompanyInfluencePlanningService;
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
@@ -121,6 +128,7 @@ export class OfficeProjectPortalController {
     if (!companyDashboardProvider) throw new Error("Company dashboard provider is not configured.");
     this.companyDashboardProvider = companyDashboardProvider;
     this.projectDashboardProvider = new InternalSimulationProjectDashboardProvider();
+    this.githubProjectDashboardProvider = new GitHubProjectDashboardProvider();
     this.companyInfluencePlanningService = new CompanyInfluencePlanningService();
     this.aiService = createMockAIService();
     this.aiProjectManagerService = new AIProjectManagerService(this.aiService);
@@ -392,10 +400,9 @@ export class OfficeProjectPortalController {
   }
 
   getProjectDashboardSnapshot(projectId: string) {
-    this.state.projectDashboardSnapshot = this.projectDashboardProvider.getProjectSnapshot(
-      this.createProjectDashboardContext(),
-      projectId,
-    );
+    const context = this.createProjectDashboardContext();
+    const internalSnapshot = this.projectDashboardProvider.getProjectSnapshot(context, projectId);
+    this.state.projectDashboardSnapshot = this.mergeGitHubProjectDashboardSource(internalSnapshot, context, projectId);
     return this.state.projectDashboardSnapshot;
   }
 
@@ -734,9 +741,13 @@ export class OfficeProjectPortalController {
 
   private async openProjectDashboard(projectId: string) {
     this.state.selectedProjectDashboardProjectId = projectId;
+    if (this.hasRepositoryMapping(projectId) && !this.state.repositorySummaries[projectId]) {
+      this.state.repositorySummaries[projectId] = createLoadingRepositorySummary();
+    }
     this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
     this.state.viewMode = "project-dashboard";
     this.view.render(this.state);
+    void this.refreshProjectDashboardRepositorySummary(projectId);
 
     if (this.state.taskCollections[projectId]) return;
 
@@ -763,6 +774,20 @@ export class OfficeProjectPortalController {
     if (!this.shouldApplyRepositorySummary(projectId, requestVersion)) return;
 
     this.state.repositorySummaries[projectId] = summary;
+    this.view.render(this.state);
+  }
+
+  private async refreshProjectDashboardRepositorySummary(projectId: string) {
+    if (!this.hasRepositoryMapping(projectId)) return;
+
+    const requestVersion = this.repositoryRequestVersion + 1;
+    this.repositoryRequestVersion = requestVersion;
+
+    const summary = await this.repositoryService.getRepositorySummary(projectId);
+    if (!this.shouldApplyProjectDashboardRepositorySummary(projectId, requestVersion)) return;
+
+    this.state.repositorySummaries[projectId] = summary;
+    this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
     this.view.render(this.state);
   }
 
@@ -850,6 +875,15 @@ export class OfficeProjectPortalController {
       this.state.viewMode === "project-dashboard" &&
       this.state.selectedProjectDashboardProjectId === projectId &&
       this.taskRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplyProjectDashboardRepositorySummary(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "project-dashboard" &&
+      this.state.selectedProjectDashboardProjectId === projectId &&
+      this.repositoryRequestVersion === requestVersion
     );
   }
 
@@ -1219,7 +1253,40 @@ export class OfficeProjectPortalController {
       workstations: this.getWorkstationSnapshots(),
       companyProgression: this.getCompanyProgressionSnapshot(),
       companyFocus: this.getCompanyFocusSummary(),
+      repositoryMappings: this.state.repositoryMappings,
+      repositorySummaries: this.state.repositorySummaries,
     };
+  }
+
+  private mergeGitHubProjectDashboardSource(
+    snapshot: ProjectDashboardSnapshot,
+    context: ProjectDashboardProviderContext,
+    projectId: string,
+  ): ProjectDashboardSnapshot {
+    if (!this.hasRepositoryMapping(projectId)) return snapshot;
+
+    const githubSnapshot = this.githubProjectDashboardProvider.getProjectSnapshot(context, projectId);
+    const githubSource: ProjectDashboardSourceMetadata = {
+      ...githubSnapshot.source,
+      signals: githubSnapshot.source.signals?.map((signal) => ({ ...signal })),
+    };
+
+    return {
+      ...snapshot,
+      externalSources: [
+        ...(snapshot.externalSources ?? []).filter((source) => source.sourceType !== "github"),
+        githubSource,
+      ],
+      sections: snapshot.sections.map((section) =>
+        section.id === "source_metadata"
+          ? { ...section, status: "available" }
+          : section,
+      ),
+    };
+  }
+
+  private hasRepositoryMapping(projectId: string) {
+    return this.state.repositoryMappings.some((mapping) => mapping.projectId === projectId && mapping.enabled);
   }
 
   private syncCompanyFocusToDashboardSnapshot() {

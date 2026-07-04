@@ -146,6 +146,7 @@ export type ProjectDashboardSnapshot = {
   relatedFocus: ProjectDashboardRelatedFocus;
   nextSuggestedFocus?: string;
   source: ProjectDashboardSourceMetadata;
+  externalSources?: ProjectDashboardSourceMetadata[];
   sections: ProjectDashboardSectionAvailability[];
 };
 

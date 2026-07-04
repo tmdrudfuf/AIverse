@@ -25,7 +25,46 @@ describe("ProjectDashboardView rows", () => {
       relatedFocusText: "Focus: Company focus is Reduce project risk.",
       nextSuggestedFocusText: "Next suggested focus: Reduce project risk",
       sourceText: "Source: internal-simulation",
+      sourceSignalRows: [],
     });
+  });
+
+  it("creates provider-neutral source rows for external repository context", () => {
+    const rows = createProjectDashboardPanelRows({
+      ...createSnapshot(),
+      externalSources: [{
+        sourceType: "github",
+        sourceId: "github:ai-verse/daily-proof",
+        displayName: "ai-verse/daily-proof",
+        mappingConfidence: "mapped",
+        statusLabel: "Fresh",
+        signals: [
+          {
+            id: "repository",
+            label: "Repository",
+            value: "ai-verse/daily-proof",
+          },
+          {
+            id: "default-branch",
+            label: "Default Branch",
+            value: "main",
+          },
+          {
+            id: "open-issues",
+            label: "Open Issues",
+            value: "0",
+          },
+        ],
+      }],
+    });
+
+    expect(rows.sourceText).toBe("Source: internal-simulation + github [Fresh]");
+    expect(rows.sourceSignalRows).toEqual([
+      "Repo ai-verse/daily-proof",
+      "Status: Fresh",
+      "Default Branch: main",
+      "Open Issues: 0",
+    ]);
   });
 
   it("creates empty rows for partial data without fabricating project activity", () => {
@@ -74,6 +113,15 @@ describe("ProjectDashboardView rows", () => {
     expect(text).not.toContain("dialogue");
     expect(text).not.toContain("control employee");
     expect(text).not.toContain("github");
+  });
+
+  it("does not import GitHub provider or API response types directly", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("./ProjectDashboardView.ts", import.meta.url), "utf8");
+
+    expect(source).not.toContain("../github");
+    expect(source).not.toContain("GitHubRepository");
+    expect(source).not.toContain("GitHubProjectDashboardProvider");
   });
 });
 

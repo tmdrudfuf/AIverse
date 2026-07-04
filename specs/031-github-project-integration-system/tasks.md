@@ -45,10 +45,10 @@
 
 **Purpose**: Surface GitHub read-only context through the existing Project Dashboard without making UI GitHub-specific.
 
-- [ ] T018 Integrate GitHub provider output through the existing Project Dashboard provider-neutral contract.
-- [ ] T019 Render GitHub source status and repository context using AIverse Office Terminal visual language only where provider-neutral data supports it.
-- [ ] T020 Add tests proving Project Dashboard UI does not import GitHub provider/API response types directly.
-- [ ] T021 Add tests for internal simulation fallback when GitHub data is absent, stale, unavailable, unauthorized, rate-limited, or offline.
+- [X] T018 Integrate GitHub provider output through the existing Project Dashboard provider-neutral contract.
+- [X] T019 Render GitHub source status and repository context using AIverse Office Terminal visual language only where provider-neutral data supports it.
+- [X] T020 Add tests proving Project Dashboard UI does not import GitHub provider/API response types directly.
+- [X] T021 Add tests for internal simulation fallback when GitHub data is absent, stale, unavailable, unauthorized, rate-limited, or offline.
 
 ---
 

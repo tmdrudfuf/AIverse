@@ -98,6 +98,7 @@ export type GitHubRepositorySummary = {
   openIssueCount: number;
   openPullRequestCount: number;
   checkStatus?: GitHubCheckStatusSummary;
+  sourceStatus?: GitHubExternalSourceStatus;
   lastUpdatedAt?: string;
   connectionStatus: GitHubRepositoryConnectionStatus;
   errorMessage?: string;
@@ -215,6 +216,8 @@ export function createGitHubExternalSourceStatusFromSummary(
       reason: "GitHub repository summary has not been loaded.",
     });
   }
+
+  if (summary.sourceStatus) return { ...summary.sourceStatus };
 
   if (summary.connectionStatus === "connected") {
     return createGitHubExternalSourceStatus("fresh", {

@@ -93,6 +93,41 @@ describe("GitHubProjectDashboardProvider", () => {
     expect(privateRepository.source.statusReason).not.toContain("token");
   });
 
+  it.each([
+    ["stale", "Stale"],
+    ["unavailable", "Unavailable"],
+    ["unauthenticated", "Unauthenticated"],
+    ["rate_limited", "Rate limited"],
+    ["offline", "Offline"],
+  ] as const)("surfaces %s source status without hiding internal project identity", (state, label) => {
+    const provider = new GitHubProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      projects: [createProject()],
+      repositoryMappings: [createMapping()],
+      repositorySummaries: {
+        "daily-proof": createSummary({
+          sourceStatus: {
+            state,
+            label,
+            reason: `${label} source state.`,
+          },
+        }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.project).toMatchObject({
+      projectId: "daily-proof",
+      name: "Daily Proof",
+      isAvailable: true,
+    });
+    expect(snapshot.source).toMatchObject({
+      sourceType: "github",
+      statusLabel: label,
+      statusReason: `${label} source state.`,
+    });
+  });
+
   it("does not expose repository mutation methods or mutate source inputs", () => {
     const provider = new GitHubProjectDashboardProvider();
     const mappings = [createMapping()];
@@ -160,6 +195,7 @@ function createSummary(overrides: Partial<GitHubRepositorySummary> = {}): GitHub
       label: "Checks passing",
       checkedAt: "2026-01-02T09:20:00.000Z",
     },
+    sourceStatus: overrides.sourceStatus,
     lastUpdatedAt: overrides.lastUpdatedAt ?? "2026-01-02T09:30:00.000Z",
     connectionStatus: overrides.connectionStatus ?? "connected",
     errorMessage: overrides.errorMessage,
