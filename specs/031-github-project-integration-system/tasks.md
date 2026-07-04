@@ -23,10 +23,10 @@
 
 **Purpose**: Add read-only mapping and source status models without touching GitHub transport.
 
-- [ ] T010 Add AIverse project repository mapping types in the approved source location.
-- [ ] T011 Add external source status types for fresh, stale, unavailable, unauthenticated, rate-limited, offline, and unknown states.
-- [ ] T012 Add tests for mapping validation, disabled mapping, invalid mapping, and source status labels.
-- [ ] T013 Confirm mapping state does not duplicate internal project, task, employee, schedule, progression, insight, knowledge, or work-session state.
+- [X] T010 Add AIverse project repository mapping types in the approved source location.
+- [X] T011 Add external source status types for fresh, stale, unavailable, unauthenticated, rate-limited, offline, and unknown states.
+- [X] T012 Add tests for mapping validation, disabled mapping, invalid mapping, and source status labels.
+- [X] T013 Confirm mapping state does not duplicate internal project, task, employee, schedule, progression, insight, knowledge, or work-session state.
 
 ---
 
