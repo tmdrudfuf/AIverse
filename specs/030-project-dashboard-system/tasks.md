@@ -80,14 +80,14 @@
 
 **Purpose**: Confirm the feature is complete, read-only, provider-neutral, and regression-safe.
 
-- [ ] T024 Complete manual validation using `specs/030-project-dashboard-system/quickstart.md`.
-- [ ] T025 Run `npm test`.
-- [ ] T026 Run `npx tsc --noEmit`.
-- [ ] T027 Run `npm run build`.
-- [ ] T028 Run `git diff --check`.
-- [ ] T029 Run `git diff --cached --check`.
-- [ ] T030 Confirm existing Company Dashboard, Company Influence, project portal, office movement, computer interaction, Employee Insight, Employee Knowledge, NPC behavior, work sessions, and project task execution behavior remain unchanged except for the new read-only project inspection path.
-- [ ] T031 Confirm no GitHub integration, external provider call, credential flow, repository sync, issue creation, task assignment, task editing, task completion, management action, dialogue system, relationship system, save/load system, economy/payroll system, or direct employee-control behavior was added.
+- [x] T024 Complete manual validation using `specs/030-project-dashboard-system/quickstart.md`.
+- [x] T025 Run `npm test`.
+- [x] T026 Run `npx tsc --noEmit`.
+- [x] T027 Run `npm run build`.
+- [x] T028 Run `git diff --check`.
+- [x] T029 Run `git diff --cached --check`.
+- [x] T030 Confirm existing Company Dashboard, Company Influence, project portal, office movement, computer interaction, Employee Insight, Employee Knowledge, NPC behavior, work sessions, and project task execution behavior remain unchanged except for the new read-only project inspection path.
+- [x] T031 Confirm no GitHub integration, external provider call, credential flow, repository sync, issue creation, task assignment, task editing, task completion, management action, dialogue system, relationship system, save/load system, economy/payroll system, or direct employee-control behavior was added.
 
 ## Dependencies
 
