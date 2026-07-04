@@ -9,7 +9,7 @@
 - [x] Render Task Detail action as Assign Employee or Start Work (placeholder).
 
 ## Validation
-- [ ] Run npx tsc --noEmit.
+- [x] Run npx tsc --noEmit.
 - [ ] Run npm run build.
 - [ ] Run git diff --check.
 - [ ] Manually verify task assignment, placeholder work, activity ordering, task list status, and employee Working state.
