@@ -66,14 +66,14 @@
 
 **Purpose**: Confirm the GitHub integration is read-only, provider-neutral, and safe.
 
-- [ ] T025 Complete manual validation using `specs/031-github-project-integration-system/quickstart.md`.
-- [ ] T026 Run `npm test`.
-- [ ] T027 Run `npx tsc --noEmit`.
-- [ ] T028 Run `npm run build`.
-- [ ] T029 Run `git diff --check`.
-- [ ] T030 Run `git diff --cached --check`.
-- [ ] T031 Confirm internal simulation remains authoritative and unchanged by GitHub source reads.
-- [ ] T032 Confirm no repository mutation or autonomous AI employee coding behavior was added.
+- [X] T025 Complete manual validation using `specs/031-github-project-integration-system/quickstart.md`.
+- [X] T026 Run `npm test`.
+- [X] T027 Run `npx tsc --noEmit`.
+- [X] T028 Run `npm run build`.
+- [X] T029 Run `git diff --check`.
+- [X] T030 Run `git diff --cached --check`.
+- [X] T031 Confirm internal simulation remains authoritative and unchanged by GitHub source reads.
+- [X] T032 Confirm no repository mutation or autonomous AI employee coding behavior was added.
 
 ## Dependencies
 
