@@ -7,6 +7,8 @@
 - [x] Prepend work_started activity to ProjectTask.activityLog.
 - [x] Move Todo tasks to In Progress when placeholder work starts.
 - [x] Render Task Detail action as Assign Employee or Start Work (placeholder).
+- [x] Preserve assigned non-Todo task status when placeholder work is recorded.
+- [x] Preserve placeholder work start for assigned tasks with an assignee name and no assigneeId.
 
 ## Validation
 - [x] Run npx tsc --noEmit.
