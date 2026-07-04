@@ -8,6 +8,7 @@
 - [x] Add Review to Done transition with status_changed activity.
 - [x] Make Done task action Completed and no-op.
 - [x] Release assigned employee to Idle on Done when no other loaded task is assigned.
+- [x] Preserve Done release behavior for assigned tasks with an assignee name and no assigneeId.
 - [x] Update Task Detail action label rendering.
 
 ## Validation
