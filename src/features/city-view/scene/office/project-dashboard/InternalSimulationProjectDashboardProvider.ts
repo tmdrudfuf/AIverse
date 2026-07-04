@@ -64,7 +64,7 @@ export class InternalSimulationProjectDashboardProvider implements ProjectDashbo
       .map((task) => createWorkItemSummary(task))
       .sort((left, right) => right.progressPercent - left.progressPercent || left.id.localeCompare(right.id));
     const employees = employeeSources.map(createEmployeeContext).sort((left, right) => left.employeeId.localeCompare(right.employeeId));
-    const activity = createActivity(tasks, workSessions, employeeSources).slice(0, 6);
+    const activity = createActivity(tasks, workSessions, employeeSources, context.companyProgression, generatedAt).slice(0, 6);
     const relatedFocus = createRelatedFocus(context.companyFocus, employees);
     const progressPercent = deriveProgressPercent(tasks);
 
@@ -259,6 +259,8 @@ function createActivity(
   tasks: ReadonlyArray<ProjectTask>,
   workSessions: ReadonlyArray<WorkSession>,
   employeeSources: ReadonlyArray<EmployeeInsightSource>,
+  companyProgression: InternalSimulationProjectDashboardProviderContext["companyProgression"],
+  generatedAt: string,
 ): ProjectDashboardActivityItem[] {
   return [
     ...tasks.flatMap((task) => (task.activityLog ?? []).map((activity) => createTaskActivityItem(activity))),
@@ -283,6 +285,15 @@ function createActivity(
       label: `${source.name} is ${source.aiState}.`,
       description: source.currentTask?.title,
     })),
+    ...(companyProgression
+      ? [{
+          id: `progression-level-${companyProgression.companyLevel}`,
+          timestamp: generatedAt,
+          type: "progression" as const,
+          label: `Company level ${companyProgression.companyLevel} supports ${companyProgression.layoutId}.`,
+          description: `${companyProgression.companyStage} stage with ${companyProgression.maxEmployees} employee capacity.`,
+        }]
+      : []),
   ]
     .filter((activity) => Number.isFinite(Date.parse(activity.timestamp)))
     .sort((left, right) => Date.parse(right.timestamp) - Date.parse(left.timestamp));

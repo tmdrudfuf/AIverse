@@ -141,6 +141,33 @@ describe("InternalSimulationProjectDashboardProvider", () => {
     expect(snapshot.generatedAt).toBe("2026-01-01T11:30:00.000Z");
   });
 
+  it("includes company progression as recent project activity when progression data is available", () => {
+    const provider = new InternalSimulationProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      generatedAt: "2026-01-01T12:00:00.000Z",
+      companyProgression: {
+        companyLevel: 2,
+        companyStage: "smallOffice",
+        floorCount: 1,
+        layoutId: "small-office",
+        maxEmployees: 6,
+        requiredMilestones: [],
+        unlockedOfficeZones: ["workspace"],
+      },
+      projects: [createProject()],
+    }, "daily-proof");
+
+    expect(snapshot.activity).toContainEqual(expect.objectContaining({
+      id: "progression-level-2",
+      timestamp: "2026-01-01T12:00:00.000Z",
+      type: "progression",
+      label: "Company level 2 supports small-office.",
+      description: "smallOffice stage with 6 employee capacity.",
+    }));
+    expect(snapshot.sections.find((section) => section.id === "recent_activity")?.status).toBe("available");
+  });
+
   it("keeps the provider internal-only and read-only by contract shape", () => {
     const provider = new InternalSimulationProjectDashboardProvider();
     const beforeProjects = [createProject()];
