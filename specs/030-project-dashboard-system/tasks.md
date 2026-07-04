@@ -49,6 +49,7 @@
 - [x] T015 [US2] Render project name, status, progress, active work, employees, blockers, activity, health, related focus, next suggested focus, and source metadata empty states in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.ts`.
 - [x] T016 [US2] Integrate `ProjectDashboardView` into `src/features/city-view/scene/office/OfficeProjectPortalView.ts` using existing modal/portal conventions.
 - [x] T017 [US2] Add view tests for populated sections, partial data, unavailable project state, empty active work, empty employees, neutral blockers, and advisory focus text in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.test.ts`.
+- [x] T017a [US2] Include existing company progression signals in internal project dashboard recent activity derivation.
 
 ---
 
