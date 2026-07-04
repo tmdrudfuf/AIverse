@@ -208,6 +208,13 @@ export class OfficeProjectPortalView {
     this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, 88);
     this.addText(this.panelX + 34, this.panelY + 304, wrapText(`[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, 78), projectMutedStyle());
     this.addText(this.panelX + 34, this.panelY + 326, wrapText(`[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, 78), projectMutedStyle());
+    const sourceSignalRows = rows.sourceSignalRows;
+    if (sourceSignalRows.length > 0) {
+      this.addText(this.panelX + 34, this.panelY + 348, wrapText(`[SOURCE] ${sourceSignalRows[0]}`, 78), projectMutedStyle());
+      this.addText(this.panelX + 34, this.panelY + 370, wrapText(`[SYNC] ${sourceSignalRows.slice(1).join(" | ")}`, 78), projectMutedStyle());
+      return;
+    }
+
     this.addText(this.panelX + 34, this.panelY + 348, wrapText(`[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, 78), projectMutedStyle());
     this.addText(this.panelX + 34, this.panelY + 370, wrapText(`[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, 78), projectMutedStyle());
   }
