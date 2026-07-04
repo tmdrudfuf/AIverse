@@ -981,7 +981,7 @@ export class OfficeProjectPortalController {
   private async startPlaceholderWorkOnSelectedTask() {
     const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
     const task = this.getSelectedTask();
-    if (!projectId || !task?.assignee || task.status !== "Todo") return;
+    if (!projectId || !task?.assignee || task.status === "Done") return;
 
     const employee = task.assigneeId
       ? this.state.employees.find((item) => item.id === task.assigneeId)
@@ -1027,7 +1027,7 @@ export class OfficeProjectPortalController {
     this.refreshEmployeeSimulationSnapshotsForWorkStarted();
     this.updateSelectedTask({
       ...updatedTask,
-      status: "In Progress",
+      status: task.status === "Todo" ? "In Progress" : task.status,
     });
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
