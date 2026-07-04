@@ -121,6 +121,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     const internals = getControllerInternals(controller);
 
     const beforeProjects = structuredClone(state.projects);
+    const beforeRepositoryMappings = structuredClone(state.repositoryMappings);
     const beforeTasks = structuredClone(state.taskCollections);
     const beforeEmployees = structuredClone(state.employees);
     const beforeWorkSessions = structuredClone(state.workSessions);
@@ -143,6 +144,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     await flushPromises();
 
     expect(state.projects).toEqual(beforeProjects);
+    expect(state.repositoryMappings).toEqual(beforeRepositoryMappings);
     expect(state.taskCollections).toEqual(beforeTasks);
     expect(state.employees).toEqual(beforeEmployees);
     expect(state.workSessions).toEqual(beforeWorkSessions);

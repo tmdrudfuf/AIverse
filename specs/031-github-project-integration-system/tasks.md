@@ -56,9 +56,9 @@
 
 **Purpose**: Protect external and internal state from unintended mutation.
 
-- [ ] T022 Add regression tests proving GitHub refresh/display does not mutate repository, project, task, employee, schedule, work-session, company influence, progression, Insight, or Knowledge state.
-- [ ] T023 Add assertions that no issue creation, PR creation, branch creation, commit, merge, GitHub Actions modification, webhook setup, credential display, or autonomous AI coding controls appear.
-- [ ] T024 Review imports and implementation paths for forbidden external mutation, credential storage, background sync, webhook, and speculative connector framework behavior.
+- [X] T022 Add regression tests proving GitHub refresh/display does not mutate repository, project, task, employee, schedule, work-session, company influence, progression, Insight, or Knowledge state.
+- [X] T023 Add assertions that no issue creation, PR creation, branch creation, commit, merge, GitHub Actions modification, webhook setup, credential display, or autonomous AI coding controls appear.
+- [X] T024 Review imports and implementation paths for forbidden external mutation, credential storage, background sync, webhook, and speculative connector framework behavior.
 
 ---
 
