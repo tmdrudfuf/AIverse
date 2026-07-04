@@ -58,7 +58,6 @@ import { WorkSessionService } from "./work-sessions/WorkSessionService";
 import { WorkstationOccupancyService } from "./workstations/WorkstationOccupancyService";
 import type { WorkstationSnapshot } from "./workstations/WorkstationTypes";
 
-const CONVERSATION_PREVIEW_TIMESTAMP = "2026-01-01T00:00:00.000Z";
 const CONVERSATION_POSITION_ZONES = new Set<string>([
   "desk",
   "collaboration",
@@ -260,8 +259,20 @@ export class OfficeProjectPortalController {
   }
 
   getEmployeeAIStateSnapshots(): ReadonlyArray<EmployeeAISnapshot> {
+    const tasks = getAllLoadedTasks(this.state.taskCollections);
+    const employeeAIPreviewTimestamp = getPreviewMovementTimestamp(
+      this.employeeNpcMovementService.getSnapshots(),
+      this.employeeSimulationService.getSnapshots(this.state.employeeSimulations),
+    );
+
     if (this.state.employees.length > 0) {
-      this.refreshEmployeeSimulationSnapshots();
+      this.state.employeeSimulations = this.employeeSimulationService.deriveSnapshots(
+        this.state.employees,
+        tasks,
+        this.state.workSessions,
+        this.state.employeeSimulations,
+        employeeAIPreviewTimestamp,
+      );
     }
 
     const employeesById = new Map(this.state.employees.map((employee) => [employee.id, employee]));
@@ -276,10 +287,6 @@ export class OfficeProjectPortalController {
       ...scheduleTargetHints,
       ...workstationTargetHints,
     };
-    const employeeAIPreviewTimestamp = getLatestMovementTimestamp(
-      this.employeeNpcMovementService.getSnapshots(),
-      CONVERSATION_PREVIEW_TIMESTAMP,
-    );
     const movementSnapshots = this.employeeNpcMovementService.previewSnapshots(
       employeeSnapshots,
       employeeAIPreviewTimestamp,
@@ -1468,9 +1475,9 @@ export class OfficeProjectPortalController {
 
   private createPreviewEmployeeConversationState() {
     const tasks = getAllLoadedTasks(this.state.taskCollections);
-    const conversationPreviewTimestamp = getLatestMovementTimestamp(
+    const conversationPreviewTimestamp = getPreviewMovementTimestamp(
       this.employeeNpcMovementService.getSnapshots(),
-      CONVERSATION_PREVIEW_TIMESTAMP,
+      this.employeeSimulationService.getSnapshots(this.state.employeeSimulations),
     );
     const employeeSnapshots = Object.values(this.employeeSimulationService.deriveSnapshots(
       this.state.employees,
@@ -1504,9 +1511,9 @@ export class OfficeProjectPortalController {
 
   private createPreviewEmployeeInsightState() {
     const tasks = getAllLoadedTasks(this.state.taskCollections);
-    const insightPreviewTimestamp = getLatestMovementTimestamp(
+    const insightPreviewTimestamp = getPreviewMovementTimestamp(
       this.employeeNpcMovementService.getSnapshots(),
-      CONVERSATION_PREVIEW_TIMESTAMP,
+      this.employeeSimulationService.getSnapshots(this.state.employeeSimulations),
     );
     const employeeSnapshots = Object.values(this.employeeSimulationService.deriveSnapshots(
       this.state.employees,
@@ -1700,17 +1707,26 @@ function createSchedulePositionHint(
   };
 }
 
-function getLatestMovementTimestamp(
+function getPreviewMovementTimestamp(
   movementSnapshots: ReadonlyArray<EmployeeNpcMovementSnapshot>,
-  fallbackTimestamp: string,
+  simulationSnapshots: ReadonlyArray<EmployeeSimulationSnapshot>,
 ) {
-  return movementSnapshots.reduce((latestTimestamp, snapshot) => {
-    const latestTime = Date.parse(latestTimestamp);
-    const snapshotTime = Date.parse(snapshot.lastUpdatedAt);
-    if (!Number.isFinite(snapshotTime)) return latestTimestamp;
-    if (!Number.isFinite(latestTime)) return snapshot.lastUpdatedAt;
-    return snapshotTime > latestTime ? snapshot.lastUpdatedAt : latestTimestamp;
-  }, fallbackTimestamp);
+  return getLatestTimestamp([
+    ...movementSnapshots.map((snapshot) => snapshot.lastUpdatedAt),
+    ...simulationSnapshots.map((snapshot) => snapshot.lastStateChangeAt),
+  ], new Date().toISOString());
+}
+
+function getLatestTimestamp(timestamps: ReadonlyArray<string | undefined>, fallbackTimestamp: string) {
+  const latestTimestamp = timestamps.reduce<string | undefined>((currentLatestTimestamp, timestamp) => {
+    const latestTime = Date.parse(currentLatestTimestamp ?? "");
+    const timestampTime = Date.parse(timestamp ?? "");
+    if (!Number.isFinite(timestampTime)) return currentLatestTimestamp;
+    if (!Number.isFinite(latestTime)) return timestamp ?? currentLatestTimestamp;
+    return timestampTime > latestTime ? timestamp ?? currentLatestTimestamp : currentLatestTimestamp;
+  }, undefined);
+
+  return latestTimestamp ?? fallbackTimestamp;
 }
 
 function getNpcPositionZone(state: EmployeeSimulationSnapshot["currentState"]): EmployeeNpcPositionZone {

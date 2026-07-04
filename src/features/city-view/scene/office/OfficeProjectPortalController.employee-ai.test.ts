@@ -115,6 +115,39 @@ describe("OfficeProjectPortalController employee AI integration", () => {
     });
   });
 
+  it("uses the latest existing simulation timestamp before movement snapshots exist", () => {
+    const state = createProjectPortalState();
+    const simulationTimestamp = "2026-07-04T09:00:00.000Z";
+    state.employees = [
+      createEmployee({
+        id: "employee-preview",
+        name: "Pia Preview",
+        status: "Idle",
+      }),
+    ];
+    state.employeeSimulations = {
+      "employee-preview": {
+        employeeId: "employee-preview",
+        currentState: "idle",
+        lastStateChangeAt: simulationTimestamp,
+        displayLabel: "Pia Preview - Idle",
+      },
+    };
+    const controller = createControllerHarness(state);
+
+    const snapshots = controller.getEmployeeAIStateSnapshots();
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]).toMatchObject({
+      employeeId: "employee-preview",
+      currentState: "idle",
+      lastUpdatedAt: simulationTimestamp,
+      contextSummary: {
+        movementState: "idle",
+      },
+    });
+  });
+
   it("does not mutate office services or portal collections while previewing Employee AI state", () => {
     const state = createProjectPortalState();
     state.employees = [
