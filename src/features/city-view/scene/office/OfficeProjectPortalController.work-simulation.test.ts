@@ -67,6 +67,58 @@ describe("OfficeProjectPortalController work simulation", () => {
       status: "running",
     });
   });
+
+  it("releases an assigned employee when a name-only Review task is marked Done", () => {
+    const state = createWorkSimulationState(createTask({
+      id: "task-name-only-review",
+      status: "Review",
+      assignee: "Alex Assigned",
+    }));
+    const controller = createControllerHarness(state);
+
+    markSelectedTaskDone(controller);
+
+    const task = expectDefined(state.taskCollections["daily-proof"]?.tasks[0]);
+    expect(task).toMatchObject({
+      id: "task-name-only-review",
+      status: "Done",
+      assignee: "Alex Assigned",
+    });
+    expect(task.assigneeId).toBeUndefined();
+    expect(task.activityLog?.[0]).toMatchObject({
+      type: "status_changed",
+      message: "Task marked done",
+    });
+    expect(state.employees[0]).toMatchObject({
+      id: "employee-assigned",
+      status: "Idle",
+      assignedTaskId: undefined,
+      currentProjectId: undefined,
+    });
+  });
+
+  it("keeps an employee working when another loaded name-only task remains assigned", () => {
+    const state = createWorkSimulationState(createTask({
+      id: "task-name-only-review",
+      status: "Review",
+      assignee: "Alex Assigned",
+    }));
+    state.taskCollections["daily-proof"]?.tasks.push(createTask({
+      id: "task-name-only-active",
+      status: "In Progress",
+      assignee: "Alex Assigned",
+    }));
+    const controller = createControllerHarness(state);
+
+    markSelectedTaskDone(controller);
+
+    expect(state.employees[0]).toMatchObject({
+      id: "employee-assigned",
+      status: "Working",
+      assignedTaskId: "task-name-only-active",
+      currentProjectId: "daily-proof",
+    });
+  });
 });
 
 type ControllerHarness = {
@@ -79,6 +131,7 @@ type ControllerHarness = {
     createProjectManagementSuggestion: ReturnType<typeof vi.fn>;
   };
   startPlaceholderWorkOnSelectedTask: () => Promise<void>;
+  markSelectedTaskDone: () => void;
 };
 
 function createControllerHarness(state: ProjectPortalState): OfficeProjectPortalController {
@@ -118,6 +171,10 @@ async function startPlaceholderWork(controller: OfficeProjectPortalController) {
   await (controller as unknown as ControllerHarness).startPlaceholderWorkOnSelectedTask();
 }
 
+function markSelectedTaskDone(controller: OfficeProjectPortalController) {
+  (controller as unknown as ControllerHarness).markSelectedTaskDone();
+}
+
 function createWorkSimulationState(task: ProjectTask) {
   const state = createProjectPortalState();
   state.isOpen = true;
@@ -126,7 +183,10 @@ function createWorkSimulationState(task: ProjectTask) {
   state.selectedTaskProjectId = "daily-proof";
   state.selectedTaskId = task.id;
   state.selectedTaskIndex = 0;
-  state.employees = [createEmployee()];
+  state.employees = [createEmployee({
+    assignedTaskId: task.id,
+    currentProjectId: "daily-proof",
+  })];
   state.taskCollections["daily-proof"] = {
     projectId: "daily-proof",
     tasks: [task],

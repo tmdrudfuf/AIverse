@@ -1054,8 +1054,9 @@ export class OfficeProjectPortalController {
     if (!task || task.status !== "Review") return;
 
     this.moveSelectedTaskStatus("Done", "Task marked done", "marked-done");
-    if (task.assigneeId) {
-      this.releaseEmployeeIfUnassigned(task.assigneeId, task.id);
+    const assigneeEmployeeId = this.getTaskAssigneeEmployeeId(task);
+    if (assigneeEmployeeId) {
+      this.releaseEmployeeIfUnassigned(assigneeEmployeeId, task.id);
       this.refreshEmployeeSimulationSnapshotsForWorkCompleted();
       this.view.render(this.state);
     }
@@ -1423,8 +1424,13 @@ export class OfficeProjectPortalController {
   }
 
   private findLoadedAssignmentForEmployee(employeeId: string, excludedTaskId?: string) {
+    const employeeName = this.state.employees.find((employee) => employee.id === employeeId)?.name;
+
     for (const collection of Object.values(this.state.taskCollections)) {
-      const task = collection.tasks.find((item) => item.id !== excludedTaskId && item.status !== "Done" && item.assigneeId === employeeId);
+      const task = collection.tasks.find((item) => {
+        if (item.id === excludedTaskId || item.status === "Done") return false;
+        return item.assigneeId === employeeId || (employeeName ? item.assignee === employeeName : false);
+      });
       if (task) {
         return {
           projectId: collection.projectId,
@@ -1434,6 +1440,13 @@ export class OfficeProjectPortalController {
     }
 
     return undefined;
+  }
+
+  private getTaskAssigneeEmployeeId(task: ProjectTask) {
+    if (task.assigneeId) return task.assigneeId;
+    if (!task.assignee) return undefined;
+
+    return this.state.employees.find((employee) => employee.name === task.assignee)?.id;
   }
 
   private deriveCurrentEmployeeConversationTargets(
