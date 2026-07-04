@@ -240,10 +240,14 @@ function createWorkloadSummary(
   currentWork: ReadonlyArray<CompanyDashboardEmployeeWorkItem>,
 ): WorkloadSummary {
   const activeWorkSessions = workSessions.filter((session) => session.status === "running" || session.status === "queued");
+  const employeeIdsByName = new Map(currentWork.map((employee) => [employee.employeeName, employee.employeeId]));
   const activeTaskAssignmentsByEmployee = tasks
-    .filter((task) => task.status !== "Done" && task.assigneeId)
+    .filter((task) => task.status !== "Done" && (task.assigneeId || task.assignee))
     .reduce<Record<string, number>>((counts, task) => {
-      counts[task.assigneeId ?? ""] = (counts[task.assigneeId ?? ""] ?? 0) + 1;
+      const employeeId = task.assigneeId ?? (task.assignee ? employeeIdsByName.get(task.assignee) : undefined);
+      if (!employeeId) return counts;
+
+      counts[employeeId] = (counts[employeeId] ?? 0) + 1;
       return counts;
     }, {});
 

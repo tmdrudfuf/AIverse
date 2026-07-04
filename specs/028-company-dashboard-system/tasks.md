@@ -54,6 +54,7 @@
 - [x] T017 Add project progress, active work, stalled work, and current project focus sections.
 - [x] T018 Add workload and office occupancy detail from existing systems where available.
 - [x] T019 Add tests for employee/project/workload/occupancy derivation and empty states.
+- [x] T019a Preserve workload derivation for assigned tasks that have an assignee name and no assigneeId.
 
 ---
 
