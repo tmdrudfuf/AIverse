@@ -48,6 +48,48 @@ export type GitHubLatestCommit = {
   committedAt: string;
 };
 
+export type GitHubCheckStatusState = "passing" | "failing" | "pending" | "unavailable" | "unknown";
+
+export type GitHubIssueSummary = {
+  openCount: number;
+  staleCount?: number;
+  labels?: string[];
+  latestIssueUpdatedAt?: string;
+};
+
+export type GitHubPullRequestSummary = {
+  openCount: number;
+  draftCount?: number;
+  reviewRequestedCount?: number;
+  latestPullRequestUpdatedAt?: string;
+};
+
+export type GitHubCommitSummary = GitHubLatestCommit & {
+  branchName: string;
+};
+
+export type GitHubCheckStatusSummary = {
+  state: GitHubCheckStatusState;
+  label: string;
+  checkedAt?: string;
+  source?: string;
+};
+
+export type GitHubRepositorySnapshot = {
+  repositoryId: string;
+  owner: string;
+  name: string;
+  url?: string;
+  defaultBranch: string;
+  issueSummary: GitHubIssueSummary;
+  pullRequestSummary: GitHubPullRequestSummary;
+  recentCommitSummary?: GitHubCommitSummary;
+  checkStatusSummary: GitHubCheckStatusSummary;
+  latestActivityAt?: string;
+  fetchedAt?: string;
+  sourceStatus: GitHubExternalSourceStatus;
+};
+
 export type GitHubRepositorySummary = {
   owner: string;
   name: string;
@@ -55,6 +97,7 @@ export type GitHubRepositorySummary = {
   latestCommit?: GitHubLatestCommit;
   openIssueCount: number;
   openPullRequestCount: number;
+  checkStatus?: GitHubCheckStatusSummary;
   lastUpdatedAt?: string;
   connectionStatus: GitHubRepositoryConnectionStatus;
   errorMessage?: string;
@@ -128,6 +171,72 @@ export function validateAIverseProjectRepositoryMapping(
       reason: "GitHub repository source has not been refreshed yet.",
     }),
   };
+}
+
+export function createGitHubRepositorySnapshot(
+  mapping: AIverseProjectRepositoryMapping,
+  summary: GitHubRepositorySummary,
+): GitHubRepositorySnapshot {
+  const sourceStatus = createGitHubExternalSourceStatusFromSummary(summary);
+
+  return {
+    repositoryId: mapping.sourceId,
+    owner: summary.owner || mapping.repository.owner,
+    name: summary.name || mapping.repository.name,
+    url: mapping.repository.url,
+    defaultBranch: summary.defaultBranch || mapping.repository.defaultBranchHint || "unknown",
+    issueSummary: {
+      openCount: summary.openIssueCount,
+    },
+    pullRequestSummary: {
+      openCount: summary.openPullRequestCount,
+    },
+    recentCommitSummary: summary.latestCommit
+      ? {
+          ...summary.latestCommit,
+          branchName: summary.defaultBranch || mapping.repository.defaultBranchHint || "unknown",
+        }
+      : undefined,
+    checkStatusSummary: summary.checkStatus ?? {
+      state: "unavailable",
+      label: "Checks unavailable",
+    },
+    latestActivityAt: summary.lastUpdatedAt ?? summary.latestCommit?.committedAt,
+    fetchedAt: summary.lastUpdatedAt,
+    sourceStatus,
+  };
+}
+
+export function createGitHubExternalSourceStatusFromSummary(
+  summary: GitHubRepositorySummary | undefined,
+): GitHubExternalSourceStatus {
+  if (!summary) {
+    return createGitHubExternalSourceStatus("unavailable", {
+      reason: "GitHub repository summary has not been loaded.",
+    });
+  }
+
+  if (summary.connectionStatus === "connected") {
+    return createGitHubExternalSourceStatus("fresh", {
+      lastSuccessfulFetchAt: summary.lastUpdatedAt,
+    });
+  }
+
+  if (summary.connectionStatus === "loading") {
+    return createGitHubExternalSourceStatus("unknown", {
+      reason: "GitHub repository summary is loading.",
+    });
+  }
+
+  if (summary.connectionStatus === "not_connected") {
+    return createGitHubExternalSourceStatus("unavailable", {
+      reason: summary.errorMessage ?? "GitHub repository data is not configured.",
+    });
+  }
+
+  return createGitHubExternalSourceStatus("unavailable", {
+    reason: summary.errorMessage ?? "Unable to load GitHub repository summary.",
+  });
 }
 
 function isDisplaySafeRepositoryPart(value: string) {

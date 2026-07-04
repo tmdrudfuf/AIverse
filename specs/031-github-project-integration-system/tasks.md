@@ -34,10 +34,10 @@
 
 **Purpose**: Map approved read-only GitHub repository data into Project Dashboard provider-neutral snapshots.
 
-- [ ] T014 Add GitHub repository snapshot/read model types for the approved vertical slice.
-- [ ] T015 Add a GitHub project dashboard provider/adapter that maps repository snapshots into provider-neutral Project Dashboard data.
-- [ ] T016 Add tests for repository identity, owner/name, default branch, URL metadata, source status, sync freshness, empty issue/PR/commit/check summaries, and latest activity.
-- [ ] T017 Confirm the provider does not expose repository mutation methods.
+- [X] T014 Add GitHub repository snapshot/read model types for the approved vertical slice.
+- [X] T015 Add a GitHub project dashboard provider/adapter that maps repository snapshots into provider-neutral Project Dashboard data.
+- [X] T016 Add tests for repository identity, owner/name, default branch, URL metadata, source status, sync freshness, empty issue/PR/commit/check summaries, and latest activity.
+- [X] T017 Confirm the provider does not expose repository mutation methods.
 
 ---
 
