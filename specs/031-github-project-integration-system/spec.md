@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: Approved for implementation with public read-only defaults
 
 **Input**: User description: "Connect real GitHub repositories, including my personal projects, to AIverse projects through the provider-neutral Project Dashboard architecture."
 
@@ -123,32 +123,32 @@ As the player, I can understand whether GitHub data is fresh, stale, unavailable
 
 ### Product and Security Decisions Requiring Approval
 
-These decisions have multiple reasonable directions and MUST be approved before implementation:
+These decisions have multiple reasonable directions and MUST be approved before implementation. The user approved the recommended first-slice defaults on 2026-07-04.
 
 1. **Authentication approach**:
    - Option A: Public repositories only for the first vertical slice.
    - Option B: User-provided personal access token for private repositories.
    - Option C: GitHub OAuth/App flow.
-   - Recommended direction: Option A first, because it avoids credential storage and still validates provider-neutral mapping.
+   - Approved direction: Option A first, because it avoids credential storage and still validates provider-neutral mapping.
 2. **Credential/token handling boundary**:
    - Option A: No credentials stored; public-only source data.
    - Option B: Session-only token entry.
    - Option C: Local encrypted token persistence.
-   - Recommended direction: Option A for first slice; defer storage until a dedicated security design exists.
+   - Approved direction: Option A for first slice; defer storage until a dedicated security design exists.
 3. **Repository selection flow**:
    - Option A: Developer-configured mapping in local project state/config.
    - Option B: Player-entered owner/name in the Office Terminal UI.
    - Option C: Authenticated repository picker.
-   - Recommended direction: Option A for first slice to keep UI and security surface small.
+   - Approved direction: Option A for first slice to keep UI and security surface small.
 4. **Refresh/sync model**:
    - Option A: Manual refresh/read on dashboard open only.
    - Option B: timed foreground refresh while dashboard is open.
    - Option C: background sync.
-   - Recommended direction: Option A for first slice to avoid background architecture.
+   - Approved direction: Option A for first slice to avoid background architecture.
 5. **Public vs private repository behavior**:
    - Option A: public-only first.
    - Option B: private repos with explicit token flow.
-   - Recommended direction: public-only first; private support requires approved auth/token handling.
+   - Approved direction: public-only first; private support requires approved auth/token handling.
 
 ### Key Entities
 

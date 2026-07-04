@@ -7,15 +7,15 @@
 
 **Purpose**: Resolve security/product decisions and inspect existing systems before implementation.
 
-- [ ] T001 Obtain explicit approval for authentication approach in `specs/031-github-project-integration-system/spec.md`.
-- [ ] T002 Obtain explicit approval for credential/token handling boundary in `specs/031-github-project-integration-system/spec.md`.
-- [ ] T003 Obtain explicit approval for repository selection flow in `specs/031-github-project-integration-system/spec.md`.
-- [ ] T004 Obtain explicit approval for refresh/sync model in `specs/031-github-project-integration-system/spec.md`.
-- [ ] T005 Obtain explicit approval for public/private repository behavior in `specs/031-github-project-integration-system/spec.md`.
-- [ ] T006 Inspect existing Project Dashboard provider files in `src/features/city-view/scene/office/project-dashboard/`.
-- [ ] T007 Inspect existing GitHub repository files in `src/features/city-view/scene/office/github/`.
-- [ ] T008 Inspect portal/dashboard integration files in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`, `src/features/city-view/scene/office/OfficeProjectPortalTypes.ts`, and `src/features/city-view/scene/office/OfficeProjectPortalView.ts`.
-- [ ] T009 Update `specs/031-github-project-integration-system/plan.md` if approval decisions change source touchpoints or implementation strategy.
+- [X] T001 Obtain explicit approval for authentication approach in `specs/031-github-project-integration-system/spec.md`.
+- [X] T002 Obtain explicit approval for credential/token handling boundary in `specs/031-github-project-integration-system/spec.md`.
+- [X] T003 Obtain explicit approval for repository selection flow in `specs/031-github-project-integration-system/spec.md`.
+- [X] T004 Obtain explicit approval for refresh/sync model in `specs/031-github-project-integration-system/spec.md`.
+- [X] T005 Obtain explicit approval for public/private repository behavior in `specs/031-github-project-integration-system/spec.md`.
+- [X] T006 Inspect existing Project Dashboard provider files in `src/features/city-view/scene/office/project-dashboard/`.
+- [X] T007 Inspect existing GitHub repository files in `src/features/city-view/scene/office/github/`.
+- [X] T008 Inspect portal/dashboard integration files in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`, `src/features/city-view/scene/office/OfficeProjectPortalTypes.ts`, and `src/features/city-view/scene/office/OfficeProjectPortalView.ts`.
+- [X] T009 Update `specs/031-github-project-integration-system/plan.md` if approval decisions change source touchpoints or implementation strategy.
 
 ---
 

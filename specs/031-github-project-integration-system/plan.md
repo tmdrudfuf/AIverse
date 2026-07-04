@@ -5,18 +5,18 @@
 
 ## Summary
 
-Add a read-only GitHub repository source for AIverse projects by mapping GitHub repository data into the existing provider-neutral Project Dashboard architecture. Internal simulation remains valid and authoritative for AIverse state. Security-sensitive decisions around authentication, credential handling, repository selection, refresh model, and public/private behavior require approval before implementation.
+Add a read-only GitHub repository source for AIverse projects by mapping GitHub repository data into the existing provider-neutral Project Dashboard architecture. Internal simulation remains valid and authoritative for AIverse state. The approved first slice uses public repositories only, stores no credentials, uses developer-configured mapping, refreshes when the Project Dashboard opens, and defers private repository support.
 
 ## Technical Context
 
 **Language/Version**: TypeScript with React/Next.js and Phaser
 **Primary Dependencies**: Existing Project Dashboard provider contract, Office Project Portal, Company Dashboard, Company Influence, Projects, Tasks, Employee AI, Schedule, Progression, Insight, Knowledge, and existing GitHub repository service/provider files where appropriate
-**Storage**: No credential storage approved; mapping storage approach requires approval before implementation
+**Storage**: No credential storage approved; developer-configured mapping may exist in local app state/config only
 **Testing**: Existing project test tooling (`npm test`) plus TypeScript/build validation
 **Target Platform**: Browser
 **Project Type**: Web game/simulation
 **Performance Goals**: GitHub source reads must not block office simulation or project dashboard rendering
-**Constraints**: Read-only, no repository mutation, no autonomous AI work, no speculative connector framework, explicit approval required for auth/credentials/selection/refresh/private repos
+**Constraints**: Read-only, no repository mutation, no autonomous AI work, no speculative connector framework, public repositories only, no credential storage
 **Scale/Scope**: One GitHub repository source mapped to one AIverse project for the first vertical slice
 
 ## Constitution Check
@@ -25,7 +25,7 @@ Add a read-only GitHub repository source for AIverse projects by mapping GitHub 
 - Existing code must be inspected before editing.
 - Smallest correct implementation is preferred.
 - Existing provider-neutral Project Dashboard architecture must be preserved.
-- No application code changes occur until spec, plan, and tasks are aligned and required security/product decisions are approved.
+- Application code changes can begin after spec, plan, and tasks are aligned; required security/product decisions were approved on 2026-07-04.
 - Full validation must pass before implementation completion.
 
 ## Project Structure
@@ -67,17 +67,9 @@ src/features/city-view/scene/office/
 
 Exact source touchpoints must be confirmed by inspection before implementation.
 
-## Required Approval Before Implementation
+## Approved Implementation Defaults
 
-Implementation must not begin until the user approves:
-
-- authentication approach
-- credential/token handling boundary
-- repository selection flow
-- refresh/sync model
-- public/private repository behavior
-
-Recommended first slice:
+The user approved these first-slice defaults on 2026-07-04:
 
 - public repositories only
 - no credential storage
