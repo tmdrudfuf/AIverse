@@ -168,6 +168,39 @@ describe("InternalSimulationProjectDashboardProvider", () => {
     expect(snapshot.sections.find((section) => section.id === "recent_activity")?.status).toBe("available");
   });
 
+  it("includes open company progression milestones in project health", () => {
+    const provider = new InternalSimulationProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      generatedAt: "2026-01-01T12:00:00.000Z",
+      companyProgression: {
+        companyLevel: 2,
+        companyStage: "smallOffice",
+        floorCount: 1,
+        layoutId: "small-office",
+        maxEmployees: 6,
+        requiredMilestones: [{
+          milestoneId: "complete-first-client-project",
+          label: "Complete first client project",
+          description: "Complete first client project to unlock the next office stage.",
+          isMet: false,
+          targetValue: 1,
+          currentValue: 0,
+        }],
+        unlockedOfficeZones: ["workspace"],
+      },
+      projects: [createProject()],
+      tasks: [createTask({ id: "task-1", status: "In Progress" })],
+    }, "daily-proof");
+
+    expect(snapshot.health).toMatchObject({
+      status: "watch",
+      label: "Project should be watched",
+      reason: "Company progression still has milestone requirements.",
+      signals: ["Progression milestone: Complete first client project"],
+    });
+  });
+
   it("includes employee context for project tasks assigned by employee name only", () => {
     const provider = new InternalSimulationProjectDashboardProvider();
 

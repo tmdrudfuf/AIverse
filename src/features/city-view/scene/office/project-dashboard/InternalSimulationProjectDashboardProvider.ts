@@ -40,7 +40,7 @@ export class InternalSimulationProjectDashboardProvider implements ProjectDashbo
         name: project.name,
         status: project.status,
         progressPercent: deriveProgressPercent(projectTasks),
-        healthLabel: deriveHealth(project, projectTasks, [], []).label,
+        healthLabel: deriveHealth(project, projectTasks, [], [], context.companyProgression).label,
       };
     });
   }
@@ -58,7 +58,7 @@ export class InternalSimulationProjectDashboardProvider implements ProjectDashbo
     const employeeSources = collectProjectEmployeeSources(context.employeeInsightSources ?? [], project.id, tasks);
     const workSessions = (context.workSessions ?? []).filter((session) => session.projectId === project.id);
     const blockers = deriveBlockers(tasks, workSessions);
-    const health = deriveHealth(project, tasks, blockers, workSessions);
+    const health = deriveHealth(project, tasks, blockers, workSessions, context.companyProgression);
     const activeWork = tasks
       .filter((task) => task.status !== "Done")
       .map((task) => createWorkItemSummary(task))
@@ -213,6 +213,7 @@ function deriveHealth(
   tasks: ReadonlyArray<ProjectTask>,
   blockers: ReadonlyArray<ProjectDashboardBlockerSummary>,
   workSessions: ReadonlyArray<WorkSession>,
+  companyProgression: InternalSimulationProjectDashboardProviderContext["companyProgression"],
 ): ProjectDashboardHealthSummary {
   if (!project.enabled) {
     return {
@@ -228,7 +229,10 @@ function deriveHealth(
       status: "risk",
       label: "Project needs attention",
       reason: "Critical unfinished work or blockers are visible.",
-      signals: blockers.slice(0, 3).map((blocker) => blocker.label),
+      signals: [
+        ...blockers.slice(0, 3).map((blocker) => blocker.label),
+        ...createProgressionHealthSignals(companyProgression).slice(0, 2),
+      ],
     };
   }
 
@@ -237,7 +241,20 @@ function deriveHealth(
       status: "watch",
       label: "Project should be watched",
       reason: "A recent work session failed.",
-      signals: ["Failed work session"],
+      signals: [
+        "Failed work session",
+        ...createProgressionHealthSignals(companyProgression).slice(0, 2),
+      ],
+    };
+  }
+
+  const progressionSignals = createProgressionHealthSignals(companyProgression);
+  if (progressionSignals.length > 0) {
+    return {
+      status: "watch",
+      label: "Project should be watched",
+      reason: "Company progression still has milestone requirements.",
+      signals: progressionSignals.slice(0, 3),
     };
   }
 
@@ -258,6 +275,14 @@ function deriveHealth(
       : "Visible project tasks are moving through the workflow.",
     signals: [`${tasks.filter((task) => task.status === "Done").length} completed task(s)`],
   };
+}
+
+function createProgressionHealthSignals(
+  companyProgression: InternalSimulationProjectDashboardProviderContext["companyProgression"],
+) {
+  return (companyProgression?.requiredMilestones ?? [])
+    .filter((milestone) => !milestone.isMet)
+    .map((milestone) => `Progression milestone: ${milestone.label}`);
 }
 
 function createActivity(
