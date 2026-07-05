@@ -135,7 +135,12 @@ function collectProjectEmployeeSources(
   tasks: ReadonlyArray<ProjectTask>,
 ) {
   const assignedEmployeeIds = new Set(tasks.flatMap((task) => task.assigneeId ? [task.assigneeId] : []));
-  return sources.filter((source) => source.currentProject?.id === projectId || assignedEmployeeIds.has(source.employeeId));
+  const assignedEmployeeNames = new Set(tasks.flatMap((task) => task.assignee ? [task.assignee] : []));
+  return sources.filter((source) => (
+    source.currentProject?.id === projectId ||
+    assignedEmployeeIds.has(source.employeeId) ||
+    assignedEmployeeNames.has(source.name)
+  ));
 }
 
 function deriveProgressPercent(tasks: ReadonlyArray<ProjectTask>) {
