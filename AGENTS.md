@@ -52,6 +52,17 @@ Fix any validation failures before finishing.
 - Include validation results.
 - Commit only after all validations pass.
 
+## Multi-Agent Coordination
+
+This repository is worked on by both OpenAI Codex and Claude Code.
+
+- AGENTS.md remains the canonical instruction file for every agent, including Claude. `CLAUDE.md` is a pointer only and must not fork instructions.
+- Codex is the primary implementer. Claude's default role is reviewer and backup implementer, defined in `.ai-company/agents/reviewer.md`.
+- Git branches, pull requests, specs, tasks, and commits are the source of truth for coordination. Do not introduce a separate manually maintained status file.
+- `.specify/feature.json` and the SPECKIT-managed pointer below are hints about the last `/speckit-specify` or `/speckit-plan` invocation, not an authoritative record of the active feature. They can lag behind later task or implementation work. When it matters, determine the active feature from git state (unmerged branches, unchecked `tasks.md` items, recent commits) rather than from these files.
+- Review handoff: when a PR exists, reviews and findings belong on the PR (GitHub review or comments). When no PR exists yet, review notes are appended to `specs/<feature>/review.md` (created only when first needed) using `.specify/templates/review-template.md`. Every review records the reviewed commit SHA, a decision (Approved / Changes Requested), blocking findings, suggestions, and residual risks.
+- Claude does not edit or push to Codex's implementation branches while reviewing, per `.ai-company/agents/reviewer.md`. If Claude implements as backup, it works on its own branch.
+
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read specs/032-movement-preview-timestamps/plan.md
