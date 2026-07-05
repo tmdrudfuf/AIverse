@@ -168,6 +168,34 @@ describe("InternalSimulationProjectDashboardProvider", () => {
     expect(snapshot.sections.find((section) => section.id === "recent_activity")?.status).toBe("available");
   });
 
+  it("includes employee context for project tasks assigned by employee name only", () => {
+    const provider = new InternalSimulationProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      generatedAt: "2026-01-01T12:00:00.000Z",
+      projects: [createProject()],
+      tasks: [
+        createTask({
+          id: "task-name-only",
+          status: "In Progress",
+          assignee: "Ada",
+        }),
+      ],
+      employeeInsightSources: [
+        createInsightSource({
+          currentProject: createProject({ id: "other-project" }),
+          currentTask: createTask({ id: "other-task", projectId: "other-project" }),
+        }),
+      ],
+    }, "daily-proof");
+
+    expect(snapshot.employees).toEqual([expect.objectContaining({
+      employeeId: "employee-1",
+      name: "Ada",
+    })]);
+    expect(snapshot.sections.find((section) => section.id === "related_employees")?.status).toBe("available");
+  });
+
   it("keeps the provider internal-only and read-only by contract shape", () => {
     const provider = new InternalSimulationProjectDashboardProvider();
     const beforeProjects = [createProject()];
