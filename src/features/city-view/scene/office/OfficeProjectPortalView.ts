@@ -7,8 +7,15 @@ import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDash
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
-const DASHBOARD_SECTION_Y = 306;
 const DASHBOARD_ROW_GAP = 24;
+const DASHBOARD_TOP_PANEL_Y = 58;
+const DASHBOARD_SUMMARY_Y = 248;
+const DASHBOARD_SOURCE_LINE_HEIGHT = 16;
+const DASHBOARD_SOURCE_GAP = 8;
+const DASHBOARD_SOURCE_HEIGHT = 14;
+const DASHBOARD_SOURCE_TO_PROJECTS_GAP = 12;
+const DASHBOARD_MIN_PROJECTS_PANEL_Y = 316;
+const DASHBOARD_PROJECTS_HEADING_OFFSET = 12;
 
 export class OfficeProjectPortalView {
   private readonly content: Phaser.GameObjects.Container;
@@ -104,8 +111,17 @@ export class OfficeProjectPortalView {
 
   private renderList(state: ProjectPortalState) {
     const dashboardRows = createCompanyDashboardPanelRows(state.companyDashboardSnapshot);
+    const summaryText = wrapText(dashboardRows.summaryText, 82);
+    const sourceY = DASHBOARD_SUMMARY_Y
+      + countTextLines(summaryText) * DASHBOARD_SOURCE_LINE_HEIGHT
+      + DASHBOARD_SOURCE_GAP;
+    const projectsPanelY = Math.max(
+      DASHBOARD_MIN_PROJECTS_PANEL_Y,
+      sourceY + DASHBOARD_SOURCE_HEIGHT + DASHBOARD_SOURCE_TO_PROJECTS_GAP,
+    );
+    const dashboardSectionY = projectsPanelY + DASHBOARD_PROJECTS_HEADING_OFFSET;
 
-    this.addTerminalPanel(this.panelX + 20, this.panelY + 58, this.panelWidth - 40, 214);
+    this.addTerminalPanel(this.panelX + 20, this.panelY + DASHBOARD_TOP_PANEL_Y, this.panelWidth - 40, projectsPanelY - DASHBOARD_TOP_PANEL_Y - 10);
     this.addText(this.panelX + 28, this.panelY + 24, "AIverse Operating Terminal", titleStyle());
     this.addText(this.panelX + 44, this.panelY + 70, `[ACTIVE] ${dashboardRows.healthText}`, bodyStyle());
     this.addText(this.panelX + 44, this.panelY + 96, dashboardRows.employeeText, bodyStyle());
@@ -120,12 +136,13 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 200, wrapText(dashboardRows.productivityText, 82), mutedStyle());
     const focusMarker = state.selectedProjectIndex < 0 ? ">" : " ";
     this.addText(this.panelX + 44, this.panelY + 224, wrapText(`${focusMarker} [FOCUS] ${dashboardRows.focusText.replace("Focus: ", "")}`, 82), rowStyle(true, state.selectedProjectIndex < 0));
-    this.addText(this.panelX + 44, this.panelY + 248, wrapText(dashboardRows.summaryText, 82), mutedStyle());
-    this.addTerminalPanel(this.panelX + 20, this.panelY + 294, this.panelWidth - 40, 100);
-    this.addText(this.panelX + 28, this.panelY + DASHBOARD_SECTION_Y, "Projects", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + DASHBOARD_SUMMARY_Y, summaryText, mutedStyle());
+    this.addText(this.panelX + 44, this.panelY + sourceY, compactTextLine(`[SOURCE] ${dashboardRows.projectSourceText.replace("Sources: ", "")}`, 82), mutedStyle());
+    this.addTerminalPanel(this.panelX + 20, this.panelY + projectsPanelY, this.panelWidth - 40, 100);
+    this.addText(this.panelX + 28, this.panelY + dashboardSectionY, "Projects", headingStyle());
 
     state.projects.forEach((project, index) => {
-      const rowY = this.panelY + DASHBOARD_SECTION_Y + 30 + index * DASHBOARD_ROW_GAP;
+      const rowY = this.panelY + dashboardSectionY + 30 + index * DASHBOARD_ROW_GAP;
       const marker = index === state.selectedProjectIndex ? ">" : " ";
       const statusColumn = project.status.padEnd(11, " ");
       this.addText(
@@ -136,9 +153,9 @@ export class OfficeProjectPortalView {
       );
     });
 
-    this.addText(this.panelX + 390, this.panelY + DASHBOARD_SECTION_Y, "Linked Services", headingStyle());
+    this.addText(this.panelX + 390, this.panelY + dashboardSectionY, "Linked Services", headingStyle());
     state.services.forEach((service, index) => {
-      const rowY = this.panelY + DASHBOARD_SECTION_Y + 30 + index * DASHBOARD_ROW_GAP;
+      const rowY = this.panelY + dashboardSectionY + 30 + index * DASHBOARD_ROW_GAP;
       this.addText(this.panelX + 406, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
   }
@@ -507,6 +524,19 @@ function wrapText(text: string, maxLength: number) {
 
   if (currentLine) lines.push(currentLine);
   return lines.join("\n");
+}
+
+function countTextLines(text: string) {
+  return text.split("\n").length;
+}
+
+function compactTextLine(text: string, maxLength: number) {
+  if (text.length <= maxLength) return text;
+
+  const overflowIndicator = text.match(/;\s\+\d+ more$/)?.[0] ?? "";
+  const suffix = overflowIndicator ? `${overflowIndicator}...` : "...";
+  const maxTextLength = Math.max(0, maxLength - suffix.length);
+  return `${text.slice(0, maxTextLength).trimEnd()}${suffix}`;
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

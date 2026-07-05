@@ -387,6 +387,8 @@ export class OfficeProjectPortalController {
         workSessions: Object.values(this.state.workSessions).flat(),
         workstations: this.getWorkstationSnapshots(),
         companyProgression: this.getCompanyProgressionSnapshot(),
+        repositoryMappings: this.state.repositoryMappings,
+        repositorySummaries: this.state.repositorySummaries,
       }),
       companyFocus: this.getCompanyFocusSummary(),
     };

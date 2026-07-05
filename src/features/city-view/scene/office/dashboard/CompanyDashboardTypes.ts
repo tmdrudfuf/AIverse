@@ -116,6 +116,29 @@ export type CompanyDashboardProjectItem = {
   completedTaskCount: number;
   blockedTaskCount: number;
   progressPercent?: number;
+  sourceSignal: CompanyDashboardProjectSourceSignal;
+};
+
+export type CompanyDashboardProjectSourceKind = "internal" | "github" | (string & {});
+
+export type CompanyDashboardProjectSourceStatus =
+  | "internal"
+  | "fresh"
+  | "stale"
+  | "unavailable"
+  | "unauthenticated"
+  | "rate_limited"
+  | "offline"
+  | "unknown";
+
+export type CompanyDashboardProjectSourceSignal = {
+  kind: CompanyDashboardProjectSourceKind;
+  label: string;
+  status: CompanyDashboardProjectSourceStatus;
+  statusLabel: string;
+  reason?: string;
+  sourceId?: string;
+  refreshedAt?: string;
 };
 
 export type ProjectDashboardSummary = {

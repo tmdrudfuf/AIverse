@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { InternalSimulationDashboardProvider } from "./InternalSimulationDashboardProvider";
+import type {
+  AIverseProjectRepositoryMapping,
+  GitHubRepositorySummary,
+} from "../github/GitHubRepositoryTypes";
+import { createGitHubExternalSourceStatus } from "../github/GitHubRepositoryTypes";
 import type { EmployeeInsightSource } from "../insight/EmployeeInsightTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { ProjectTask } from "../tasks/ProjectTaskTypes";
@@ -229,6 +234,153 @@ describe("InternalSimulationDashboardProvider", () => {
 
     expect(snapshot.generatedAt).toBe("2026-01-01T11:30:00.000Z");
   });
+
+  it("derives compact project source signals from internal and GitHub source status data", () => {
+    const provider = new InternalSimulationDashboardProvider();
+
+    const snapshot = provider.getSnapshot({
+      projects: [
+        createProject({ id: "internal-project", name: "Internal Project" }),
+        createProject({ id: "fresh-project", name: "Fresh Project" }),
+        createProject({ id: "missing-summary", name: "Missing Summary" }),
+        createProject({ id: "stale-project", name: "Stale Project" }),
+        createProject({ id: "private-project", name: "Private Project" }),
+        createProject({ id: "rate-limited-project", name: "Rate Limited Project" }),
+        createProject({ id: "offline-project", name: "Offline Project" }),
+        createProject({ id: "unknown-project", name: "Unknown Project" }),
+      ],
+      repositoryMappings: [
+        createRepositoryMapping({ projectId: "fresh-project" }),
+        createRepositoryMapping({ projectId: "missing-summary" }),
+        createRepositoryMapping({ projectId: "stale-project" }),
+        createRepositoryMapping({ projectId: "private-project", visibility: "private" }),
+        createRepositoryMapping({ projectId: "rate-limited-project" }),
+        createRepositoryMapping({ projectId: "offline-project" }),
+        createRepositoryMapping({ projectId: "unknown-project" }),
+      ],
+      repositorySummaries: {
+        "fresh-project": createRepositorySummary({ connectionStatus: "connected" }),
+        "stale-project": createRepositorySummary({
+          connectionStatus: "connected",
+          sourceStatus: createGitHubExternalSourceStatus("stale", {
+            reason: "Cached repository data is outside the freshness window.",
+            lastSuccessfulFetchAt: "2026-01-01T09:00:00.000Z",
+          }),
+        }),
+        "rate-limited-project": createRepositorySummary({
+          connectionStatus: "error",
+          sourceStatus: createGitHubExternalSourceStatus("rate_limited", {
+            reason: "GitHub rate limit prevents refresh.",
+          }),
+        }),
+        "offline-project": createRepositorySummary({
+          connectionStatus: "error",
+          sourceStatus: createGitHubExternalSourceStatus("offline", {
+            reason: "Network is unavailable.",
+          }),
+        }),
+        "unknown-project": createRepositorySummary({ connectionStatus: "loading" }),
+      },
+    });
+
+    const sourceSignals = new Map(snapshot.projects.projects.map((project) => [project.projectId, project.sourceSignal]));
+
+    expect(sourceSignals.get("internal-project")).toMatchObject({
+      kind: "internal",
+      label: "Internal",
+      status: "internal",
+      statusLabel: "Internal",
+    });
+    expect(sourceSignals.get("fresh-project")).toMatchObject({
+      kind: "github",
+      label: "GitHub linked",
+      status: "fresh",
+      statusLabel: "Fresh",
+      refreshedAt: "2026-01-01T10:00:00.000Z",
+    });
+    expect(sourceSignals.get("missing-summary")).toMatchObject({
+      kind: "github",
+      status: "unavailable",
+      statusLabel: "Unavailable",
+      reason: "GitHub repository summary has not been loaded.",
+    });
+    expect(sourceSignals.get("stale-project")).toMatchObject({
+      kind: "github",
+      status: "stale",
+      statusLabel: "Stale",
+    });
+    expect(sourceSignals.get("private-project")).toMatchObject({
+      kind: "github",
+      status: "unauthenticated",
+      statusLabel: "Unauthenticated",
+      reason: "Private repositories are deferred until credential handling is approved.",
+    });
+    expect(sourceSignals.get("rate-limited-project")).toMatchObject({
+      kind: "github",
+      status: "rate_limited",
+      statusLabel: "Rate limited",
+    });
+    expect(sourceSignals.get("offline-project")).toMatchObject({
+      kind: "github",
+      status: "offline",
+      statusLabel: "Offline",
+    });
+    expect(sourceSignals.get("unknown-project")).toMatchObject({
+      kind: "github",
+      status: "unknown",
+      statusLabel: "Unknown",
+    });
+  });
+
+  it("does not mutate simulation or repository inputs while deriving project source signals", () => {
+    const provider = new InternalSimulationDashboardProvider();
+    const companyProgression = {
+      companyLevel: 2,
+      companyStage: "smallOffice" as const,
+      floorCount: 1,
+      layoutId: "small-office",
+      maxEmployees: 6,
+      requiredMilestones: [],
+      unlockedOfficeZones: ["workspace" as const],
+    };
+    const projects = [createProject()];
+    const tasks = [createTask({ id: "task-1", status: "In Progress" })];
+    const employeeInsightSources = [createInsightSource({ employeeId: "employee-1", aiState: "working" })];
+    const workSessions = [createWorkSession({ id: "session-1", status: "running" })];
+    const repositoryMappings = [createRepositoryMapping({ projectId: "daily-proof" })];
+    const repositorySummaries = {
+      "daily-proof": createRepositorySummary({ connectionStatus: "connected" }),
+    };
+    const before = structuredClone({
+      companyProgression,
+      projects,
+      tasks,
+      employeeInsightSources,
+      workSessions,
+      repositoryMappings,
+      repositorySummaries,
+    });
+
+    provider.getSnapshot({
+      companyProgression,
+      projects,
+      tasks,
+      employeeInsightSources,
+      workSessions,
+      repositoryMappings,
+      repositorySummaries,
+    });
+
+    expect({
+      companyProgression,
+      projects,
+      tasks,
+      employeeInsightSources,
+      workSessions,
+      repositoryMappings,
+      repositorySummaries,
+    }).toEqual(before);
+  });
 });
 
 function createInsightSource(options: {
@@ -304,5 +456,42 @@ function createWorkSession(options: Partial<WorkSession> = {}): WorkSession {
     summary: options.summary,
     resultType: options.resultType,
     activityIds: options.activityIds,
+  };
+}
+
+function createRepositoryMapping(
+  options: Partial<AIverseProjectRepositoryMapping> & { visibility?: AIverseProjectRepositoryMapping["repository"]["visibility"] },
+): AIverseProjectRepositoryMapping {
+  const projectId = options.projectId ?? "daily-proof";
+
+  return {
+    projectId,
+    sourceId: options.sourceId ?? `github-${projectId}`,
+    enabled: options.enabled ?? true,
+    repository: options.repository ?? {
+      owner: "tmdrudfuf",
+      name: projectId,
+      url: `https://github.com/tmdrudfuf/${projectId}`,
+      visibility: options.visibility ?? "public",
+      defaultBranchHint: "main",
+    },
+    createdAt: options.createdAt,
+    updatedAt: options.updatedAt,
+  };
+}
+
+function createRepositorySummary(options: Partial<GitHubRepositorySummary> = {}): GitHubRepositorySummary {
+  return {
+    owner: options.owner ?? "tmdrudfuf",
+    name: options.name ?? "daily-proof",
+    defaultBranch: options.defaultBranch ?? "main",
+    latestCommit: options.latestCommit,
+    openIssueCount: options.openIssueCount ?? 0,
+    openPullRequestCount: options.openPullRequestCount ?? 0,
+    checkStatus: options.checkStatus,
+    sourceStatus: options.sourceStatus,
+    lastUpdatedAt: options.lastUpdatedAt ?? "2026-01-01T10:00:00.000Z",
+    connectionStatus: options.connectionStatus ?? "connected",
+    errorMessage: options.errorMessage,
   };
 }

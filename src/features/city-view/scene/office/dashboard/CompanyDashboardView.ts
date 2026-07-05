@@ -8,6 +8,7 @@ export type CompanyDashboardPanelRows = {
   roleText: string;
   projectText: string;
   projectProgressText: string;
+  projectSourceText: string;
   workloadText: string;
   occupancyText: string;
   bottleneckText: string;
@@ -29,6 +30,7 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
       roleText: "Roles: Unavailable",
       projectText: "Projects: Unavailable",
       projectProgressText: "Progress: Unavailable",
+      projectSourceText: "Sources: Unavailable",
       workloadText: "Workload: Unavailable",
       occupancyText: "Office: Unavailable",
       bottleneckText: "Bottlenecks: None visible",
@@ -49,6 +51,7 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
     roleText: `Roles: ${formatCounts(snapshot.employees.byRole, "role")}`,
     projectText: `Projects: ${snapshot.projects.activeProjects}/${snapshot.projects.totalProjects} active`,
     projectProgressText: `Progress: ${snapshot.projects.averageProgress ?? 0}% average`,
+    projectSourceText: createProjectSourceText(snapshot),
     workloadText: `Workload: ${snapshot.workload.unassignedTaskCount} unassigned, ${snapshot.workload.activeWorkSessionCount} running`,
     occupancyText: `Office: ${snapshot.occupancy.occupiedWorkstations} occupied, ${snapshot.occupancy.availableWorkstations} open`,
     bottleneckText: snapshot.bottlenecks[0]?.label
@@ -63,6 +66,22 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
     summaryText: snapshot.companySummary,
     activityText: snapshot.activity[0]?.label ?? "Activity: No recent company activity",
   };
+}
+
+function createProjectSourceText(snapshot: CompanyDashboardSnapshot) {
+  if (snapshot.projects.projects.length === 0) return "Sources: No projects";
+
+  const visibleProjects = snapshot.projects.projects.slice(0, 4);
+  const hiddenProjectCount = snapshot.projects.projects.length - visibleProjects.length;
+  const projectSignals = visibleProjects.map((project) => {
+    const status = project.sourceSignal.status === "internal" ? "" : ` [${project.sourceSignal.statusLabel}]`;
+    return `${project.name}: ${project.sourceSignal.label}${status}`;
+  });
+
+  return `Sources: ${[
+    ...projectSignals,
+    ...(hiddenProjectCount > 0 ? [`+${hiddenProjectCount} more`] : []),
+  ].join("; ")}`;
 }
 
 function formatCounts<TItem extends Record<TKey, string> & { count: number }, TKey extends keyof TItem>(
