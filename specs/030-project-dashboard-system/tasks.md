@@ -51,6 +51,7 @@
 - [x] T017 [US2] Add view tests for populated sections, partial data, unavailable project state, empty active work, empty employees, neutral blockers, and advisory focus text in `src/features/city-view/scene/office/project-dashboard/ProjectDashboardView.test.ts`.
 - [x] T017a [US2] Include existing company progression signals in internal project dashboard recent activity derivation.
 - [x] T017b [US2] Include supported name-only task assignees in internal project dashboard related employee derivation.
+- [x] T017c [US2] Include open company progression milestones in internal project dashboard health derivation.
 
 ---
 
