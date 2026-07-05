@@ -76,6 +76,15 @@ describe("CompanyDashboardTypes provider-neutral helpers", () => {
     expect(snapshot.sourceAvailability).not.toBe(sourceAvailability);
   });
 
+  it("keeps default project source signals empty when no projects are visible", () => {
+    const snapshot = createEmptyCompanyDashboardSnapshot(
+      INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
+      "2026-01-01T00:00:00.000Z",
+    );
+
+    expect(snapshot.projects.projects).toEqual([]);
+  });
+
   it("defines the provider interface around snapshots instead of implementation-specific data", () => {
     const provider: CompanyDashboardProvider = {
       id: INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,

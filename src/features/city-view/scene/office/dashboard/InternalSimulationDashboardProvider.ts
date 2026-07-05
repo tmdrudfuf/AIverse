@@ -1,6 +1,14 @@
 import type { EmployeeConversation } from "../conversations/EmployeeConversationTypes";
 import type { Employee } from "../employees/EmployeeTypes";
 import type { EmployeeSimulationSnapshot } from "../employees/EmployeeSimulationTypes";
+import type {
+  AIverseProjectRepositoryMapping,
+  GitHubRepositorySummary,
+} from "../github/GitHubRepositoryTypes";
+import {
+  createGitHubExternalSourceStatusFromSummary,
+  validateAIverseProjectRepositoryMapping,
+} from "../github/GitHubRepositoryTypes";
 import type { EmployeeInsightSource } from "../insight/EmployeeInsightTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { CompanyProgressionSnapshot } from "../progression/CompanyProgressionTypes";
@@ -16,6 +24,7 @@ import {
   type CompanyDashboardEmployeeWorkItem,
   type CompanyDashboardProvider,
   type CompanyDashboardProviderContext,
+  type CompanyDashboardProjectSourceSignal,
   type CompanyDashboardSectionAvailability,
   type CompanyDashboardSourceAvailability,
   type CompanyDashboardSnapshot,
@@ -39,6 +48,8 @@ export type InternalSimulationDashboardProviderContext = CompanyDashboardProvide
   workstations?: ReadonlyArray<WorkstationSnapshot>;
   conversations?: ReadonlyArray<EmployeeConversation>;
   companyProgression?: CompanyProgressionSnapshot;
+  repositoryMappings?: ReadonlyArray<AIverseProjectRepositoryMapping>;
+  repositorySummaries?: Record<string, GitHubRepositorySummary>;
 };
 
 export class InternalSimulationDashboardProvider implements CompanyDashboardProvider {
@@ -60,7 +71,12 @@ export class InternalSimulationDashboardProvider implements CompanyDashboardProv
     );
 
     const employees = createEmployeeSummary(context.employees ?? [], employeeSources);
-    const projectSummary = createProjectSummary(projects, tasks);
+    const projectSummary = createProjectSummary(
+      projects,
+      tasks,
+      context.repositoryMappings ?? [],
+      context.repositorySummaries ?? {},
+    );
     const workload = createWorkloadSummary(tasks, workSessions, employees.currentWork);
     const occupancy = createOccupancySummary(workstations, employeeSources);
     const bottlenecks = createBottlenecks(tasks, workload, projectSummary);
@@ -208,6 +224,8 @@ function createEmployeeSummary(
 function createProjectSummary(
   projects: ReadonlyArray<ProjectPortalProject>,
   tasks: ReadonlyArray<ProjectTask>,
+  repositoryMappings: ReadonlyArray<AIverseProjectRepositoryMapping>,
+  repositorySummaries: Readonly<Record<string, GitHubRepositorySummary>>,
 ): ProjectDashboardSummary {
   const projectItems = projects.map((project) => {
     const projectTasks = tasks.filter((task) => task.projectId === project.id);
@@ -219,6 +237,7 @@ function createProjectSummary(
       completedTaskCount: projectTasks.filter((task) => task.status === "Done").length,
       blockedTaskCount: projectTasks.filter((task) => task.priority === "Critical" && task.status !== "Done").length,
       progressPercent: projectTasks.length > 0 ? average(projectTasks.map((task) => getTaskProgress(task.status))) : undefined,
+      sourceSignal: createProjectSourceSignal(project.id, repositoryMappings, repositorySummaries),
     };
   });
 
@@ -231,6 +250,38 @@ function createProjectSummary(
       ? average(projectItems.map((project) => project.progressPercent ?? 0))
       : undefined,
     projects: projectItems,
+  };
+}
+
+function createProjectSourceSignal(
+  projectId: string,
+  repositoryMappings: ReadonlyArray<AIverseProjectRepositoryMapping>,
+  repositorySummaries: Readonly<Record<string, GitHubRepositorySummary>>,
+): CompanyDashboardProjectSourceSignal {
+  const mapping = repositoryMappings.find((item) => item.projectId === projectId);
+
+  if (!mapping) {
+    return {
+      kind: "internal",
+      label: "Internal",
+      status: "internal",
+      statusLabel: "Internal",
+    };
+  }
+
+  const validation = validateAIverseProjectRepositoryMapping(mapping);
+  const status = validation.isValid
+    ? createGitHubExternalSourceStatusFromSummary(repositorySummaries[projectId])
+    : validation.status;
+
+  return {
+    kind: "github",
+    label: "GitHub linked",
+    status: status.state,
+    statusLabel: status.label,
+    reason: status.reason,
+    sourceId: mapping.sourceId,
+    refreshedAt: status.lastSuccessfulFetchAt,
   };
 }
 
