@@ -249,6 +249,31 @@ describe("GitHubProjectDashboardProvider", () => {
       nextAttentionLabel: "Review internal simulation context for advisory guidance.",
     });
   });
+
+  it("keeps fixture-style source summaries provider-neutral for future public reads", () => {
+    const provider = new GitHubProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      projects: [createProject()],
+      repositoryMappings: [createMapping()],
+      repositorySummaries: {
+        "daily-proof": createSummary(),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.source.signals?.map((signal) => signal.id)).toEqual([
+      "repository",
+      "default-branch",
+      "open-issues",
+      "open-pull-requests",
+      "recent-commit",
+      "checks",
+      "latest-activity",
+    ]);
+    expect(snapshot.source).not.toHaveProperty("rawResponse");
+    expect(snapshot.source).not.toHaveProperty("token");
+    expect(snapshot.source).not.toHaveProperty("sync");
+  });
 });
 
 function createProject(): ProjectPortalProject {

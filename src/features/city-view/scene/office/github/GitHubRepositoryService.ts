@@ -15,7 +15,7 @@ export class GitHubRepositoryService {
         openIssueCount: 0,
         openPullRequestCount: 0,
         connectionStatus: "error",
-        errorMessage: error instanceof Error ? error.message : "Unable to load repository summary.",
+        errorMessage: "Unable to load repository summary.",
       };
     }
   }

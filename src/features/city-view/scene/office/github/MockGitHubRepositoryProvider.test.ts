@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { MockGitHubRepositoryProvider } from "./MockGitHubRepositoryProvider";
+import { GITHUB_PUBLIC_READ_SUMMARY_FIELDS } from "./GitHubRepositoryTypes";
 
 describe("MockGitHubRepositoryProvider", () => {
   it("returns deterministic rich fixture summaries for Daily Proof", async () => {
@@ -117,5 +118,21 @@ describe("MockGitHubRepositoryProvider", () => {
     }
 
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns summaries that stay within the approved public read boundary", async () => {
+    const provider = new MockGitHubRepositoryProvider();
+    const summaries = await Promise.all([
+      provider.getRepositorySummary("daily-proof"),
+      provider.getRepositorySummary("daily-proof-stale"),
+      provider.getRepositorySummary("daily-proof-failing"),
+      provider.getRepositorySummary("missing-project"),
+    ]);
+
+    summaries.forEach((summary) => {
+      expect(Object.keys(summary).every((key) => GITHUB_PUBLIC_READ_SUMMARY_FIELDS.includes(
+        key as (typeof GITHUB_PUBLIC_READ_SUMMARY_FIELDS)[number],
+      ))).toBe(true);
+    });
   });
 });
