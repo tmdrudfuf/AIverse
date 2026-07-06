@@ -377,6 +377,18 @@ describe("InternalSimulationDashboardProvider", () => {
       statusLabel: "Unavailable",
       reason: "GitHub repository summary has not been loaded.",
     });
+    expect(Object.keys(sourceSignals.get("daily-proof") ?? {}).sort()).toEqual([
+      "kind",
+      "label",
+      "reason",
+      "refreshedAt",
+      "sourceId",
+      "status",
+      "statusLabel",
+    ]);
+    expect(sourceSignals.get("daily-proof")).not.toHaveProperty("rawResponse");
+    expect(sourceSignals.get("daily-proof")).not.toHaveProperty("token");
+    expect(sourceSignals.get("daily-proof")).not.toHaveProperty("sync");
   });
 
   it("does not mutate simulation or repository inputs while deriving project source signals", () => {

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   createGitHubExternalSourceStatus,
+  createGitHubExternalSourceStatusFromSummary,
   createGitHubRepositorySnapshot,
+  GITHUB_PUBLIC_READ_SUMMARY_FIELDS,
   type AIverseProjectRepositoryMapping,
   type GitHubRepositorySummary,
   validateAIverseProjectRepositoryMapping,
@@ -124,6 +126,73 @@ describe("GitHub repository mapping and source status", () => {
         label: "Fresh",
         reason: "Local fixture repository data is current.",
       },
+    });
+  });
+
+  it("defines the approved public read summary boundary", () => {
+    expect(GITHUB_PUBLIC_READ_SUMMARY_FIELDS).toEqual([
+      "owner",
+      "name",
+      "defaultBranch",
+      "latestCommit",
+      "openIssueCount",
+      "openPullRequestCount",
+      "checkStatus",
+      "sourceStatus",
+      "lastUpdatedAt",
+      "connectionStatus",
+      "errorMessage",
+    ]);
+    expect(GITHUB_PUBLIC_READ_SUMMARY_FIELDS).not.toEqual(expect.arrayContaining([
+      "token",
+      "credentials",
+      "auth",
+      "sync",
+      "webhook",
+      "mutation",
+      "issues",
+      "pullRequests",
+      "rawResponse",
+    ]));
+  });
+
+  it.each([
+    ["connected", undefined, "fresh", "Fresh"],
+    ["loading", undefined, "unknown", "Unknown"],
+    ["not_connected", "Repository data is not configured.", "unavailable", "Unavailable"],
+    ["error", "Unable to load repository summary.", "unavailable", "Unavailable"],
+  ] as const)("maps %s connection summaries into display-safe source status", (connectionStatus, errorMessage, state, label) => {
+    const summary = createSummary({
+      connectionStatus,
+      errorMessage,
+    });
+    summary.sourceStatus = undefined;
+    const status = createGitHubExternalSourceStatusFromSummary(summary);
+
+    expect(status).toMatchObject({ state, label });
+    expect(status.reason ?? "").not.toContain("token");
+  });
+
+  it.each([
+    ["rate_limited", "Rate limited"],
+    ["offline", "Offline"],
+    ["stale", "Stale"],
+    ["unavailable", "Unavailable"],
+    ["unknown", "Unknown"],
+    ["unauthenticated", "Unauthenticated"],
+  ] as const)("preserves explicit %s source status from provider summaries", (state, label) => {
+    const status = createGitHubExternalSourceStatusFromSummary(createSummary({
+      sourceStatus: createGitHubExternalSourceStatus(state, {
+        reason: `${label} public-read preflight state.`,
+      }),
+    }));
+
+    expect(status).toEqual({
+      state,
+      label,
+      reason: `${label} public-read preflight state.`,
+      lastSuccessfulFetchAt: undefined,
+      nextRefreshAllowedAt: undefined,
     });
   });
 });

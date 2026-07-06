@@ -104,6 +104,22 @@ export type GitHubRepositorySummary = {
   errorMessage?: string;
 };
 
+export const GITHUB_PUBLIC_READ_SUMMARY_FIELDS = [
+  "owner",
+  "name",
+  "defaultBranch",
+  "latestCommit",
+  "openIssueCount",
+  "openPullRequestCount",
+  "checkStatus",
+  "sourceStatus",
+  "lastUpdatedAt",
+  "connectionStatus",
+  "errorMessage",
+] as const satisfies readonly (keyof GitHubRepositorySummary)[];
+
+export type GitHubPublicReadSummaryField = typeof GITHUB_PUBLIC_READ_SUMMARY_FIELDS[number];
+
 const SOURCE_STATUS_LABELS: Record<GitHubExternalSourceStatusState, string> = {
   fresh: "Fresh",
   stale: "Stale",
