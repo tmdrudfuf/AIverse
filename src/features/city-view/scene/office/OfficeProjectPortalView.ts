@@ -16,6 +16,12 @@ const DASHBOARD_SOURCE_HEIGHT = 14;
 const DASHBOARD_SOURCE_TO_PROJECTS_GAP = 12;
 const DASHBOARD_MIN_PROJECTS_PANEL_Y = 316;
 const DASHBOARD_PROJECTS_HEADING_OFFSET = 12;
+const PROJECT_DASHBOARD_LOWER_PANEL_Y = 282;
+const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 294;
+const PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT = 14;
+const PROJECT_DASHBOARD_LOWER_ROW_GAP = 4;
+const PROJECT_DASHBOARD_LOWER_PANEL_PADDING = 10;
+const PROJECT_DASHBOARD_LOWER_WRAP_LENGTH = 78;
 
 export class OfficeProjectPortalView {
   private readonly content: Phaser.GameObjects.Container;
@@ -192,7 +198,7 @@ export class OfficeProjectPortalView {
     const rightPanelX = this.panelX + 356;
     const topPanelY = this.panelY + 58;
     const sectionPanelY = this.panelY + 128;
-    const bottomPanelY = this.panelY + 292;
+    const bottomPanelY = this.panelY + PROJECT_DASHBOARD_LOWER_PANEL_Y;
 
     this.addTerminalPanel(this.panelX + 18, topPanelY, this.panelWidth - 36, 58);
     this.addText(this.panelX + 28, this.panelY + 24, rows.title, projectTitleStyle());
@@ -222,18 +228,22 @@ export class OfficeProjectPortalView {
       this.addText(rightPanelX + 12, rowY, wrapText(`> ${row}`, 32), projectBodyStyle());
     });
 
-    this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, 88);
-    this.addText(this.panelX + 34, this.panelY + 304, wrapText(`[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, 78), projectMutedStyle());
-    this.addText(this.panelX + 34, this.panelY + 326, wrapText(`[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, 78), projectMutedStyle());
-    const sourceSignalRows = rows.sourceSignalRows;
-    if (sourceSignalRows.length > 0) {
-      this.addText(this.panelX + 34, this.panelY + 348, wrapText(`[SOURCE] ${sourceSignalRows[0]}`, 78), projectMutedStyle());
-      this.addText(this.panelX + 34, this.panelY + 370, wrapText(`[SYNC] ${sourceSignalRows.slice(1).join(" | ")}`, 78), projectMutedStyle());
-      return;
-    }
+    const lowerRows = prepareProjectDashboardLowerRows(createProjectDashboardLowerRows(rows));
+    const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(
+      lowerRows,
+      this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y,
+    );
+    this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, lowerPanelHeight);
+    this.renderProjectDashboardLowerRows(lowerRows);
+  }
 
-    this.addText(this.panelX + 34, this.panelY + 348, wrapText(`[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, 78), projectMutedStyle());
-    this.addText(this.panelX + 34, this.panelY + 370, wrapText(`[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, 78), projectMutedStyle());
+  private renderProjectDashboardLowerRows(rows: ProjectDashboardRenderedLowerRow[]) {
+    let rowY = this.panelY + PROJECT_DASHBOARD_LOWER_ROW_START_Y;
+
+    rows.forEach((row) => {
+      this.addText(this.panelX + 34, rowY, row.text, projectMutedStyle());
+      rowY += countTextLines(row.text) * PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT + PROJECT_DASHBOARD_LOWER_ROW_GAP;
+    });
   }
 
   private renderDetail(state: ProjectPortalState) {
@@ -504,6 +514,61 @@ function getLatestWorkSession(state: ProjectPortalState, task: ProjectTask) {
   return state.workSessions[task.id]?.[0];
 }
 
+type ProjectDashboardLowerRow = {
+  text: string;
+  maxLines: number;
+};
+
+type ProjectDashboardRenderedLowerRow = {
+  text: string;
+};
+
+function createProjectDashboardLowerRows(rows: ReturnType<typeof createProjectDashboardPanelRows>): ProjectDashboardLowerRow[] {
+  const sourceSignalRows = rows.sourceSignalRows;
+  const lowerRows: ProjectDashboardLowerRow[] = [
+    { text: `[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, maxLines: 1 },
+    { text: `[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, maxLines: 1 },
+    { text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`, maxLines: 2 },
+    { text: `[ATTENTION] ${rows.advisoryNextText.replace("Next attention: ", "")}`, maxLines: 1 },
+  ];
+
+  if (sourceSignalRows.length > 0) {
+    lowerRows.push({ text: `[SOURCE] ${sourceSignalRows[0]}`, maxLines: 1 });
+    if (sourceSignalRows.length > 1) {
+      lowerRows.push({ text: `[SYNC] ${sourceSignalRows.slice(1).join(" | ")}`, maxLines: 1 });
+    }
+  }
+
+  if (sourceSignalRows.length === 0) {
+    lowerRows.push(
+      { text: `[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, maxLines: 1 },
+      { text: `[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, maxLines: 1 },
+    );
+  }
+
+  return lowerRows;
+}
+
+function prepareProjectDashboardLowerRows(rows: ProjectDashboardLowerRow[]): ProjectDashboardRenderedLowerRow[] {
+  return rows.map((row) => ({
+    text: wrapAndClampText(row.text, PROJECT_DASHBOARD_LOWER_WRAP_LENGTH, row.maxLines),
+  }));
+}
+
+function calculateProjectDashboardLowerPanelHeight(rows: ProjectDashboardRenderedLowerRow[], maxHeight: number) {
+  const contentHeight = rows.reduce((height, row, index) => {
+    const gap = index === rows.length - 1 ? 0 : PROJECT_DASHBOARD_LOWER_ROW_GAP;
+    return height + countTextLines(row.text) * PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT + gap;
+  }, 0);
+
+  const desiredHeight = contentHeight
+    + PROJECT_DASHBOARD_LOWER_ROW_START_Y
+    - PROJECT_DASHBOARD_LOWER_PANEL_Y
+    + PROJECT_DASHBOARD_LOWER_PANEL_PADDING;
+
+  return Math.min(desiredHeight, maxHeight);
+}
+
 function wrapText(text: string, maxLength: number) {
   if (text.length <= maxLength) return text;
 
@@ -514,8 +579,14 @@ function wrapText(text: string, maxLength: number) {
   words.forEach((word) => {
     const nextLine = currentLine ? `${currentLine} ${word}` : word;
     if (nextLine.length > maxLength) {
-      lines.push(currentLine);
-      currentLine = word;
+      if (currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+        return;
+      }
+
+      lines.push(word);
+      currentLine = "";
       return;
     }
 
@@ -524,6 +595,23 @@ function wrapText(text: string, maxLength: number) {
 
   if (currentLine) lines.push(currentLine);
   return lines.join("\n");
+}
+
+function wrapAndClampText(text: string, maxLength: number, maxLines: number) {
+  if (maxLines === 1) return compactTextLine(text, maxLength);
+
+  const wrappedText = wrapText(text, maxLength);
+  const lines = wrappedText.split("\n");
+  if (lines.length <= maxLines) return wrappedText;
+
+  const visibleLines = lines.slice(0, maxLines);
+  visibleLines[visibleLines.length - 1] = appendEllipsis(visibleLines[visibleLines.length - 1], maxLength);
+  return visibleLines.join("\n");
+}
+
+function appendEllipsis(text: string, maxLength: number) {
+  if (text.length <= maxLength - 3) return `${text}...`;
+  return `${text.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 function countTextLines(text: string) {

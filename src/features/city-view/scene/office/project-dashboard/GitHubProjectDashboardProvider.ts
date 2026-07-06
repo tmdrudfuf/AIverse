@@ -103,6 +103,7 @@ export class GitHubProjectDashboardProvider implements ProjectDashboardProvider 
         summary: "GitHub source data does not assign employee focus.",
       },
       nextSuggestedFocus: undefined,
+      advisory: createGitHubAdvisorySignal(),
       source: {
         sourceType: "github",
         sourceId: mapping.sourceId,
@@ -123,6 +124,7 @@ export class GitHubProjectDashboardProvider implements ProjectDashboardProvider 
         createProjectDashboardSectionAvailability("recent_activity", "Recent Activity", activity.length > 0 ? "available" : "empty"),
         createProjectDashboardSectionAvailability("related_focus", "Related Focus", "empty"),
         createProjectDashboardSectionAvailability("project_health", "Project Health", "available"),
+        createProjectDashboardSectionAvailability("project_advisory", "Project Advisory", "empty", "GitHub source data does not provide local project-manager advisory signals."),
         createProjectDashboardSectionAvailability("source_metadata", "Source Metadata", "available"),
       ],
     };
@@ -167,6 +169,7 @@ function createGitHubUnavailableSnapshot(
       employeeFocusLabels: [],
       summary: "GitHub source data does not assign employee focus.",
     },
+    advisory: createGitHubAdvisorySignal(),
     source: {
       sourceType: "github",
       sourceId: mapping?.sourceId ?? projectId,
@@ -187,8 +190,18 @@ function createGitHubUnavailableSnapshot(
       createProjectDashboardSectionAvailability("recent_activity", "Recent Activity", "empty"),
       createProjectDashboardSectionAvailability("related_focus", "Related Focus", "empty"),
       createProjectDashboardSectionAvailability("project_health", "Project Health", "unavailable", status.reason),
+      createProjectDashboardSectionAvailability("project_advisory", "Project Advisory", "empty", "GitHub source data does not provide local project-manager advisory signals."),
       createProjectDashboardSectionAvailability("source_metadata", "Source Metadata", "available"),
     ],
+  };
+}
+
+function createGitHubAdvisorySignal() {
+  return {
+    status: "empty" as const,
+    healthSummary: "Local advisory unavailable",
+    topRiskLabel: "No local project-manager risk signal is available.",
+    nextAttentionLabel: "Review internal simulation context for advisory guidance.",
   };
 }
 

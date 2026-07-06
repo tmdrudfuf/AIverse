@@ -11,6 +11,8 @@ export type ProjectDashboardPanelRows = {
   employeeRows: string[];
   blockerText: string;
   activityText: string;
+  advisoryText: string;
+  advisoryNextText: string;
   relatedFocusText: string;
   nextSuggestedFocusText: string;
   sourceText: string;
@@ -30,6 +32,8 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       employeeRows: ["No employee context visible."],
       blockerText: "Blockers: None visible",
       activityText: "Activity: No recent project activity",
+      advisoryText: "Advisory: Unavailable",
+      advisoryNextText: "Next attention: Unavailable",
       relatedFocusText: "Focus: No project focus signals are visible.",
       nextSuggestedFocusText: "Next suggested focus: None",
       sourceText: "Source: Unavailable",
@@ -49,6 +53,8 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       employeeRows: ["No employee context visible."],
       blockerText: "Blockers: None visible",
       activityText: "Activity: No recent project activity",
+      advisoryText: createAdvisoryText(snapshot),
+      advisoryNextText: createAdvisoryNextText(snapshot),
       relatedFocusText: "Focus: No project focus is available.",
       nextSuggestedFocusText: "Next suggested focus: None",
       sourceText: `Source: ${snapshot.source.sourceType}`,
@@ -75,11 +81,21 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
     activityText: snapshot.activity[0]?.label
       ? `Activity: ${snapshot.activity[0].label}`
       : "Activity: No recent project activity",
+    advisoryText: createAdvisoryText(snapshot),
+    advisoryNextText: createAdvisoryNextText(snapshot),
     relatedFocusText: `Focus: ${snapshot.relatedFocus.summary}`,
     nextSuggestedFocusText: `Next suggested focus: ${snapshot.nextSuggestedFocus ?? "None"}`,
     sourceText: createSourceText(snapshot),
     sourceSignalRows: createSourceSignalRows(snapshot),
   };
+}
+
+function createAdvisoryText(snapshot: ProjectDashboardSnapshot) {
+  return `Advisory: ${snapshot.advisory.healthSummary} Risk: ${snapshot.advisory.topRiskLabel}`;
+}
+
+function createAdvisoryNextText(snapshot: ProjectDashboardSnapshot) {
+  return `Next attention: ${snapshot.advisory.nextAttentionLabel}`;
 }
 
 function createSourceText(snapshot: ProjectDashboardSnapshot) {

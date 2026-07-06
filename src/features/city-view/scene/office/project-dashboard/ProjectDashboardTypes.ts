@@ -25,6 +25,7 @@ export type ProjectDashboardSectionId =
   | "recent_activity"
   | "related_focus"
   | "project_health"
+  | "project_advisory"
   | "source_metadata";
 
 export type ProjectDashboardSectionAvailability = {
@@ -112,6 +113,14 @@ export type ProjectDashboardRelatedFocus = {
   summary: string;
 };
 
+export type ProjectDashboardAdvisorySignal = {
+  status: ProjectDashboardSectionStatus;
+  healthSummary: string;
+  topRiskLabel: string;
+  nextAttentionLabel: string;
+  generatedAt?: string;
+};
+
 export type ProjectDashboardSourceMetadata = {
   // Metadata only: future providers can map into this shape without making the dashboard call external systems.
   sourceType: ProjectDashboardSourceType;
@@ -145,6 +154,7 @@ export type ProjectDashboardSnapshot = {
   activity: ProjectDashboardActivityItem[];
   relatedFocus: ProjectDashboardRelatedFocus;
   nextSuggestedFocus?: string;
+  advisory: ProjectDashboardAdvisorySignal;
   source: ProjectDashboardSourceMetadata;
   externalSources?: ProjectDashboardSourceMetadata[];
   sections: ProjectDashboardSectionAvailability[];
@@ -219,6 +229,12 @@ export function createUnavailableProjectDashboardSnapshot(
       employeeFocusLabels: [],
       summary: "No project focus is available.",
     },
+    advisory: {
+      status: "unavailable",
+      healthSummary: "Advisory unavailable",
+      topRiskLabel: "Project unavailable",
+      nextAttentionLabel: "No project advisory can be shown.",
+    },
     source: {
       sourceType: "internal-simulation",
       sourceId: projectId,
@@ -233,6 +249,7 @@ export function createUnavailableProjectDashboardSnapshot(
       createProjectDashboardSectionAvailability("recent_activity", "Recent Activity", "empty"),
       createProjectDashboardSectionAvailability("related_focus", "Related Focus", "empty"),
       createProjectDashboardSectionAvailability("project_health", "Project Health", "unavailable"),
+      createProjectDashboardSectionAvailability("project_advisory", "Project Advisory", "unavailable"),
       createProjectDashboardSectionAvailability("source_metadata", "Source Metadata", "available"),
     ],
   };

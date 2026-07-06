@@ -1,3 +1,4 @@
+import type { ProjectManagementSuggestion, ProjectRiskSeverity } from "../ai/AIProjectManagerTypes";
 import type { EmployeeInsightSource } from "../insight/EmployeeInsightTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { ProjectTask, TaskActivity } from "../tasks/ProjectTaskTypes";
@@ -7,6 +8,7 @@ import {
   createUnavailableProjectDashboardSnapshot,
   INTERNAL_SIMULATION_PROJECT_DASHBOARD_PROVIDER_ID,
   type ProjectDashboardActivityItem,
+  type ProjectDashboardAdvisorySignal,
   type ProjectDashboardBlockerSummary,
   type ProjectDashboardEmployeeContext,
   type ProjectDashboardHealthSummary,
@@ -25,6 +27,7 @@ export type InternalSimulationProjectDashboardProviderContext = ProjectDashboard
   projects?: ReadonlyArray<ProjectPortalProject>;
   tasks?: ReadonlyArray<ProjectTask>;
   workSessions?: ReadonlyArray<WorkSession>;
+  projectManagementSuggestions?: Readonly<Record<string, ProjectManagementSuggestion>>;
 };
 
 export class InternalSimulationProjectDashboardProvider implements ProjectDashboardProvider {
@@ -67,6 +70,7 @@ export class InternalSimulationProjectDashboardProvider implements ProjectDashbo
     const activity = createActivity(tasks, workSessions, employeeSources, context.companyProgression, generatedAt).slice(0, 6);
     const relatedFocus = createRelatedFocus(context.companyFocus, employees);
     const progressPercent = deriveProgressPercent(tasks);
+    const advisory = createAdvisorySignal(context.projectManagementSuggestions?.[project.id], project.id);
 
     return {
       providerId: this.id,
@@ -91,6 +95,7 @@ export class InternalSimulationProjectDashboardProvider implements ProjectDashbo
       activity,
       relatedFocus,
       nextSuggestedFocus: createNextSuggestedFocus(health, blockers, context.companyFocus),
+      advisory,
       source: {
         sourceType: "internal-simulation",
         sourceId: project.id,
@@ -105,10 +110,43 @@ export class InternalSimulationProjectDashboardProvider implements ProjectDashbo
         createProjectDashboardSectionAvailability("recent_activity", "Recent Activity", activity.length > 0 ? "available" : "empty"),
         createProjectDashboardSectionAvailability("related_focus", "Related Focus", relatedFocus.employeeFocusLabels.length > 0 || Boolean(relatedFocus.companyFocusLabel) ? "available" : "empty"),
         createProjectDashboardSectionAvailability("project_health", "Project Health", "available"),
+        createProjectDashboardSectionAvailability("project_advisory", "Project Advisory", advisory.status),
         createProjectDashboardSectionAvailability("source_metadata", "Source Metadata", "available"),
       ],
     };
   }
+}
+
+function createAdvisorySignal(
+  suggestion: ProjectManagementSuggestion | undefined,
+  projectId: string,
+): ProjectDashboardAdvisorySignal {
+  if (!suggestion || suggestion.projectId !== projectId) {
+    return {
+      status: "empty",
+      healthSummary: "Local advisory waiting for project-manager signal.",
+      topRiskLabel: "No local advisory risk is available.",
+      nextAttentionLabel: "Open project work areas to prepare advisory context.",
+    };
+  }
+
+  const topRisk = suggestion.risks
+    .slice()
+    .sort((left, right) => getRiskSeverityRank(right.severity) - getRiskSeverityRank(left.severity))[0];
+
+  return {
+    status: "available",
+    healthSummary: suggestion.healthSummary.summary,
+    topRiskLabel: topRisk?.message ?? "No immediate advisory risk is visible.",
+    nextAttentionLabel: `${suggestion.nextAction.action}: ${suggestion.nextAction.reason}`,
+    generatedAt: suggestion.createdAt,
+  };
+}
+
+function getRiskSeverityRank(severity: ProjectRiskSeverity) {
+  if (severity === "high") return 3;
+  if (severity === "medium") return 2;
+  return 1;
 }
 
 function collectTasks(context: InternalSimulationProjectDashboardProviderContext): ProjectTask[] {
