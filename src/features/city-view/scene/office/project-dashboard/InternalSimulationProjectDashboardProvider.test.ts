@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { ProjectManagementSuggestion } from "../ai/AIProjectManagerTypes";
 import type { EmployeeInsightSource } from "../insight/EmployeeInsightTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { ProjectTask } from "../tasks/ProjectTaskTypes";
@@ -97,6 +98,10 @@ describe("InternalSimulationProjectDashboardProvider", () => {
     expect(snapshot.activity.map((activity) => activity.id)).toContain("task-activity-activity-1");
     expect(snapshot.relatedFocus.companyFocusLabel).toBe("Reduce project risk");
     expect(snapshot.nextSuggestedFocus).toBe("Reduce project risk");
+    expect(snapshot.advisory).toMatchObject({
+      status: "empty",
+      healthSummary: "Local advisory waiting for project-manager signal.",
+    });
     expect(snapshot.source).toEqual({
       sourceType: "internal-simulation",
       sourceId: "daily-proof",
@@ -123,8 +128,84 @@ describe("InternalSimulationProjectDashboardProvider", () => {
     expect(empty.activeWork).toEqual([]);
     expect(empty.employees).toEqual([]);
     expect(empty.blockers).toEqual([]);
+    expect(missing.advisory.status).toBe("unavailable");
+    expect(empty.advisory.status).toBe("empty");
     expect(empty.sections.find((section) => section.id === "active_work")?.status).toBe("empty");
     expect(empty.sections.find((section) => section.id === "related_employees")?.status).toBe("empty");
+  });
+
+  it("maps an existing matching project-management suggestion into advisory signal rows", () => {
+    const provider = new InternalSimulationProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      generatedAt: "2026-01-01T12:00:00.000Z",
+      projects: [createProject()],
+      tasks: [createTask({ id: "task-1", status: "In Progress" })],
+      projectManagementSuggestions: {
+        "daily-proof": createSuggestion({
+          risks: [
+            {
+              id: "risk-low",
+              projectId: "daily-proof",
+              severity: "low",
+              message: "Low-priority documentation risk.",
+              relatedTaskIds: ["task-1"],
+            },
+            {
+              id: "risk-high",
+              projectId: "daily-proof",
+              severity: "high",
+              message: "Critical dashboard work needs review.",
+              relatedTaskIds: ["task-1"],
+            },
+          ],
+        }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.advisory).toEqual({
+      status: "available",
+      healthSummary: "Daily Proof has 1 active task and 0 completed tasks.",
+      topRiskLabel: "Critical dashboard work needs review.",
+      nextAttentionLabel: "Reduce project risk: Critical dashboard work needs attention.",
+      generatedAt: "2026-01-01T11:45:00.000Z",
+    });
+    expect(snapshot.sections.find((section) => section.id === "project_advisory")?.status).toBe("available");
+  });
+
+  it("does not show another project's suggestion for the selected project", () => {
+    const provider = new InternalSimulationProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      generatedAt: "2026-01-01T12:00:00.000Z",
+      projects: [createProject()],
+      projectManagementSuggestions: {
+        "daily-proof": createSuggestion({ projectId: "other-project" }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.advisory).toMatchObject({
+      status: "empty",
+      healthSummary: "Local advisory waiting for project-manager signal.",
+      topRiskLabel: "No local advisory risk is available.",
+    });
+  });
+
+  it("shows a neutral advisory risk state when a matching suggestion has no risks", () => {
+    const provider = new InternalSimulationProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      generatedAt: "2026-01-01T12:00:00.000Z",
+      projects: [createProject()],
+      projectManagementSuggestions: {
+        "daily-proof": createSuggestion({ risks: [] }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.advisory).toMatchObject({
+      status: "available",
+      topRiskLabel: "No immediate advisory risk is visible.",
+    });
   });
 
   it("uses the latest known source timestamp when generatedAt is not supplied", () => {
@@ -233,13 +314,18 @@ describe("InternalSimulationProjectDashboardProvider", () => {
     const provider = new InternalSimulationProjectDashboardProvider();
     const beforeProjects = [createProject()];
     const beforeTasks = [createTask({ id: "task-1", status: "Todo" })];
+    const beforeSuggestions = {
+      "daily-proof": createSuggestion(),
+    };
     const projects = structuredClone(beforeProjects);
     const tasks = structuredClone(beforeTasks);
+    const projectManagementSuggestions = structuredClone(beforeSuggestions);
 
-    provider.getProjectSnapshot({ projects, tasks }, "daily-proof");
+    provider.getProjectSnapshot({ projects, tasks, projectManagementSuggestions }, "daily-proof");
 
     expect(projects).toEqual(beforeProjects);
     expect(tasks).toEqual(beforeTasks);
+    expect(projectManagementSuggestions).toEqual(beforeSuggestions);
     expect(Object.keys(provider)).toEqual(["id", "label"]);
   });
 });
@@ -315,5 +401,36 @@ function createWorkSession(options: Partial<WorkSession> = {}): WorkSession {
     summary: options.summary,
     resultType: options.resultType,
     activityIds: options.activityIds,
+  };
+}
+
+function createSuggestion(options: Partial<ProjectManagementSuggestion> = {}): ProjectManagementSuggestion {
+  const projectId = options.projectId ?? "daily-proof";
+  return {
+    projectId,
+    healthSummary: options.healthSummary ?? {
+      projectId,
+      status: "watch",
+      summary: "Daily Proof has 1 active task and 0 completed tasks.",
+      totalTasks: 1,
+      activeTasks: 1,
+      completedTasks: 0,
+      activeEmployees: 1,
+      recentActivityCount: 1,
+    },
+    risks: options.risks ?? [{
+      id: "risk-1",
+      projectId,
+      severity: "medium",
+      message: "Dashboard advisory needs review.",
+      relatedTaskIds: ["task-1"],
+    }],
+    nextAction: options.nextAction ?? {
+      projectId,
+      action: "Reduce project risk",
+      reason: "Critical dashboard work needs attention.",
+      taskId: "task-1",
+    },
+    createdAt: options.createdAt ?? "2026-01-01T11:45:00.000Z",
   };
 }

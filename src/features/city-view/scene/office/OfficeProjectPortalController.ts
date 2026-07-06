@@ -1265,6 +1265,7 @@ export class OfficeProjectPortalController {
       companyFocus: this.getCompanyFocusSummary(),
       repositoryMappings: this.state.repositoryMappings,
       repositorySummaries: this.state.repositorySummaries,
+      projectManagementSuggestions: this.state.projectManagementSuggestions,
     };
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { AIProjectManagerService } from "./ai/AIProjectManagerService";
+import type { ProjectManagementSuggestion } from "./ai/AIProjectManagerTypes";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { InternalSimulationDashboardProvider } from "./dashboard/InternalSimulationDashboardProvider";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
@@ -83,6 +84,26 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.projectDashboardSnapshot).toBe(snapshot);
   });
 
+  it("passes existing project-management suggestions into the Project Dashboard without creating new ones", () => {
+    const state = createProjectPortalState();
+    state.projectManagementSuggestions["daily-proof"] = createSuggestion();
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.aiProjectManagerService.createProjectManagementSuggestion = vi.fn(async () => {
+      throw new Error("Project Dashboard must not create management suggestions.");
+    });
+
+    const snapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    expect(snapshot.advisory).toMatchObject({
+      status: "available",
+      healthSummary: "Daily Proof has 1 active task and 0 completed tasks.",
+      topRiskLabel: "Dashboard advisory needs review.",
+      nextAttentionLabel: "Reduce project risk: Critical dashboard work needs attention.",
+    });
+    expect(internals.aiProjectManagerService.createProjectManagementSuggestion).not.toHaveBeenCalled();
+  });
+
   it("preserves existing detail and workspace state when opening project dashboard is not requested", () => {
     const state = createProjectPortalState();
     state.isOpen = true;
@@ -125,6 +146,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     const beforeTasks = structuredClone(state.taskCollections);
     const beforeEmployees = structuredClone(state.employees);
     const beforeWorkSessions = structuredClone(state.workSessions);
+    const beforeSuggestions = structuredClone(state.projectManagementSuggestions);
     const beforeInfluence = structuredClone(state.companyInfluencePlan);
     const beforeProgression = internals.companyProgressionService.getProgressionSnapshot();
     const beforeMovement = internals.employeeNpcMovementService.getSnapshots();
@@ -148,6 +170,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.taskCollections).toEqual(beforeTasks);
     expect(state.employees).toEqual(beforeEmployees);
     expect(state.workSessions).toEqual(beforeWorkSessions);
+    expect(state.projectManagementSuggestions).toEqual(beforeSuggestions);
     expect(state.companyInfluencePlan).toEqual(beforeInfluence);
     expect(internals.companyProgressionService.getProgressionSnapshot()).toEqual(beforeProgression);
     expect(internals.employeeNpcMovementService.getSnapshots()).toEqual(beforeMovement);
@@ -298,6 +321,36 @@ function createEmployee(): Employee {
     description: "Project dashboard test employee",
     assignedTaskId: "task-dashboard",
     currentProjectId: "daily-proof",
+  };
+}
+
+function createSuggestion(): ProjectManagementSuggestion {
+  return {
+    projectId: "daily-proof",
+    healthSummary: {
+      projectId: "daily-proof",
+      status: "watch",
+      summary: "Daily Proof has 1 active task and 0 completed tasks.",
+      totalTasks: 1,
+      activeTasks: 1,
+      completedTasks: 0,
+      activeEmployees: 1,
+      recentActivityCount: 1,
+    },
+    risks: [{
+      id: "risk-1",
+      projectId: "daily-proof",
+      severity: "medium",
+      message: "Dashboard advisory needs review.",
+      relatedTaskIds: ["task-dashboard"],
+    }],
+    nextAction: {
+      projectId: "daily-proof",
+      action: "Reduce project risk",
+      reason: "Critical dashboard work needs attention.",
+      taskId: "task-dashboard",
+    },
+    createdAt: "2026-01-01T11:45:00.000Z",
   };
 }
 

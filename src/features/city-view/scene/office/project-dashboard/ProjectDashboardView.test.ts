@@ -22,6 +22,8 @@ describe("ProjectDashboardView rows", () => {
       employeeRows: ["Ada - working"],
       blockerText: "Blocker: Critical unfinished task",
       activityText: "Activity: Build project dashboard is In Progress.",
+      advisoryText: "Advisory: Daily Proof has 1 active task and 1 completed task. Risk: Critical work needs review.",
+      advisoryNextText: "Next attention: Reduce project risk: Critical dashboard work needs attention.",
       relatedFocusText: "Focus: Company focus is Reduce project risk.",
       nextSuggestedFocusText: "Next suggested focus: Reduce project risk",
       sourceText: "Source: internal-simulation",
@@ -85,6 +87,8 @@ describe("ProjectDashboardView rows", () => {
     expect(rows.employeeRows).toEqual(["No employee context visible."]);
     expect(rows.blockerText).toBe("Blockers: None visible");
     expect(rows.activityText).toBe("Activity: No recent project activity");
+    expect(rows.advisoryText).toBe("Advisory: Daily Proof has 1 active task and 1 completed task. Risk: Critical work needs review.");
+    expect(rows.advisoryNextText).toBe("Next attention: Reduce project risk: Critical dashboard work needs attention.");
     expect(rows.relatedFocusText).toBe("Focus: No project focus signals are visible.");
     expect(rows.nextSuggestedFocusText).toBe("Next suggested focus: None");
   });
@@ -101,6 +105,27 @@ describe("ProjectDashboardView rows", () => {
     expect(rows.title).toBe("Project unavailable");
     expect(rows.statusText).toBe("Project unavailable");
     expect(rows.healthText).toBe("The selected project could not be found in the current dashboard source.");
+    expect(rows.advisoryText).toBe("Advisory: Advisory unavailable Risk: Project unavailable");
+    expect(rows.advisoryNextText).toBe("Next attention: No project advisory can be shown.");
+  });
+
+  it("creates clear empty advisory rows when local suggestion data is missing", () => {
+    const rows = createProjectDashboardPanelRows({
+      ...createSnapshot(),
+      advisory: {
+        status: "empty",
+        healthSummary: "Local advisory waiting for project-manager signal.",
+        topRiskLabel: "No local advisory risk is available.",
+        nextAttentionLabel: "Open project work areas to prepare advisory context.",
+      },
+    });
+
+    expect(rows.advisoryText).toBe(
+      "Advisory: Local advisory waiting for project-manager signal. Risk: No local advisory risk is available.",
+    );
+    expect(rows.advisoryNextText).toBe(
+      "Next attention: Open project work areas to prepare advisory context.",
+    );
   });
 
   it("does not expose assignment, editing, issue creation, dialogue, or direct control affordances", () => {
@@ -210,6 +235,13 @@ function createSnapshot(): ProjectDashboardSnapshot {
       summary: "Company focus is Reduce project risk.",
     },
     nextSuggestedFocus: "Reduce project risk",
+    advisory: {
+      status: "available",
+      healthSummary: "Daily Proof has 1 active task and 1 completed task.",
+      topRiskLabel: "Critical work needs review.",
+      nextAttentionLabel: "Reduce project risk: Critical dashboard work needs attention.",
+      generatedAt: "2026-01-01T10:00:00.000Z",
+    },
     source: {
       sourceType: "internal-simulation",
       sourceId: "daily-proof",

@@ -65,5 +65,5 @@ This repository is worked on by both OpenAI Codex and Claude Code.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/033-company-dashboard-project-source-signals/plan.md
+shell commands, and other important information, read specs/034-project-advisory-signals/plan.md
 <!-- SPECKIT END -->
