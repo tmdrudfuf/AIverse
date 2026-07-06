@@ -30,20 +30,20 @@ describe("GitHubProjectDashboardProvider", () => {
       externalUrl: "https://github.com/ai-verse/daily-proof",
       mappingConfidence: "mapped",
       statusLabel: "Fresh",
-      refreshedAt: "2026-01-02T09:30:00.000Z",
+      refreshedAt: "2026-06-26T18:30:00.000Z",
     });
     expect(snapshot.source.signals?.map((signal) => [signal.label, signal.value])).toEqual([
       ["Repository", "ai-verse/daily-proof"],
       ["Default Branch", "main"],
-      ["Open Issues", "2"],
-      ["Open Pull Requests", "1"],
-      ["Recent Commit", "abc1234 Prepare repository dashboard data"],
-      ["Checks", "Checks passing"],
-      ["Latest Activity", "2026-01-02T09:30:00.000Z"],
+      ["Open Issues", "4"],
+      ["Open Pull Requests", "2"],
+      ["Recent Commit", "dp7f3a2 Stabilize office dashboard repository fixture flow"],
+      ["Checks", "CI passing"],
+      ["Latest Activity", "2026-06-26T18:30:00.000Z"],
     ]);
     expect(snapshot.activity[0]).toMatchObject({
-      id: "github-commit-abc1234",
-      label: "Latest GitHub commit: Prepare repository dashboard data",
+      id: "github-commit-dp7f3a2",
+      label: "Latest GitHub commit: Stabilize office dashboard repository fixture flow",
     });
   });
 
@@ -128,6 +128,85 @@ describe("GitHubProjectDashboardProvider", () => {
     });
   });
 
+  it("surfaces stale fixture-style source status with recent activity intact", () => {
+    const provider = new GitHubProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      projects: [createProject()],
+      repositoryMappings: [createMapping()],
+      repositorySummaries: {
+        "daily-proof": createSummary({
+          name: "daily-proof-stale",
+          openIssueCount: 7,
+          openPullRequestCount: 1,
+          checkStatus: {
+            state: "pending",
+            label: "Checks pending",
+            checkedAt: "2026-06-20T09:20:00.000Z",
+          },
+          sourceStatus: {
+            state: "stale",
+            label: "Stale",
+            reason: "Local fixture repository data is older than the expected freshness window.",
+            lastSuccessfulFetchAt: "2026-06-20T09:30:00.000Z",
+          },
+          lastUpdatedAt: "2026-06-20T09:30:00.000Z",
+        }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.source).toMatchObject({
+      displayName: "ai-verse/daily-proof-stale",
+      statusLabel: "Stale",
+      statusReason: "Local fixture repository data is older than the expected freshness window.",
+      refreshedAt: "2026-06-20T09:30:00.000Z",
+    });
+    expect(snapshot.source.signals?.map((signal) => [signal.label, signal.value])).toContainEqual(["Open Issues", "7"]);
+    expect(snapshot.source.signals?.map((signal) => [signal.label, signal.value])).toContainEqual(["Open Pull Requests", "1"]);
+    expect(snapshot.health.label).toBe("Checks pending");
+    expect(snapshot.activity[0]?.label).toContain("Latest GitHub commit:");
+  });
+
+  it("surfaces failing fixture checks as read-only project health risk", () => {
+    const provider = new GitHubProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      projects: [createProject()],
+      repositoryMappings: [createMapping()],
+      repositorySummaries: {
+        "daily-proof": createSummary({
+          name: "daily-proof-failing",
+          defaultBranch: "release/checks",
+          openIssueCount: 3,
+          openPullRequestCount: 3,
+          checkStatus: {
+            state: "failing",
+            label: "2 checks failing",
+            checkedAt: "2026-06-25T15:00:00.000Z",
+          },
+          sourceStatus: {
+            state: "fresh",
+            label: "Fresh",
+            reason: "Local fixture repository data is current, but checks are failing.",
+            lastSuccessfulFetchAt: "2026-06-25T15:05:00.000Z",
+          },
+          lastUpdatedAt: "2026-06-25T15:05:00.000Z",
+        }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.health).toMatchObject({
+      status: "risk",
+      label: "GitHub checks failing",
+      reason: "2 checks failing",
+      signals: ["2 checks failing"],
+    });
+    expect(snapshot.source.signals?.map((signal) => [signal.label, signal.value])).toContainEqual(["Default Branch", "release/checks"]);
+    expect(snapshot.source.signals?.map((signal) => [signal.label, signal.value])).toContainEqual(["Checks", "2 checks failing"]);
+    expect(snapshot.activeWork).toEqual([]);
+    expect(snapshot.employees).toEqual([]);
+  });
+
   it("does not expose repository mutation methods or mutate source inputs", () => {
     const provider = new GitHubProjectDashboardProvider();
     const mappings = [createMapping()];
@@ -143,6 +222,32 @@ describe("GitHubProjectDashboardProvider", () => {
     expect(Object.keys(provider)).toEqual(["id", "label"]);
     expect(mappings).toEqual(beforeMappings);
     expect(summaries).toEqual(beforeSummaries);
+  });
+
+  it("keeps local advisory empty instead of generating it from repository fixture signals", () => {
+    const provider = new GitHubProjectDashboardProvider();
+
+    const snapshot = provider.getProjectSnapshot({
+      projects: [createProject()],
+      repositoryMappings: [createMapping()],
+      repositorySummaries: {
+        "daily-proof": createSummary({
+          openIssueCount: 9,
+          openPullRequestCount: 4,
+          checkStatus: {
+            state: "failing",
+            label: "Fixture checks failing",
+          },
+        }),
+      },
+    }, "daily-proof");
+
+    expect(snapshot.advisory).toEqual({
+      status: "empty",
+      healthSummary: "Local advisory unavailable",
+      topRiskLabel: "No local project-manager risk signal is available.",
+      nextAttentionLabel: "Review internal simulation context for advisory guidance.",
+    });
   });
 });
 
@@ -183,20 +288,21 @@ function createSummary(overrides: Partial<GitHubRepositorySummary> = {}): GitHub
     name: overrides.name ?? "daily-proof",
     defaultBranch: overrides.defaultBranch ?? "main",
     latestCommit: overrides.latestCommit ?? {
-      sha: "abc1234",
-      message: "Prepare repository dashboard data",
-      authorName: "AIverse",
-      committedAt: "2026-01-02T09:00:00.000Z",
+      sha: "dp7f3a2",
+      message: "Stabilize office dashboard repository fixture flow",
+      authorName: "AIverse Bot",
+      committedAt: "2026-06-26T18:00:00.000Z",
     },
-    openIssueCount: overrides.openIssueCount ?? 2,
-    openPullRequestCount: overrides.openPullRequestCount ?? 1,
+    openIssueCount: overrides.openIssueCount ?? 4,
+    openPullRequestCount: overrides.openPullRequestCount ?? 2,
     checkStatus: overrides.checkStatus ?? {
       state: "passing",
-      label: "Checks passing",
-      checkedAt: "2026-01-02T09:20:00.000Z",
+      label: "CI passing",
+      checkedAt: "2026-06-26T18:24:00.000Z",
+      source: "local fixture checks",
     },
     sourceStatus: overrides.sourceStatus,
-    lastUpdatedAt: overrides.lastUpdatedAt ?? "2026-01-02T09:30:00.000Z",
+    lastUpdatedAt: overrides.lastUpdatedAt ?? "2026-06-26T18:30:00.000Z",
     connectionStatus: overrides.connectionStatus ?? "connected",
     errorMessage: overrides.errorMessage,
   };

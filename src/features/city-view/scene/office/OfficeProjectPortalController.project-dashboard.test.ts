@@ -16,6 +16,7 @@ import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjectDashboardProvider";
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
+import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
@@ -178,6 +179,51 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(internals.workstationOccupancyService.getSnapshots()).toEqual(beforeWorkstations);
     expect(internals.aiService.analyzeTask).not.toHaveBeenCalled();
     expect(internals.aiService.recommendEmployeeForTask).not.toHaveBeenCalled();
+    expect(internals.aiProjectManagerService.createProjectManagementSuggestion).not.toHaveBeenCalled();
+  });
+
+  it("loads fixture-backed repository summaries through the portal flow without creating advisory data", async () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    const fixtureProvider = new MockGitHubRepositoryProvider();
+    internals.repositoryService.getRepositorySummary = vi.fn((projectId: string) => fixtureProvider.getRepositorySummary(projectId));
+    internals.aiProjectManagerService.createProjectManagementSuggestion = vi.fn(async () => {
+      throw new Error("Fixture repository data must not generate project advisory suggestions.");
+    });
+
+    const beforeProjects = structuredClone(state.projects);
+    const beforeMappings = structuredClone(state.repositoryMappings);
+    const beforeSuggestions = structuredClone(state.projectManagementSuggestions);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+    await flushPromises();
+
+    expect(internals.repositoryService.getRepositorySummary).toHaveBeenCalledWith("daily-proof");
+    expect(state.repositorySummaries["daily-proof"]).toMatchObject({
+      name: "daily-proof",
+      openIssueCount: 4,
+      openPullRequestCount: 2,
+      checkStatus: {
+        state: "passing",
+        label: "CI passing",
+      },
+      sourceStatus: {
+        state: "fresh",
+        label: "Fresh",
+      },
+    });
+    expect(state.projectDashboardSnapshot?.externalSources?.[0]).toMatchObject({
+      sourceType: "github",
+      displayName: "ai-verse/daily-proof",
+      statusLabel: "Fresh",
+    });
+    expect(state.projectDashboardSnapshot?.advisory.status).toBe("empty");
+    expect(state.projects).toEqual(beforeProjects);
+    expect(state.repositoryMappings).toEqual(beforeMappings);
+    expect(state.projectManagementSuggestions).toEqual(beforeSuggestions);
     expect(internals.aiProjectManagerService.createProjectManagementSuggestion).not.toHaveBeenCalled();
   });
 });

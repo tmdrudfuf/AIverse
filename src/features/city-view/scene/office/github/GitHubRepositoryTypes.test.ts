@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   createGitHubExternalSourceStatus,
+  createGitHubRepositorySnapshot,
   type AIverseProjectRepositoryMapping,
+  type GitHubRepositorySummary,
   validateAIverseProjectRepositoryMapping,
 } from "./GitHubRepositoryTypes";
 
@@ -91,6 +93,39 @@ describe("GitHub repository mapping and source status", () => {
     });
     expect(validation.status.reason).not.toContain("token");
   });
+
+  it("maps rich repository summaries into deterministic source snapshots", () => {
+    const snapshot = createGitHubRepositorySnapshot(createMapping(), createSummary());
+
+    expect(snapshot).toMatchObject({
+      repositoryId: "github:ai-verse/daily-proof",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      issueSummary: {
+        openCount: 4,
+      },
+      pullRequestSummary: {
+        openCount: 2,
+      },
+      recentCommitSummary: {
+        sha: "dp7f3a2",
+        message: "Stabilize office dashboard repository fixture flow",
+        branchName: "main",
+      },
+      checkStatusSummary: {
+        state: "passing",
+        label: "CI passing",
+      },
+      latestActivityAt: "2026-06-26T18:30:00.000Z",
+      fetchedAt: "2026-06-26T18:30:00.000Z",
+      sourceStatus: {
+        state: "fresh",
+        label: "Fresh",
+        reason: "Local fixture repository data is current.",
+      },
+    });
+  });
 });
 
 function createMapping(overrides: Partial<AIverseProjectRepositoryMapping> = {}): AIverseProjectRepositoryMapping {
@@ -104,5 +139,34 @@ function createMapping(overrides: Partial<AIverseProjectRepositoryMapping> = {})
       visibility: "public",
     },
     enabled: overrides.enabled ?? true,
+  };
+}
+
+function createSummary(overrides: Partial<GitHubRepositorySummary> = {}): GitHubRepositorySummary {
+  return {
+    owner: overrides.owner ?? "ai-verse",
+    name: overrides.name ?? "daily-proof",
+    defaultBranch: overrides.defaultBranch ?? "main",
+    latestCommit: overrides.latestCommit ?? {
+      sha: "dp7f3a2",
+      message: "Stabilize office dashboard repository fixture flow",
+      authorName: "AIverse Bot",
+      committedAt: "2026-06-26T18:00:00.000Z",
+    },
+    openIssueCount: overrides.openIssueCount ?? 4,
+    openPullRequestCount: overrides.openPullRequestCount ?? 2,
+    checkStatus: overrides.checkStatus ?? {
+      state: "passing",
+      label: "CI passing",
+      checkedAt: "2026-06-26T18:24:00.000Z",
+      source: "local fixture checks",
+    },
+    sourceStatus: overrides.sourceStatus ?? createGitHubExternalSourceStatus("fresh", {
+      reason: "Local fixture repository data is current.",
+      lastSuccessfulFetchAt: "2026-06-26T18:30:00.000Z",
+    }),
+    lastUpdatedAt: overrides.lastUpdatedAt ?? "2026-06-26T18:30:00.000Z",
+    connectionStatus: overrides.connectionStatus ?? "connected",
+    errorMessage: overrides.errorMessage,
   };
 }

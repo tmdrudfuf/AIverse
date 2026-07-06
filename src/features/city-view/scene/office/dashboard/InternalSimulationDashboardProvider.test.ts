@@ -10,6 +10,7 @@ import type { EmployeeInsightSource } from "../insight/EmployeeInsightTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { ProjectTask } from "../tasks/ProjectTaskTypes";
 import type { WorkSession } from "../work-sessions/WorkSessionTypes";
+import { MockGitHubRepositoryProvider } from "../github/MockGitHubRepositoryProvider";
 
 describe("InternalSimulationDashboardProvider", () => {
   it("derives a populated dashboard snapshot from existing simulation data", () => {
@@ -329,6 +330,52 @@ describe("InternalSimulationDashboardProvider", () => {
       kind: "github",
       status: "unknown",
       statusLabel: "Unknown",
+    });
+  });
+
+  it("derives Company Dashboard source signals from local repository fixtures", async () => {
+    const provider = new InternalSimulationDashboardProvider();
+    const fixtureProvider = new MockGitHubRepositoryProvider();
+    const repositorySummaries = {
+      "daily-proof": await fixtureProvider.getRepositorySummary("daily-proof"),
+      "daily-proof-stale": await fixtureProvider.getRepositorySummary("daily-proof-stale"),
+    };
+
+    const snapshot = provider.getSnapshot({
+      projects: [
+        createProject({ id: "daily-proof", name: "Daily Proof" }),
+        createProject({ id: "daily-proof-stale", name: "Daily Proof Stale" }),
+        createProject({ id: "missing-fixture", name: "Missing Fixture" }),
+      ],
+      repositoryMappings: [
+        createRepositoryMapping({ projectId: "daily-proof", sourceId: "github:ai-verse/daily-proof" }),
+        createRepositoryMapping({ projectId: "daily-proof-stale", sourceId: "github:ai-verse/daily-proof-stale" }),
+        createRepositoryMapping({ projectId: "missing-fixture", sourceId: "github:ai-verse/missing-fixture" }),
+      ],
+      repositorySummaries,
+    });
+
+    const sourceSignals = new Map(snapshot.projects.projects.map((project) => [project.projectId, project.sourceSignal]));
+
+    expect(sourceSignals.get("daily-proof")).toMatchObject({
+      kind: "github",
+      label: "GitHub linked",
+      status: "fresh",
+      statusLabel: "Fresh",
+      sourceId: "github:ai-verse/daily-proof",
+      refreshedAt: "2026-06-26T18:30:00.000Z",
+    });
+    expect(sourceSignals.get("daily-proof-stale")).toMatchObject({
+      kind: "github",
+      status: "stale",
+      statusLabel: "Stale",
+      reason: "Local fixture repository data is older than the expected freshness window.",
+    });
+    expect(sourceSignals.get("missing-fixture")).toMatchObject({
+      kind: "github",
+      status: "unavailable",
+      statusLabel: "Unavailable",
+      reason: "GitHub repository summary has not been loaded.",
     });
   });
 
