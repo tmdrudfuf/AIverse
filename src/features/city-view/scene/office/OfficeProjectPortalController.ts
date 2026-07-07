@@ -19,6 +19,7 @@ import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
+import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
@@ -113,7 +114,9 @@ export class OfficeProjectPortalController {
     this.state = createProjectPortalState();
     this.view = new OfficeProjectPortalView(scene, this.state);
     this.repositoryService = new GitHubRepositoryService(
-      new GitHubPublicRepositoryProvider(createRepositoryReferenceResolver(() => this.state.repositoryMappings)),
+      new CachedGitHubRepositoryProvider(
+        new GitHubPublicRepositoryProvider(createRepositoryReferenceResolver(() => this.state.repositoryMappings)),
+      ),
     );
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
