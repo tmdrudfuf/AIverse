@@ -8,6 +8,11 @@ const {
   writeGeneratedPrompt,
   writeState,
 } = require("./agentWorkflow.js");
+const {
+  DEFAULT_AGENT_RUNNERS,
+  detectAgentCli,
+  runWorkflowAgentAndPersist,
+} = require("./agentRunner.js");
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -24,6 +29,8 @@ function printUsage() {
     "Usage:",
     "  node tools/agent-workflow/cli.js next --state <state.json> [--write]",
     "  node tools/agent-workflow/cli.js record --state <state.json> --stage <stage> --agent <name> (--result-text <text> | --result-file <path>)",
+    "  node tools/agent-workflow/cli.js detect-agent --agent <codex|claude>",
+    "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <codex|claude>] [--timeout-ms <ms>]",
     "",
     "Safety:",
     "  This script does not push, create PRs, merge PRs, delete branches, call external AI tools, or call network APIs.",
@@ -35,7 +42,33 @@ function main(argv) {
   const [command, ...args] = argv;
   const statePath = readFlag(args, "--state");
 
-  if (!command || !statePath) {
+  if (!command) {
+    printUsage();
+    process.exitCode = 1;
+    return;
+  }
+
+  if (command === "detect-agent") {
+    const agentId = readFlag(args, "--agent");
+    const config = DEFAULT_AGENT_RUNNERS[agentId];
+    if (!config) {
+      console.error(`Unknown agent: ${agentId || "not provided"}`);
+      process.exitCode = 1;
+      return;
+    }
+    detectAgentCli(config)
+      .then((result) => {
+        console.log(JSON.stringify(result, null, 2));
+        if (!result.installed) process.exitCode = 2;
+      })
+      .catch((error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+      });
+    return;
+  }
+
+  if (!statePath) {
     printUsage();
     process.exitCode = 1;
     return;
@@ -75,6 +108,25 @@ function main(argv) {
     writeState(resolvedStatePath, recorded.state);
     console.log(`Recorded ${recorded.result.stage} result at ${recorded.result.path}`);
     console.log(`Next stage: ${generatePrompt(recorded.state).stage}`);
+    return;
+  }
+
+  if (command === "run-agent") {
+    const timeoutMsText = readFlag(args, "--timeout-ms");
+    runWorkflowAgentAndPersist(resolvedStatePath, {
+      cwd: process.cwd(),
+      stage: readFlag(args, "--stage"),
+      agentId: readFlag(args, "--agent"),
+      timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
+    })
+      .then((run) => {
+        console.log(JSON.stringify(run.executionRecord, null, 2));
+        if (run.executionRecord.exitCode !== 0) process.exitCode = run.executionRecord.timedOut ? 124 : 1;
+      })
+      .catch((error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+      });
     return;
   }
 
