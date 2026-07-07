@@ -42,10 +42,12 @@ const REVIEW_DECISION_FORMAT = [
 ].join("\n");
 
 function sanitizeFeatureId(featureId) {
-  return String(featureId || "unknown-feature")
+  const sanitized = String(featureId || "unknown-feature")
     .trim()
     .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "unknown-feature";
+    .replace(/^-+|-+$/g, "");
+
+  return sanitized && sanitized !== "." && sanitized !== ".." ? sanitized : "unknown-feature";
 }
 
 function normalizeList(value, fallback) {

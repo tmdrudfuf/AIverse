@@ -154,6 +154,56 @@ describe("agent workflow result records", () => {
     expect(fs.readFileSync(recorded.outputPath, "utf8")).toBe("Implementation complete.");
   });
 
+  it("keeps featureId '.' under the run root by falling back to a safe segment", () => {
+    const cwd = createTempDir();
+    const state = createState({ featureId: "." });
+    const runRoot = path.join(cwd, ".agent-workflow", "runs");
+
+    const runDirectory = getRunDirectory(state, { cwd });
+    const recorded = recordAgentResult(
+      state,
+      {
+        stage: "implement",
+        agent: "Claude",
+        resultText: "Implementation complete.",
+      },
+      {
+        cwd,
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(runDirectory).toBe(path.join(runRoot, "unknown-feature"));
+    expect(path.relative(runRoot, recorded.outputPath)).toMatch(/^unknown-feature/);
+    expect(path.relative(runRoot, recorded.outputPath)).not.toMatch(/^\.\./);
+  });
+
+  it("keeps featureId '..' under the run root by falling back to a safe segment", () => {
+    const cwd = createTempDir();
+    const state = createState({ featureId: ".." });
+    const runRoot = path.join(cwd, ".agent-workflow", "runs");
+
+    const runDirectory = getRunDirectory(state, { cwd });
+    const recorded = recordAgentResult(
+      state,
+      {
+        stage: "implement",
+        agent: "Claude",
+        resultText: "Implementation complete.",
+      },
+      {
+        cwd,
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(runDirectory).toBe(path.join(runRoot, "unknown-feature"));
+    expect(path.relative(runRoot, recorded.outputPath)).toMatch(/^unknown-feature/);
+    expect(path.relative(runRoot, recorded.outputPath)).not.toMatch(/^\.\./);
+  });
+
   it("rejects run roots outside .agent-workflow/runs", () => {
     expect(() => getRunDirectory(createState(), { cwd: createTempDir(), runRoot: "tmp/runs" })).toThrow(
       ".agent-workflow/runs",
