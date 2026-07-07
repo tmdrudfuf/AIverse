@@ -65,5 +65,5 @@ This repository is worked on by both OpenAI Codex and Claude Code.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/039-github-public-read-cache/plan.md
+shell commands, and other important information, read specs/040-github-public-read-refresh-control/plan.md
 <!-- SPECKIT END -->

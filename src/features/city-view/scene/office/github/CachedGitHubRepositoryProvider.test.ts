@@ -46,6 +46,144 @@ describe("CachedGitHubRepositoryProvider", () => {
     expect(getRepositorySummary).toHaveBeenCalledTimes(2);
   });
 
+  it("refreshRepositorySummary bypasses the cache even within the TTL", async () => {
+    const { provider: underlying, getRepositorySummary } = createUnderlyingStub();
+    const clock = createClock();
+    const cache = new CachedGitHubRepositoryProvider(underlying, { ttlMs: TTL_MS, now: clock });
+
+    await cache.getRepositorySummary("daily-proof");
+    clock.advance(1); // still well within TTL
+    await cache.refreshRepositorySummary("daily-proof");
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(2);
+  });
+
+  it("a successful refresh replaces the cached summary for subsequent normal reads", async () => {
+    const summaries: GitHubRepositorySummary[] = [
+      {
+        owner: "ai-verse",
+        name: "daily-proof",
+        defaultBranch: "main",
+        openIssueCount: 5,
+        openPullRequestCount: 2,
+        connectionStatus: "connected",
+        sourceStatus: { state: "fresh", label: "Fresh", lastSuccessfulFetchAt: "2026-07-01T00:00:00.000Z" },
+      },
+      {
+        owner: "ai-verse",
+        name: "daily-proof",
+        defaultBranch: "main",
+        openIssueCount: 1,
+        openPullRequestCount: 0,
+        connectionStatus: "connected",
+        sourceStatus: { state: "fresh", label: "Fresh", lastSuccessfulFetchAt: "2026-07-01T00:10:00.000Z" },
+      },
+    ];
+    let callIndex = 0;
+    const getRepositorySummary = vi.fn(async () => summaries[callIndex++]);
+    const clock = createClock();
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: clock });
+
+    await cache.getRepositorySummary("daily-proof"); // primes the cache with summaries[0]
+    const refreshed = await cache.refreshRepositorySummary("daily-proof"); // forces summaries[1]
+    const afterRefresh = await cache.getRepositorySummary("daily-proof"); // should hit the cache with the refreshed value
+
+    expect(refreshed.openIssueCount).toBe(1);
+    expect(afterRefresh).toEqual(refreshed);
+    expect(getRepositorySummary).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshing one project does not affect another project's cache", async () => {
+    const { provider: underlying, getRepositorySummary } = createUnderlyingStub();
+    const cache = new CachedGitHubRepositoryProvider(underlying, { ttlMs: TTL_MS, now: createClock() });
+
+    await cache.getRepositorySummary("daily-proof");
+    await cache.getRepositorySummary("other-project");
+    await cache.refreshRepositorySummary("daily-proof");
+    await cache.getRepositorySummary("other-project"); // should still be a cache hit
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(3);
+    expect(getRepositorySummary).toHaveBeenNthCalledWith(3, "daily-proof");
+  });
+
+  it("a failed refresh does not fabricate a connected/fresh result", async () => {
+    const failureSummary: GitHubRepositorySummary = {
+      owner: "",
+      name: "",
+      defaultBranch: "",
+      openIssueCount: 0,
+      openPullRequestCount: 0,
+      connectionStatus: "error",
+      errorMessage: "GitHub rate limit reached for public reads.",
+      sourceStatus: { state: "rate_limited", label: "Rate limited" },
+    };
+    const getRepositorySummary = vi.fn(async () => failureSummary);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    const result = await cache.refreshRepositorySummary("daily-proof");
+
+    expect(result.connectionStatus).toBe("error");
+    expect(result.sourceStatus?.state).toBe("rate_limited");
+  });
+
+  it("a failed refresh clears the previous cache entry rather than preserving stale success", async () => {
+    const successSummary: GitHubRepositorySummary = {
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      openIssueCount: 2,
+      openPullRequestCount: 1,
+      connectionStatus: "connected",
+      sourceStatus: { state: "fresh", label: "Fresh" },
+    };
+    const failureSummary: GitHubRepositorySummary = {
+      owner: "",
+      name: "",
+      defaultBranch: "",
+      openIssueCount: 0,
+      openPullRequestCount: 0,
+      connectionStatus: "error",
+      errorMessage: "Unable to reach GitHub. The network may be unavailable.",
+      sourceStatus: { state: "offline", label: "Offline" },
+    };
+    const results = [successSummary, failureSummary, failureSummary];
+    let callIndex = 0;
+    const getRepositorySummary = vi.fn(async () => results[Math.min(callIndex++, results.length - 1)]);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    await cache.getRepositorySummary("daily-proof"); // primes the cache with a success
+    const refreshResult = await cache.refreshRepositorySummary("daily-proof"); // fails
+    const nextRead = await cache.getRepositorySummary("daily-proof"); // must NOT replay the stale success
+
+    expect(refreshResult.connectionStatus).toBe("error");
+    expect(nextRead.connectionStatus).toBe("error");
+    expect(getRepositorySummary).toHaveBeenCalledTimes(3);
+  });
+
+  it("refreshing an unmapped project performs zero fetch calls", async () => {
+    const fetchStub = vi.fn();
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const realProvider = new GitHubPublicRepositoryProvider(() => undefined, fetchStub);
+      const cache = new CachedGitHubRepositoryProvider(realProvider, { ttlMs: TTL_MS, now: createClock() });
+
+      const result = await cache.refreshRepositorySummary("unmapped-project");
+
+      expect(fetchStub).not.toHaveBeenCalled();
+      expect(result).toEqual({
+        owner: "",
+        name: "",
+        defaultBranch: "",
+        openIssueCount: 0,
+        openPullRequestCount: 0,
+        connectionStatus: "not_connected",
+        errorMessage: "Repository data is not configured for this project.",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it.each([
     ["Infinity", Infinity],
     ["NaN", NaN],
@@ -228,7 +366,12 @@ describe("CachedGitHubRepositoryProvider", () => {
     const cache: GitHubRepositoryProvider = new CachedGitHubRepositoryProvider(createUnderlyingStub().provider);
 
     expect(typeof cache.getRepositorySummary).toBe("function");
-    expect(Object.getOwnPropertyNames(Object.getPrototypeOf(cache))).toEqual(["constructor", "getRepositorySummary"]);
+    expect(Object.getOwnPropertyNames(Object.getPrototypeOf(cache)).sort()).toEqual([
+      "constructor",
+      "fetchAndUpdateCache",
+      "getRepositorySummary",
+      "refreshRepositorySummary",
+    ]);
   });
 
   it("does not mutate the summary returned by the underlying provider", async () => {

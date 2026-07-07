@@ -90,21 +90,73 @@ describe("OfficeProjectPortalController real repository provider wiring", () => 
       vi.unstubAllGlobals();
     }
   });
+
+  it("triggers a real refresh through the actual input-handling path, bypassing the cache", async () => {
+    const fetchStub = createFetchStub();
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const controller = new OfficeProjectPortalController(createSceneStub());
+      const internals = getControllerInternals(controller);
+
+      controller.open();
+      internals.state.viewMode = "repository-detail";
+      internals.state.selectedRepositoryProjectId = "daily-proof";
+
+      // Prime the cache with a normal read (3 calls: repo, commits, pulls).
+      const primed = await internals.repositoryService.getRepositorySummary("daily-proof");
+      internals.state.repositorySummaries["daily-proof"] = primed;
+      const callsAfterPriming = fetchStub.mock.calls.length;
+      expect(callsAfterPriming).toBeGreaterThan(0);
+
+      controller.updateInput(createInput({})); // consume the justOpened guard
+      controller.updateInput(createInput({ enterPressed: true })); // trigger refresh
+      await flushPromises();
+
+      expect(fetchStub.mock.calls.length).toBeGreaterThan(callsAfterPriming);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not trigger a refresh fetch for an unmapped project even when the refresh action is pressed", async () => {
+    const fetchStub = createFetchStub();
+    vi.stubGlobal("fetch", fetchStub);
+    try {
+      const controller = new OfficeProjectPortalController(createSceneStub());
+      const internals = getControllerInternals(controller);
+
+      controller.open();
+      internals.state.viewMode = "repository-detail";
+      internals.state.selectedRepositoryProjectId = "unmapped-project";
+
+      controller.updateInput(createInput({})); // consume the justOpened guard
+      controller.updateInput(createInput({ enterPressed: true })); // attempted refresh
+      await flushPromises();
+
+      expect(fetchStub).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
+
+type RepositorySummary = {
+  connectionStatus: string;
+  errorMessage?: string;
+  sourceStatus?: { state: string };
+};
 
 type ControllerInternals = {
   state: {
     projects: unknown;
     repositoryMappings: unknown;
     projectManagementSuggestions: unknown;
-    repositorySummaries: Record<string, {
-      connectionStatus: string;
-      errorMessage?: string;
-      sourceStatus?: { state: string };
-    }>;
+    viewMode: string;
+    selectedRepositoryProjectId: string | undefined;
+    repositorySummaries: Record<string, RepositorySummary>;
   };
   repositoryService: {
-    getRepositorySummary: (projectId: string) => Promise<unknown>;
+    getRepositorySummary: (projectId: string) => Promise<RepositorySummary>;
   };
 };
 

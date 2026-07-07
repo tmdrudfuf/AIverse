@@ -644,12 +644,20 @@ export class OfficeProjectPortalController {
   }
 
   private updateRepositoryDetailInput(input: OfficeProjectPortalInput) {
-    if (!input.escapePressed) return;
+    if (input.escapePressed) {
+      this.state.viewMode = "workspace";
+      this.state.selectedRepositoryProjectId = undefined;
+      this.repositoryRequestVersion += 1;
+      this.view.render(this.state);
+      return;
+    }
 
-    this.state.viewMode = "workspace";
-    this.state.selectedRepositoryProjectId = undefined;
-    this.repositoryRequestVersion += 1;
-    this.view.render(this.state);
+    if (input.actionPressed || input.enterPressed) {
+      const projectId = this.state.selectedRepositoryProjectId;
+      if (projectId && this.hasRepositoryMapping(projectId)) {
+        void this.refreshRepositoryDetail(projectId);
+      }
+    }
   }
 
   private updateTaskListInput(input: OfficeProjectPortalInput) {
@@ -786,6 +794,19 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
 
     const summary = await this.repositoryService.getRepositorySummary(projectId);
+    if (!this.shouldApplyRepositorySummary(projectId, requestVersion)) return;
+
+    this.state.repositorySummaries[projectId] = summary;
+    this.view.render(this.state);
+  }
+
+  private async refreshRepositoryDetail(projectId: string) {
+    const requestVersion = this.repositoryRequestVersion + 1;
+    this.repositoryRequestVersion = requestVersion;
+    this.state.repositorySummaries[projectId] = createLoadingRepositorySummary();
+    this.view.render(this.state);
+
+    const summary = await this.repositoryService.refreshRepositorySummary(projectId);
     if (!this.shouldApplyRepositorySummary(projectId, requestVersion)) return;
 
     this.state.repositorySummaries[projectId] = summary;

@@ -14,12 +14,25 @@ type CacheEntry = {
 };
 
 /**
+ * An additional, optional capability a GitHubRepositoryProvider decorator may support:
+ * force a fresh read that bypasses any cache-hit check, while still applying the same
+ * cache-update rules a normal read would. This does not change GitHubRepositoryProvider.
+ */
+export interface GitHubRepositoryRefresher {
+  refreshRepositorySummary(projectId: string): Promise<GitHubRepositorySummary>;
+}
+
+/**
  * Decorates any GitHubRepositoryProvider with an in-memory, TTL-based cache keyed by
  * projectId. Only successful ("connected") summaries are cached; every other state
  * (rate_limited/offline/unavailable/not_connected) always falls through to the wrapped
  * provider, so a failure is never replayed from cache and never blocks an immediate retry.
+ *
+ * refreshRepositorySummary always bypasses the cache-hit check but shares the exact same
+ * cache-update logic as getRepositorySummary, so a manual refresh and a normal cache-miss
+ * read can never disagree about what gets stored.
  */
-export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider {
+export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider, GitHubRepositoryRefresher {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly ttlMs: number;
   private readonly now: () => number;
@@ -40,6 +53,14 @@ export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider 
       return cloneSummary(cached.summary);
     }
 
+    return this.fetchAndUpdateCache(projectId);
+  }
+
+  async refreshRepositorySummary(projectId: string): Promise<GitHubRepositorySummary> {
+    return this.fetchAndUpdateCache(projectId);
+  }
+
+  private async fetchAndUpdateCache(projectId: string): Promise<GitHubRepositorySummary> {
     const summary = await this.provider.getRepositorySummary(projectId);
 
     if (summary.connectionStatus === "connected") {
