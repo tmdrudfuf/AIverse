@@ -1,6 +1,6 @@
 # Tasks: Agent Review Orchestration
 
-**Input**: Design documents from `specs/041-agent-review-orchestration/`
+**Input**: Design documents from `specs/042-agent-review-orchestration/`
 
 **Prerequisites**: `plan.md`, `spec.md`, `research.md`, `data-model.md`, `contracts/workflow-state.md`
 
@@ -14,13 +14,13 @@
 
 ## Phase 2: Spec Kit Design Artifacts
 
-- [x] T004 Create `specs/041-agent-review-orchestration/spec.md`.
-- [x] T005 Create `specs/041-agent-review-orchestration/plan.md`.
-- [x] T006 Create `specs/041-agent-review-orchestration/research.md`.
-- [x] T007 Create `specs/041-agent-review-orchestration/data-model.md`.
-- [x] T008 Create `specs/041-agent-review-orchestration/contracts/workflow-state.md`.
-- [x] T009 Create `specs/041-agent-review-orchestration/quickstart.md`.
-- [x] T010 Create `specs/041-agent-review-orchestration/checklists/requirements.md`.
+- [x] T004 Create `specs/042-agent-review-orchestration/spec.md`.
+- [x] T005 Create `specs/042-agent-review-orchestration/plan.md`.
+- [x] T006 Create `specs/042-agent-review-orchestration/research.md`.
+- [x] T007 Create `specs/042-agent-review-orchestration/data-model.md`.
+- [x] T008 Create `specs/042-agent-review-orchestration/contracts/workflow-state.md`.
+- [x] T009 Create `specs/042-agent-review-orchestration/quickstart.md`.
+- [x] T010 Create `specs/042-agent-review-orchestration/checklists/requirements.md`.
 
 ---
 

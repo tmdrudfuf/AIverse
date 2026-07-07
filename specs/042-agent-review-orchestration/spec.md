@@ -1,6 +1,6 @@
 # Feature Specification: Agent Review Orchestration
 
-**Feature Branch**: `041-agent-review-orchestration`
+**Feature Branch**: `042-agent-review-orchestration`
 
 **Created**: 2026-07-08
 

@@ -6,7 +6,7 @@ The workflow state is a JSON object read by `tools/agent-workflow/cli.js`.
 
 ```json
 {
-  "featureId": "041-agent-review-orchestration",
+  "featureId": "042-agent-review-orchestration",
   "featureName": "Agent Review Orchestration",
   "currentBranch": "codex/agent-review-orchestration",
   "baseBranch": "main",

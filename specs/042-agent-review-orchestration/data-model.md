@@ -6,7 +6,7 @@ Represents one local Claude/Codex coordination workflow.
 
 Fields:
 
-- `featureId`: Stable feature identifier such as `041-agent-review-orchestration`.
+- `featureId`: Stable feature identifier such as `042-agent-review-orchestration`.
 - `featureName`: Human-readable feature name.
 - `currentBranch`: Implementation or review branch.
 - `baseBranch`: Base branch for review, usually `main`.

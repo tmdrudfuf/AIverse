@@ -33,7 +33,7 @@ function createTempDir() {
 
 function createState(overrides: Partial<WorkflowState> = {}): WorkflowState {
   return {
-    featureId: "041-agent-review-orchestration",
+    featureId: "042-agent-review-orchestration",
     featureName: "Agent Review Orchestration",
     currentBranch: "codex/agent-review-orchestration",
     baseBranch: "main",
@@ -50,7 +50,7 @@ describe("agent workflow prompt generation", () => {
     const generated = generatePrompt(createState());
 
     expect(generated.stage).toBe("implement");
-    expect(generated.prompt).toContain("Implement 041-agent-review-orchestration");
+    expect(generated.prompt).toContain("Implement 042-agent-review-orchestration");
     expect(generated.prompt).toContain("codex/agent-review-orchestration");
     expect(generated.prompt).toContain("npm test");
     expect(generated.prompt).toContain("Do not push.");
@@ -65,7 +65,7 @@ describe("agent workflow prompt generation", () => {
     const generated = generatePrompt(state);
 
     expect(generated.stage).toBe("review");
-    expect(generated.prompt).toContain("Review 041-agent-review-orchestration");
+    expect(generated.prompt).toContain("Review 042-agent-review-orchestration");
     expect(generated.prompt).toContain("Approved");
     expect(generated.prompt).toContain("Changes Requested");
   });
@@ -149,7 +149,7 @@ describe("agent workflow result records", () => {
       },
     );
 
-    expect(recorded.result.path).toMatch(/^\.agent-workflow\/runs\/041-agent-review-orchestration\//);
+    expect(recorded.result.path).toMatch(/^\.agent-workflow\/runs\/042-agent-review-orchestration\//);
     expect(recorded.outputPath.startsWith(path.join(cwd, ".agent-workflow", "runs"))).toBe(true);
     expect(fs.readFileSync(recorded.outputPath, "utf8")).toBe("Implementation complete.");
   });
@@ -237,7 +237,7 @@ describe("agent workflow result records", () => {
     });
 
     expect(written.outputPath.startsWith(path.join(cwd, ".agent-workflow", "runs"))).toBe(true);
-    expect(fs.readFileSync(written.outputPath, "utf8")).toContain("Implement 041-agent-review-orchestration");
+    expect(fs.readFileSync(written.outputPath, "utf8")).toContain("Implement 042-agent-review-orchestration");
   });
 });
 

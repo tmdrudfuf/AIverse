@@ -1,8 +1,8 @@
 # Implementation Plan: Agent Review Orchestration
 
-**Branch**: `041-agent-review-orchestration` | **Date**: 2026-07-08 | **Spec**: `specs/041-agent-review-orchestration/spec.md`
+**Branch**: `042-agent-review-orchestration` | **Date**: 2026-07-08 | **Spec**: `specs/042-agent-review-orchestration/spec.md`
 
-**Input**: Feature specification from `specs/041-agent-review-orchestration/spec.md`
+**Input**: Feature specification from `specs/042-agent-review-orchestration/spec.md`
 
 ## Summary
 
@@ -43,7 +43,7 @@ No constitution violations are expected.
 ### Documentation (this feature)
 
 ```text
-specs/041-agent-review-orchestration/
+specs/042-agent-review-orchestration/
 ├── spec.md
 ├── plan.md
 ├── research.md
