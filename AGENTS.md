@@ -65,5 +65,5 @@ This repository is worked on by both OpenAI Codex and Claude Code.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/041-github-refresh-concurrency-guard/plan.md
+shell commands, and other important information, read specs/042-agent-review-orchestration/plan.md
 <!-- SPECKIT END -->
