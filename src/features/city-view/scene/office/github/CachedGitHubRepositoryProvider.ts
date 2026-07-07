@@ -34,6 +34,7 @@ export interface GitHubRepositoryRefresher {
  */
 export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider, GitHubRepositoryRefresher {
   private readonly cache = new Map<string, CacheEntry>();
+  private readonly inFlightRequests = new Map<string, Promise<GitHubRepositorySummary>>();
   private readonly ttlMs: number;
   private readonly now: () => number;
 
@@ -60,7 +61,28 @@ export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider,
     return this.fetchAndUpdateCache(projectId);
   }
 
+  /**
+   * Coalesces concurrent calls for the same projectId into a single underlying request.
+   * A second caller while one is already in flight joins the same promise instead of
+   * triggering another network read; every caller (original and joiners) still receives
+   * an independently-cloned result. The in-flight entry is always removed once the call
+   * settles, whether it resolves or rejects, so a later call always starts fresh.
+   */
   private async fetchAndUpdateCache(projectId: string): Promise<GitHubRepositorySummary> {
+    const existing = this.inFlightRequests.get(projectId);
+    if (existing) return existing.then(cloneSummary);
+
+    const request = this.performFetchAndUpdateCache(projectId);
+    this.inFlightRequests.set(projectId, request);
+
+    try {
+      return await request;
+    } finally {
+      this.inFlightRequests.delete(projectId);
+    }
+  }
+
+  private async performFetchAndUpdateCache(projectId: string): Promise<GitHubRepositorySummary> {
     const summary = await this.provider.getRepositorySummary(projectId);
 
     if (summary.connectionStatus === "connected") {

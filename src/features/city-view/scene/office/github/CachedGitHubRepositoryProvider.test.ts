@@ -46,6 +46,157 @@ describe("CachedGitHubRepositoryProvider", () => {
     expect(getRepositorySummary).toHaveBeenCalledTimes(2);
   });
 
+  it("coalesces two concurrent reads for the same project into a single underlying call", async () => {
+    const deferred = createDeferred<GitHubRepositorySummary>();
+    const getRepositorySummary = vi.fn(() => deferred.promise);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    const first = cache.getRepositorySummary("daily-proof");
+    const second = cache.getRepositorySummary("daily-proof");
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(1);
+
+    deferred.resolve({
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      openIssueCount: 1,
+      openPullRequestCount: 0,
+      connectionStatus: "connected",
+    });
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult).toEqual(secondResult);
+    expect(firstResult).not.toBe(secondResult);
+  });
+
+  it("coalesces two concurrent refreshes for the same project into a single underlying call and isolates mutation between callers", async () => {
+    const deferred = createDeferred<GitHubRepositorySummary>();
+    const getRepositorySummary = vi.fn(() => deferred.promise);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    const first = cache.refreshRepositorySummary("daily-proof");
+    const second = cache.refreshRepositorySummary("daily-proof");
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(1);
+
+    deferred.resolve({
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      latestCommit: { sha: "abc1234", message: "Original message", authorName: "Ada", committedAt: "2026-07-01T00:00:00.000Z" },
+      openIssueCount: 1,
+      openPullRequestCount: 0,
+      connectionStatus: "connected",
+    });
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult).toEqual(secondResult);
+    firstResult.latestCommit!.message = "mutated";
+    expect(secondResult.latestCommit?.message).toBe("Original message");
+  });
+
+  it("starts a new underlying call for a later request once the in-flight one has completed", async () => {
+    const secondSummary: GitHubRepositorySummary = {
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      openIssueCount: 9,
+      openPullRequestCount: 3,
+      connectionStatus: "connected",
+    };
+    const getRepositorySummary = vi.fn()
+      .mockResolvedValueOnce({
+        owner: "ai-verse",
+        name: "daily-proof",
+        defaultBranch: "main",
+        openIssueCount: 1,
+        openPullRequestCount: 0,
+        connectionStatus: "connected",
+      } satisfies GitHubRepositorySummary)
+      .mockResolvedValueOnce(secondSummary);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    await cache.refreshRepositorySummary("daily-proof");
+    const second = await cache.refreshRepositorySummary("daily-proof");
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(2);
+    expect(second).toEqual(secondSummary);
+  });
+
+  it("clears the in-flight guard after a failure so the next request retries", async () => {
+    const deferred = createDeferred<GitHubRepositorySummary>();
+    const recoveredSummary: GitHubRepositorySummary = {
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      openIssueCount: 0,
+      openPullRequestCount: 0,
+      connectionStatus: "connected",
+    };
+    const getRepositorySummary = vi.fn()
+      .mockImplementationOnce(() => deferred.promise)
+      .mockResolvedValueOnce(recoveredSummary);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    const first = cache.refreshRepositorySummary("daily-proof");
+    deferred.reject(new Error("unexpected provider failure"));
+    await expect(first).rejects.toThrow("unexpected provider failure");
+
+    const second = await cache.refreshRepositorySummary("daily-proof");
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(2);
+    expect(second).toEqual(recoveredSummary);
+  });
+
+  it("propagates a rejection to a joining caller as well as the original caller", async () => {
+    const deferred = createDeferred<GitHubRepositorySummary>();
+    const getRepositorySummary = vi.fn(() => deferred.promise);
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    const first = cache.getRepositorySummary("daily-proof");
+    const second = cache.getRepositorySummary("daily-proof");
+    deferred.reject(new Error("boom"));
+
+    await expect(first).rejects.toThrow("boom");
+    await expect(second).rejects.toThrow("boom");
+    expect(getRepositorySummary).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not block a different project's refresh while one project's refresh is in flight", async () => {
+    const deferredA = createDeferred<GitHubRepositorySummary>();
+    const summaryB: GitHubRepositorySummary = {
+      owner: "ai-verse",
+      name: "project-b",
+      defaultBranch: "main",
+      openIssueCount: 2,
+      openPullRequestCount: 0,
+      connectionStatus: "connected",
+    };
+    const getRepositorySummary = vi.fn((projectId: string) =>
+      projectId === "project-a" ? deferredA.promise : Promise.resolve(summaryB),
+    );
+    const cache = new CachedGitHubRepositoryProvider({ getRepositorySummary }, { ttlMs: TTL_MS, now: createClock() });
+
+    const refreshA = cache.refreshRepositorySummary("project-a");
+    const refreshB = await cache.refreshRepositorySummary("project-b");
+
+    expect(refreshB).toEqual(summaryB);
+    expect(getRepositorySummary).toHaveBeenCalledTimes(2);
+
+    deferredA.resolve({
+      owner: "ai-verse",
+      name: "project-a",
+      defaultBranch: "main",
+      openIssueCount: 0,
+      openPullRequestCount: 0,
+      connectionStatus: "connected",
+    });
+    await refreshA;
+  });
+
   it("refreshRepositorySummary bypasses the cache even within the TTL", async () => {
     const { provider: underlying, getRepositorySummary } = createUnderlyingStub();
     const clock = createClock();
@@ -370,6 +521,7 @@ describe("CachedGitHubRepositoryProvider", () => {
       "constructor",
       "fetchAndUpdateCache",
       "getRepositorySummary",
+      "performFetchAndUpdateCache",
       "refreshRepositorySummary",
     ]);
   });
@@ -424,4 +576,14 @@ function createClock() {
     currentTime += ms;
   };
   return clock;
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
