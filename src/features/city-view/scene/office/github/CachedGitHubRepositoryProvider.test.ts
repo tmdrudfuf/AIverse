@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { GitHubRepositoryProvider } from "./GitHubRepositoryProvider";
-import { CachedGitHubRepositoryProvider } from "./CachedGitHubRepositoryProvider";
+import {
+  CachedGitHubRepositoryProvider,
+  DEFAULT_GITHUB_REPOSITORY_SUMMARY_CACHE_TTL_MS,
+} from "./CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./GitHubPublicRepositoryProvider";
 import type { GitHubRepositorySummary } from "./GitHubRepositoryTypes";
 
@@ -39,6 +42,25 @@ describe("CachedGitHubRepositoryProvider", () => {
     await cache.getRepositorySummary("daily-proof");
     clock.advance(TTL_MS + 1);
     await cache.getRepositorySummary("daily-proof");
+
+    expect(getRepositorySummary).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["Infinity", Infinity],
+    ["NaN", NaN],
+    ["zero", 0],
+    ["a negative number", -1000],
+  ])("falls back to the default TTL instead of caching forever or never when ttlMs is %s", async (_label, invalidTtlMs) => {
+    const { provider: underlying, getRepositorySummary } = createUnderlyingStub();
+    const clock = createClock();
+    const cache = new CachedGitHubRepositoryProvider(underlying, { ttlMs: invalidTtlMs, now: clock });
+
+    await cache.getRepositorySummary("daily-proof");
+    clock.advance(DEFAULT_GITHUB_REPOSITORY_SUMMARY_CACHE_TTL_MS - 1);
+    await cache.getRepositorySummary("daily-proof"); // still within the default TTL: must be a cache hit
+    clock.advance(2);
+    await cache.getRepositorySummary("daily-proof"); // past the default TTL: must call through again
 
     expect(getRepositorySummary).toHaveBeenCalledTimes(2);
   });

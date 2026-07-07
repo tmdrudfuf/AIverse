@@ -28,7 +28,9 @@ export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider 
     private readonly provider: GitHubRepositoryProvider,
     options: CachedGitHubRepositoryProviderOptions = {},
   ) {
-    this.ttlMs = options.ttlMs ?? DEFAULT_GITHUB_REPOSITORY_SUMMARY_CACHE_TTL_MS;
+    this.ttlMs = isFinitePositiveNumber(options.ttlMs)
+      ? options.ttlMs
+      : DEFAULT_GITHUB_REPOSITORY_SUMMARY_CACHE_TTL_MS;
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -51,6 +53,10 @@ export class CachedGitHubRepositoryProvider implements GitHubRepositoryProvider 
 
     return cloneSummary(summary);
   }
+}
+
+function isFinitePositiveNumber(value: number | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 function cloneSummary(summary: GitHubRepositorySummary): GitHubRepositorySummary {
