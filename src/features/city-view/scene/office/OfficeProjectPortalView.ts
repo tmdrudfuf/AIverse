@@ -313,7 +313,7 @@ export class OfficeProjectPortalView {
 
     if (summary.connectionStatus === "connected") {
       this.renderConnectedRepositorySummary(summary);
-      this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
+      this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Enter refresh", instructionStyle()).setOrigin(1, 0.5);
       return;
     }
 
@@ -326,7 +326,7 @@ export class OfficeProjectPortalView {
 
     this.addText(this.panelX + 28, this.panelY + 84, "Status: Error", headingStyle());
     this.addText(this.panelX + 28, this.panelY + 128, summary.errorMessage ?? "Unable to load repository summary.", bodyStyle());
-    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Enter refresh", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderConnectedRepositorySummary(summary: GitHubRepositorySummary) {
