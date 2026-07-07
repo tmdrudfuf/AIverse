@@ -98,6 +98,105 @@ describe("GitHubPublicRepositoryProvider", () => {
     });
   });
 
+  it("does not report fresh/connected when the commits read is rate-limited", async () => {
+    const fetchStub = createFetchStub({
+      repo: defaultRepoResponse(),
+      commits: emptyResponse(403, { "x-ratelimit-remaining": "0" }),
+      pulls: jsonResponse(200, [{ id: 1 }]),
+    });
+    const provider = new GitHubPublicRepositoryProvider(() => ({ owner: "ai-verse", name: "daily-proof" }), fetchStub);
+
+    const summary = await provider.getRepositorySummary("daily-proof");
+
+    expect(summary.connectionStatus).toBe("error");
+    expect(summary.sourceStatus?.state).toBe("rate_limited");
+    expect(summary.openPullRequestCount).toBe(0);
+    expect(summary.openIssueCount).toBe(0);
+    expect(summary.errorMessage).not.toContain("api.github.com");
+    expect(summary.errorMessage).not.toContain("403");
+  });
+
+  it("does not report fresh/connected when the commits read fails over the network", async () => {
+    const fetchStub = createFetchStub({
+      repo: defaultRepoResponse(),
+      commits: () => {
+        throw new TypeError("Failed to fetch");
+      },
+      pulls: jsonResponse(200, [{ id: 1 }]),
+    });
+    const provider = new GitHubPublicRepositoryProvider(() => ({ owner: "ai-verse", name: "daily-proof" }), fetchStub);
+
+    const summary = await provider.getRepositorySummary("daily-proof");
+
+    expect(summary.connectionStatus).toBe("error");
+    expect(summary.sourceStatus?.state).toBe("offline");
+    expect(summary.errorMessage).not.toContain("Failed to fetch");
+  });
+
+  it("does not report fresh/connected when the commits read returns a malformed body", async () => {
+    const fetchStub = createFetchStub({
+      repo: defaultRepoResponse(),
+      commits: malformedResponse(),
+      pulls: jsonResponse(200, [{ id: 1 }]),
+    });
+    const provider = new GitHubPublicRepositoryProvider(() => ({ owner: "ai-verse", name: "daily-proof" }), fetchStub);
+
+    const summary = await provider.getRepositorySummary("daily-proof");
+
+    expect(summary.connectionStatus).toBe("error");
+    expect(summary.sourceStatus?.state).toBe("unavailable");
+    expect(summary.latestCommit).toBeUndefined();
+  });
+
+  it("does not fabricate zero open pull requests when the pulls read is rate-limited", async () => {
+    const fetchStub = createFetchStub({
+      repo: defaultRepoResponse(),
+      commits: jsonResponse(200, []),
+      pulls: emptyResponse(403, { "x-ratelimit-remaining": "0" }),
+    });
+    const provider = new GitHubPublicRepositoryProvider(() => ({ owner: "ai-verse", name: "daily-proof" }), fetchStub);
+
+    const summary = await provider.getRepositorySummary("daily-proof");
+
+    expect(summary.connectionStatus).toBe("error");
+    expect(summary.sourceStatus?.state).toBe("rate_limited");
+    // Must not silently report 0 open PRs (which would also inflate openIssueCount) when the read actually failed.
+    expect(summary.openPullRequestCount).toBe(0);
+    expect(summary.openIssueCount).toBe(0);
+    expect(summary.errorMessage).not.toContain("api.github.com");
+  });
+
+  it("does not fabricate zero open pull requests when the pulls read fails over the network", async () => {
+    const fetchStub = createFetchStub({
+      repo: defaultRepoResponse(),
+      commits: jsonResponse(200, []),
+      pulls: () => {
+        throw new TypeError("Failed to fetch");
+      },
+    });
+    const provider = new GitHubPublicRepositoryProvider(() => ({ owner: "ai-verse", name: "daily-proof" }), fetchStub);
+
+    const summary = await provider.getRepositorySummary("daily-proof");
+
+    expect(summary.connectionStatus).toBe("error");
+    expect(summary.sourceStatus?.state).toBe("offline");
+    expect(summary.errorMessage).not.toContain("Failed to fetch");
+  });
+
+  it("does not fabricate zero open pull requests when the pulls read returns a malformed body", async () => {
+    const fetchStub = createFetchStub({
+      repo: defaultRepoResponse(),
+      commits: jsonResponse(200, []),
+      pulls: malformedResponse(),
+    });
+    const provider = new GitHubPublicRepositoryProvider(() => ({ owner: "ai-verse", name: "daily-proof" }), fetchStub);
+
+    const summary = await provider.getRepositorySummary("daily-proof");
+
+    expect(summary.connectionStatus).toBe("error");
+    expect(summary.sourceStatus?.state).toBe("unavailable");
+  });
+
   it("maps a 404 to unavailable rather than unauthenticated, since visibility is already resolved upstream", async () => {
     const fetchStub = createFetchStub({
       repo: emptyResponse(404),
@@ -179,11 +278,40 @@ function emptyResponse(status: number, headers: Record<string, string> = {}): Re
   } as unknown as Response;
 }
 
-function createFetchStub(routes: { repo?: Response; commits?: Response; pulls?: Response }) {
+type RouteHandler = Response | (() => Promise<Response>);
+
+function createFetchStub(routes: { repo?: RouteHandler; commits?: RouteHandler; pulls?: RouteHandler }) {
   return vi.fn(async (input: string | URL | Request) => {
     const url = String(input);
-    if (url.includes("/pulls")) return routes.pulls ?? jsonResponse(200, []);
-    if (url.includes("/commits")) return routes.commits ?? jsonResponse(200, []);
-    return routes.repo ?? jsonResponse(200, {});
+    if (url.includes("/pulls")) return resolveRoute(routes.pulls, () => jsonResponse(200, []));
+    if (url.includes("/commits")) return resolveRoute(routes.commits, () => jsonResponse(200, []));
+    return resolveRoute(routes.repo, () => jsonResponse(200, {}));
+  });
+}
+
+function resolveRoute(handler: RouteHandler | undefined, fallback: () => Response): Promise<Response> | Response {
+  if (!handler) return fallback();
+  if (typeof handler === "function") return handler();
+  return handler;
+}
+
+function malformedResponse(): Response {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    json: async () => {
+      throw new SyntaxError("Unexpected token in JSON");
+    },
+  } as unknown as Response;
+}
+
+function defaultRepoResponse(): Response {
+  return jsonResponse(200, {
+    owner: { login: "ai-verse" },
+    name: "daily-proof",
+    default_branch: "main",
+    open_issues_count: 6,
+    pushed_at: "2026-07-01T00:00:00.000Z",
   });
 }

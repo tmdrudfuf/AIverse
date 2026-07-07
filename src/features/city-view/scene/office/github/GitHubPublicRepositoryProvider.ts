@@ -20,6 +20,10 @@ export type GitHubRepositoryReferenceResolver = (
 
 type FetchLike = typeof fetch;
 
+type SecondaryReadResult<TValue> =
+  | { ok: true; value: TValue }
+  | { ok: false; state: GitHubExternalSourceStatusState; reason: string };
+
 /**
  * The first real, unauthenticated, read-only GitHubRepositoryProvider implementation.
  * Only issues GET requests to public api.github.com endpoints and never throws;
@@ -64,16 +68,21 @@ export class GitHubPublicRepositoryProvider implements GitHubRepositoryProvider 
       const lastUpdatedAt =
         readStringField(repositoryData, "pushed_at") ?? readStringField(repositoryData, "updated_at");
 
-      const [latestCommit, openPullRequestCount] = await Promise.all([
+      const [commitResult, pullRequestResult] = await Promise.all([
         readLatestCommit(fetchFn, reference, defaultBranch),
         readOpenPullRequestCount(fetchFn, reference),
       ]);
+
+      if (!commitResult.ok) return createFailureSummary(reference, commitResult.state, commitResult.reason);
+      if (!pullRequestResult.ok) return createFailureSummary(reference, pullRequestResult.state, pullRequestResult.reason);
+
+      const openPullRequestCount = pullRequestResult.value;
 
       return {
         owner,
         name,
         defaultBranch,
-        latestCommit,
+        latestCommit: commitResult.value,
         openIssueCount: Math.max(0, openIssuesAndPullRequests - openPullRequestCount),
         openPullRequestCount,
         lastUpdatedAt,
@@ -101,36 +110,63 @@ async function readLatestCommit(
   fetchFn: FetchLike,
   reference: GitHubRepositoryReference,
   defaultBranch: string,
-): Promise<GitHubLatestCommit | undefined> {
+): Promise<SecondaryReadResult<GitHubLatestCommit | undefined>> {
   try {
     const response = await fetchFn(
       `${GITHUB_API_BASE_URL}/repos/${encodeURIComponent(reference.owner)}/${encodeURIComponent(reference.name)}/commits?sha=${encodeURIComponent(defaultBranch)}&per_page=1`,
     );
-    if (!response.ok) return undefined;
+
+    if (isRateLimitedResponse(response)) {
+      return { ok: false, state: "rate_limited", reason: "GitHub rate limit reached for public reads." };
+    }
+
+    if (!response.ok) {
+      return { ok: false, state: "unavailable", reason: "Unable to load repository summary." };
+    }
 
     const data = await parseJsonSafely(response);
-    if (!Array.isArray(data) || data.length === 0) return undefined;
+    if (!Array.isArray(data)) {
+      return { ok: false, state: "unavailable", reason: "GitHub returned an unexpected response." };
+    }
 
-    return extractLatestCommit(data[0]);
+    // An empty array is a legitimate "no commits yet" result, not a failure.
+    if (data.length === 0) return { ok: true, value: undefined };
+
+    const commit = extractLatestCommit(data[0]);
+    if (!commit) return { ok: false, state: "unavailable", reason: "GitHub returned an unexpected response." };
+
+    return { ok: true, value: commit };
   } catch {
-    return undefined;
+    return { ok: false, state: "offline", reason: "Unable to reach GitHub. The network may be unavailable." };
   }
 }
 
 async function readOpenPullRequestCount(
   fetchFn: FetchLike,
   reference: GitHubRepositoryReference,
-): Promise<number> {
+): Promise<SecondaryReadResult<number>> {
   try {
     const response = await fetchFn(
       `${GITHUB_API_BASE_URL}/repos/${encodeURIComponent(reference.owner)}/${encodeURIComponent(reference.name)}/pulls?state=open&per_page=${OPEN_PULL_REQUEST_PAGE_SIZE}`,
     );
-    if (!response.ok) return 0;
+
+    if (isRateLimitedResponse(response)) {
+      return { ok: false, state: "rate_limited", reason: "GitHub rate limit reached for public reads." };
+    }
+
+    if (!response.ok) {
+      return { ok: false, state: "unavailable", reason: "Unable to load repository summary." };
+    }
 
     const data = await parseJsonSafely(response);
-    return Array.isArray(data) ? data.length : 0;
+    if (!Array.isArray(data)) {
+      return { ok: false, state: "unavailable", reason: "GitHub returned an unexpected response." };
+    }
+
+    // A zero-length array is a legitimate "no open pull requests" result, not a failure.
+    return { ok: true, value: data.length };
   } catch {
-    return 0;
+    return { ok: false, state: "offline", reason: "Unable to reach GitHub. The network may be unavailable." };
   }
 }
 
