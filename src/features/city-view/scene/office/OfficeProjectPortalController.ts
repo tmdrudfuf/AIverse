@@ -19,13 +19,14 @@ import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
+import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
+import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
 import { GitHubRepositoryService } from "./github/GitHubRepositoryService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { EmployeeInsightSource, EmployeeInsightTarget } from "./insight/EmployeeInsightTypes";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import type { CompanyFocusId, CompanyFocusSummary } from "./influence/CompanyInfluencePlanningTypes";
 import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
-import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
@@ -111,7 +112,9 @@ export class OfficeProjectPortalController {
   constructor(scene: PhaserScene) {
     this.state = createProjectPortalState();
     this.view = new OfficeProjectPortalView(scene, this.state);
-    this.repositoryService = new GitHubRepositoryService(new MockGitHubRepositoryProvider());
+    this.repositoryService = new GitHubRepositoryService(
+      new GitHubPublicRepositoryProvider(createRepositoryReferenceResolver(() => this.state.repositoryMappings)),
+    );
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
