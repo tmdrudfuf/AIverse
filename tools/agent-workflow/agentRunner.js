@@ -207,6 +207,86 @@ async function detectAgentCli(config, options = {}) {
   };
 }
 
+function listDiagnosticAgentIds(state) {
+  return Array.from(new Set([
+    ...Object.keys(DEFAULT_AGENT_RUNNERS),
+    ...Object.keys(state.agentRunners || {}),
+    ...Object.values(getStageAgents(state)),
+  ].filter(Boolean))).sort();
+}
+
+async function diagnoseAgentRunners(state, options = {}) {
+  const adapter = options.processAdapter || createDefaultProcessAdapter();
+  const agentIds = options.agentIds || listDiagnosticAgentIds(state);
+  const diagnostics = [];
+
+  for (const agentId of agentIds) {
+    let agent;
+    try {
+      agent = resolveAgentConfig(state, agentId);
+    } catch (error) {
+      diagnostics.push({
+        agentId,
+        identity: agentId,
+        command: "",
+        args: [],
+        configured: false,
+        safe: false,
+        installed: false,
+        exitCode: null,
+        timedOut: false,
+        message: error.message,
+      });
+      continue;
+    }
+
+    try {
+      assertSafeCommand(agent);
+    } catch (error) {
+      diagnostics.push({
+        agentId: agent.agentId,
+        identity: agent.identity,
+        command: agent.command,
+        args: agent.args,
+        configured: true,
+        safe: false,
+        installed: false,
+        exitCode: null,
+        timedOut: false,
+        message: error.message,
+      });
+      continue;
+    }
+
+    const detected = await detectAgentCli(agent, {
+      cwd: options.cwd,
+      processAdapter: adapter,
+      timeoutMs: options.timeoutMs,
+    });
+    diagnostics.push({
+      agentId: agent.agentId,
+      identity: agent.identity,
+      command: agent.command,
+      args: agent.args,
+      configured: true,
+      safe: true,
+      installed: detected.installed,
+      exitCode: detected.exitCode,
+      timedOut: detected.timedOut,
+      interrupted: detected.interrupted,
+      durationMs: detected.durationMs,
+      stdout: detected.stdout,
+      stderr: detected.stderr,
+      errorMessage: detected.errorMessage,
+      message: detected.installed
+        ? `${agent.identity} is available via ${agent.command}.`
+        : `${agent.identity} is not available via ${agent.command}.`,
+    });
+  }
+
+  return diagnostics;
+}
+
 function classifyOutput(result) {
   if (result.timedOut) return "timeout";
   if (result.interrupted || result.signal) return "interrupted";
@@ -319,10 +399,15 @@ module.exports = {
   assertSafeCommand,
   createDefaultProcessAdapter,
   detectAgentCli,
+  diagnoseAgentRunners,
+  getAgentRunners,
+  getStageAgents,
   isRemoteMutatingCommand,
   isSuccessfulExecution,
+  listDiagnosticAgentIds,
   normalizeAgentConfig,
   resolveAgentConfig,
+  resolveStageAgentId,
   runWorkflowAgent,
   runWorkflowAgentAndPersist,
 };

@@ -7,6 +7,7 @@ import {
   DEFAULT_STAGE_AGENTS,
   assertRunnableStage,
   assertSafeCommand,
+  diagnoseAgentRunners,
   detectAgentCli,
   isRemoteMutatingCommand,
   runWorkflowAgent,
@@ -76,6 +77,44 @@ describe("CLI agent detection", () => {
     expect(result.installed).toBe(false);
     expect(result.agentId).toBe("claude");
     expect(result.errorMessage).toContain("ENOENT");
+  });
+
+  it("diagnoses available, missing, missing-config, and unsafe runners without unsafe spawns", async () => {
+    const adapter = createAdapter({ stdout: "ok", exitCode: 0 });
+    const state = createState({
+      agentRunners: {
+        codex: { identity: "OpenAI Codex CLI", command: "codex" },
+        unsafe: { identity: "Unsafe", command: "gh", args: ["pr", "merge"] },
+      },
+      stageAgents: {
+        implement: "codex",
+        review: "missing",
+        fix: "unsafe",
+      },
+    });
+
+    const diagnostics = await diagnoseAgentRunners(state, {
+      cwd: createTempDir(),
+      processAdapter: adapter,
+      agentIds: ["codex", "missing", "unsafe"],
+    });
+
+    expect(diagnostics.find((item) => item.agentId === "codex")).toEqual(expect.objectContaining({
+      configured: true,
+      safe: true,
+      installed: true,
+    }));
+    expect(diagnostics.find((item) => item.agentId === "missing")).toEqual(expect.objectContaining({
+      configured: false,
+      safe: false,
+      installed: false,
+    }));
+    expect(diagnostics.find((item) => item.agentId === "unsafe")).toEqual(expect.objectContaining({
+      configured: true,
+      safe: false,
+      installed: false,
+    }));
+    expect(adapter.run).toHaveBeenCalledTimes(1);
   });
 });
 
