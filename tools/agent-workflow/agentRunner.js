@@ -181,7 +181,10 @@ function createDefaultProcessAdapter() {
 
 async function detectAgentCli(config, options = {}) {
   const agent = normalizeAgentConfig(config);
-  assertSafeCommand({ ...agent, args: ["--version"] });
+  // Validate the configured runner's real command + args, not a substituted "--version"
+  // probe. A runner configured for a remote-mutating command (e.g. gh pr merge) must be
+  // rejected outright, not silently normalized into a harmless-looking --version check.
+  assertSafeCommand(agent);
   const adapter = options.processAdapter || createDefaultProcessAdapter();
   const startedAt = new Date().toISOString();
   const result = await adapter.run(agent.command, ["--version"], {

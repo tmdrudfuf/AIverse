@@ -10,6 +10,7 @@ import {
   diagnoseAgentRunners,
   detectAgentCli,
   isRemoteMutatingCommand,
+  resolveAgentConfig,
   runWorkflowAgent,
 } from "./agentRunner.js";
 import { determineNextStage, getRunDirectory } from "./agentWorkflow.js";
@@ -77,6 +78,54 @@ describe("CLI agent detection", () => {
     expect(result.installed).toBe(false);
     expect(result.agentId).toBe("claude");
     expect(result.errorMessage).toContain("ENOENT");
+  });
+
+  it("rejects a state-configured 'gh pr merge' runner before spawning during detection", async () => {
+    const adapter = createAdapter({ stdout: "gh version 2.0.0", exitCode: 0 });
+    const state = createState({
+      agentRunners: {
+        unsafeMerge: { identity: "Unsafe Merge", command: "gh", args: ["pr", "merge"] },
+      },
+    });
+
+    const resolved = resolveAgentConfig(state, "unsafeMerge");
+
+    await expect(detectAgentCli(resolved, { processAdapter: adapter, cwd: createTempDir() })).rejects.toThrow(
+      "Remote-mutating",
+    );
+    expect(adapter.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects a state-configured 'git push' runner before spawning during detection", async () => {
+    const adapter = createAdapter({ stdout: "git version 2.40.0", exitCode: 0 });
+    const state = createState({
+      agentRunners: {
+        unsafePush: { identity: "Unsafe Push", command: "git", args: ["push"] },
+      },
+    });
+
+    const resolved = resolveAgentConfig(state, "unsafePush");
+
+    await expect(detectAgentCli(resolved, { processAdapter: adapter, cwd: createTempDir() })).rejects.toThrow(
+      "Remote-mutating",
+    );
+    expect(adapter.run).not.toHaveBeenCalled();
+  });
+
+  it("still detects a safe state-configured runner normally", async () => {
+    const adapter = createAdapter({ stdout: "codex-cli 0.142.3\n", exitCode: 0 });
+    const state = createState({
+      agentRunners: {
+        safeCodex: { identity: "OpenAI Codex CLI", command: "codex", args: [] },
+      },
+    });
+
+    const resolved = resolveAgentConfig(state, "safeCodex");
+    const result = await detectAgentCli(resolved, { processAdapter: adapter, cwd: createTempDir() });
+
+    expect(result.installed).toBe(true);
+    expect(result.agentId).toBe("safeCodex");
+    expect(adapter.run).toHaveBeenCalledWith("codex", ["--version"], expect.objectContaining({ timeoutMs: 30000 }));
   });
 
   it("diagnoses available, missing, missing-config, and unsafe runners without unsafe spawns", async () => {
