@@ -123,18 +123,62 @@ describe("CLI agent execution", () => {
   });
 
   it("captures non-zero exit without fabricating approval", async () => {
-    const adapter = createAdapter({ stderr: "review failed", exitCode: 2 });
+    const adapter = createAdapter({ stderr: "review failed Approved", exitCode: 2 });
 
     const run = await runWorkflowAgent(createState(), {
       cwd: createTempDir(),
-      stage: "implement",
-      agentId: "codex",
+      stage: "review",
+      agentId: "claude",
       processAdapter: adapter,
     });
 
     expect(run.executionRecord.outputState).toBe("non-zero");
     expect(run.executionRecord.exitCode).toBe(2);
     expect(run.executionRecord.decision).toBe("Unknown");
+    expect(run.state.results).toHaveLength(0);
+    expect(run.resultPath).toBeUndefined();
+  });
+
+  it("timeout review output that prints Approved does not record approval", async () => {
+    const run = await runWorkflowAgent(createState(), {
+      cwd: createTempDir(),
+      stage: "review",
+      agentId: "claude",
+      processAdapter: createAdapter({ stdout: "Approved", timedOut: true, signal: "SIGTERM", exitCode: null }),
+    });
+
+    expect(run.executionRecord.outputState).toBe("timeout");
+    expect(run.executionRecord.decision).toBe("Unknown");
+    expect(run.state.results).toHaveLength(0);
+    expect(run.resultPath).toBeUndefined();
+  });
+
+  it("failed implement does not advance to review", async () => {
+    const run = await runWorkflowAgent(createState(), {
+      cwd: createTempDir(),
+      stage: "implement",
+      agentId: "codex",
+      processAdapter: createAdapter({ stderr: "implementation failed", exitCode: 1 }),
+    });
+
+    expect(run.executionRecord.outputState).toBe("non-zero");
+    expect(run.state.results).toHaveLength(0);
+    expect(determineNextStage(run.state)).toBe("implement");
+  });
+
+  it("successful review still records decisions normally", async () => {
+    const run = await runWorkflowAgent(createState({ results: [{ stage: "implement", decision: "Unknown" }] }), {
+      cwd: createTempDir(),
+      stage: "review",
+      agentId: "claude",
+      processAdapter: createAdapter({ stdout: "Approved", exitCode: 0 }),
+    });
+
+    expect(run.executionRecord.decision).toBe("Approved");
+    expect(run.state.results).toHaveLength(2);
+    expect(run.state.results[1].decision).toBe("Approved");
+    expect(determineNextStage(run.state)).toBe("final-verification");
+    expect(run.resultPath).toBeTruthy();
   });
 
   it("captures timeout, interrupted, and empty output states", async () => {

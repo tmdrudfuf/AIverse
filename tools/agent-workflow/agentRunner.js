@@ -215,6 +215,10 @@ function classifyOutput(result) {
   return "ok";
 }
 
+function isSuccessfulExecution(result) {
+  return result.exitCode === 0 && !result.timedOut && !result.interrupted && !result.signal && !result.errorMessage;
+}
+
 async function runWorkflowAgent(state, options = {}) {
   const stage = options.stage || determineNextStage(state);
   assertRunnableStage(stage);
@@ -233,6 +237,7 @@ async function runWorkflowAgent(state, options = {}) {
   });
   const completedAt = new Date().toISOString();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
+  const successful = isSuccessfulExecution(result);
   const executionRecord = {
     featureId: state.featureId,
     stage,
@@ -251,7 +256,7 @@ async function runWorkflowAgent(state, options = {}) {
     stdout: result.stdout || "",
     stderr: result.stderr || "",
     errorMessage: result.errorMessage || "",
-    decision: detectDecision(outputText),
+    decision: successful ? detectDecision(outputText) : "Unknown",
   };
 
   const recordPath = createRunFilePath(state, `${stage}-${agent.agentId}-execution`, {
@@ -261,23 +266,25 @@ async function runWorkflowAgent(state, options = {}) {
   fs.mkdirSync(path.dirname(recordPath), { recursive: true });
   fs.writeFileSync(recordPath, `${JSON.stringify(executionRecord, null, 2)}\n`, "utf8");
 
-  const recorded = recordAgentResult(
-    state,
-    {
-      stage,
-      agent: agent.identity,
-      resultText: outputText,
-      outputPath: createRunFilePath(state, `${stage}-${agent.agentId}-result`, {
+  const recorded = successful
+    ? recordAgentResult(
+      state,
+      {
+        stage,
+        agent: agent.identity,
+        resultText: outputText,
+        outputPath: createRunFilePath(state, `${stage}-${agent.agentId}-result`, {
+          cwd: options.cwd || process.cwd(),
+          now: options.now,
+        }),
+      },
+      {
         cwd: options.cwd || process.cwd(),
+        recordedAt: completedAt,
         now: options.now,
-      }),
-    },
-    {
-      cwd: options.cwd || process.cwd(),
-      recordedAt: completedAt,
-      now: options.now,
-    },
-  );
+      },
+    )
+    : { state, outputPath: undefined };
   const nextState = {
     ...recorded.state,
     agentExecutions: [
@@ -313,6 +320,7 @@ module.exports = {
   createDefaultProcessAdapter,
   detectAgentCli,
   isRemoteMutatingCommand,
+  isSuccessfulExecution,
   normalizeAgentConfig,
   resolveAgentConfig,
   runWorkflowAgent,
