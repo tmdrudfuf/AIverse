@@ -65,5 +65,5 @@ This repository is worked on by both OpenAI Codex and Claude Code.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/043-cli-agent-runner-foundation/plan.md
+shell commands, and other important information, read specs/044-agent-workflow-run-command/plan.md
 <!-- SPECKIT END -->
