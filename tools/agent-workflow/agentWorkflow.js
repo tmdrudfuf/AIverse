@@ -238,6 +238,7 @@ module.exports = {
   WORKFLOW_STAGES,
   detectDecision,
   determineNextStage,
+  createRunFilePath,
   generatePrompt,
   getRunDirectory,
   listForbiddenExecutablePatterns,

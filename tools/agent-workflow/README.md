@@ -79,3 +79,28 @@ Generated prompts may include suggested commands, but they are labeled `HUMAN-ON
 - branch deletion
 
 The script never executes these commands.
+
+## Detect Local Agent CLIs
+
+```powershell
+node tools/agent-workflow/cli.js detect-agent --agent codex
+node tools/agent-workflow/cli.js detect-agent --agent claude
+```
+
+The detection command reports whether the configured command appears executable. It does not call GitHub, OpenAI, Anthropic, or any SDK/API.
+
+## Run a Workflow Stage Through a Local CLI
+
+```powershell
+node tools/agent-workflow/cli.js run-agent --state .agent-workflow/example-state.json --stage implement --agent codex --timeout-ms 300000
+```
+
+The runner:
+
+- generates the stage prompt with the existing workflow templates,
+- sends it to the configured CLI through stdin,
+- captures stdout, stderr, exit code, signal, timeout/interruption state, duration, agent identity, and stage,
+- writes JSON execution records under `.agent-workflow/runs/<feature-id>/`,
+- appends the local result to the workflow state.
+
+`human-merge-decision` is never run through an agent CLI. Remote-mutating commands remain human-only and are refused before subprocess execution.
