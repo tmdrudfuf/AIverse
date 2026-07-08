@@ -3,8 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { determineNextStage, writeState } from "./agentWorkflow.js";
-import { formatRunSummary } from "./cli.js";
-import { runWorkflowCommand, runWorkflowCommandAndPersist } from "./agentWorkflowRun.js";
+import { formatDryRunSummary, formatRunSummary } from "./cli.js";
+import { createDryRunSummary, runWorkflowCommand, runWorkflowCommandAndPersist } from "./agentWorkflowRun.js";
 
 type WorkflowState = {
   featureId: string;
@@ -155,5 +155,45 @@ describe("agent workflow run command", () => {
     expect(summary.steps[0].recordPath).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
     expect(summary.steps[0].resultPath).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
     expect(formatRunSummary(summary)).toContain("Stage: implement");
+  });
+
+  it("previews the current stage without spawning an agent CLI", () => {
+    const cwd = createTempDir();
+
+    const summary = createDryRunSummary(createState(), {
+      cwd,
+      now: () => "2026-07-08T00:00:00.000Z",
+    });
+
+    expect(summary.stage).toBe("implement");
+    expect(summary.agentId).toBe("codex");
+    expect(summary.command).toBe("codex");
+    expect(summary.promptPath).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
+    expect(summary.runDirectory).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
+    expect(summary.nextExpectedStep).toBe("review");
+    expect(formatDryRunSummary(summary)).toContain("No agent CLI was spawned.");
+  });
+
+  it("dry-run stops before human merge decision", () => {
+    const summary = createDryRunSummary(createState({
+      results: [{ stage: "final-verification", decision: "Unknown" }],
+    }), {
+      cwd: createTempDir(),
+    });
+
+    expect(summary.blocked).toBe(true);
+    expect(summary.stage).toBe("human-merge-decision");
+    expect(summary.blockedReason).toContain("human-only");
+  });
+
+  it("dry-run rejects unsafe runner config before prompt generation", () => {
+    expect(() => createDryRunSummary(createState({
+      agentRunners: {
+        unsafe: { identity: "Unsafe", command: "git", args: ["push"] },
+      },
+      stageAgents: { implement: "unsafe" },
+    }), {
+      cwd: createTempDir(),
+    })).toThrow("Remote-mutating");
   });
 });

@@ -10,10 +10,12 @@ const {
 } = require("./agentWorkflow.js");
 const {
   DEFAULT_AGENT_RUNNERS,
+  diagnoseAgentRunners,
   detectAgentCli,
+  resolveAgentConfig,
   runWorkflowAgentAndPersist,
 } = require("./agentRunner.js");
-const { runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
+const { createDryRunSummary, runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -31,8 +33,9 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js next --state <state.json> [--write]",
     "  node tools/agent-workflow/cli.js record --state <state.json> --stage <stage> --agent <name> (--result-text <text> | --result-file <path>)",
     "  node tools/agent-workflow/cli.js detect-agent --agent <codex|claude>",
+    "  node tools/agent-workflow/cli.js diagnose --state <state.json>",
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <codex|claude>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js run --state <state.json> [--until-blocked] [--max-steps <n>] [--agent <codex|claude>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <codex|claude>] [--timeout-ms <ms>]",
     "",
     "Safety:",
     "  This script does not push, create PRs, merge PRs, delete branches, call external AI tools, or call network APIs.",
@@ -52,7 +55,16 @@ function main(argv) {
 
   if (command === "detect-agent") {
     const agentId = readFlag(args, "--agent");
-    const config = DEFAULT_AGENT_RUNNERS[agentId];
+    let config;
+    try {
+      config = statePath
+        ? resolveAgentConfig(readState(path.resolve(process.cwd(), statePath)), agentId)
+        : DEFAULT_AGENT_RUNNERS[agentId];
+    } catch (error) {
+      console.error(`Agent detection failed: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     if (!config) {
       console.error(`Unknown agent: ${agentId || "not provided"}`);
       process.exitCode = 1;
@@ -78,6 +90,23 @@ function main(argv) {
 
   const resolvedStatePath = path.resolve(process.cwd(), statePath);
   const state = readState(resolvedStatePath);
+
+  if (command === "diagnose") {
+    const timeoutMsText = readFlag(args, "--timeout-ms");
+    diagnoseAgentRunners(state, {
+      cwd: process.cwd(),
+      timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
+    })
+      .then((diagnostics) => {
+        console.log(formatDiagnostics(diagnostics));
+        if (diagnostics.some((item) => !item.configured || !item.safe || !item.installed)) process.exitCode = 2;
+      })
+      .catch((error) => {
+        console.error(`Diagnostics failed: ${error.message}`);
+        process.exitCode = 1;
+      });
+    return;
+  }
 
   if (command === "next") {
     if (hasFlag(args, "--write")) {
@@ -135,6 +164,22 @@ function main(argv) {
   if (command === "run") {
     const timeoutMsText = readFlag(args, "--timeout-ms");
     const maxStepsText = readFlag(args, "--max-steps");
+    if (hasFlag(args, "--dry-run")) {
+      try {
+        const summary = createDryRunSummary(state, {
+          cwd: process.cwd(),
+          stage: readFlag(args, "--stage"),
+          agentId: readFlag(args, "--agent"),
+        });
+        console.log(formatDryRunSummary(summary));
+        if (summary.blocked) process.exitCode = 2;
+      } catch (error) {
+        console.error(`Dry run failed: ${error.message}`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
     runWorkflowCommandAndPersist(resolvedStatePath, {
       cwd: process.cwd(),
       stage: readFlag(args, "--stage"),
@@ -172,13 +217,62 @@ function formatRunSummary(summary) {
       `Execution: ${step.recordPath}`,
       `Result path: ${step.resultPath || "none"}`,
     ].join(" | "));
+    const message = describeOutputState(step.outputState);
+    if (message) lines.push(`  ${message}`);
   }
   if (summary.errorMessage) lines.push(`Error: ${summary.errorMessage}`);
   return lines.join("\n");
+}
+
+function describeOutputState(outputState) {
+  if (outputState === "timeout") return "The agent command timed out; no stage result was recorded.";
+  if (outputState === "interrupted") return "The agent command was interrupted; no stage result was recorded.";
+  if (outputState === "non-zero") return "The agent command exited non-zero; inspect the execution log before retrying.";
+  if (outputState === "empty") return "The agent command produced empty output; no stage result was recorded.";
+  return "";
+}
+
+function formatDryRunSummary(summary) {
+  const lines = [
+    `Dry run stage: ${summary.stage}`,
+    `Run directory: ${summary.runDirectory}`,
+    `Next expected step: ${summary.nextExpectedStep}`,
+  ];
+  if (summary.blocked) {
+    lines.push(`Blocked: ${summary.blockedReason}`);
+    return lines.join("\n");
+  }
+  lines.push(
+    `Selected agent: ${summary.agentId} (${summary.agentIdentity})`,
+    `Command: ${[summary.command, ...(summary.args || [])].join(" ").trim()}`,
+    `Prompt path: ${summary.promptPath}`,
+    "No agent CLI was spawned.",
+  );
+  return lines.join("\n");
+}
+
+function formatDiagnostics(diagnostics) {
+  return diagnostics.map((item) => {
+    const status = !item.configured
+      ? "missing-config"
+      : !item.safe
+        ? "unsafe"
+        : item.installed
+          ? "available"
+          : "not-available";
+    const command = [item.command, ...(item.args || [])].join(" ").trim() || "not configured";
+    const details = item.errorMessage || item.stderr || item.message;
+    return [
+      `Agent: ${item.agentId} (${item.identity})`,
+      `  Status: ${status}`,
+      `  Command: ${command}`,
+      `  Message: ${details}`,
+    ].join("\n");
+  }).join("\n");
 }
 
 if (require.main === module) {
   main(process.argv.slice(2));
 }
 
-module.exports = { formatRunSummary, main };
+module.exports = { formatDiagnostics, formatDryRunSummary, formatRunSummary, main };

@@ -1,0 +1,25 @@
+{
+  "agentRunners": {
+    "codex": {
+      "identity": "OpenAI Codex CLI",
+      "command": "codex",
+      "args": [],
+      "inputMode": "stdin",
+      "timeoutMs": 300000
+    },
+    "claude": {
+      "identity": "Claude Code CLI",
+      "command": "claude",
+      "args": [],
+      "inputMode": "stdin",
+      "timeoutMs": 300000
+    }
+  },
+  "stageAgents": {
+    "implement": "codex",
+    "review": "claude",
+    "fix": "codex",
+    "re-review": "claude",
+    "final-verification": "codex"
+  }
+}

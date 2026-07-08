@@ -1,7 +1,13 @@
 const fs = require("fs");
 
-const { determineNextStage, readState, writeState } = require("./agentWorkflow.js");
-const { runWorkflowAgent } = require("./agentRunner.js");
+const { determineNextStage, getRunDirectory, readState, writeGeneratedPrompt, writeState } = require("./agentWorkflow.js");
+const {
+  assertRunnableStage,
+  assertSafeCommand,
+  resolveAgentConfig,
+  resolveStageAgentId,
+  runWorkflowAgent,
+} = require("./agentRunner.js");
 
 const DEFAULT_MAX_WORKFLOW_RUN_STEPS = 6;
 
@@ -24,6 +30,49 @@ function createStepSummary(run) {
     recordPath: run.state.agentExecutions?.[run.state.agentExecutions.length - 1]?.path || "",
     resultPath: run.resultPath ? run.resultPath.replace(/\\/g, "/") : undefined,
     nextStage,
+  };
+}
+
+function getNextExpectedStep(stage) {
+  if (stage === "implement") return "review";
+  if (stage === "fix") return "re-review";
+  if (stage === "final-verification") return "human-merge-decision";
+  if (stage === "review" || stage === "re-review") return "depends on Approved or Changes Requested";
+  return "human-merge-decision";
+}
+
+function createDryRunSummary(state, options = {}) {
+  const stage = options.stage || determineNextStage(state);
+  if (stage === "human-merge-decision") {
+    return {
+      stage,
+      blocked: true,
+      blockedReason: "human-merge-decision is human-only and must not invoke an agent CLI",
+      nextExpectedStep: "human merge decision",
+      runDirectory: getRunDirectory(state, { cwd: options.cwd }),
+    };
+  }
+
+  assertRunnableStage(stage);
+  const agentId = resolveStageAgentId(state, stage, options.agentId);
+  const agent = resolveAgentConfig(state, agentId);
+  assertSafeCommand(agent);
+  const generated = writeGeneratedPrompt(state, {
+    cwd: options.cwd,
+    stage,
+    now: options.now,
+  });
+
+  return {
+    stage,
+    agentId: agent.agentId,
+    agentIdentity: agent.identity,
+    command: agent.command,
+    args: agent.args,
+    promptPath: generated.outputPath.replace(/\\/g, "/"),
+    runDirectory: getRunDirectory(state, { cwd: options.cwd }).replace(/\\/g, "/"),
+    nextExpectedStep: getNextExpectedStep(stage),
+    blocked: false,
   };
 }
 
@@ -93,6 +142,7 @@ async function runWorkflowCommandAndPersist(statePath, options = {}) {
 
 module.exports = {
   DEFAULT_MAX_WORKFLOW_RUN_STEPS,
+  createDryRunSummary,
   normalizeMaxSteps,
   runWorkflowCommand,
   runWorkflowCommandAndPersist,

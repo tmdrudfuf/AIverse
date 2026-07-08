@@ -89,6 +89,31 @@ node tools/agent-workflow/cli.js detect-agent --agent claude
 
 The detection command reports whether the configured command appears executable. It does not call GitHub, OpenAI, Anthropic, or any SDK/API.
 
+Use a workflow state file when you have custom command paths or stage mappings:
+
+```powershell
+node tools/agent-workflow/cli.js detect-agent --state .agent-workflow/example-state.json --agent codex
+node tools/agent-workflow/cli.js diagnose --state .agent-workflow/example-state.json
+```
+
+Diagnostics reports configured command names, missing config, unsafe command rejection, and local availability. Unsafe commands are rejected before a subprocess is spawned.
+
+## Configure Real Local Runners
+
+Copy the committed example state into the gitignored runtime directory:
+
+```powershell
+New-Item -ItemType Directory -Force .agent-workflow
+Copy-Item tools/agent-workflow/examples/codex-claude-state.json .agent-workflow/example-state.json
+```
+
+The example uses command names expected on PATH:
+
+- `codex` for OpenAI Codex CLI
+- `claude` for Claude Code CLI
+
+If your CLIs are installed somewhere else, edit the local `.agent-workflow/example-state.json` command fields. Do not commit local state files, API keys, tokens, or credentials.
+
 ## Run a Workflow Stage Through a Local CLI
 
 ```powershell
@@ -107,6 +132,12 @@ The runner:
 
 ## Run the Workflow Command
 
+Preview the current stage without spawning an agent:
+
+```powershell
+node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json --dry-run
+```
+
 Run exactly the current stage:
 
 ```powershell
@@ -120,3 +151,23 @@ node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json 
 ```
 
 The command prints the current stage, selected agent, execution result, next stage, and output paths. It stops before `human-merge-decision` and never executes push, PR, merge, or branch deletion commands.
+
+If a command times out, exits non-zero, is interrupted, or returns empty output, the workflow records execution diagnostics but does not record a stage result or advance the workflow.
+
+## Inspect Logs
+
+```powershell
+Get-ChildItem .agent-workflow/runs -Recurse
+```
+
+Execution logs and generated prompts stay under `.agent-workflow/runs/<feature-id>/`, which is gitignored.
+
+## Human-Only Merge Step
+
+When the workflow reaches `human-merge-decision`, inspect the final verification output and perform remote-mutating commands yourself if appropriate. The runner never executes:
+
+- `git push`
+- `gh pr create`
+- `gh pr ready`
+- `gh pr merge`
+- branch deletion
