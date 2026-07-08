@@ -104,3 +104,19 @@ The runner:
 - appends the local result to the workflow state.
 
 `human-merge-decision` is never run through an agent CLI. Remote-mutating commands remain human-only and are refused before subprocess execution.
+
+## Run the Workflow Command
+
+Run exactly the current stage:
+
+```powershell
+node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json
+```
+
+Continue across safe runnable stages until blocked:
+
+```powershell
+node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json --until-blocked --max-steps 6
+```
+
+The command prints the current stage, selected agent, execution result, next stage, and output paths. It stops before `human-merge-decision` and never executes push, PR, merge, or branch deletion commands.

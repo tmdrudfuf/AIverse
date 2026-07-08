@@ -13,6 +13,7 @@ const {
   detectAgentCli,
   runWorkflowAgentAndPersist,
 } = require("./agentRunner.js");
+const { runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -31,6 +32,7 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js record --state <state.json> --stage <stage> --agent <name> (--result-text <text> | --result-file <path>)",
     "  node tools/agent-workflow/cli.js detect-agent --agent <codex|claude>",
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <codex|claude>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js run --state <state.json> [--until-blocked] [--max-steps <n>] [--agent <codex|claude>] [--timeout-ms <ms>]",
     "",
     "Safety:",
     "  This script does not push, create PRs, merge PRs, delete branches, call external AI tools, or call network APIs.",
@@ -130,12 +132,53 @@ function main(argv) {
     return;
   }
 
+  if (command === "run") {
+    const timeoutMsText = readFlag(args, "--timeout-ms");
+    const maxStepsText = readFlag(args, "--max-steps");
+    runWorkflowCommandAndPersist(resolvedStatePath, {
+      cwd: process.cwd(),
+      stage: readFlag(args, "--stage"),
+      agentId: readFlag(args, "--agent"),
+      timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
+      untilBlocked: hasFlag(args, "--until-blocked"),
+      maxSteps: maxStepsText ? Number(maxStepsText) : undefined,
+    })
+      .then((summary) => {
+        console.log(formatRunSummary(summary));
+        if (summary.stopReason === "failure" || summary.stopReason === "missing-agent") process.exitCode = 1;
+      })
+      .catch((error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+      });
+    return;
+  }
+
   printUsage();
   process.exitCode = 1;
+}
+
+function formatRunSummary(summary) {
+  const lines = [
+    `Workflow run stopped: ${summary.stopReason}`,
+    `Next stage: ${summary.nextStage}`,
+  ];
+  for (const step of summary.steps) {
+    lines.push([
+      `Stage: ${step.stage}`,
+      `Agent: ${step.agentId}`,
+      `Result: ${step.outputState}`,
+      `Next: ${step.nextStage}`,
+      `Execution: ${step.recordPath}`,
+      `Result path: ${step.resultPath || "none"}`,
+    ].join(" | "));
+  }
+  if (summary.errorMessage) lines.push(`Error: ${summary.errorMessage}`);
+  return lines.join("\n");
 }
 
 if (require.main === module) {
   main(process.argv.slice(2));
 }
 
-module.exports = { main };
+module.exports = { formatRunSummary, main };
