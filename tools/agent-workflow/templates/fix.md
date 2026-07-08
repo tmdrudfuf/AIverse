@@ -12,6 +12,10 @@ Expected commit: `{{expectedCommit}}`
 
 {{validationCommands}}
 
+## Review Findings To Fix
+
+{{reviewFindings}}
+
 ## Safety Rules
 
 {{safetyRules}}
