@@ -194,7 +194,7 @@ function createDefaultProcessAdapter() {
 
 async function detectAgentCli(config, options = {}) {
   const agent = normalizeAgentConfig(config);
-  assertSafeCommand({ ...agent, args: ["--version"] });
+  assertSafeCommand(agent);
   const adapter = options.processAdapter || createDefaultProcessAdapter();
   const startedAt = new Date().toISOString();
   const result = await adapter.run(agent.command, ["--version"], {

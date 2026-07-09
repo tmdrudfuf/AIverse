@@ -79,6 +79,47 @@ describe("CLI agent detection", () => {
     expect(result.agentId).toBe("claude");
     expect(result.errorMessage).toContain("ENOENT");
   });
+
+  it("rejects state-configured gh pr merge before detection spawn", async () => {
+    const adapter = createAdapter({ stdout: "should not run" });
+
+    await expect(detectAgentCli({
+      agentId: "unsafe",
+      identity: "Unsafe gh",
+      command: "gh",
+      args: ["pr", "merge"],
+      inputMode: "stdin",
+    }, { processAdapter: adapter, cwd: createTempDir() })).rejects.toThrow("Remote-mutating");
+    expect(adapter.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects state-configured git push before detection spawn", async () => {
+    const adapter = createAdapter({ stdout: "should not run" });
+
+    await expect(detectAgentCli({
+      agentId: "unsafe",
+      identity: "Unsafe git",
+      command: "git",
+      args: ["push"],
+      inputMode: "stdin",
+    }, { processAdapter: adapter, cwd: createTempDir() })).rejects.toThrow("Remote-mutating");
+    expect(adapter.run).not.toHaveBeenCalled();
+  });
+
+  it("still probes safe configured runners with --version", async () => {
+    const adapter = createAdapter({ stdout: "safe 1.0.0", exitCode: 0 });
+
+    const result = await detectAgentCli({
+      agentId: "safe",
+      identity: "Safe CLI",
+      command: "safe-cli",
+      args: ["run"],
+      inputMode: "stdin",
+    }, { processAdapter: adapter, cwd: createTempDir() });
+
+    expect(result.installed).toBe(true);
+    expect(adapter.run).toHaveBeenCalledWith("safe-cli", ["--version"], expect.any(Object));
+  });
 });
 
 describe("CLI agent execution", () => {
