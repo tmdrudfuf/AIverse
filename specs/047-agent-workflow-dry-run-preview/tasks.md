@@ -24,11 +24,11 @@
 
 **Independent Test**: Run focused tests proving dry-run preview prints stage, agent, command preview, prompt path, run directory, and next expected step while making zero process-adapter calls.
 
-- [ ] T004 [P] [US1] Add dry-run preview tests for one-stage runnable preview in `tools/agent-workflow/agentWorkflowRun.test.ts`
-- [ ] T005 [P] [US1] Add dry-run preview tests for human-merge-decision and unsafe runner rejection in `tools/agent-workflow/agentWorkflowRun.test.ts`
-- [ ] T006 [US1] Implement dry-run preview resolution in `tools/agent-workflow/agentWorkflowRun.js`
-- [ ] T007 [US1] Wire `run --dry-run` output in `tools/agent-workflow/cli.js`
-- [ ] T008 [US1] Confirm dry-run preview does not record results, append execution records, spawn agents, or advance workflow state
+- [X] T004 [P] [US1] Add dry-run preview tests for one-stage runnable preview in `tools/agent-workflow/agentWorkflowRun.test.ts`
+- [X] T005 [P] [US1] Add dry-run preview tests for human-merge-decision and unsafe runner rejection in `tools/agent-workflow/agentWorkflowRun.test.ts`
+- [X] T006 [US1] Implement dry-run preview resolution in `tools/agent-workflow/agentWorkflowRun.js`
+- [X] T007 [US1] Wire `run --dry-run` output in `tools/agent-workflow/cli.js`
+- [X] T008 [US1] Confirm dry-run preview does not record results, append execution records, spawn agents, or advance workflow state
 
 ---
 
@@ -36,13 +36,13 @@
 
 **Purpose**: Keep local tooling docs and validation evidence current.
 
-- [ ] T009 Update `tools/agent-workflow/README.md` with the `run --dry-run` preview command
-- [ ] T010 Run `npm test`
-- [ ] T011 Run `npx tsc --noEmit`
-- [ ] T012 Run `npm run build`
-- [ ] T013 Run `git diff --check`
-- [ ] T014 Run `git diff --cached --check`
-- [ ] T015 Confirm no product `src/` files changed and no remote mutation occurred
+- [X] T009 Update `tools/agent-workflow/README.md` with the `run --dry-run` preview command
+- [X] T010 Run `npm test`
+- [X] T011 Run `npx tsc --noEmit`
+- [X] T012 Run `npm run build`
+- [X] T013 Run `git diff --check`
+- [X] T014 Run `git diff --cached --check`
+- [X] T015 Confirm no product `src/` files changed and no remote mutation occurred
 
 ## Dependencies & Execution Order
 

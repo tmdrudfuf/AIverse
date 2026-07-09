@@ -13,7 +13,7 @@ const {
   detectAgentCli,
   runWorkflowAgentAndPersist,
 } = require("./agentRunner.js");
-const { runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
+const { previewWorkflowCommand, runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -32,7 +32,7 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js record --state <state.json> --stage <stage> --agent <name> (--result-text <text> | --result-file <path>)",
     "  node tools/agent-workflow/cli.js detect-agent --agent <codex|claude>",
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <codex|claude>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js run --state <state.json> [--until-blocked] [--max-steps <n>] [--agent <codex|claude>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <codex|claude>] [--timeout-ms <ms>]",
     "",
     "Safety:",
     "  This script does not push, create PRs, merge PRs, delete branches, call external AI tools, or call network APIs.",
@@ -133,6 +133,20 @@ function main(argv) {
   }
 
   if (command === "run") {
+    if (hasFlag(args, "--dry-run")) {
+      try {
+        console.log(formatDryRunPreview(previewWorkflowCommand(state, {
+          cwd: process.cwd(),
+          stage: readFlag(args, "--stage"),
+          agentId: readFlag(args, "--agent"),
+        })));
+      } catch (error) {
+        console.error(error.message);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
     const timeoutMsText = readFlag(args, "--timeout-ms");
     const maxStepsText = readFlag(args, "--max-steps");
     runWorkflowCommandAndPersist(resolvedStatePath, {
@@ -177,8 +191,21 @@ function formatRunSummary(summary) {
   return lines.join("\n");
 }
 
+function formatDryRunPreview(preview) {
+  return [
+    "Dry run: true",
+    `Current stage: ${preview.stage}`,
+    `Selected agent: ${preview.agentId || "human-merge-decision"} (${preview.agentIdentity})`,
+    `Command: ${preview.commandPreview}`,
+    `Prompt path: ${preview.promptPath || "none"}`,
+    `Run directory: ${preview.runDirectory}`,
+    `Next expected step: ${preview.nextStage}`,
+    `Will spawn: ${preview.willSpawn}`,
+  ].join("\n");
+}
+
 if (require.main === module) {
   main(process.argv.slice(2));
 }
 
-module.exports = { formatRunSummary, main };
+module.exports = { formatDryRunPreview, formatRunSummary, main };

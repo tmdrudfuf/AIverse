@@ -113,10 +113,16 @@ Run exactly the current stage:
 node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json
 ```
 
+Preview the current stage without spawning an agent or advancing state:
+
+```powershell
+node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json --dry-run
+```
+
 Continue across safe runnable stages until blocked:
 
 ```powershell
 node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json --until-blocked --max-steps 6
 ```
 
-The command prints the current stage, selected agent, execution result, next stage, and output paths. It stops before `human-merge-decision` and never executes push, PR, merge, or branch deletion commands.
+The command prints the current stage, selected agent, execution result, next stage, and output paths. Dry-run preview prints the selected stage, selected agent, command preview, prompt path, run directory, and next expected step without spawning an agent. It stops before `human-merge-decision` and never executes push, PR, merge, or branch deletion commands.
