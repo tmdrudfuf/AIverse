@@ -65,5 +65,5 @@ This repository is worked on by both OpenAI Codex and Claude Code.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/046-codex-claude-e2e-orchestration/plan.md
+shell commands, and other important information, read specs/047-agent-workflow-dry-run-preview/plan.md
 <!-- SPECKIT END -->
