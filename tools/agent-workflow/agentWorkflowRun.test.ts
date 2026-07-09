@@ -14,6 +14,7 @@ type WorkflowState = {
   validationCommands: string[];
   scopeConstraints: string[];
   results: Array<{ stage: string; decision?: string }>;
+  reviewFindings?: string[];
   agentRunners?: Record<string, unknown>;
   stageAgents?: Record<string, string>;
 };
@@ -89,6 +90,36 @@ describe("agent workflow run command", () => {
     expect(summary.steps.map((step) => step.stage)).toEqual(["implement", "review", "final-verification"]);
     expect(summary.stopReason).toBe("human-merge-decision");
     expect(summary.nextStage).toBe("human-merge-decision");
+  });
+
+  it("runs Codex implement then Claude review and preserves Changes Requested findings for Codex fix", async () => {
+    const adapter = createSequenceAdapter([
+      { stdout: "implementation done", exitCode: 0 },
+      { stdout: "Changes Requested\n- Fix tools/agent-workflow/agentWorkflow.js:10.", exitCode: 0 },
+    ]);
+
+    const summary = await runWorkflowCommand(createState({
+      repositoryPath: "C:\\Users\\tmdru\\Desktop\\Ky-Project\\AIverse",
+      taskScope: "Spec 046 E2E orchestration",
+      changedFiles: ["tools/agent-workflow/agentWorkflow.js"],
+      validationEvidence: ["npm test passed"],
+    } as Partial<WorkflowState>), {
+      cwd: createTempDir(),
+      untilBlocked: true,
+      maxSteps: 2,
+      processAdapter: adapter,
+      now: () => "2026-07-08T00:00:00.000Z",
+    });
+
+    expect(adapter.run).toHaveBeenNthCalledWith(1, "codex", [], expect.objectContaining({
+      input: expect.stringContaining("Implement 044-agent-workflow-run-command"),
+    }));
+    expect(adapter.run).toHaveBeenNthCalledWith(2, "claude", ["-p", expect.stringContaining("Spec 046 E2E orchestration")], expect.objectContaining({
+      input: undefined,
+    }));
+    expect(summary.steps.map((step) => step.stage)).toEqual(["implement", "review"]);
+    expect(summary.nextStage).toBe("fix");
+    expect(summary.state.reviewFindings?.[0]).toContain("agentWorkflow.js:10");
   });
 
   it("stops on failed execution and does not advance stage", async () => {

@@ -59,10 +59,30 @@ function formatList(items) {
   return items.map((item) => `- ${item}`).join("\n");
 }
 
+function formatOptionalList(value, emptyText) {
+  if (!Array.isArray(value) || value.length === 0) return emptyText;
+  return formatList(value);
+}
+
 function detectDecision(text) {
   const content = String(text || "");
-  if (content.includes("Changes Requested")) return "Changes Requested";
-  if (content.includes("Approved")) return "Approved";
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^#+\s*/, "").replace(/^\*\*(.+)\*\*$/, "$1").trim())
+    .filter(Boolean);
+  const hasChangesRequested = lines.some((line) => (
+    line === "Changes Requested"
+    || line.startsWith("Changes Requested ")
+    || /^Review Decision:\s*Changes Requested\b/i.test(line)
+  ));
+  const hasApproved = lines.some((line) => (
+    line === "Approved"
+    || line.startsWith("Approved ")
+    || /^Review Decision:\s*Approved\b/i.test(line)
+  ));
+  if (hasChangesRequested && hasApproved) return "Unknown";
+  if (hasChangesRequested) return "Changes Requested";
+  if (hasApproved) return "Approved";
   return "Unknown";
 }
 
@@ -104,6 +124,11 @@ function renderTemplate(template, state) {
   const validationCommands = normalizeList(state.validationCommands, DEFAULT_VALIDATION_COMMANDS);
   const scopeConstraints = normalizeList(state.scopeConstraints, ["Keep the change scoped to the active feature."]);
   const expectedCommit = state.expectedCommit ? String(state.expectedCommit) : "not provided";
+  const repositoryPath = state.repositoryPath ? String(state.repositoryPath) : "not provided";
+  const taskScope = state.taskScope ? String(state.taskScope) : "not provided";
+  const changedFiles = formatOptionalList(state.changedFiles, "- not provided");
+  const validationEvidence = formatOptionalList(state.validationEvidence, "- not provided");
+  const reviewFindings = formatOptionalList(state.reviewFindings, "- none recorded");
   const primaryWorktreeRule = state.primaryWorktreePath
     ? `Primary worktree safety: do not modify, checkout, reset, stash, clean, or otherwise interfere with ${state.primaryWorktreePath}.`
     : "Primary worktree safety: if another worktree is active, do not modify or interfere with it.";
@@ -114,6 +139,11 @@ function renderTemplate(template, state) {
     currentBranch: state.currentBranch || "unknown-branch",
     baseBranch: state.baseBranch || "main",
     expectedCommit,
+    repositoryPath,
+    taskScope,
+    changedFiles,
+    validationEvidence,
+    reviewFindings,
     validationCommands: formatList(validationCommands),
     scopeConstraints: formatList(scopeConstraints),
     reviewDecisionFormat: REVIEW_DECISION_FORMAT,
@@ -202,11 +232,17 @@ function recordAgentResult(state, input, options = {}) {
     recordedAt: options.recordedAt || new Date().toISOString(),
     path: path.relative(options.cwd || process.cwd(), outputPath).replace(/\\/g, "/"),
   };
+  if ((stage === "review" || stage === "re-review") && result.decision === "Changes Requested") {
+    result.findings = content;
+  }
 
   const nextState = {
     ...state,
     results: [...(Array.isArray(state.results) ? state.results : []), result],
   };
+  if (result.findings) {
+    nextState.reviewFindings = [...(Array.isArray(state.reviewFindings) ? state.reviewFindings : []), result.findings];
+  }
 
   return { state: nextState, result, outputPath };
 }

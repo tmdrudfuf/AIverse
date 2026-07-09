@@ -7,6 +7,7 @@ import {
   DEFAULT_STAGE_AGENTS,
   assertRunnableStage,
   assertSafeCommand,
+  createPromptInvocation,
   detectAgentCli,
   isRemoteMutatingCommand,
   runWorkflowAgent,
@@ -21,6 +22,7 @@ type WorkflowState = {
   validationCommands: string[];
   scopeConstraints: string[];
   results: Array<{ stage: string; decision?: string; path?: string }>;
+  reviewFindings?: string[];
   agentRunners?: Record<string, unknown>;
   stageAgents?: Record<string, string>;
 };
@@ -77,6 +79,47 @@ describe("CLI agent detection", () => {
     expect(result.agentId).toBe("claude");
     expect(result.errorMessage).toContain("ENOENT");
   });
+
+  it("rejects state-configured gh pr merge before detection spawn", async () => {
+    const adapter = createAdapter({ stdout: "should not run" });
+
+    await expect(detectAgentCli({
+      agentId: "unsafe",
+      identity: "Unsafe gh",
+      command: "gh",
+      args: ["pr", "merge"],
+      inputMode: "stdin",
+    }, { processAdapter: adapter, cwd: createTempDir() })).rejects.toThrow("Remote-mutating");
+    expect(adapter.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects state-configured git push before detection spawn", async () => {
+    const adapter = createAdapter({ stdout: "should not run" });
+
+    await expect(detectAgentCli({
+      agentId: "unsafe",
+      identity: "Unsafe git",
+      command: "git",
+      args: ["push"],
+      inputMode: "stdin",
+    }, { processAdapter: adapter, cwd: createTempDir() })).rejects.toThrow("Remote-mutating");
+    expect(adapter.run).not.toHaveBeenCalled();
+  });
+
+  it("still probes safe configured runners with --version", async () => {
+    const adapter = createAdapter({ stdout: "safe 1.0.0", exitCode: 0 });
+
+    const result = await detectAgentCli({
+      agentId: "safe",
+      identity: "Safe CLI",
+      command: "safe-cli",
+      args: ["run"],
+      inputMode: "stdin",
+    }, { processAdapter: adapter, cwd: createTempDir() });
+
+    expect(result.installed).toBe(true);
+    expect(adapter.run).toHaveBeenCalledWith("safe-cli", ["--version"], expect.any(Object));
+  });
 });
 
 describe("CLI agent execution", () => {
@@ -103,6 +146,53 @@ describe("CLI agent execution", () => {
       cwd,
       input: expect.stringContaining("Implement 043-cli-agent-runner-foundation"),
     }));
+  });
+
+  it("runs a Claude review prompt through -p without stdin input", async () => {
+    const cwd = createTempDir();
+    const adapter = createAdapter({ stdout: "Approved", exitCode: 0, durationMs: 25 });
+    const state = createState({
+      repositoryPath: cwd,
+      taskScope: "Spec 046 review scope",
+      changedFiles: ["tools/agent-workflow/agentRunner.js"],
+      validationEvidence: ["npm test passed"],
+      results: [{ stage: "implement", decision: "Unknown" }],
+    } as Partial<WorkflowState>);
+
+    const run = await runWorkflowAgent(state, {
+      cwd,
+      stage: "review",
+      agentId: "claude",
+      processAdapter: adapter,
+      now: () => "2026-07-08T00:00:00.000Z",
+    });
+
+    expect(run.executionRecord.agentId).toBe("claude");
+    expect(run.executionRecord.command).toBe("claude");
+    expect(run.executionRecord.args[0]).toBe("-p");
+    expect(run.executionRecord.args[1]).toContain("Repository path");
+    expect(run.executionRecord.args[1]).toContain(cwd);
+    expect(run.executionRecord.args[1]).toContain("Spec 046 review scope");
+    expect(run.executionRecord.args[1]).toContain("tools/agent-workflow/agentRunner.js");
+    expect(run.executionRecord.args[1]).toContain("npm test passed");
+    expect(adapter.run).toHaveBeenCalledWith("claude", ["-p", expect.stringContaining("Review 043-cli-agent-runner-foundation")], expect.objectContaining({
+      cwd,
+      input: undefined,
+    }));
+  });
+
+  it("builds prompt argument invocations without hardcoding Claude in the workflow", () => {
+    const invocation = createPromptInvocation({
+      agentId: "reviewer",
+      identity: "Reviewer",
+      command: "reviewer",
+      args: ["--prompt", "{prompt}"],
+      inputMode: "argument",
+      timeoutMs: 1000,
+    }, "Review this branch");
+
+    expect(invocation.args).toEqual(["--prompt", "Review this branch"]);
+    expect(invocation.input).toBeUndefined();
   });
 
   it("records a Claude review decision and advances the workflow to fix", async () => {
@@ -136,6 +226,25 @@ describe("CLI agent execution", () => {
     expect(run.executionRecord.exitCode).toBe(2);
     expect(run.executionRecord.decision).toBe("Unknown");
     expect(run.state.results).toHaveLength(0);
+    expect(run.resultPath).toBeUndefined();
+  });
+
+  it("handles unavailable Claude without recording a review decision", async () => {
+    const run = await runWorkflowAgent(createState({ results: [{ stage: "implement", decision: "Unknown" }] }), {
+      cwd: createTempDir(),
+      stage: "review",
+      agentId: "claude",
+      processAdapter: createAdapter({
+        stderr: "spawn claude ENOENT",
+        exitCode: null,
+        errorMessage: "spawn claude ENOENT",
+      }),
+    });
+
+    expect(run.executionRecord.outputState).toBe("non-zero");
+    expect(run.executionRecord.errorMessage).toContain("ENOENT");
+    expect(run.executionRecord.decision).toBe("Unknown");
+    expect(run.state.results).toHaveLength(1);
     expect(run.resultPath).toBeUndefined();
   });
 

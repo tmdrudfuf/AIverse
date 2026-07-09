@@ -28,8 +28,8 @@ const DEFAULT_AGENT_RUNNERS = {
     agentId: "claude",
     identity: "Claude Code CLI",
     command: "claude",
-    args: [],
-    inputMode: "stdin",
+    args: ["-p", "{{prompt}}"],
+    inputMode: "argument",
     timeoutMs: DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
   },
 };
@@ -115,6 +115,19 @@ function assertSafeCommand(config) {
   }
 }
 
+function createPromptInvocation(agent, prompt) {
+  if (agent.inputMode === "argument") {
+    const promptArgs = agent.args.map((arg) => {
+      if (arg === "{{prompt}}" || arg === "{prompt}") return prompt;
+      return arg;
+    });
+    const args = promptArgs.some((arg) => arg === prompt) ? promptArgs : [...promptArgs, prompt];
+    return { args, input: undefined };
+  }
+
+  return { args: agent.args, input: prompt };
+}
+
 function createDefaultProcessAdapter() {
   return {
     run(command, args = [], options = {}) {
@@ -181,7 +194,7 @@ function createDefaultProcessAdapter() {
 
 async function detectAgentCli(config, options = {}) {
   const agent = normalizeAgentConfig(config);
-  assertSafeCommand({ ...agent, args: ["--version"] });
+  assertSafeCommand(agent);
   const adapter = options.processAdapter || createDefaultProcessAdapter();
   const startedAt = new Date().toISOString();
   const result = await adapter.run(agent.command, ["--version"], {
@@ -229,10 +242,11 @@ async function runWorkflowAgent(state, options = {}) {
 
   const adapter = options.processAdapter || createDefaultProcessAdapter();
   const generated = generatePrompt(state, { stage });
+  const invocation = createPromptInvocation(agent, generated.prompt);
   const startedAt = new Date().toISOString();
-  const result = await adapter.run(agent.command, agent.args, {
+  const result = await adapter.run(agent.command, invocation.args, {
     cwd: options.cwd || process.cwd(),
-    input: generated.prompt,
+    input: invocation.input,
     timeoutMs,
   });
   const completedAt = new Date().toISOString();
@@ -244,7 +258,7 @@ async function runWorkflowAgent(state, options = {}) {
     agentId: agent.agentId,
     agentIdentity: agent.identity,
     command: agent.command,
-    args: agent.args,
+    args: invocation.args,
     startedAt,
     completedAt,
     durationMs: result.durationMs || 0,
@@ -318,6 +332,7 @@ module.exports = {
   assertRunnableStage,
   assertSafeCommand,
   createDefaultProcessAdapter,
+  createPromptInvocation,
   detectAgentCli,
   isRemoteMutatingCommand,
   isSuccessfulExecution,

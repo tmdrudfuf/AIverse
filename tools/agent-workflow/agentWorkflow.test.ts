@@ -25,6 +25,7 @@ type WorkflowState = {
     decision?: string;
     path?: string;
   }>;
+  reviewFindings?: string[];
 };
 
 function createTempDir() {
@@ -60,7 +61,11 @@ describe("agent workflow prompt generation", () => {
   it("generates a review prompt after an implementation result is recorded", () => {
     const state = createState({
       results: [{ stage: "implement", decision: "Unknown" }],
-    });
+      repositoryPath: "C:\\Users\\tmdru\\Desktop\\Ky-Project\\AIverse",
+      taskScope: "Spec 046 local orchestration",
+      changedFiles: ["tools/agent-workflow/agentRunner.js"],
+      validationEvidence: ["npm test passed"],
+    } as Partial<WorkflowState>);
 
     const generated = generatePrompt(state);
 
@@ -68,6 +73,23 @@ describe("agent workflow prompt generation", () => {
     expect(generated.prompt).toContain("Review 042-agent-review-orchestration");
     expect(generated.prompt).toContain("Approved");
     expect(generated.prompt).toContain("Changes Requested");
+    expect(generated.prompt).toContain("C:\\Users\\tmdru\\Desktop\\Ky-Project\\AIverse");
+    expect(generated.prompt).toContain("Spec 046 local orchestration");
+    expect(generated.prompt).toContain("tools/agent-workflow/agentRunner.js");
+    expect(generated.prompt).toContain("npm test passed");
+    expect(generated.prompt).toContain("Do not commit, push, create or update pull requests");
+  });
+
+  it("renders recorded review findings into the fix prompt", () => {
+    const state = createState({
+      results: [{ stage: "review", decision: "Changes Requested" }],
+      reviewFindings: ["Changes Requested\n- Fix tools/agent-workflow/agentRunner.js line 42."],
+    });
+
+    const generated = generatePrompt(state);
+
+    expect(generated.stage).toBe("fix");
+    expect(generated.prompt).toContain("Fix tools/agent-workflow/agentRunner.js line 42.");
   });
 
   it("generates a fix prompt when review result contains Changes Requested", () => {
@@ -210,13 +232,106 @@ describe("agent workflow result records", () => {
     );
   });
 
-  it("prefers Changes Requested over Approved when both appear", () => {
+  it("treats mixed Approved and Changes Requested output as ambiguous", () => {
     const recorded = recordAgentResult(
       createState(),
       {
         stage: "review",
         agent: "Codex",
-        resultText: "Approved? No. Changes Requested - fix the test.",
+        resultText: "Approved\nChanges Requested - fix the test.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(recorded.result.decision).toBe("Unknown");
+    expect(recorded.state.reviewFindings).toBeUndefined();
+    expect(determineNextStage(recorded.state)).toBe("review");
+  });
+
+  it("parses real Claude markdown review decision forms", () => {
+    const approved = recordAgentResult(
+      createState({ results: [{ stage: "fix", decision: "Unknown" }] }),
+      {
+        stage: "re-review",
+        agent: "Claude",
+        resultText: "**Approved**",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+    const changes = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "## Review Decision: Changes Requested\n\n- Add the missing quickstart note.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(approved.result.decision).toBe("Approved");
+    expect(determineNextStage(approved.state)).toBe("final-verification");
+    expect(changes.result.decision).toBe("Changes Requested");
+    expect(determineNextStage(changes.state)).toBe("fix");
+    expect(changes.state.reviewFindings?.[0]).toContain("missing quickstart note");
+  });
+
+  it("does not treat explanatory decision mentions as final decisions", () => {
+    const recorded = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "This is not approved yet. A previous review had changes requested.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(recorded.result.decision).toBe("Unknown");
+    expect(determineNextStage(recorded.state)).toBe("review");
+  });
+
+  it("treats mixed markdown review decisions as ambiguous", () => {
+    const recorded = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "## Review Decision: Approved\n\n**Changes Requested**",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(recorded.result.decision).toBe("Unknown");
+    expect(determineNextStage(recorded.state)).toBe("review");
+  });
+
+  it("preserves Changes Requested findings for the next Codex fix", () => {
+    const recorded = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "Changes Requested\n- Fix tools/agent-workflow/agentRunner.js:42 before proceeding.",
       },
       {
         cwd: createTempDir(),
@@ -226,7 +341,30 @@ describe("agent workflow result records", () => {
     );
 
     expect(recorded.result.decision).toBe("Changes Requested");
-    expect(determineNextStage(recorded.state)).toBe("fix");
+    expect((recorded.result as { findings?: string }).findings).toContain("agentRunner.js:42");
+    expect(recorded.state.reviewFindings).toEqual([
+      "Changes Requested\n- Fix tools/agent-workflow/agentRunner.js:42 before proceeding.",
+    ]);
+    expect(generatePrompt(recorded.state).prompt).toContain("agentRunner.js:42");
+  });
+
+  it("treats malformed review output as unknown", () => {
+    const recorded = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "Looks pretty good, but maybe fix something later.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(recorded.result.decision).toBe("Unknown");
+    expect(determineNextStage(recorded.state)).toBe("review");
   });
 
   it("writes generated prompts only under the run directory", () => {

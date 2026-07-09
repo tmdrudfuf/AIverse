@@ -4,6 +4,20 @@ Review branch `{{currentBranch}}` against base `{{baseBranch}}`.
 
 Expected commit: `{{expectedCommit}}`
 
+Repository path: `{{repositoryPath}}`
+
+Task/spec scope:
+
+{{taskScope}}
+
+Changed files / diff scope:
+
+{{changedFiles}}
+
+Validation evidence:
+
+{{validationEvidence}}
+
 ## Review Focus
 
 - Correctness
@@ -24,6 +38,11 @@ Expected commit: `{{expectedCommit}}`
 
 {{reviewDecisionFormat}}
 
+Return exactly one review decision:
+
+- `Approved`
+- `Changes Requested` with exact file/line comments and behavioral risk
+
 ## Safety Rules
 
 {{safetyRules}}
@@ -31,6 +50,7 @@ Expected commit: `{{expectedCommit}}`
 {{primaryWorktreeRule}}
 
 Do not modify files unless a human explicitly asks for a fix.
+Do not commit, push, create or update pull requests, mark pull requests ready, merge, delete branches, or perform remote mutations.
 
 ## Human-Only Commands
 
