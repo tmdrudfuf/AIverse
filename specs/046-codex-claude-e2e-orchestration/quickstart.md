@@ -51,6 +51,8 @@
    .agent-workflow/runs/<feature-id>/
    ```
 
+   Note 2026-07-09: Live local workflow runs record smoke-test evidence under `.agent-workflow/runs/<feature-id>/`.
+
 ## Expected Outcomes
 
 - Codex implementation stages receive prompts through stdin.

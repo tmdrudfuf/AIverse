@@ -62,6 +62,15 @@
 - [X] T016 Run `git diff --check`
 - [X] T017 Run `git diff --cached --check`
 
+---
+
+## Phase 6: Live Smoke Parser Hardening
+
+**Purpose**: Address the live Codex-to-Claude smoke-test blocker where real Claude markdown decisions were not always parsed as workflow decisions.
+
+- [X] T018 Add conservative markdown review decision parsing for standalone bold decisions and `Review Decision:` heading forms in `tools/agent-workflow/agentWorkflow.js`
+- [X] T019 Add focused parser regressions for bold decisions, `Review Decision:` heading forms, explanatory mentions, and mixed markdown decisions in `tools/agent-workflow/agentWorkflow.test.ts`
+
 ## Dependencies & Execution Order
 
 - Phase 1 before implementation.

@@ -252,6 +252,79 @@ describe("agent workflow result records", () => {
     expect(determineNextStage(recorded.state)).toBe("review");
   });
 
+  it("parses real Claude markdown review decision forms", () => {
+    const approved = recordAgentResult(
+      createState({ results: [{ stage: "fix", decision: "Unknown" }] }),
+      {
+        stage: "re-review",
+        agent: "Claude",
+        resultText: "**Approved**",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+    const changes = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "## Review Decision: Changes Requested\n\n- Add the missing quickstart note.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(approved.result.decision).toBe("Approved");
+    expect(determineNextStage(approved.state)).toBe("final-verification");
+    expect(changes.result.decision).toBe("Changes Requested");
+    expect(determineNextStage(changes.state)).toBe("fix");
+    expect(changes.state.reviewFindings?.[0]).toContain("missing quickstart note");
+  });
+
+  it("does not treat explanatory decision mentions as final decisions", () => {
+    const recorded = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "This is not approved yet. A previous review had changes requested.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(recorded.result.decision).toBe("Unknown");
+    expect(determineNextStage(recorded.state)).toBe("review");
+  });
+
+  it("treats mixed markdown review decisions as ambiguous", () => {
+    const recorded = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "## Review Decision: Approved\n\n**Changes Requested**",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+
+    expect(recorded.result.decision).toBe("Unknown");
+    expect(determineNextStage(recorded.state)).toBe("review");
+  });
+
   it("preserves Changes Requested findings for the next Codex fix", () => {
     const recorded = recordAgentResult(
       createState(),

@@ -68,10 +68,18 @@ function detectDecision(text) {
   const content = String(text || "");
   const lines = content
     .split(/\r?\n/)
-    .map((line) => line.trim())
+    .map((line) => line.trim().replace(/^#+\s*/, "").replace(/^\*\*(.+)\*\*$/, "$1").trim())
     .filter(Boolean);
-  const hasChangesRequested = lines.some((line) => line === "Changes Requested" || line.startsWith("Changes Requested "));
-  const hasApproved = lines.some((line) => line === "Approved" || line.startsWith("Approved "));
+  const hasChangesRequested = lines.some((line) => (
+    line === "Changes Requested"
+    || line.startsWith("Changes Requested ")
+    || /^Review Decision:\s*Changes Requested\b/i.test(line)
+  ));
+  const hasApproved = lines.some((line) => (
+    line === "Approved"
+    || line.startsWith("Approved ")
+    || /^Review Decision:\s*Approved\b/i.test(line)
+  ));
   if (hasChangesRequested && hasApproved) return "Unknown";
   if (hasChangesRequested) return "Changes Requested";
   if (hasApproved) return "Approved";
