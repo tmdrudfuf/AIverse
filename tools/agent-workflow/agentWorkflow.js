@@ -73,12 +73,12 @@ function detectDecision(text) {
   const hasChangesRequested = lines.some((line) => (
     line === "Changes Requested"
     || line.startsWith("Changes Requested ")
-    || /^Review Decision:\s*Changes Requested\b/i.test(line)
+    || /^(Review\s+)?Decision:\s*Changes Requested\b/i.test(line)
   ));
   const hasApproved = lines.some((line) => (
     line === "Approved"
     || line.startsWith("Approved ")
-    || /^Review Decision:\s*Approved\b/i.test(line)
+    || /^(Review\s+)?Decision:\s*Approved\b/i.test(line)
   ));
   if (hasChangesRequested && hasApproved) return "Unknown";
   if (hasChangesRequested) return "Changes Requested";
