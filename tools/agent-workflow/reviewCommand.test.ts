@@ -379,6 +379,61 @@ describe("independent review execution", () => {
     expect(run.state.reviewRuns[0].outcome).toBe("Timed Out");
   });
 
+  it("propagates an explicit Reviewer timeout unchanged", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    const adapter = createSpyAdapter({ stdout: "# Review Decision: Approved", exitCode: 0 });
+
+    await runIndependentReview(createState(), {
+      cwd,
+      processAdapter: adapter,
+      timeoutMs: 600000,
+      now: () => "2026-07-23T00:00:00.000Z",
+    });
+
+    expect(adapter.run).toHaveBeenCalledWith("claude", expect.any(Array), expect.objectContaining({
+      timeoutMs: 600000,
+    }));
+  });
+
+  it("allows a long-running successful Reviewer to complete before timeout", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    const state = createState({
+      agentRunners: {
+        reviewer: {
+          identity: "Long Mock Reviewer",
+          command: process.execPath,
+          args: [
+            "-e",
+            "process.stdin.resume(); process.stdin.on('end', () => setTimeout(() => console.log('# Review Decision: Approved\\n\\n## Blocking Findings\\n(none)\\n## Non-Blocking Improvements\\n(none)\\n## Validation Performed\\nmock\\n## Final Recommendation\\nApprove.'), 12000));",
+          ],
+          inputMode: "stdin",
+          timeoutMs: 30000,
+        },
+      },
+    });
+
+    const run = await runIndependentReview(state, {
+      cwd,
+      timeoutMs: 30000,
+      now: () => "2026-07-23T00:00:00.000Z",
+    });
+    const executionRecord = JSON.parse(fs.readFileSync(run.executionPath, "utf8"));
+
+    expect(run.outcome).toBe("Approved");
+    expect(executionRecord.exitCode).toBe(0);
+    expect(executionRecord.signal).toBeNull();
+    expect(executionRecord.timedOut).toBe(false);
+    expect(executionRecord.interrupted).toBe(false);
+    expect(executionRecord.terminationReason).toBe("natural-exit");
+    expect(executionRecord.configuredTimeoutMs).toBe(30000);
+  }, 20000);
+
   it("classifies a failed execution without fabricating approval", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import {
   CLAUDE_FULL_ACCESS_ARGS,
@@ -439,6 +440,124 @@ describe("CLI agent execution", () => {
     expect(result.timedOut).toBe(true);
     expect(result.exitCode === null || typeof result.exitCode === "number").toBe(true);
     expect(result.signal || result.exitCode).toBeTruthy();
+  });
+
+  it("lets a long-running child complete naturally without cleanup termination", async () => {
+    const adapter = createDefaultProcessAdapter();
+
+    const result = await adapter.run(process.execPath, [
+      "-e",
+      "setTimeout(() => console.log('done'), 1200)",
+    ], {
+      cwd: createTempDir(),
+      timeoutMs: 5000,
+    });
+
+    expect(result.stdout.trim()).toBe("done");
+    expect(result.exitCode).toBe(0);
+    expect(result.signal).toBeNull();
+    expect(result.timedOut).toBe(false);
+    expect(result.interrupted).toBe(false);
+    expect(result.terminationReason).toBe("natural-exit");
+    expect(result.configuredTimeoutMs).toBe(5000);
+  });
+
+  it("records actual timeout separately from parent interruption", async () => {
+    const adapter = createDefaultProcessAdapter();
+
+    const result = await adapter.run(process.execPath, [
+      "-e",
+      "setInterval(() => {}, 1000)",
+    ], {
+      cwd: createTempDir(),
+      timeoutMs: 50,
+      killGraceMs: 50,
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(result.interrupted).toBe(false);
+    expect(result.terminationReason).toBe("timeout");
+    expect(result.terminationRequestedBy).toBe("timeout-timer");
+    expect(result.configuredTimeoutMs).toBe(50);
+  });
+
+  it("records parent signal interruption without sending real process signals", async () => {
+    const adapter = createDefaultProcessAdapter();
+    const signalTarget = new EventEmitter();
+    signalTarget.once = signalTarget.once.bind(signalTarget);
+    signalTarget.off = signalTarget.off.bind(signalTarget);
+
+    const run = adapter.run(process.execPath, [
+      "-e",
+      "setInterval(() => {}, 1000)",
+    ], {
+      cwd: createTempDir(),
+      timeoutMs: 5000,
+      killGraceMs: 50,
+      signalTarget,
+    });
+    setTimeout(() => signalTarget.emit("SIGTERM", "SIGTERM"), 100);
+
+    const result = await run;
+
+    expect(result.timedOut).toBe(false);
+    expect(result.interrupted).toBe(true);
+    expect(result.signal).toBe("SIGTERM");
+    expect(result.terminationReason).toBe("parent-signal");
+    expect(result.terminationRequestedBy).toBe("parent-process");
+    expect(result.parentSignal).toBe("SIGTERM");
+    expect(signalTarget.listenerCount("SIGTERM")).toBe(0);
+    expect(signalTarget.listenerCount("SIGINT")).toBe(0);
+  });
+
+  it("records non-zero natural exits without timeout or interruption", async () => {
+    const adapter = createDefaultProcessAdapter();
+
+    const result = await adapter.run(process.execPath, [
+      "-e",
+      "process.stderr.write('bad'); process.exit(7)",
+    ], {
+      cwd: createTempDir(),
+      timeoutMs: 5000,
+    });
+
+    expect(result.stderr).toBe("bad");
+    expect(result.exitCode).toBe(7);
+    expect(result.signal).toBeNull();
+    expect(result.timedOut).toBe(false);
+    expect(result.interrupted).toBe(false);
+    expect(result.terminationReason).toBe("natural-exit");
+  });
+
+  it("clears timers and signal listeners across repeated real subprocess runs", async () => {
+    const adapter = createDefaultProcessAdapter();
+    const signalTarget = new EventEmitter();
+    signalTarget.once = signalTarget.once.bind(signalTarget);
+    signalTarget.off = signalTarget.off.bind(signalTarget);
+
+    const first = await adapter.run(process.execPath, [
+      "-e",
+      "setTimeout(() => console.log('first'), 300)",
+    ], {
+      cwd: createTempDir(),
+      timeoutMs: 5000,
+      signalTarget,
+    });
+    const second = await adapter.run(process.execPath, [
+      "-e",
+      "setTimeout(() => console.log('second'), 300)",
+    ], {
+      cwd: createTempDir(),
+      timeoutMs: 5000,
+      signalTarget,
+    });
+
+    expect(first.stdout.trim()).toBe("first");
+    expect(second.stdout.trim()).toBe("second");
+    expect(first.interrupted).toBe(false);
+    expect(second.interrupted).toBe(false);
+    expect(signalTarget.listenerCount("SIGTERM")).toBe(0);
+    expect(signalTarget.listenerCount("SIGINT")).toBe(0);
   });
 
   it("keeps run records contained for unusual feature ids", async () => {

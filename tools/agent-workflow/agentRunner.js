@@ -10,6 +10,7 @@ const {
   generatePrompt,
   listForbiddenExecutablePatterns,
   recordAgentResult,
+  readState,
   writeState,
 } = require("./agentWorkflow.js");
 
@@ -162,6 +163,9 @@ function createDefaultProcessAdapter() {
     run(command, args = [], options = {}) {
       return new Promise((resolve) => {
         const startedAtMs = Date.now();
+        const configuredTimeoutMs = options.timeoutMs || DEFAULT_AGENT_RUNNER_TIMEOUT_MS;
+        const gracePeriodMs = options.killGraceMs || 2_000;
+        const signalTarget = options.signalTarget || process;
         const child = spawn(command, args, {
           cwd: options.cwd,
           shell: false,
@@ -174,37 +178,45 @@ function createDefaultProcessAdapter() {
         let timedOut = false;
         let interrupted = false;
         let interruptSignal = null;
+        let terminationReason = null;
+        let terminationRequestedAt = null;
+        let terminationRequestedBy = null;
+        let parentSignal = null;
         let forceKillTimeout;
 
         const cleanup = () => {
           clearTimeout(timeout);
           clearTimeout(forceKillTimeout);
-          process.off("SIGINT", handleInterrupt);
-          process.off("SIGTERM", handleInterrupt);
+          signalTarget.off("SIGINT", handleInterrupt);
+          signalTarget.off("SIGTERM", handleInterrupt);
         };
 
-        const requestChildShutdown = () => {
+        const requestChildShutdown = (reason, requestedBy, signal) => {
           if (child.exitCode !== null || child.signalCode !== null) return;
+          terminationReason = reason;
+          terminationRequestedBy = requestedBy;
+          terminationRequestedAt = new Date().toISOString();
+          if (signal) parentSignal = signal;
           child.kill("SIGTERM");
           clearTimeout(forceKillTimeout);
           forceKillTimeout = setTimeout(() => {
             if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
-          }, options.killGraceMs || 2_000);
+          }, gracePeriodMs);
         };
 
         const timeout = setTimeout(() => {
           timedOut = true;
-          requestChildShutdown();
-        }, options.timeoutMs || DEFAULT_AGENT_RUNNER_TIMEOUT_MS);
+          requestChildShutdown("timeout", "timeout-timer");
+        }, configuredTimeoutMs);
 
         const handleInterrupt = (signal) => {
           interrupted = true;
           interruptSignal = signal;
-          requestChildShutdown();
+          requestChildShutdown("parent-signal", "parent-process", signal);
         };
 
-        process.once("SIGINT", handleInterrupt);
-        process.once("SIGTERM", handleInterrupt);
+        signalTarget.once("SIGINT", handleInterrupt);
+        signalTarget.once("SIGTERM", handleInterrupt);
 
         child.stdout.on("data", (chunk) => {
           stdout += chunk.toString();
@@ -225,20 +237,37 @@ function createDefaultProcessAdapter() {
             interrupted,
             durationMs: Date.now() - startedAtMs,
             errorMessage: error.message,
+            terminationReason: terminationReason || "spawn-error",
+            terminationRequestedAt,
+            terminationRequestedBy,
+            configuredTimeoutMs,
+            gracePeriodMs,
+            parentSignal,
+            childCloseObservedAt: null,
           });
         });
         child.on("close", (exitCode, signal) => {
           if (settled) return;
           settled = true;
           cleanup();
+          const childCloseObservedAt = new Date().toISOString();
+          const observedTerminationReason = terminationReason
+            || (signal ? "child-signal" : "natural-exit");
           resolve({
             stdout,
             stderr,
             exitCode,
             signal: signal || interruptSignal,
             timedOut,
-            interrupted: interrupted || (Boolean(signal) && !timedOut),
+            interrupted,
             durationMs: Date.now() - startedAtMs,
+            terminationReason: observedTerminationReason,
+            terminationRequestedAt,
+            terminationRequestedBy,
+            configuredTimeoutMs,
+            gracePeriodMs,
+            parentSignal,
+            childCloseObservedAt,
           });
         });
 
@@ -327,6 +356,13 @@ async function runWorkflowAgent(state, options = {}) {
     stdout: result.stdout || "",
     stderr: result.stderr || "",
     errorMessage: result.errorMessage || "",
+    terminationReason: result.terminationReason || "",
+    terminationRequestedAt: result.terminationRequestedAt || null,
+    terminationRequestedBy: result.terminationRequestedBy || "",
+    configuredTimeoutMs: result.configuredTimeoutMs || timeoutMs,
+    gracePeriodMs: result.gracePeriodMs || null,
+    parentSignal: result.parentSignal || null,
+    childCloseObservedAt: result.childCloseObservedAt || null,
     decision: successful ? detectDecision(outputText) : "Unknown",
   };
 
@@ -376,7 +412,7 @@ async function runWorkflowAgent(state, options = {}) {
 }
 
 async function runWorkflowAgentAndPersist(statePath, options = {}) {
-  const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+  const state = readState(statePath);
   const run = await runWorkflowAgent(state, options);
   writeState(statePath, run.state);
   return run;
