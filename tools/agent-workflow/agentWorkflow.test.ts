@@ -7,6 +7,7 @@ import {
   generatePrompt,
   getRunDirectory,
   listForbiddenExecutablePatterns,
+  readState,
   recordAgentResult,
   writeGeneratedPrompt,
 } from "./agentWorkflow.js";
@@ -355,7 +356,7 @@ describe("agent workflow result records", () => {
     expect(determineNextStage(recorded.state)).toBe("review");
   });
 
-  it("preserves Changes Requested findings for the next Codex fix", () => {
+  it("preserves Changes Requested findings for the next Implementer fix", () => {
     const recorded = recordAgentResult(
       createState(),
       {
@@ -406,6 +407,14 @@ describe("agent workflow result records", () => {
 
     expect(written.outputPath.startsWith(path.join(cwd, ".agent-workflow", "runs"))).toBe(true);
     expect(fs.readFileSync(written.outputPath, "utf8")).toContain("Implement 042-agent-review-orchestration");
+  });
+
+  it("reads PowerShell-created UTF-8 state files with a BOM", () => {
+    const cwd = createTempDir();
+    const statePath = path.join(cwd, "state.json");
+    fs.writeFileSync(statePath, `\uFEFF${JSON.stringify(createState())}`, "utf8");
+
+    expect(readState(statePath).featureId).toBe("042-agent-review-orchestration");
   });
 });
 

@@ -1,4 +1,4 @@
-# Data Model: Codex Claude E2E Orchestration
+# Data Model: Role-Based E2E Agent Orchestration
 
 ## Workflow State Extension
 
@@ -20,34 +20,62 @@ Existing workflow state remains the source of truth. This feature uses optional 
 
 ## Runner Configuration
 
-### Codex Implementation Runner
+Runner configurations describe concrete CLI agents. Role assignments decide which runner fills each workflow role.
 
-- `agentId`: `codex`
-- `identity`: `OpenAI Codex CLI`
+### Default Implementer Runner
+
+- `agentId`: `implementer`
+- `identity`: `Implementer (Codex CLI)`
 - `command`: `codex`
-- `args`: `[]`
+- `args`: `["--sandbox", "danger-full-access", "--ask-for-approval", "never", "exec"]`
 - `inputMode`: `stdin`
 
-### Claude Review Runner
+### Default Reviewer Runner
 
-- `agentId`: `claude`
-- `identity`: `Claude Code CLI`
+- `agentId`: `reviewer`
+- `identity`: `Reviewer (Claude CLI)`
 - `command`: `claude`
-- `args`: `["-p", "{{prompt}}"]`
+- `args`: `["--dangerously-skip-permissions", "-p", "{{prompt}}"]`
 - `inputMode`: `argument`
+
+### Backward-Compatible Runner Aliases
+
+- `codex`: OpenAI Codex CLI using stdin and the same full local-access flags as the default Implementer.
+- `claude`: Claude Code CLI using `["--dangerously-skip-permissions", "-p", "{{prompt}}"]`.
+
+Existing workflow state files that refer directly to `codex` or `claude` continue to work. New state files should prefer role-oriented runner IDs or local IDs that describe the assignment.
+
+## Role Assignment
+
+### Default Stage Mapping
+
+- `implement`: `implementer`
+- `review`: `reviewer`
+- `fix`: `implementer`
+- `re-review`: `reviewer`
+- `final-verification`: `implementer`
+
+### Fallback Assignment
+
+If the default Implementer is unavailable due to rate limits, quota, maintenance, or local CLI issues, a local state file may swap assignments. Example: Implementer = Claude CLI and Reviewer = Codex CLI.
+
+The reviewer should be different from the implementer whenever possible. Do not let an agent review its own implementation unless there is no reasonable alternative.
+
+Future CLI agents may fill either role, including Codex CLI, Claude CLI, Gemini CLI, OpenAI CLI, Qwen CLI, and future local agents.
 
 ### Validation Rules
 
 - Runner commands are checked for remote-mutating patterns before subprocess execution.
 - `human-merge-decision` never receives a runner.
 - Timeout values fall back to the existing default if invalid.
+- Role assignments must resolve to configured runner IDs.
 
 ## Review Result
 
 ### Fields
 
 - `stage`: `review` or `re-review`
-- `agent`: reviewer identity
+- `agent`: Reviewer identity
 - `decision`: `Approved`, `Changes Requested`, or `Unknown`
 - `findings`: full successful review text when the decision is `Changes Requested`
 - `path`: local run-record path

@@ -26,7 +26,7 @@
    - next expected step
    - `Will spawn: false`
 
-4. Verify no Codex or Claude process is spawned by the dry-run preview.
+4. Verify no Implementer, Reviewer, or configured agent process is spawned by the dry-run preview.
 
 5. Verify state is not advanced and no stage result is recorded.
 
@@ -42,4 +42,4 @@ git diff --cached --check
 
 ## Live E2E Readiness
 
-After implementation and validation, run this feature through the existing Codex -> Claude workflow as a small production-code smoke test. Stop at the human gate and do not perform remote mutations.
+After implementation and validation, run this feature through the existing Implementer -> Reviewer workflow as a small production-code smoke test. Stop at the human gate and do not perform remote mutations.

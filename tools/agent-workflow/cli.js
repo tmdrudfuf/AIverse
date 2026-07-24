@@ -14,6 +14,12 @@ const {
   runWorkflowAgentAndPersist,
 } = require("./agentRunner.js");
 const { previewWorkflowCommand, runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
+const {
+  NEXT_ACTION_BY_OUTCOME,
+  SAME_RUNNER_WARNING,
+  previewIndependentReview,
+  runIndependentReviewAndPersist,
+} = require("./reviewCommand.js");
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -30,12 +36,14 @@ function printUsage() {
     "Usage:",
     "  node tools/agent-workflow/cli.js next --state <state.json> [--write]",
     "  node tools/agent-workflow/cli.js record --state <state.json> --stage <stage> --agent <name> (--result-text <text> | --result-file <path>)",
-    "  node tools/agent-workflow/cli.js detect-agent --agent <codex|claude>",
-    "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <codex|claude>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <codex|claude>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js detect-agent --agent <implementer|reviewer|agent-id>",
+    "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--base <branch>] [--timeout-ms <ms>]",
     "",
     "Safety:",
-    "  This script does not push, create PRs, merge PRs, delete branches, call external AI tools, or call network APIs.",
+    "  This script does not push, create PRs, merge PRs, or delete branches.",
+    "  Configured local agent CLIs may use network access when a human runs a local CLI stage.",
     "  Any remote-mutating commands in generated prompts are labeled HUMAN-ONLY.",
   ].join("\n"));
 }
@@ -168,8 +176,74 @@ function main(argv) {
     return;
   }
 
+  if (command === "run-review") {
+    if (hasFlag(args, "--dry-run")) {
+      try {
+        console.log(formatIndependentReviewDryRunPreview(previewIndependentReview(state, {
+          cwd: process.cwd(),
+          agentId: readFlag(args, "--agent"),
+          baseBranch: readFlag(args, "--base"),
+        })));
+      } catch (error) {
+        console.error(error.message);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    const timeoutMsText = readFlag(args, "--timeout-ms");
+    runIndependentReviewAndPersist(resolvedStatePath, {
+      cwd: process.cwd(),
+      agentId: readFlag(args, "--agent"),
+      baseBranch: readFlag(args, "--base"),
+      timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
+    })
+      .then((run) => {
+        console.log(formatIndependentReviewResult(run));
+        if (run.outcome !== "Approved") process.exitCode = 1;
+      })
+      .catch((error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+      });
+    return;
+  }
+
   printUsage();
   process.exitCode = 1;
+}
+
+function formatIndependentReviewDryRunPreview(preview) {
+  const lines = [];
+  if (preview.sameRunner) lines.push(SAME_RUNNER_WARNING, "");
+  lines.push(
+    "Dry run: true",
+    `Implementer: ${preview.implementerId} (${preview.implementerIdentity})`,
+    `Reviewer: ${preview.reviewerId} (${preview.reviewerIdentity})`,
+    `Command: ${preview.commandPreview}`,
+    `Prompt path: ${preview.promptPath}`,
+    `Run directory: ${preview.runDirectory}`,
+    `Repository: ${preview.repositoryContext.repositoryPath}`,
+    `Current branch: ${preview.repositoryContext.currentBranch}`,
+    `Base branch: ${preview.repositoryContext.baseBranch}`,
+    `Merge base: ${preview.repositoryContext.mergeBase || "(none)"}`,
+    `Staged changes: ${preview.repositoryContext.hasStagedChanges}`,
+    `Unstaged changes: ${preview.repositoryContext.hasUnstagedChanges}`,
+    `Committed branch changes: ${preview.repositoryContext.hasCommittedChanges}`,
+    `Will spawn: ${preview.willSpawn}`,
+  );
+  return lines.join("\n");
+}
+
+function formatIndependentReviewResult(run) {
+  const lines = [];
+  if (run.sameRunner) lines.push(SAME_RUNNER_WARNING, "");
+  lines.push(`Review Decision: ${run.outcome}`);
+  if (run.outcome === "Approved" || run.outcome === "Changes Requested") {
+    lines.push(`Reviewer: ${run.reviewerId}`);
+  }
+  lines.push(`Next action: ${NEXT_ACTION_BY_OUTCOME[run.outcome] || "inspect the saved review output."}`);
+  return lines.join("\n");
 }
 
 function formatRunSummary(summary) {
@@ -208,4 +282,10 @@ if (require.main === module) {
   main(process.argv.slice(2));
 }
 
-module.exports = { formatDryRunPreview, formatRunSummary, main };
+module.exports = {
+  formatDryRunPreview,
+  formatIndependentReviewDryRunPreview,
+  formatIndependentReviewResult,
+  formatRunSummary,
+  main,
+};

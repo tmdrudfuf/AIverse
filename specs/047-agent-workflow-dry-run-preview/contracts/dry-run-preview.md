@@ -9,7 +9,7 @@ node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json 
 Optional existing flags may be combined when safe:
 
 ```powershell
-node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json --stage review --agent claude --dry-run
+node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json --stage review --agent reviewer --dry-run
 ```
 
 ## Expected Output
@@ -27,7 +27,7 @@ The command prints a deterministic preview containing:
 
 ## Safety Behavior
 
-- Must not invoke Codex, Claude, or any configured process adapter.
+- Must not invoke the Implementer, Reviewer, or any configured process adapter.
 - Must not record a stage result.
 - Must not append an execution record.
 - Must not push, create PRs, mark PRs ready, merge, delete branches, or perform remote mutation.

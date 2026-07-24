@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add a local-only dry-run preview for the existing `tools/agent-workflow` `run` command. The preview should resolve the current stage and selected agent, generate the same prompt metadata used by real runs, show the command/prompt/run-directory preview, and stop without spawning Codex or Claude or recording stage results. This provides the first small production-code smoke task for the live Codex -> Claude workflow after Spec 046.
+Add a local-only dry-run preview for the existing `tools/agent-workflow` `run` command. The preview should resolve the current stage and selected role/agent, generate the same prompt metadata used by real runs, show the command/prompt/run-directory preview, and stop without spawning the Implementer, Reviewer, or any configured agent and without recording stage results. This provides the first small production-code smoke task for the live Implementer -> Reviewer workflow after Spec 046.
 
 ## Technical Context
 
@@ -26,13 +26,13 @@ Add a local-only dry-run preview for the existing `tools/agent-workflow` `run` c
 
 **Constraints**: Local-only, no product `src/` changes, no external API calls, no credentials, no remote mutation, no automatic PR or merge actions, no live CLI calls in tests
 
-**Scale/Scope**: One focused CLI preview improvement and focused tests, small enough for live Codex -> Claude orchestration review
+**Scale/Scope**: One focused CLI preview improvement and focused tests, small enough for live Implementer -> Reviewer orchestration review
 
 ## Existing System Review
 
 - Spec 044 added `run` and `--until-blocked` execution through `agentWorkflowRun.js`.
 - Spec 045 documented configuration and dry-run/diagnostic expectations, but current `main` does not expose a `run --dry-run` preview path in `tools/agent-workflow/cli.js`.
-- Spec 046 verified live Codex and Claude execution, review parsing, fix/re-review, and human-gate stopping.
+- Spec 046 verified live role-based execution, review parsing, fix/re-review, and human-gate stopping with default Implementer = Codex CLI and Reviewer = Claude CLI.
 - Smallest seam: add preview-only behavior near the `run` command path, reusing stage/agent resolution and prompt generation helpers without spawning the process adapter.
 
 ## Constitution Check

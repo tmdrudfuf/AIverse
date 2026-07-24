@@ -14,13 +14,37 @@ const {
 } = require("./agentWorkflow.js");
 
 const DEFAULT_AGENT_RUNNER_TIMEOUT_MS = 5 * 60 * 1000;
+const CODEX_FULL_ACCESS_ARGS = [
+  "--sandbox",
+  "danger-full-access",
+  "--ask-for-approval",
+  "never",
+  "exec",
+];
+const CLAUDE_FULL_ACCESS_ARGS = ["--dangerously-skip-permissions", "-p", "{{prompt}}"];
 
 const DEFAULT_AGENT_RUNNERS = {
+  implementer: {
+    agentId: "implementer",
+    identity: "Implementer (Codex CLI)",
+    command: "codex",
+    args: CODEX_FULL_ACCESS_ARGS,
+    inputMode: "stdin",
+    timeoutMs: DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
+  },
+  reviewer: {
+    agentId: "reviewer",
+    identity: "Reviewer (Claude CLI)",
+    command: "claude",
+    args: CLAUDE_FULL_ACCESS_ARGS,
+    inputMode: "argument",
+    timeoutMs: DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
+  },
   codex: {
     agentId: "codex",
     identity: "OpenAI Codex CLI",
     command: "codex",
-    args: [],
+    args: CODEX_FULL_ACCESS_ARGS,
     inputMode: "stdin",
     timeoutMs: DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
   },
@@ -28,18 +52,18 @@ const DEFAULT_AGENT_RUNNERS = {
     agentId: "claude",
     identity: "Claude Code CLI",
     command: "claude",
-    args: ["-p", "{{prompt}}"],
+    args: CLAUDE_FULL_ACCESS_ARGS,
     inputMode: "argument",
     timeoutMs: DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
   },
 };
 
 const DEFAULT_STAGE_AGENTS = {
-  implement: "codex",
-  review: "claude",
-  fix: "codex",
-  "re-review": "claude",
-  "final-verification": "codex",
+  implement: "implementer",
+  review: "reviewer",
+  fix: "implementer",
+  "re-review": "reviewer",
+  "final-verification": "implementer",
 };
 
 function normalizeAgentConfig(config) {
@@ -102,8 +126,13 @@ function isRemoteMutatingCommand(command, args = []) {
     if (normalizedArgs[0] === "push") return true;
     if (normalizedArgs[0] === "branch" && ["-d", "-D", "--delete"].includes(normalizedArgs[1])) return true;
   }
-  if (normalizedCommand === "gh" && normalizedArgs[0] === "pr") {
-    return ["create", "ready", "merge"].includes(normalizedArgs[1]);
+  if (normalizedCommand === "gh") {
+    const mutatingGhCommands = new Set(["api", "gist", "issue", "pr", "project", "release", "repo", "workflow"]);
+    if (normalizedArgs[0] === "pr") {
+      const readOnlyPrCommands = new Set(["checks", "diff", "list", "status", "view"]);
+      return !readOnlyPrCommands.has(normalizedArgs[1]);
+    }
+    if (mutatingGhCommands.has(normalizedArgs[0])) return true;
   }
   return false;
 }
@@ -143,11 +172,39 @@ function createDefaultProcessAdapter() {
         let stderr = "";
         let settled = false;
         let timedOut = false;
+        let interrupted = false;
+        let interruptSignal = null;
+        let forceKillTimeout;
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          clearTimeout(forceKillTimeout);
+          process.off("SIGINT", handleInterrupt);
+          process.off("SIGTERM", handleInterrupt);
+        };
+
+        const requestChildShutdown = () => {
+          if (child.exitCode !== null || child.signalCode !== null) return;
+          child.kill("SIGTERM");
+          clearTimeout(forceKillTimeout);
+          forceKillTimeout = setTimeout(() => {
+            if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+          }, options.killGraceMs || 2_000);
+        };
 
         const timeout = setTimeout(() => {
           timedOut = true;
-          child.kill("SIGTERM");
+          requestChildShutdown();
         }, options.timeoutMs || DEFAULT_AGENT_RUNNER_TIMEOUT_MS);
+
+        const handleInterrupt = (signal) => {
+          interrupted = true;
+          interruptSignal = signal;
+          requestChildShutdown();
+        };
+
+        process.once("SIGINT", handleInterrupt);
+        process.once("SIGTERM", handleInterrupt);
 
         child.stdout.on("data", (chunk) => {
           stdout += chunk.toString();
@@ -158,14 +215,14 @@ function createDefaultProcessAdapter() {
         child.on("error", (error) => {
           if (settled) return;
           settled = true;
-          clearTimeout(timeout);
+          cleanup();
           resolve({
             stdout,
             stderr: stderr || error.message,
             exitCode: null,
-            signal: null,
+            signal: interruptSignal,
             timedOut,
-            interrupted: false,
+            interrupted,
             durationMs: Date.now() - startedAtMs,
             errorMessage: error.message,
           });
@@ -173,14 +230,14 @@ function createDefaultProcessAdapter() {
         child.on("close", (exitCode, signal) => {
           if (settled) return;
           settled = true;
-          clearTimeout(timeout);
+          cleanup();
           resolve({
             stdout,
             stderr,
             exitCode,
-            signal,
+            signal: signal || interruptSignal,
             timedOut,
-            interrupted: Boolean(signal) && !timedOut,
+            interrupted: interrupted || (Boolean(signal) && !timedOut),
             durationMs: Date.now() - startedAtMs,
           });
         });
@@ -327,6 +384,8 @@ async function runWorkflowAgentAndPersist(statePath, options = {}) {
 
 module.exports = {
   DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
+  CLAUDE_FULL_ACCESS_ARGS,
+  CODEX_FULL_ACCESS_ARGS,
   DEFAULT_AGENT_RUNNERS,
   DEFAULT_STAGE_AGENTS,
   assertRunnableStage,

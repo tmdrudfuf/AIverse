@@ -168,7 +168,7 @@ function generatePrompt(state, options = {}) {
 }
 
 function readState(statePath) {
-  return JSON.parse(fs.readFileSync(statePath, "utf8"));
+  return JSON.parse(fs.readFileSync(statePath, "utf8").replace(/^\uFEFF/, ""));
 }
 
 function writeState(statePath, state) {
@@ -275,6 +275,7 @@ module.exports = {
   detectDecision,
   determineNextStage,
   createRunFilePath,
+  formatList,
   generatePrompt,
   getRunDirectory,
   listForbiddenExecutablePatterns,

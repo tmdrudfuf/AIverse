@@ -58,4 +58,4 @@
 2. Add failing focused tests for dry-run behavior.
 3. Implement the smallest preview path that reuses existing stage, agent, and prompt resolution.
 4. Validate with the full required suite.
-5. Stop for live Codex -> Claude workflow review before push or PR actions.
+5. Stop for live Implementer -> Reviewer workflow review before push or PR actions.

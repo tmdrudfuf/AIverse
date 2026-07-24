@@ -11,7 +11,7 @@
 
 ## Decision: Keep dry-run subprocess-free
 
-**Rationale**: The feature exists to support safe live orchestration. Dry-run must not call Codex, Claude, or fake process adapters in production or tests.
+**Rationale**: The feature exists to support safe live orchestration. Dry-run must not call the Implementer, Reviewer, or fake process adapters in production or tests.
 
 **Alternatives considered**:
 
