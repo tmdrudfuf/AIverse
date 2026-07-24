@@ -1,7 +1,19 @@
 const fs = require("fs");
 
-const { determineNextStage, readState, writeState } = require("./agentWorkflow.js");
-const { runWorkflowAgent } = require("./agentRunner.js");
+const {
+  createRunFilePath,
+  determineNextStage,
+  getRunDirectory,
+  readState,
+  writeState,
+} = require("./agentWorkflow.js");
+const {
+  DEFAULT_STAGE_AGENTS,
+  assertRunnableStage,
+  assertSafeCommand,
+  resolveAgentConfig,
+  runWorkflowAgent,
+} = require("./agentRunner.js");
 
 const DEFAULT_MAX_WORKFLOW_RUN_STEPS = 6;
 
@@ -24,6 +36,69 @@ function createStepSummary(run) {
     recordPath: run.state.agentExecutions?.[run.state.agentExecutions.length - 1]?.path || "",
     resultPath: run.resultPath ? run.resultPath.replace(/\\/g, "/") : undefined,
     nextStage,
+  };
+}
+
+function createCommandPreview(agent) {
+  const args = agent.args.map((arg) => (arg === "{{prompt}}" || arg === "{prompt}" ? "{{prompt}}" : arg));
+  return [agent.command, ...args].filter(Boolean).join(" ");
+}
+
+function resolvePreviewStageAgentId(state, stage, explicitAgentId) {
+  if (explicitAgentId) return explicitAgentId;
+  const stageAgents = {
+    ...DEFAULT_STAGE_AGENTS,
+    ...(state.stageAgents || {}),
+  };
+  const agentId = stageAgents[stage];
+  if (!agentId) throw new Error(`No default agent configured for stage ${stage}`);
+  return agentId;
+}
+
+function getDryRunNextExpectedStep(stage) {
+  if (stage === "implement") return "review";
+  if (stage === "fix") return "re-review";
+  if (stage === "final-verification") return "human-merge-decision";
+  if (stage === "review" || stage === "re-review") return "depends-on-review-decision";
+  return stage;
+}
+
+function previewWorkflowCommand(state, options = {}) {
+  const stage = options.stage || determineNextStage(state);
+  const nextStage = getDryRunNextExpectedStep(stage);
+  const runDirectory = getRunDirectory(state, { cwd: options.cwd });
+
+  if (stage === "human-merge-decision") {
+    return {
+      dryRun: true,
+      stage,
+      nextStage: "human-merge-decision",
+      agentId: undefined,
+      agentIdentity: "Human merge decision",
+      commandPreview: "human-only",
+      promptPath: undefined,
+      runDirectory,
+      willSpawn: false,
+      humanGate: true,
+    };
+  }
+
+  assertRunnableStage(stage);
+  const agentId = resolvePreviewStageAgentId(state, stage, options.agentId);
+  const agent = resolveAgentConfig(state, agentId);
+  assertSafeCommand(agent);
+
+  return {
+    dryRun: true,
+    stage,
+    nextStage,
+    agentId: agent.agentId,
+    agentIdentity: agent.identity,
+    commandPreview: createCommandPreview(agent),
+    promptPath: createRunFilePath(state, `${stage}-prompt`, { cwd: options.cwd }).replace(/\\/g, "/"),
+    runDirectory: runDirectory.replace(/\\/g, "/"),
+    willSpawn: false,
+    humanGate: false,
   };
 }
 
@@ -94,6 +169,7 @@ async function runWorkflowCommandAndPersist(statePath, options = {}) {
 module.exports = {
   DEFAULT_MAX_WORKFLOW_RUN_STEPS,
   normalizeMaxSteps,
+  previewWorkflowCommand,
   runWorkflowCommand,
   runWorkflowCommandAndPersist,
 };

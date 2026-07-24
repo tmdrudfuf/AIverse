@@ -3,8 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { determineNextStage, writeState } from "./agentWorkflow.js";
-import { formatRunSummary } from "./cli.js";
-import { runWorkflowCommand, runWorkflowCommandAndPersist } from "./agentWorkflowRun.js";
+import { formatDryRunPreview, formatRunSummary } from "./cli.js";
+import { previewWorkflowCommand, runWorkflowCommand, runWorkflowCommandAndPersist } from "./agentWorkflowRun.js";
+import { CLAUDE_FULL_ACCESS_ARGS, CODEX_FULL_ACCESS_ARGS } from "./agentRunner.js";
 
 type WorkflowState = {
   featureId: string;
@@ -15,6 +16,7 @@ type WorkflowState = {
   scopeConstraints: string[];
   results: Array<{ stage: string; decision?: string }>;
   reviewFindings?: string[];
+  agentExecutions?: unknown[];
   agentRunners?: Record<string, unknown>;
   stageAgents?: Record<string, string>;
 };
@@ -92,7 +94,7 @@ describe("agent workflow run command", () => {
     expect(summary.nextStage).toBe("human-merge-decision");
   });
 
-  it("runs Codex implement then Claude review and preserves Changes Requested findings for Codex fix", async () => {
+  it("runs Implementer then Reviewer and preserves Changes Requested findings for the fix stage", async () => {
     const adapter = createSequenceAdapter([
       { stdout: "implementation done", exitCode: 0 },
       { stdout: "Changes Requested\n- Fix tools/agent-workflow/agentWorkflow.js:10.", exitCode: 0 },
@@ -111,10 +113,14 @@ describe("agent workflow run command", () => {
       now: () => "2026-07-08T00:00:00.000Z",
     });
 
-    expect(adapter.run).toHaveBeenNthCalledWith(1, "codex", [], expect.objectContaining({
+    expect(adapter.run).toHaveBeenNthCalledWith(1, "codex", CODEX_FULL_ACCESS_ARGS, expect.objectContaining({
       input: expect.stringContaining("Implement 044-agent-workflow-run-command"),
     }));
-    expect(adapter.run).toHaveBeenNthCalledWith(2, "claude", ["-p", expect.stringContaining("Spec 046 E2E orchestration")], expect.objectContaining({
+    expect(adapter.run).toHaveBeenNthCalledWith(2, "claude", [
+      "--dangerously-skip-permissions",
+      "-p",
+      expect.stringContaining("Spec 046 E2E orchestration"),
+    ], expect.objectContaining({
       input: undefined,
     }));
     expect(summary.steps.map((step) => step.stage)).toEqual(["implement", "review"]);
@@ -186,5 +192,74 @@ describe("agent workflow run command", () => {
     expect(summary.steps[0].recordPath).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
     expect(summary.steps[0].resultPath).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
     expect(formatRunSummary(summary)).toContain("Stage: implement");
+  });
+
+  it("previews a runnable dry-run stage without spawning or advancing state", () => {
+    const cwd = createTempDir();
+    const state = createState();
+    const adapter = createSequenceAdapter([{ stdout: "should not run" }]);
+
+    const preview = previewWorkflowCommand(state, { cwd });
+
+    expect(adapter.run).not.toHaveBeenCalled();
+    expect(preview.dryRun).toBe(true);
+    expect(preview.stage).toBe("implement");
+    expect(preview.agentId).toBe("implementer");
+    expect(preview.agentIdentity).toBe("Implementer (Codex CLI)");
+    expect(preview.commandPreview).toBe("codex --sandbox danger-full-access --ask-for-approval never exec");
+    expect(preview.promptPath).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
+    expect(preview.runDirectory).toContain(".agent-workflow/runs/044-agent-workflow-run-command");
+    expect(preview.nextStage).toBe("review");
+    expect(preview.willSpawn).toBe(false);
+    expect(state.results).toEqual([]);
+    expect(state.agentExecutions).toBeUndefined();
+    expect(formatDryRunPreview(preview)).toContain("Will spawn: false");
+  });
+
+  it("previews Reviewer prompt argument delivery without embedding the full prompt", () => {
+    const preview = previewWorkflowCommand(createState({
+      results: [{ stage: "implement", decision: "Unknown" }],
+    }), {
+      cwd: createTempDir(),
+    });
+
+    expect(preview.stage).toBe("review");
+    expect(preview.agentId).toBe("reviewer");
+    expect(preview.commandPreview).toBe("claude --dangerously-skip-permissions -p {{prompt}}");
+    expect(preview.nextStage).toBe("depends-on-review-decision");
+    expect(preview.willSpawn).toBe(false);
+    expect(CLAUDE_FULL_ACCESS_ARGS).toContain("--dangerously-skip-permissions");
+  });
+
+  it("previews human merge decision as a human gate without selecting a runner", () => {
+    const preview = previewWorkflowCommand(createState({
+      results: [{ stage: "final-verification", decision: "Approved" }],
+    }), {
+      cwd: createTempDir(),
+    });
+
+    expect(preview.stage).toBe("human-merge-decision");
+    expect(preview.agentId).toBeUndefined();
+    expect(preview.commandPreview).toBe("human-only");
+    expect(preview.nextStage).toBe("human-merge-decision");
+    expect(preview.willSpawn).toBe(false);
+  });
+
+  it("rejects unsafe dry-run runner configs before any spawn path", () => {
+    const adapter = createSequenceAdapter([{ stdout: "should not run" }]);
+    const state = createState({
+      agentRunners: {
+        implementer: {
+          agentId: "implementer",
+          identity: "Unsafe Implementer",
+          command: "gh",
+          args: ["pr", "merge"],
+          inputMode: "stdin",
+        },
+      },
+    });
+
+    expect(() => previewWorkflowCommand(state, { cwd: createTempDir() })).toThrow("Remote-mutating commands");
+    expect(adapter.run).not.toHaveBeenCalled();
   });
 });

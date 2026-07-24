@@ -7,6 +7,7 @@ import {
   generatePrompt,
   getRunDirectory,
   listForbiddenExecutablePatterns,
+  readState,
   recordAgentResult,
   writeGeneratedPrompt,
 } from "./agentWorkflow.js";
@@ -253,7 +254,7 @@ describe("agent workflow result records", () => {
   });
 
   it("parses real Claude markdown review decision forms", () => {
-    const approved = recordAgentResult(
+    const boldApproved = recordAgentResult(
       createState({ results: [{ stage: "fix", decision: "Unknown" }] }),
       {
         stage: "re-review",
@@ -266,7 +267,7 @@ describe("agent workflow result records", () => {
         now: () => "2026-07-08T00:00:00.000Z",
       },
     );
-    const changes = recordAgentResult(
+    const reviewDecisionChanges = recordAgentResult(
       createState(),
       {
         stage: "review",
@@ -279,12 +280,42 @@ describe("agent workflow result records", () => {
         now: () => "2026-07-08T00:00:00.000Z",
       },
     );
+    const decisionApproved = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "## Decision: Approved\n\nNo changes requested.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
+    const decisionChanges = recordAgentResult(
+      createState(),
+      {
+        stage: "review",
+        agent: "Claude",
+        resultText: "## Decision: Changes Requested\n\n- Fix the dry-run preview.",
+      },
+      {
+        cwd: createTempDir(),
+        recordedAt: "2026-07-08T00:00:00.000Z",
+        now: () => "2026-07-08T00:00:00.000Z",
+      },
+    );
 
-    expect(approved.result.decision).toBe("Approved");
-    expect(determineNextStage(approved.state)).toBe("final-verification");
-    expect(changes.result.decision).toBe("Changes Requested");
-    expect(determineNextStage(changes.state)).toBe("fix");
-    expect(changes.state.reviewFindings?.[0]).toContain("missing quickstart note");
+    expect(boldApproved.result.decision).toBe("Approved");
+    expect(determineNextStage(boldApproved.state)).toBe("final-verification");
+    expect(reviewDecisionChanges.result.decision).toBe("Changes Requested");
+    expect(determineNextStage(reviewDecisionChanges.state)).toBe("fix");
+    expect(reviewDecisionChanges.state.reviewFindings?.[0]).toContain("missing quickstart note");
+    expect(decisionApproved.result.decision).toBe("Approved");
+    expect(determineNextStage(decisionApproved.state)).toBe("final-verification");
+    expect(decisionChanges.result.decision).toBe("Changes Requested");
+    expect(determineNextStage(decisionChanges.state)).toBe("fix");
   });
 
   it("does not treat explanatory decision mentions as final decisions", () => {
@@ -293,7 +324,7 @@ describe("agent workflow result records", () => {
       {
         stage: "review",
         agent: "Claude",
-        resultText: "This is not approved yet. A previous review had changes requested.",
+        resultText: "This is not approved yet. No changes requested in the summary. A previous review had changes requested.",
       },
       {
         cwd: createTempDir(),
@@ -312,7 +343,7 @@ describe("agent workflow result records", () => {
       {
         stage: "review",
         agent: "Claude",
-        resultText: "## Review Decision: Approved\n\n**Changes Requested**",
+        resultText: "## Decision: Approved\n\n**Changes Requested**",
       },
       {
         cwd: createTempDir(),
@@ -325,7 +356,7 @@ describe("agent workflow result records", () => {
     expect(determineNextStage(recorded.state)).toBe("review");
   });
 
-  it("preserves Changes Requested findings for the next Codex fix", () => {
+  it("preserves Changes Requested findings for the next Implementer fix", () => {
     const recorded = recordAgentResult(
       createState(),
       {
@@ -376,6 +407,14 @@ describe("agent workflow result records", () => {
 
     expect(written.outputPath.startsWith(path.join(cwd, ".agent-workflow", "runs"))).toBe(true);
     expect(fs.readFileSync(written.outputPath, "utf8")).toContain("Implement 042-agent-review-orchestration");
+  });
+
+  it("reads PowerShell-created UTF-8 state files with a BOM", () => {
+    const cwd = createTempDir();
+    const statePath = path.join(cwd, "state.json");
+    fs.writeFileSync(statePath, `\uFEFF${JSON.stringify(createState())}`, "utf8");
+
+    expect(readState(statePath).featureId).toBe("042-agent-review-orchestration");
   });
 });
 

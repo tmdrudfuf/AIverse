@@ -1,4 +1,4 @@
-# Tasks: Codex Claude E2E Orchestration
+# Tasks: Role-Based E2E Agent Orchestration
 
 **Input**: Design documents from `/specs/046-codex-claude-e2e-orchestration/`
 
@@ -27,15 +27,15 @@
 
 ---
 
-## Phase 3: User Story 1 - Run a Grounded Claude Review After Codex Implementation (Priority: P1)
+## Phase 3: User Story 1 - Run a Grounded Reviewer Review After Implementer Work (Priority: P1)
 
-**Goal**: Codex implementation and Claude review run through the same local workflow with safe default runner configuration.
+**Goal**: Implementer and Reviewer run through the same local workflow with safe default runner configuration.
 
-**Independent Test**: Fake process adapter verifies Codex stdin implementation and Claude `-p` review invocation with review prompt grounding.
+**Independent Test**: Fake process adapter verifies default Implementer stdin implementation and default Reviewer `-p` review invocation with review prompt grounding.
 
-- [X] T006 [P] [US1] Add Codex stdin runner regression test in `tools/agent-workflow/agentRunner.test.ts`
-- [X] T007 [P] [US1] Add Claude `-p` runner regression test in `tools/agent-workflow/agentRunner.test.ts`
-- [X] T008 [US1] Set the default Claude review runner to `claude -p {{prompt}}` in `tools/agent-workflow/agentRunner.js`
+- [X] T006 [P] [US1] Add default Implementer stdin runner regression test in `tools/agent-workflow/agentRunner.test.ts`
+- [X] T007 [P] [US1] Add default Reviewer `-p` runner regression test in `tools/agent-workflow/agentRunner.test.ts`
+- [X] T008 [US1] Set the default Reviewer runner to `claude --dangerously-skip-permissions -p {{prompt}}` in `tools/agent-workflow/agentRunner.js`
 - [X] T009 [US1] Preserve successful `Changes Requested` findings for fix prompts in `tools/agent-workflow/agentWorkflow.js`
 
 ---
@@ -44,9 +44,9 @@
 
 **Goal**: Missing, unsafe, failed, or ambiguous runner output never advances as approval.
 
-**Independent Test**: Fake process adapter verifies missing Claude, unsafe command rejection, malformed output, and no remote mutation.
+**Independent Test**: Fake process adapter verifies missing Reviewer, unsafe command rejection, malformed output, and no remote mutation.
 
-- [X] T010 [P] [US2] Add unavailable Claude handling test in `tools/agent-workflow/agentRunner.test.ts`
+- [X] T010 [P] [US2] Add unavailable Reviewer handling test in `tools/agent-workflow/agentRunner.test.ts`
 - [X] T011 [P] [US2] Add malformed and ambiguous review output tests in `tools/agent-workflow/agentWorkflow.test.ts`
 - [X] T012 [US2] Add integration-style fake adapter test for implement to review to fix preservation in `tools/agent-workflow/agentWorkflowRun.test.ts`
 
@@ -66,7 +66,7 @@
 
 ## Phase 6: Live Smoke Parser Hardening
 
-**Purpose**: Address the live Codex-to-Claude smoke-test blocker where real Claude markdown decisions were not always parsed as workflow decisions.
+**Purpose**: Address the live Implementer-to-Reviewer smoke-test blocker where real Reviewer markdown decisions were not always parsed as workflow decisions.
 
 - [X] T018 Add conservative markdown review decision parsing for standalone bold decisions and `Review Decision:` heading forms in `tools/agent-workflow/agentWorkflow.js`
 - [X] T019 Add focused parser regressions for bold decisions, `Review Decision:` heading forms, explanatory mentions, and mixed markdown decisions in `tools/agent-workflow/agentWorkflow.test.ts`

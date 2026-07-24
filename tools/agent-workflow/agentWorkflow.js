@@ -73,12 +73,12 @@ function detectDecision(text) {
   const hasChangesRequested = lines.some((line) => (
     line === "Changes Requested"
     || line.startsWith("Changes Requested ")
-    || /^Review Decision:\s*Changes Requested\b/i.test(line)
+    || /^(Review\s+)?Decision:\s*Changes Requested\b/i.test(line)
   ));
   const hasApproved = lines.some((line) => (
     line === "Approved"
     || line.startsWith("Approved ")
-    || /^Review Decision:\s*Approved\b/i.test(line)
+    || /^(Review\s+)?Decision:\s*Approved\b/i.test(line)
   ));
   if (hasChangesRequested && hasApproved) return "Unknown";
   if (hasChangesRequested) return "Changes Requested";
@@ -168,7 +168,7 @@ function generatePrompt(state, options = {}) {
 }
 
 function readState(statePath) {
-  return JSON.parse(fs.readFileSync(statePath, "utf8"));
+  return JSON.parse(fs.readFileSync(statePath, "utf8").replace(/^\uFEFF/, ""));
 }
 
 function writeState(statePath, state) {
@@ -275,6 +275,7 @@ module.exports = {
   detectDecision,
   determineNextStage,
   createRunFilePath,
+  formatList,
   generatePrompt,
   getRunDirectory,
   listForbiddenExecutablePatterns,

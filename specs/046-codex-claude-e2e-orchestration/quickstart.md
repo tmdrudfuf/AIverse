@@ -1,11 +1,14 @@
-# Quickstart: Codex Claude E2E Orchestration
+# Quickstart: Role-Based E2E Agent Orchestration
 
 ## Prerequisites
 
-- Codex CLI is installed and available as `codex`.
-- Claude Code CLI is installed and available as `claude`.
-- Claude supports non-interactive prompt mode with `claude -p "<prompt>"`.
+- A supported CLI is available for the Implementer role.
+- A supported CLI is available for the Reviewer role.
+- By default, Codex CLI is installed and available as `codex` for the Implementer role.
+- By default, Claude CLI is installed and available as `claude` for the Reviewer role.
+- The default Claude Reviewer supports non-interactive prompt mode with `claude --dangerously-skip-permissions -p "<prompt>"`.
 - The workflow state file points to a local feature branch and contains no secrets.
+- The Reviewer should be different from the Implementer whenever possible.
 
 ## Example State Shape
 
@@ -21,7 +24,44 @@
   "changedFiles": ["tools/agent-workflow/agentRunner.js"],
   "validationEvidence": ["npm test passed"],
   "scopeConstraints": ["Do not modify unrelated files."],
+  "stageAgents": {
+    "implement": "implementer",
+    "review": "reviewer",
+    "fix": "implementer",
+    "re-review": "reviewer",
+    "final-verification": "implementer"
+  },
   "results": []
+}
+```
+
+`stageAgents` is optional. When omitted, the same default role mapping is used. Existing state files that map directly to `codex` or `claude` still work.
+
+To swap assignments when the default Implementer is unavailable, configure local runner IDs and remap stages:
+
+```json
+{
+  "agentRunners": {
+    "claude-implementer": {
+      "identity": "Implementer (Claude CLI)",
+      "command": "claude",
+      "args": ["--dangerously-skip-permissions", "-p", "{{prompt}}"],
+      "inputMode": "argument"
+    },
+    "codex-reviewer": {
+      "identity": "Reviewer (Codex CLI)",
+      "command": "codex",
+      "args": ["--sandbox", "danger-full-access", "--ask-for-approval", "never", "exec"],
+      "inputMode": "stdin"
+    }
+  },
+  "stageAgents": {
+    "implement": "claude-implementer",
+    "review": "codex-reviewer",
+    "fix": "claude-implementer",
+    "re-review": "codex-reviewer",
+    "final-verification": "claude-implementer"
+  }
 }
 ```
 
@@ -55,9 +95,9 @@
 
 ## Expected Outcomes
 
-- Codex implementation stages receive prompts through stdin.
-- Claude review stages receive prompts through `claude -p`.
-- `Changes Requested` findings are preserved for the next Codex fix prompt.
+- Default Implementer stages receive prompts through Codex CLI stdin.
+- Default Reviewer stages receive prompts through `claude --dangerously-skip-permissions -p`.
+- `Changes Requested` findings are preserved for the next Implementer fix prompt.
 - Failed or ambiguous review output does not advance the workflow.
 - The workflow stops before `human-merge-decision`.
 - No push, PR, merge, branch deletion, credential storage, or remote mutation occurs automatically.

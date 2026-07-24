@@ -1,4 +1,4 @@
-# Implementation Plan: Codex Claude E2E Orchestration
+# Implementation Plan: Role-Based E2E Agent Orchestration
 
 **Branch**: `codex/codex-claude-e2e-orchestration` | **Date**: 2026-07-09 | **Spec**: [spec.md](./spec.md)
 
@@ -6,7 +6,9 @@
 
 ## Summary
 
-Add the first real local Codex-to-Claude orchestration slice by extending the existing Spec 042-044 workflow runner. Codex remains the default implementation/fix runner. Claude becomes the default review/re-review runner using non-interactive `claude -p <prompt>` invocation. Review prompts become grounded with repository, branch, commit, scope, diff, validation, and safety information. Successful review findings are preserved for Codex fix prompts while failed or ambiguous executions do not advance the workflow.
+Add the first real local role-based orchestration slice by extending the existing Spec 042-044 workflow runner. The workflow uses logical roles: Implementer for implementation/fix/final-verification stages and Reviewer for review/re-review stages. Default assignment is Implementer = Codex CLI and Reviewer = Claude CLI using non-interactive `claude --dangerously-skip-permissions -p <prompt>` invocation for the default Reviewer. Review prompts become grounded with repository, branch, commit, scope, diff, validation, and safety information. Successful review findings are preserved for Implementer fix prompts while failed or ambiguous executions do not advance the workflow.
+
+The reviewer should be different from the implementer whenever possible. If the default Implementer becomes unavailable due to rate limits, quota, maintenance, or local CLI issues, role assignments may be swapped or moved to another supported CLI agent.
 
 ## Technical Context
 
@@ -26,7 +28,7 @@ Add the first real local Codex-to-Claude orchestration slice by extending the ex
 
 **Constraints**: Local-only, no product `src/` changes, no remote mutation, no automatic PR or merge actions, no live CLI calls in tests
 
-**Scale/Scope**: One focused vertical slice covering implement -> review -> fix handoff state, not full production agent automation
+**Scale/Scope**: One focused vertical slice covering Implementer -> Reviewer -> Implementer fix handoff state, not full production agent automation
 
 ## Constitution Check
 
@@ -70,7 +72,7 @@ tools/agent-workflow/
 |   `-- review.md
 ```
 
-**Structure Decision**: Extend the existing local workflow runner modules. Do not create a parallel orchestration system.
+**Structure Decision**: Extend the existing local workflow runner modules. Do not create a parallel orchestration system. Keep concrete CLI runner settings configurable so future agents such as Codex CLI, Claude CLI, Gemini CLI, OpenAI CLI, Qwen CLI, and future local agents can fill either role.
 
 ## Phase 0 Research
 
