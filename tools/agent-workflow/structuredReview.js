@@ -22,6 +22,31 @@ const UNSAFE_QUESTION_PATTERNS = [
   /\b(skip|bypass|disable)\s+(?:validation|tests?|safety|permission|review)\b/i,
   /\bunrelated\s+(?:work|feature|change|task)\b/i,
 ];
+const UNSAFE_NORMALIZED_SECRET_PATTERNS = [
+  /\bapi\s+key\b/,
+  /\baccess\s+token\b/,
+  /\brefresh\s+token\b/,
+  /\bprivate\s+key\b/,
+  /\bclient\s+secret\b/,
+  /\bsecret\s+access\s+key\b/,
+  /\b(?:github|gh)\s+token\b/,
+  /\baws\s+access\s+key\s+id\b/,
+  /\baws\s+secret\s+access\s+key\b/,
+  /\bazure\s+client\s+secret\b/,
+];
+const UNSAFE_COMPACT_SECRET_PATTERNS = [
+  /apikey/,
+  /accesstoken/,
+  /refreshtoken/,
+  /privatekey/,
+  /clientsecret/,
+  /secretaccesskey/,
+  /githubtoken/,
+  /ghtoken/,
+  /awsaccesskeyid/,
+  /awssecretaccesskey/,
+  /azureclientsecret/,
+];
 
 function sectionRanges(markdown) {
   const content = String(markdown || "").replace(/\r\n/g, "\n");
@@ -128,9 +153,25 @@ function validateFindingCollection(value, collectionName, requireActionable) {
   return { diagnostics, normalized };
 }
 
+function normalizeQuestionSafetyText(text) {
+  return String(text || "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function isUnsafeQuestionText(question) {
   const text = `${question.question || ""}\n${question.reason || ""}`;
-  return UNSAFE_QUESTION_PATTERNS.some((pattern) => pattern.test(text));
+  if (UNSAFE_QUESTION_PATTERNS.some((pattern) => pattern.test(text))) return true;
+  const normalized = normalizeQuestionSafetyText(text);
+  const compact = normalized.replace(/\s+/g, "");
+  return (
+    UNSAFE_NORMALIZED_SECRET_PATTERNS.some((pattern) => pattern.test(normalized))
+    || UNSAFE_COMPACT_SECRET_PATTERNS.some((pattern) => pattern.test(compact))
+  );
 }
 
 function validateQuestion(question) {

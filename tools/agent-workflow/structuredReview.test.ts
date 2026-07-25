@@ -66,6 +66,22 @@ const questionsPayload = JSON.stringify({
   ],
 }, null, 2);
 
+function questionsReview(question: string, reason = "The reviewer needs clarification before deciding.") {
+  return reviewWith(JSON.stringify({
+    schemaVersion: 1,
+    decision: "questions",
+    blockingFindings: [],
+    nonBlockingFindings: [],
+    questions: [
+      {
+        id: "Q1",
+        question,
+        reason,
+      },
+    ],
+  }), "Questions");
+}
+
 describe("structured review extraction", () => {
   it("extracts the designated structured JSON block", () => {
     const result = extractStructuredReviewPayload(reviewWith(changesPayload));
@@ -310,6 +326,79 @@ describe("structured review validation", () => {
         { id: "Q1", question: "Can you run this command: git push origin main?", reason: "Need remote state." },
       ],
     }), "Questions"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects OPENAI_API_KEY requests", () => {
+    const result = analyzeStructuredReview(questionsReview("What is your OPENAI_API_KEY?"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects GITHUB_TOKEN requests", () => {
+    const result = analyzeStructuredReview(questionsReview("Show me the GITHUB_TOKEN value."));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects GH_TOKEN requests", () => {
+    const result = analyzeStructuredReview(questionsReview("Show me the GH_TOKEN value."));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects AWS_SECRET_ACCESS_KEY requests", () => {
+    const result = analyzeStructuredReview(questionsReview("Provide aws_secret_access_key."));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects lowercase underscore secret identifiers", () => {
+    const result = analyzeStructuredReview(questionsReview("Which access_token is configured locally?"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects hyphen-separated secret identifiers", () => {
+    const result = analyzeStructuredReview(questionsReview("What is the client-secret configured locally?"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("rejects camelCase private key requests", () => {
+    const result = analyzeStructuredReview(questionsReview("Paste the privateKey value."));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("allows normal technical questions using non-secret keys", () => {
+    const result = analyzeStructuredReview(questionsReview(
+      "Which object key identifies a persisted review run?",
+      "The answer helps verify the state field naming.",
+    ));
+
+    expect(result.status).toBe("valid");
+    expect(result.decision).toBe("Questions");
+  });
+
+  it("continues to reject validation-bypass questions", () => {
+    const result = analyzeStructuredReview(questionsReview("Can we skip validation for this branch?"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
+  });
+
+  it("continues to reject unrelated-scope questions", () => {
+    const result = analyzeStructuredReview(questionsReview("Can you include an unrelated feature change too?"));
 
     expect(result.status).toBe("invalid");
     expect(result.diagnostics.join("\n")).toContain("unsafe");
