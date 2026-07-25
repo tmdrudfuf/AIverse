@@ -41,3 +41,14 @@ If a valid structured `changes_requested` review is returned, fix prompts use th
 ## Human Responsibilities
 
 The workflow automates local implementation, validation, review, and bounded fixes only. Push, PR creation, readiness, approval, merge, and remote deletion remain human-only.
+
+## Documentation-Only Smoke Test
+
+For an end-to-end smoke, configure local mock Implementer and Reviewer runners in a gitignored
+state file, then run `orchestrate` with `--max-fix-cycles 1`. The Implementer should make a
+single documentation-only edit, and the Reviewer should return `Approved` with a valid
+`schemaVersion: 1` structured review block.
+
+The expected result is `human-merge-decision`, `latestStructuredReviewStatus: "valid"`, one raw
+Markdown review artifact, one structured JSON review artifact, passing validation, and no fix
+cycle.
