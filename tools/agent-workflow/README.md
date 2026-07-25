@@ -222,7 +222,7 @@ This command:
 - builds a self-contained review prompt (`templates/independent-review.md`) that includes the changed-file summary, bounded diffs, reported validation evidence, `AGENTS.md`, `CLAUDE.md` (when present), and the active feature spec (`specs/<featureId>/spec.md`, or `specPath` in state if set);
 - resolves the configured **Reviewer** (`stageAgents.review`, defaulting to the Reviewer role) and runs it;
 - classifies the result as `Approved`, `Changes Requested`, `Unknown`, `Execution Failed`, or `Timed Out` - ambiguous output is never treated as approval;
-- writes the prompt, a JSON execution record, and the raw Reviewer output under `.agent-workflow/runs/<feature-id>/`, and appends a summary to `state.reviewRuns`;
+- writes the prompt, a JSON execution record, the raw Reviewer output, and a structured review JSON artifact when valid under `.agent-workflow/runs/<feature-id>/`, and appends a summary to `state.reviewRuns`;
 - prints the decision and a concise next action. It never commits, pushes, opens a PR, or merges.
 
 If the resolved Implementer and Reviewer are configured identically, the command prints a warning that independent review is not guaranteed, but still runs:
@@ -250,6 +250,78 @@ Optional state fields used by `run-review` (all optional, existing state files r
 ```
 
 `specPath` overrides automatic spec discovery. `reviewRuns` is populated automatically after each real run with `{ outcome, reviewerId, sameRunner, recordedAt, promptPath, executionPath, resultPath }`.
+
+### Structured Review Handoff
+
+Reviewer output remains human-readable Markdown. Reviewers that support structured handoff also include exactly one fenced JSON payload under `## Structured Review`:
+
+````markdown
+# Review Decision: Changes Requested
+
+## Blocking Findings
+
+- Severity: P1
+  File: tools/agent-workflow/example.js
+  Location: 42-48
+  Problem: Unsafe command reaches process spawn.
+  Impact: Remote-mutating commands could bypass safety validation.
+  Recommendation: Validate the normalized command before spawn.
+
+## Non-Blocking Improvements
+
+(none)
+
+## Validation Performed
+
+npm test
+
+## Final Recommendation
+
+Request changes.
+
+## Structured Review
+
+```json
+{
+  "schemaVersion": 1,
+  "decision": "changes_requested",
+  "summary": "One blocking safety issue was found.",
+  "blockingFindings": [
+    {
+      "id": "P1-001",
+      "severity": "P1",
+      "filePath": "tools/agent-workflow/example.js",
+      "location": "42-48",
+      "summary": "Unsafe command reaches process spawn.",
+      "reason": "The configured command is replaced before safety validation.",
+      "recommendation": "Validate the normalized configured command before creating the process invocation."
+    }
+  ],
+  "nonBlockingFindings": [],
+  "questions": []
+}
+```
+````
+
+Structured schema rules:
+
+- `schemaVersion` must be `1`; unsupported versions are rejected.
+- `decision` must be `approved` or `changes_requested`.
+- Finding `severity` must be `P0`, `P1`, `P2`, or `P3`.
+- Finding IDs must be unique within one review artifact.
+- Blocking findings must include actionable details and a recommendation.
+- The workflow preserves supplied fields and does not invent missing reviewer information.
+
+Conflict and fallback behavior:
+
+- No structured block: existing Markdown-only decision and finding extraction remain available.
+- Valid structured block with matching Markdown decision: the structured decision is used.
+- Valid structured block with Markdown decision `Unknown`: the structured decision is used.
+- Markdown and structured decisions conflict: the result is `Unknown`.
+- Malformed, duplicated, unsupported, or invalid structured content: the result is `Unknown`.
+- Invalid structured data is never treated as approval and does not start a blind fix cycle.
+
+When the structured block is valid, a separate JSON artifact is written beside the raw Markdown result, and review run records include additive fields such as `structuredReviewStatus`, `structuredReviewDecision`, `structuredReviewPath`, and `structuredReviewDiagnostics`. Existing state files and old run records without these fields remain readable.
 
 ## Run the Automated Implement-Review-Fix Loop
 
@@ -280,6 +352,8 @@ review -> Changes Requested -> fix -> re-review -> Changes Requested -> blocked
 ```
 
 The loop stops conservatively when validation fails, a runner times out or exits non-zero, the Reviewer returns `Unknown`, a `Changes Requested` result has no actionable findings, a fix cycle produces no repository diff, the branch changes during orchestration, or the configured fix-cycle limit is reached.
+
+When a valid structured `changes_requested` review is present, fix prompts use the structured blocking findings, preserving finding IDs, severity, file path, location, summary, reason, and recommendation. When structured data is absent, the loop falls back to the existing Markdown finding extraction. When structured data is invalid, unsupported, or conflicting, the loop blocks conservatively.
 
 Preview without spawning agents, running validation, writing execution/result artifacts, or advancing state:
 

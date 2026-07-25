@@ -94,6 +94,7 @@ Then include these sections, in order:
 ## Non-Blocking Improvements
 ## Validation Performed
 ## Final Recommendation
+## Structured Review
 ```
 
 Each blocking finding must include:
@@ -103,6 +104,40 @@ Each blocking finding must include:
 - the exact problem
 - why it matters
 - a recommended correction
+
+The `## Structured Review` section must contain exactly one fenced `json` block with this
+provider-neutral schema:
+
+```json
+{
+  "schemaVersion": 1,
+  "decision": "changes_requested",
+  "summary": "One blocking correctness issue was found.",
+  "blockingFindings": [
+    {
+      "id": "P1-001",
+      "severity": "P1",
+      "filePath": "tools/agent-workflow/example.js",
+      "location": "42-48",
+      "summary": "Unsafe command reaches process spawn.",
+      "reason": "The configured command is replaced before safety validation.",
+      "recommendation": "Validate the normalized configured command before creating the process invocation."
+    }
+  ],
+  "nonBlockingFindings": [],
+  "questions": []
+}
+```
+
+Structured review rules:
+
+- `schemaVersion` must be `1`.
+- `decision` must be `approved` or `changes_requested`.
+- `severity` must be `P0`, `P1`, `P2`, or `P3`.
+- Finding IDs must be unique within this review artifact.
+- Preserve only details you can verify; do not invent file paths, locations, reasons, or recommendations.
+- If there are no blocking findings, use `"blockingFindings": []`.
+- The Markdown heading decision and structured decision must agree unless the Markdown decision is intentionally omitted or unknown.
 
 ## Safety Rules
 
