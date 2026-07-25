@@ -86,6 +86,36 @@ function buildArtifact({ status, reviewSequence, previousFindings, classificatio
 
 function applyInitialLifecycle(review, options = {}) {
   const reviewSequence = options.reviewSequence || 1;
+  const existingHistory = Array.isArray(options.previousHistory) ? options.previousHistory : [];
+  if (existingHistory.length) {
+    const diagnostics = ["Initial lifecycle cannot replace existing finding history."];
+    return {
+      status: LIFECYCLE_STATUSES.INVALID,
+      reviewSequence,
+      history: existingHistory,
+      activeBlockingFindings: existingHistory
+        .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
+        .map((entry) => entry.finding)
+        .filter(Boolean),
+      lifecycle: buildArtifact({
+        status: LIFECYCLE_STATUSES.INVALID,
+        reviewSequence,
+        previousFindings: existingHistory.map((entry) => ({
+          findingId: entry.findingId,
+          kind: entry.kind,
+          severity: entry.severity,
+          currentStatus: entry.currentStatus,
+        })),
+        classifications: [],
+        newFindings: [],
+        stillOpenFindings: [],
+        resolvedFindings: [],
+        activeBlockingFindings: [],
+        diagnostics,
+      }),
+      diagnostics,
+    };
+  }
   const currentFindings = getCurrentFindings(review);
   const history = currentFindings.map((finding) => normalizeFinding(finding, finding.kind, reviewSequence, options));
   const activeBlockingFindings = history
@@ -115,6 +145,87 @@ function applyInitialLifecycle(review, options = {}) {
   };
 }
 
+function preserveResolvedHistoryLifecycle(review, history, options = {}) {
+  const reviewSequence = options.reviewSequence || 1;
+  const diagnostics = [];
+  const currentFindings = getCurrentFindings(review);
+  const currentById = new Map(currentFindings.map((finding) => [finding.id, finding]));
+  const previousById = new Map(history.map((entry) => [entry.findingId, entry]));
+  const lifecycleEntries = Array.isArray(review.findingLifecycle) ? review.findingLifecycle : [];
+  const classifications = lifecycleMap(lifecycleEntries, diagnostics);
+  const nextHistoryById = new Map(history.map((entry) => [entry.findingId, { ...entry }]));
+  const newFindings = [];
+
+  for (const current of currentFindings) {
+    const findingId = normalizeString(current.id);
+    if (previousById.has(findingId)) {
+      diagnostics.push(`Resolved finding ${findingId} cannot be reused as a current finding.`);
+      compareContinuity(previousById.get(findingId), current, diagnostics);
+      continue;
+    }
+    const classification = classifications.get(findingId);
+    if (!classification) {
+      diagnostics.push(`New current finding ${findingId || "(missing id)"} is missing lifecycle classification.`);
+      continue;
+    }
+    if (classification.status !== "new") {
+      diagnostics.push(`New current finding ${findingId} must be classified as new.`);
+      continue;
+    }
+    newFindings.push(findingId);
+    nextHistoryById.set(findingId, normalizeFinding(current, current.kind, reviewSequence, options));
+  }
+
+  for (const classification of classifications.values()) {
+    if (previousById.has(classification.findingId)) {
+      diagnostics.push(`Resolved previous finding ${classification.findingId} must not receive a new lifecycle transition.`);
+    } else if (!currentById.has(classification.findingId)) {
+      diagnostics.push(`Lifecycle entry references unknown findingId: ${classification.findingId}.`);
+    }
+  }
+
+  const activeBlockingFindings = Array.from(nextHistoryById.values())
+    .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
+    .map((entry) => entry.finding)
+    .filter(Boolean);
+
+  if (review.decision === "approved" && activeBlockingFindings.length) {
+    diagnostics.push(`approved review has active blocking findings: ${activeBlockingFindings.map((finding) => finding.id).join(", ")}.`);
+  }
+  if (review.decision === "changes_requested" && activeBlockingFindings.length === 0) {
+    diagnostics.push("changes_requested lifecycle review must leave at least one active blocking finding.");
+  }
+
+  const lifecycle = buildArtifact({
+    status: diagnostics.length ? LIFECYCLE_STATUSES.INVALID : LIFECYCLE_STATUSES.VALID,
+    reviewSequence,
+    previousFindings: history.map((entry) => ({
+      findingId: entry.findingId,
+      kind: entry.kind,
+      severity: entry.severity,
+      currentStatus: entry.currentStatus,
+    })),
+    classifications: Array.from(classifications.values()),
+    newFindings,
+    stillOpenFindings: [],
+    resolvedFindings: [],
+    activeBlockingFindings,
+    diagnostics,
+  });
+
+  if (diagnostics.length) {
+    return { status: LIFECYCLE_STATUSES.INVALID, reviewSequence, history, activeBlockingFindings, lifecycle, diagnostics };
+  }
+  return {
+    status: LIFECYCLE_STATUSES.VALID,
+    reviewSequence,
+    history: Array.from(nextHistoryById.values()),
+    activeBlockingFindings,
+    lifecycle,
+    diagnostics: [],
+  };
+}
+
 function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
   const reviewSequence = options.reviewSequence || 1;
   const history = Array.isArray(previousHistory) ? previousHistory : [];
@@ -128,7 +239,10 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
     };
   }
 
-  if (!openPrevious.length) return applyInitialLifecycle(review, { ...options, reviewSequence });
+  if (!openPrevious.length) {
+    if (history.length) return preserveResolvedHistoryLifecycle(review, history, { ...options, reviewSequence });
+    return applyInitialLifecycle(review, { ...options, reviewSequence });
+  }
 
   const lifecycleEntries = Array.isArray(review.findingLifecycle) ? review.findingLifecycle : undefined;
   if (!lifecycleEntries) {

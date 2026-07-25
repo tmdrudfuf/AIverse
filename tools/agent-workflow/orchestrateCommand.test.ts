@@ -785,6 +785,65 @@ describe("orchestrate workflow", () => {
     expect(run.state.findingHistory[0].currentStatus).toBe("resolved");
   }, 30000);
 
+  it("preserves fully resolved history when a resumed re-review introduces a new finding", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const f2 = {
+      id: "P2-001",
+      severity: "P2",
+      filePath: "tracked.txt",
+      location: "line 2",
+      summary: "new validation gap",
+      reason: "a later re-review found a new issue",
+      recommendation: "add the missing validation",
+    };
+    const adapter = createSequenceAdapter([
+      { stdout: lifecycleReview("changes_requested", [f2], [
+        { findingId: "P2-001", status: "new", explanation: "This issue is new after earlier findings resolved." },
+      ]) },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed new finding\n") },
+      { stdout: "revalidation passed" },
+      { stdout: lifecycleReview("approved", [], [
+        { findingId: "P2-001", status: "resolved", explanation: "The new finding was fixed." },
+      ]) },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const state = createState({
+      reviewSequence: 2,
+      findingHistory: [
+        {
+          findingId: "F1",
+          kind: "blocking",
+          severity: "P1",
+          summary: "old issue",
+          recommendation: "fix old issue",
+          firstSeenReviewSequence: 1,
+          lastSeenReviewSequence: 2,
+          currentStatus: "resolved",
+          resolvedReviewSequence: 2,
+          finding: {
+            id: "F1",
+            severity: "P1",
+            summary: "old issue",
+            recommendation: "fix old issue",
+          },
+        },
+      ],
+      orchestration: { currentStage: "re-review", maxFixCycles: 2, maxQuestionCycles: 1 },
+    });
+
+    const run = await runOrchestration(state, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.findingHistory).toHaveLength(2);
+    expect(run.state.findingHistory[0].findingId).toBe("F1");
+    expect(run.state.findingHistory[0].currentStatus).toBe("resolved");
+    expect(run.state.findingHistory[0].firstSeenReviewSequence).toBe(1);
+    expect(run.state.findingHistory[0].resolvedReviewSequence).toBe(2);
+    expect(run.state.findingHistory[1].findingId).toBe("P2-001");
+    expect(run.state.findingHistory[1].currentStatus).toBe("resolved");
+  }, 30000);
+
   it("accepts fix cycles that change content without changing diff stats", async () => {
     const cwd = createTempDir();
     initRepo(cwd);
