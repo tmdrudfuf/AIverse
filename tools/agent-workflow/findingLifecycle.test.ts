@@ -42,6 +42,23 @@ function resolvedHistory() {
   }), initialHistory(), { reviewSequence: 2 }).history || [];
 }
 
+function mixedHistory() {
+  const f2 = {
+    ...blocker,
+    id: "F2",
+    severity: "P2",
+    summary: "Second issue.",
+    recommendation: "Fix the second issue.",
+  };
+  return normalizeLifecycle(review({
+    blockingFindings: [f2],
+    findingLifecycle: [
+      { findingId: "F1", status: "resolved", explanation: "Committed diff is now included." },
+      { findingId: "F2", status: "new", explanation: "New issue found after the fix." },
+    ],
+  }), initialHistory(), { reviewSequence: 2 }).history || [];
+}
+
 describe("finding lifecycle normalization", () => {
   it("records initial findings as new", () => {
     const result = normalizeLifecycle(review(), [], { reviewSequence: 1 });
@@ -315,5 +332,34 @@ describe("finding lifecycle normalization", () => {
 
     expect(result.status).toBe("invalid");
     expect(result.diagnostics.join("\n")).toContain("cannot be reused");
+  });
+
+  it("rejects reuse of a resolved finding ID when other prior findings remain open", () => {
+    const result = normalizeLifecycle(review({
+      blockingFindings: [
+        {
+          ...blocker,
+          id: "F1",
+          summary: "Unrelated issue reusing a resolved ID.",
+          recommendation: "Use a new finding ID for the new issue.",
+        },
+        {
+          ...blocker,
+          id: "F2",
+          severity: "P2",
+          summary: "Second issue.",
+          recommendation: "Fix the second issue.",
+        },
+      ],
+      findingLifecycle: [
+        { findingId: "F1", status: "new", explanation: "Incorrectly presented as a new issue." },
+        { findingId: "F2", status: "still_open", explanation: "The second issue remains." },
+      ],
+    }), mixedHistory(), { reviewSequence: 3 });
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("Resolved finding F1 cannot be reused");
+    expect(result.diagnostics.join("\n")).toContain("must not receive a new lifecycle transition");
+    expect(result.diagnostics.join("\n")).toContain("changed summary");
   });
 });

@@ -255,6 +255,7 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
   const currentFindings = getCurrentFindings(review);
   const currentById = new Map(currentFindings.map((finding) => [finding.id, finding]));
   const previousById = new Map(openPrevious.map((entry) => [entry.findingId, entry]));
+  const historyById = new Map(history.map((entry) => [entry.findingId, entry]));
   const classifications = lifecycleMap(lifecycleEntries, diagnostics);
   const nextHistoryById = new Map(history.map((entry) => [entry.findingId, { ...entry }]));
   const newFindings = [];
@@ -305,6 +306,11 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
     const findingId = normalizeString(current.id);
     const classification = classifications.get(findingId);
     if (previousById.has(findingId)) continue;
+    if (historyById.has(findingId)) {
+      diagnostics.push(`Resolved finding ${findingId} cannot be reused as a current finding.`);
+      compareContinuity(historyById.get(findingId), current, diagnostics);
+      continue;
+    }
     if (!classification) {
       diagnostics.push(`New current finding ${findingId || "(missing id)"} is missing lifecycle classification.`);
       continue;
@@ -318,7 +324,9 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
   }
 
   for (const classification of classifications.values()) {
-    if (!previousById.has(classification.findingId) && !currentById.has(classification.findingId)) {
+    if (historyById.has(classification.findingId) && !previousById.has(classification.findingId)) {
+      diagnostics.push(`Resolved previous finding ${classification.findingId} must not receive a new lifecycle transition.`);
+    } else if (!previousById.has(classification.findingId) && !currentById.has(classification.findingId)) {
       diagnostics.push(`Lifecycle entry references unknown findingId: ${classification.findingId}.`);
     }
   }
