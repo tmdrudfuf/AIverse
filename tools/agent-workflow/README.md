@@ -250,3 +250,78 @@ Optional state fields used by `run-review` (all optional, existing state files r
 ```
 
 `specPath` overrides automatic spec discovery. `reviewRuns` is populated automatically after each real run with `{ outcome, reviewerId, sameRunner, recordedAt, promptPath, executionPath, resultPath }`.
+
+## Run the Automated Implement-Review-Fix Loop
+
+Run the complete local loop with one command:
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-state.json --timeout-ms 300000 --max-fix-cycles 2
+```
+
+The workflow automates local implementation and review. Push, PR creation, readiness, approval, merge, and remote deletion remain human-only.
+
+Default flow:
+
+```text
+implement -> validate -> review -> final-verification -> human-merge-decision
+```
+
+Changes Requested flow:
+
+```text
+implement -> validate -> review -> fix -> revalidate -> re-review -> final-verification -> human-merge-decision
+```
+
+Bounded failure flow:
+
+```text
+review -> Changes Requested -> fix -> re-review -> Changes Requested -> blocked
+```
+
+The loop stops conservatively when validation fails, a runner times out or exits non-zero, the Reviewer returns `Unknown`, a `Changes Requested` result has no actionable findings, a fix cycle produces no repository diff, the branch changes during orchestration, or the configured fix-cycle limit is reached.
+
+Preview without spawning agents, running validation, writing execution/result artifacts, or advancing state:
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-state.json --dry-run --max-fix-cycles 2
+```
+
+Dry-run prints the feature, branch, current stage, resolved Implementer/Reviewer, command previews, validation commands, max fix cycles, planned stages, prompt paths, run directory, next expected stage, and `Will spawn: false`.
+
+Useful flags:
+
+- `--max-fix-cycles <n>` limits fix/re-review cycles. Default: `2`.
+- `--timeout-ms <ms>` applies to local agent and validation subprocesses.
+- `--skip-validation` skips validation stages for controlled smoke tests only.
+- `--validation-command <command>` can be repeated to override validation commands.
+
+State is persisted after each completed stage in the existing state file. On rerun, `orchestrate` resumes from `state.orchestration.currentStage`, so completed implementation or validation stages are not repeated unless the state says they are still pending.
+
+Additional state fields populated by `orchestrate` include:
+
+```json
+{
+  "orchestration": {
+    "currentStage": "human-merge-decision",
+    "maxFixCycles": 2,
+    "decision": "Ready for human merge decision",
+    "nextExpectedAction": "human approval before push, PR, readiness, approval, merge, or remote deletion."
+  },
+  "orchestrationRuns": [],
+  "validationRuns": [],
+  "fixCycleCount": 0,
+  "latestReviewDecision": "Approved"
+}
+```
+
+Validation defaults remain:
+
+```powershell
+npm test
+npx tsc --noEmit
+npm run build
+git diff --check
+```
+
+Each validation command records stdout, stderr, exit code, signal, timeout/interruption state, duration, status, and artifact path under `.agent-workflow/runs/<feature-id>/`.

@@ -20,6 +20,10 @@ const {
   previewIndependentReview,
   runIndependentReviewAndPersist,
 } = require("./reviewCommand.js");
+const {
+  previewOrchestration,
+  runOrchestrationAndPersist,
+} = require("./orchestrateCommand.js");
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -40,6 +44,7 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--base <branch>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>]",
     "",
     "Safety:",
     "  This script does not push, create PRs, merge PRs, or delete branches.",
@@ -209,8 +214,49 @@ function main(argv) {
     return;
   }
 
+  if (command === "orchestrate") {
+    const timeoutMsText = readFlag(args, "--timeout-ms");
+    const maxFixCyclesText = readFlag(args, "--max-fix-cycles");
+    const validationCommands = readAllFlags(args, "--validation-command");
+    const options = {
+      cwd: process.cwd(),
+      timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
+      maxFixCycles: maxFixCyclesText ? Number(maxFixCyclesText) : undefined,
+      skipValidation: hasFlag(args, "--skip-validation"),
+      validationCommands: validationCommands.length ? validationCommands : undefined,
+    };
+    if (hasFlag(args, "--dry-run")) {
+      try {
+        console.log(formatOrchestrationDryRun(previewOrchestration(state, options)));
+      } catch (error) {
+        console.error(error.message);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
+    runOrchestrationAndPersist(resolvedStatePath, options)
+      .then((run) => {
+        console.log(formatOrchestrationResult(run));
+        if (run.decision !== "Ready for human merge decision") process.exitCode = 1;
+      })
+      .catch((error) => {
+        console.error(error.message);
+        process.exitCode = 1;
+      });
+    return;
+  }
+
   printUsage();
   process.exitCode = 1;
+}
+
+function readAllFlags(args, name) {
+  const values = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === name && args[index + 1] !== undefined) values.push(args[index + 1]);
+  }
+  return values;
 }
 
 function formatIndependentReviewDryRunPreview(preview) {
@@ -243,6 +289,49 @@ function formatIndependentReviewResult(run) {
     lines.push(`Reviewer: ${run.reviewerId}`);
   }
   lines.push(`Next action: ${NEXT_ACTION_BY_OUTCOME[run.outcome] || "inspect the saved review output."}`);
+  return lines.join("\n");
+}
+
+function formatOrchestrationDryRun(preview) {
+  const lines = [
+    "Dry run: true",
+    `Feature: ${preview.featureId}`,
+    `Branch: ${preview.branch}`,
+    `Current stage: ${preview.currentStage}`,
+    `Implementer: ${preview.implementer.id} (${preview.implementer.identity})`,
+    `Implementer command: ${preview.implementer.commandPreview}`,
+    `Reviewer: ${preview.reviewer.id} (${preview.reviewer.identity})`,
+    `Reviewer command: ${preview.reviewer.commandPreview}`,
+    `Validation: ${preview.validationCommands.length ? preview.validationCommands.join("; ") : "skipped"}`,
+    `Fix cycle: ${preview.fixCycleCount || 0}/${preview.maxFixCycles}`,
+    `Next action: ${preview.nextExpectedStage}`,
+    `Run directory: ${preview.runDirectory}`,
+    `Artifacts: implement prompt=${preview.promptPaths.implement}; review prompt=${preview.promptPaths.review}; fix prompt=${preview.promptPaths.fix}`,
+    `Planned stages: ${preview.plannedStages.join(" -> ")}`,
+    `Will spawn: ${preview.willSpawn}`,
+  ];
+  if (preview.sameRunner) lines.splice(1, 0, SAME_RUNNER_WARNING, "");
+  return lines.join("\n");
+}
+
+function formatOrchestrationResult(run) {
+  const orchestration = run.state.orchestration || {};
+  const lines = [];
+  if (orchestration.sameRunner) lines.push(SAME_RUNNER_WARNING, "");
+  lines.push(
+    `Feature: ${run.state.featureId || "unknown-feature"}`,
+    `Branch: ${run.state.currentBranch || orchestration.branch || "unknown-branch"}`,
+    `Implementer: ${orchestration.implementerId || "unknown"} (${orchestration.implementerIdentity || "unknown"})`,
+    `Reviewer: ${orchestration.reviewerId || "unknown"} (${orchestration.reviewerIdentity || "unknown"})`,
+    `Current stage: ${orchestration.currentStage || "unknown"}`,
+    `Validation: ${Array.isArray(run.state.validationRuns) && run.state.validationRuns.length ? run.state.validationRuns.at(-1).status : "not run"}`,
+    `Review decision: ${run.state.latestReviewDecision || "none"}`,
+    `Fix cycle: ${run.state.fixCycleCount || 0}/${orchestration.maxFixCycles ?? "unknown"}`,
+    `Next action: ${run.nextAction || "inspect state"}`,
+    `Artifacts: ${run.steps.map((step) => step.artifactPath).filter(Boolean).join("; ") || "none"}`,
+    `Decision: ${run.decision}`,
+  );
+  if (run.reason) lines.push(`Reason: ${run.reason}`);
   return lines.join("\n");
 }
 
@@ -286,6 +375,8 @@ module.exports = {
   formatDryRunPreview,
   formatIndependentReviewDryRunPreview,
   formatIndependentReviewResult,
+  formatOrchestrationDryRun,
+  formatOrchestrationResult,
   formatRunSummary,
   main,
 };

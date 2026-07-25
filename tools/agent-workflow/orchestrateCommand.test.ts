@@ -1,0 +1,446 @@
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { readState, writeState } from "./agentWorkflow.js";
+import {
+  extractReviewFindings,
+  previewOrchestration,
+  runOrchestration,
+  runOrchestrationAndPersist,
+  runValidationCommands,
+} from "./orchestrateCommand.js";
+
+type MockResult = {
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number | null;
+  signal?: string | null;
+  timedOut?: boolean;
+  interrupted?: boolean;
+  durationMs?: number;
+  mutate?: (cwd: string, input?: string) => void;
+};
+
+function createTempDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "orchestrate-"));
+}
+
+function git(cwd: string, args: string[]) {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+}
+
+function initRepo(cwd: string) {
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+  git(cwd, ["config", "user.email", "test@example.com"]);
+  git(cwd, ["config", "user.name", "Test"]);
+  fs.writeFileSync(path.join(cwd, "tracked.txt"), "base\n");
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "init"]);
+}
+
+function createState(overrides: Record<string, unknown> = {}) {
+  return {
+    featureId: "999-orchestrate-test",
+    featureName: "Orchestrate Test",
+    baseBranch: "main",
+    taskScope: "Test orchestrate workflow.",
+    results: [],
+    validationCommands: ["mock validation"],
+    agentRunners: {
+      implementer: {
+        identity: "Mock Implementer",
+        command: "mock-implementer",
+        args: [],
+        inputMode: "stdin",
+        timeoutMs: 1000,
+      },
+      reviewer: {
+        identity: "Mock Reviewer",
+        command: "mock-reviewer",
+        args: [],
+        inputMode: "stdin",
+        timeoutMs: 1000,
+      },
+    },
+    ...overrides,
+  };
+}
+
+function createSequenceAdapter(results: MockResult[], cwd: string) {
+  const calls: Array<{ command: string; args: string[]; input?: string }> = [];
+  const run = vi.fn(async (command: string, args: string[], options: { input?: string }) => {
+    calls.push({ command, args, input: options.input });
+    const next = results.shift();
+    if (!next) throw new Error(`Unexpected process call: ${command}`);
+    if (next.mutate) next.mutate(cwd, options.input);
+    return {
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      interrupted: false,
+      durationMs: 5,
+      ...next,
+    };
+  });
+  return { run, calls };
+}
+
+const approvedReview = "# Review Decision: Approved\n\n## Blocking Findings\n(none)\n## Non-Blocking Improvements\n(none)\n## Validation Performed\nmock\n## Final Recommendation\nApprove.";
+const actionableChanges = "# Review Decision: Changes Requested\n\n## Blocking Findings\n- File: tracked.txt\n  Location: line 1\n  Problem: value is stale\n  Impact: behavior remains wrong\n  Recommendation: update the value\n\n## Non-Blocking Improvements\n(none)\n## Validation Performed\nmock\n## Final Recommendation\nFix the finding.";
+
+describe("orchestrate dry-run", () => {
+  it("does not spawn, validate, mutate state, or write result artifacts", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const state = createState();
+    const preview = previewOrchestration(state, { cwd, maxFixCycles: 3 });
+
+    expect(preview.dryRun).toBe(true);
+    expect(preview.willSpawn).toBe(false);
+    expect(preview.implementer.commandPreview).toBe("mock-implementer");
+    expect(preview.reviewer.commandPreview).toBe("mock-reviewer");
+    expect(preview.validationCommands).toEqual(["mock validation"]);
+    expect(preview.maxFixCycles).toBe(3);
+    expect(preview.fixCycleCount).toBe(0);
+    expect(state).not.toHaveProperty("orchestration");
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow"))).toBe(false);
+  });
+
+  it("reports the resumed fix cycle count", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const preview = previewOrchestration(createState({
+      fixCycleCount: 1,
+      orchestration: { currentStage: "re-review", maxFixCycles: 3 },
+    }), { cwd, maxFixCycles: 3 });
+
+    expect(preview.currentStage).toBe("re-review");
+    expect(preview.fixCycleCount).toBe(1);
+  });
+});
+
+describe("orchestrate workflow", () => {
+  it("runs direct approval flow to human merge decision", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.orchestration.currentStage).toBe("human-merge-decision");
+    expect(run.state.orchestration.implementerIdentity).toBe("Mock Implementer");
+    expect(run.state.orchestration.reviewerIdentity).toBe("Mock Reviewer");
+    expect(adapter.run).toHaveBeenCalledTimes(4);
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer", expect.any(String), "mock-reviewer", expect.any(String)]);
+    expect(run.state.validationRuns).toHaveLength(2);
+    expect(run.state.reviewRuns).toHaveLength(1);
+  }, 30000);
+
+  it("runs one fix cycle and reaches approval", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: actionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      { stdout: "revalidation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.fixCycleCount).toBe(1);
+    expect(adapter.calls.some((call) => call.input?.includes("File: tracked.txt"))).toBe(true);
+  }, 30000);
+
+  it("accepts fix cycles that change content without changing diff stats", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "wrong\n") },
+      { stdout: "validation passed" },
+      { stdout: actionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "right\n") },
+      { stdout: "revalidation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.fixCycleCount).toBe(1);
+    expect(fs.readFileSync(path.join(cwd, "tracked.txt"), "utf8")).toBe("right\n");
+  }, 30000);
+
+  it("stops when maximum fix cycles are exhausted", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: actionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed once\n") },
+      { stdout: "revalidation passed" },
+      { stdout: actionableChanges },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 1 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Maximum fix cycles reached");
+    expect(run.state.orchestration.currentStage).toBe("blocked");
+  }, 30000);
+
+  it("does not run Reviewer when validation fails", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stderr: "validation failed", exitCode: 1 },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toContain("validate failed");
+    expect(adapter.calls.map((call) => call.command)).not.toContain("mock-reviewer");
+  }, 30000);
+
+  it("does not start a fix cycle for Reviewer Unknown", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: "looks okay maybe" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer returned Unknown");
+    expect(adapter.calls.filter((call) => call.command === "mock-implementer")).toHaveLength(1);
+  }, 30000);
+
+  it("stops conservatively on Reviewer timeout", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview, timedOut: true, signal: "SIGTERM", exitCode: null },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer returned Timed Out");
+  }, 30000);
+
+  it("stops conservatively on Implementer timeout and never reviews", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "partial", timedOut: true, signal: "SIGTERM", exitCode: null },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("implement execution failed");
+    expect(adapter.calls).toHaveLength(1);
+  }, 30000);
+
+  it("does not start a blind fix for non-actionable Changes Requested", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: "# Review Decision: Changes Requested\n\n## Blocking Findings\nPlease improve it." },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer requested changes without actionable findings");
+    expect(adapter.calls).toHaveLength(3);
+  }, 30000);
+
+  it("blocks no-change fix cycles", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: actionableChanges },
+      { stdout: "claimed fixed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Fix cycle produced no repository diff");
+  }, 30000);
+
+  it("rejects unsafe runner configs before spawn", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([{ stdout: "should not run" }], cwd);
+    const state = createState({
+      agentRunners: {
+        implementer: { identity: "Unsafe", command: "gh", args: ["pr", "merge"], inputMode: "stdin" },
+        reviewer: { identity: "Mock Reviewer", command: "mock-reviewer", args: [], inputMode: "stdin" },
+      },
+    });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating");
+    expect(adapter.run).not.toHaveBeenCalled();
+  }, 30000);
+
+  it("rejects unsafe validation commands before validation spawn", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+    ], cwd);
+    const state = createState({ validationCommands: ["git push origin main"] });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
+  }, 30000);
+
+  it("rejects quote-split unsafe validation commands before validation spawn", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+    ], cwd);
+    const state = createState({ validationCommands: ["g''it push origin main"] });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
+  }, 30000);
+
+  it("rejects shell-wrapped unsafe validation commands before validation spawn", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+    ], cwd);
+    const state = createState({ validationCommands: ["sh -c \"git push origin main\""] });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
+  }, 30000);
+
+  it("runs npm validation commands through the real adapter on Windows-compatible argv", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+
+    const validation = await runValidationCommands(createState({ validationCommands: ["npm --version"] }), "validate", {
+      cwd,
+      timeoutMs: 30000,
+    });
+
+    expect(validation.passed).toBe(true);
+    expect(validation.records[0]?.status).toBe("passed");
+    expect(validation.records[0]?.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  }, 30000);
+
+  it("resumes from review without repeating implementation or validation", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const state = createState({
+      orchestration: { currentStage: "review", maxFixCycles: 2 },
+      validationRuns: [{ stage: "validate", status: "passed", path: ".agent-workflow/runs/x/validation.md" }],
+    });
+
+    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-reviewer", expect.any(String)]);
+  }, 30000);
+
+  it("supports role-swapped Implementer and Reviewer", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const state = createState({
+      stageAgents: { implement: "claude", review: "codex" },
+      agentRunners: {
+        claude: { identity: "Implementer (Claude CLI)", command: "mock-claude", args: ["-p", "{{prompt}}"], inputMode: "argument" },
+        codex: { identity: "Reviewer (Codex CLI)", command: "mock-codex", args: [], inputMode: "stdin" },
+      },
+    });
+
+    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.orchestration.implementerIdentity).toBe("Implementer (Claude CLI)");
+    expect(run.state.orchestration.reviewerIdentity).toBe("Reviewer (Codex CLI)");
+    expect(adapter.calls[0].command).toBe("mock-claude");
+    expect(adapter.calls[2].command).toBe("mock-codex");
+  }, 30000);
+
+  it("loads BOM state and persists orchestration state", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = path.join(cwd, ".agent-workflow", "state.json");
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, `\uFEFF${JSON.stringify(createState())}`, "utf8");
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestrationAndPersist(statePath, { cwd, processAdapter: adapter });
+    const persisted = readState(statePath);
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(persisted.orchestration.currentStage).toBe("human-merge-decision");
+  }, 30000);
+});
+
+describe("review finding extraction", () => {
+  it("extracts only details that are present", () => {
+    const findings = extractReviewFindings(actionableChanges);
+    const firstFinding = findings[0];
+
+    expect(findings).toHaveLength(1);
+    expect(firstFinding?.filePath).toBe("tracked.txt");
+    expect(firstFinding?.location).toBe("line 1");
+    expect(firstFinding?.problem).toBe("value is stale");
+    expect(firstFinding?.recommendation).toBe("update the value");
+  });
+
+  it("does not invent findings from vague text", () => {
+    expect(extractReviewFindings("Please improve it.")).toEqual([]);
+  });
+});

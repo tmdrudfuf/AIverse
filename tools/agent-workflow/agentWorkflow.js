@@ -173,7 +173,9 @@ function readState(statePath) {
 
 function writeState(statePath, state) {
   fs.mkdirSync(path.dirname(statePath), { recursive: true });
-  fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  const tempPath = `${statePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  fs.renameSync(tempPath, statePath);
 }
 
 function assertRunRoot(runRoot) {
