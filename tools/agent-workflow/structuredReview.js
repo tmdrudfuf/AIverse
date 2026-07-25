@@ -10,9 +10,18 @@ const STRUCTURED_REVIEW_STATUSES = {
 const STRUCTURED_DECISION_TO_WORKFLOW = {
   approved: "Approved",
   changes_requested: "Changes Requested",
+  questions: "Questions",
 };
 const VALID_SEVERITIES = new Set(["P0", "P1", "P2", "P3"]);
 const STRING_FIELDS = ["id", "severity", "filePath", "location", "summary", "reason", "recommendation"];
+const QUESTION_STRING_FIELDS = ["id", "question", "reason"];
+const UNSAFE_QUESTION_PATTERNS = [
+  /\b(secret|token|credential|password|api[-_\s]?key|private\s+env(?:ironment)?)\b/i,
+  /\b(git\s+push|gh\s+pr\s+(?:create|merge|ready|edit)|gh\s+api|delete\s+remote\s+branch)\b/i,
+  /\b(run|execute|invoke)\s+(?:this\s+)?(?:command|shell|powershell|bash|cmd)\b/i,
+  /\b(skip|bypass|disable)\s+(?:validation|tests?|safety|permission|review)\b/i,
+  /\bunrelated\s+(?:work|feature|change|task)\b/i,
+];
 
 function sectionRanges(markdown) {
   const content = String(markdown || "").replace(/\r\n/g, "\n");
@@ -22,7 +31,7 @@ function sectionRanges(markdown) {
   while ((match = headingPattern.exec(content)) !== null) {
     const sectionStart = match.index + match[0].length;
     const rest = content.slice(sectionStart);
-    const nextHeading = rest.search(/^##\s+(?!Structured Review\s*$).+/gim);
+    const nextHeading = rest.search(/^##\s+.+/gim);
     const sectionEnd = nextHeading === -1 ? content.length : sectionStart + nextHeading;
     ranges.push(content.slice(sectionStart, sectionEnd));
   }
@@ -119,23 +128,54 @@ function validateFindingCollection(value, collectionName, requireActionable) {
   return { diagnostics, normalized };
 }
 
+function isUnsafeQuestionText(question) {
+  const text = `${question.question || ""}\n${question.reason || ""}`;
+  return UNSAFE_QUESTION_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function validateQuestion(question) {
+  const diagnostics = [];
+  if (!question || typeof question !== "object" || Array.isArray(question)) {
+    return { diagnostics: ["questions contains a non-object question."] };
+  }
+  const normalized = {};
+  for (const field of QUESTION_STRING_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(question, field)) {
+      if (typeof question[field] !== "string") {
+        diagnostics.push(`question field ${field} must be a string.`);
+        continue;
+      }
+      const value = question[field].trim();
+      if (value) normalized[field] = value;
+    }
+  }
+  if (!normalized.id) diagnostics.push("question is missing id.");
+  if (!normalized.question) diagnostics.push(`question ${normalized.id || "(missing id)"} is missing question.`);
+  if (!normalized.reason) diagnostics.push(`question ${normalized.id || "(missing id)"} is missing reason.`);
+  if (isUnsafeQuestionText(normalized)) {
+    diagnostics.push(`question ${normalized.id || "(missing id)"} contains unsafe or out-of-scope content.`);
+  }
+  return { normalized, diagnostics };
+}
+
 function validateQuestions(value) {
   if (value === undefined) return { diagnostics: [], normalized: [] };
   if (!Array.isArray(value)) return { diagnostics: ["questions must be an array."], normalized: [] };
   const diagnostics = [];
   const normalized = [];
-  value.forEach((question, index) => {
-    if (typeof question === "string") {
-      const trimmed = question.trim();
-      if (trimmed) normalized.push(trimmed);
-      return;
+  const seenIds = new Set();
+  for (const question of value) {
+    const result = validateQuestion(question);
+    diagnostics.push(...result.diagnostics);
+    if (!result.normalized) continue;
+    if (result.normalized.id) {
+      if (seenIds.has(result.normalized.id)) {
+        diagnostics.push(`Duplicate structured review question id: ${result.normalized.id}.`);
+      }
+      seenIds.add(result.normalized.id);
     }
-    if (question && typeof question === "object" && !Array.isArray(question)) {
-      normalized.push(question);
-      return;
-    }
-    diagnostics.push(`questions[${index}] must be a string or object.`);
-  });
+    normalized.push(result.normalized);
+  }
   return { diagnostics, normalized };
 }
 
@@ -175,6 +215,20 @@ function validateStructuredReviewObject(value) {
     if (!finding.id) continue;
     if (seenIds.has(finding.id)) diagnostics.push(`Duplicate structured review finding id: ${finding.id}.`);
     seenIds.add(finding.id);
+  }
+
+  if (diagnostics.length) {
+    return { status: STRUCTURED_REVIEW_STATUSES.INVALID, diagnostics };
+  }
+
+  if (decision === "approved" && (blocking.normalized.length || questions.normalized.length)) {
+    diagnostics.push("approved structured review must not include blocking findings or questions.");
+  }
+  if (decision === "changes_requested" && (questions.normalized.length || !blocking.normalized.length)) {
+    diagnostics.push("changes_requested structured review must include blocking findings and no questions.");
+  }
+  if (decision === "questions" && (blocking.normalized.length || !questions.normalized.length)) {
+    diagnostics.push("questions structured review must include questions and no blocking findings.");
   }
 
   if (diagnostics.length) {
@@ -265,6 +319,7 @@ module.exports = {
   STRUCTURED_REVIEW_STATUSES,
   SUPPORTED_SCHEMA_VERSION,
   VALID_SEVERITIES,
+  UNSAFE_QUESTION_PATTERNS,
   analyzeStructuredReview,
   extractStructuredReviewPayload,
   parseStructuredReview,

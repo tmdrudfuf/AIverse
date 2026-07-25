@@ -51,6 +51,21 @@ const changesPayload = JSON.stringify({
   questions: [],
 }, null, 2);
 
+const questionsPayload = JSON.stringify({
+  schemaVersion: 1,
+  decision: "questions",
+  summary: "Clarification is needed.",
+  blockingFindings: [],
+  nonBlockingFindings: [],
+  questions: [
+    {
+      id: "Q1",
+      question: "Which validation result covers the timeout path?",
+      reason: "The review artifact does not show evidence for this behavior.",
+    },
+  ],
+}, null, 2);
+
 describe("structured review extraction", () => {
   it("extracts the designated structured JSON block", () => {
     const result = extractStructuredReviewPayload(reviewWith(changesPayload));
@@ -109,6 +124,29 @@ describe("structured review extraction", () => {
     expect(result.decision).toBe("Unknown");
     expect(result.blockCount).toBe(2);
   });
+
+  it("treats repeated structured review headings as distinct sections", () => {
+    const markdown = [
+      "# Review Decision: Approved",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      approvedPayload,
+      "```",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      approvedPayload,
+      "```",
+    ].join("\n");
+
+    const result = analyzeStructuredReview(markdown);
+
+    expect(result.status).toBe("invalid");
+    expect(result.blockCount).toBe(2);
+  });
 });
 
 describe("structured review validation", () => {
@@ -152,7 +190,7 @@ describe("structured review validation", () => {
     expect(result.review?.blockingFindings).toHaveLength(2);
   });
 
-  it("allows non-blocking findings and optional questions", () => {
+  it("allows non-blocking findings on approved reviews", () => {
     const result = validateStructuredReviewObject({
       schemaVersion: 1,
       decision: "approved",
@@ -160,12 +198,121 @@ describe("structured review validation", () => {
       nonBlockingFindings: [
         { id: "P3-001", severity: "P3", summary: "Consider docs." },
       ],
-      questions: ["Should this be documented?", { id: "Q2", question: "Follow-up?" }],
+      questions: [],
     });
 
     expect(result.status).toBe("valid");
     expect(result.review?.nonBlockingFindings).toHaveLength(1);
-    expect(result.review?.questions).toHaveLength(2);
+    expect(result.review?.questions).toHaveLength(0);
+  });
+
+  it("validates a structured questions decision", () => {
+    const result = analyzeStructuredReview(reviewWith(questionsPayload, "Questions"));
+
+    expect(result.status).toBe("valid");
+    expect(result.decision).toBe("Questions");
+    expect(result.review?.decision).toBe("questions");
+    expect(result.review?.questions[0].id).toBe("Q1");
+  });
+
+  it("recognizes a Markdown Questions decision when structured data is absent", () => {
+    const result = analyzeStructuredReview("# Review Decision: Questions\n\n## Questions\n- Q1: Need evidence.");
+
+    expect(result.status).toBe("absent");
+    expect(result.decision).toBe("Questions");
+    expect(result.decisionSource).toBe("markdown");
+  });
+
+  it("rejects questions decisions with no questions", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "questions",
+      blockingFindings: [],
+      nonBlockingFindings: [],
+      questions: [],
+    }), "Questions"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.decision).toBe("Unknown");
+    expect(result.diagnostics.join("\n")).toContain("must include questions");
+  });
+
+  it("rejects duplicate question IDs", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "questions",
+      blockingFindings: [],
+      questions: [
+        { id: "Q1", question: "First?", reason: "Need first." },
+        { id: "Q1", question: "Second?", reason: "Need second." },
+      ],
+    }), "Questions"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("Duplicate structured review question id");
+  });
+
+  it("rejects questions missing a reason", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "questions",
+      blockingFindings: [],
+      questions: [
+        { id: "Q1", question: "Which test covers this?" },
+      ],
+    }), "Questions"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("missing reason");
+  });
+
+  it("rejects questions mixed with blocking findings", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "questions",
+      blockingFindings: [
+        {
+          id: "P1-001",
+          severity: "P1",
+          summary: "Issue.",
+          recommendation: "Fix it.",
+        },
+      ],
+      questions: [
+        { id: "Q1", question: "Which test covers this?", reason: "Need evidence." },
+      ],
+    }), "Questions"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("no blocking findings");
+  });
+
+  it("rejects approved reviews with questions", () => {
+    const result = validateStructuredReviewObject({
+      schemaVersion: 1,
+      decision: "approved",
+      blockingFindings: [],
+      questions: [
+        { id: "Q1", question: "Still unsure?", reason: "Approval cannot require answers." },
+      ],
+    });
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("approved structured review");
+  });
+
+  it("rejects unsafe question content", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "questions",
+      blockingFindings: [],
+      questions: [
+        { id: "Q1", question: "Can you run this command: git push origin main?", reason: "Need remote state." },
+      ],
+    }), "Questions"));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("unsafe");
   });
 
   it("rejects unsupported schema versions", () => {

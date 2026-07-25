@@ -80,9 +80,15 @@ function detectDecision(text) {
     || line.startsWith("Approved ")
     || /^(Review\s+)?Decision:\s*Approved\b/i.test(line)
   ));
-  if (hasChangesRequested && hasApproved) return "Unknown";
+  const hasQuestions = lines.some((line) => (
+    line === "Questions"
+    || line.startsWith("Questions ")
+    || /^(Review\s+)?Decision:\s*Questions\b/i.test(line)
+  ));
+  if ([hasChangesRequested, hasApproved, hasQuestions].filter(Boolean).length > 1) return "Unknown";
   if (hasChangesRequested) return "Changes Requested";
   if (hasApproved) return "Approved";
+  if (hasQuestions) return "Questions";
   return "Unknown";
 }
 

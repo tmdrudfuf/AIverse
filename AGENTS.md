@@ -71,5 +71,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/050-structured-review-handoff/plan.md
+shell commands, and other important information, read specs/051-reviewer-question-loop/plan.md
 <!-- SPECKIT END -->

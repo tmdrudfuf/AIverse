@@ -304,9 +304,10 @@ function formatOrchestrationDryRun(preview) {
     `Reviewer command: ${preview.reviewer.commandPreview}`,
     `Validation: ${preview.validationCommands.length ? preview.validationCommands.join("; ") : "skipped"}`,
     `Fix cycle: ${preview.fixCycleCount || 0}/${preview.maxFixCycles}`,
+    `Question cycle: ${preview.questionCycle || 0}/${preview.maxQuestionCycles}`,
     `Next action: ${preview.nextExpectedStage}`,
     `Run directory: ${preview.runDirectory}`,
-    `Artifacts: implement prompt=${preview.promptPaths.implement}; review prompt=${preview.promptPaths.review}; fix prompt=${preview.promptPaths.fix}`,
+    `Artifacts: implement prompt=${preview.promptPaths.implement}; review prompt=${preview.promptPaths.review}; answer prompt=${preview.promptPaths.answerQuestions}; final-review prompt=${preview.promptPaths.finalReview}; fix prompt=${preview.promptPaths.fix}`,
     `Planned stages: ${preview.plannedStages.join(" -> ")}`,
     `Will spawn: ${preview.willSpawn}`,
   ];
