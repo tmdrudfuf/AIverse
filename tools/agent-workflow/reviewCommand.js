@@ -20,6 +20,7 @@ const {
   resolveAgentConfig,
 } = require("./agentRunner.js");
 const { analyzeStructuredReview } = require("./structuredReview.js");
+const { formatFindingHistoryForPrompt } = require("./findingLifecycle.js");
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DIFF_LIMITS = { maxChars: 6000, maxLines: 200 };
@@ -233,6 +234,7 @@ function buildIndependentReviewPrompt(state, gitContext, options = {}) {
     agentsInstructions,
     claudeInstructions,
     workflowStateSummary,
+    findingHistory: formatFindingHistoryForPrompt(state.findingHistory || (state.orchestration && state.orchestration.findingHistory) || []),
     validationEvidence,
     changedFilesSummary,
     stagedDiff: `${truncate(gitContext.stagedDiffStat, DEFAULT_STAT_LIMITS)}\n\n${truncate(gitContext.stagedDiff)}`,

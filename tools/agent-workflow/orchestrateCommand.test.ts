@@ -134,6 +134,68 @@ const structuredActionableChanges = [
   }, null, 2),
   "```",
 ].join("\n");
+function lifecycleReview(decision: "approved" | "changes_requested", blockingFindings: unknown[], findingLifecycle: unknown[]) {
+  const heading = decision === "approved" ? "Approved" : "Changes Requested";
+  return [
+    `# Review Decision: ${heading}`,
+    "",
+    "## Blocking Findings",
+    blockingFindings.length ? "- structured blockers supplied" : "(none)",
+    "",
+    "## Non-Blocking Improvements",
+    "(none)",
+    "",
+    "## Validation Performed",
+    "mock",
+    "",
+    "## Final Recommendation",
+    heading,
+    "",
+    "## Structured Review",
+    "",
+    "```json",
+    JSON.stringify({
+      schemaVersion: 1,
+      decision,
+      summary: heading,
+      blockingFindings,
+      nonBlockingFindings: [],
+      questions: [],
+      findingLifecycle,
+    }, null, 2),
+    "```",
+  ].join("\n");
+}
+const structuredResolvedApproval = lifecycleReview("approved", [], [
+  { findingId: "P1-001", status: "resolved", explanation: "The stale value was updated." },
+]);
+const structuredStillOpenChanges = lifecycleReview("changes_requested", [
+  {
+    id: "P1-001",
+    severity: "P1",
+    filePath: "tracked.txt",
+    location: "line 1",
+    summary: "value is stale",
+    reason: "behavior remains wrong",
+    recommendation: "update the value",
+  },
+], [
+  { findingId: "P1-001", status: "still_open", explanation: "The stale value remains." },
+]);
+const structuredResolvedPlusNew = lifecycleReview("changes_requested", [
+  {
+    id: "P2-001",
+    severity: "P2",
+    filePath: "tracked.txt",
+    location: "line 2",
+    summary: "new validation gap",
+    reason: "a second behavior remains wrong",
+    recommendation: "add the missing validation",
+  },
+], [
+  { findingId: "P1-001", status: "resolved", explanation: "The stale value was updated." },
+  { findingId: "P2-001", status: "new", explanation: "This issue was found after the fix." },
+]);
 const structuredQuestionsReview = [
   "# Review Decision: Questions",
   "",
@@ -280,7 +342,7 @@ describe("orchestrate workflow", () => {
       { stdout: "validation passed" },
       { stdout: structuredQuestionsReview },
       { stdout: structuredAnswers },
-      { stdout: structuredApprovedReview },
+      { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
     ], cwd);
 
@@ -317,7 +379,7 @@ describe("orchestrate workflow", () => {
       { stdout: structuredActionableChanges },
       { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
       { stdout: "revalidation passed" },
-      { stdout: structuredApprovedReview },
+      { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
     ], cwd);
 
@@ -460,7 +522,7 @@ describe("orchestrate workflow", () => {
     initRepo(cwd);
     const adapter = createSequenceAdapter([
       { stdout: structuredAnswers },
-      { stdout: structuredApprovedReview },
+      { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
     ], cwd);
     const state = createState({
@@ -499,7 +561,7 @@ describe("orchestrate workflow", () => {
     const cwd = createTempDir();
     initRepo(cwd);
     const adapter = createSequenceAdapter([
-      { stdout: structuredApprovedReview },
+      { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
     ], cwd);
     const state = createState({
@@ -575,7 +637,7 @@ describe("orchestrate workflow", () => {
       { stdout: structuredActionableChanges },
       { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
       { stdout: "revalidation passed" },
-      { stdout: structuredApprovedReview },
+      { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
     ], cwd);
 
@@ -592,6 +654,194 @@ describe("orchestrate workflow", () => {
     expect(fixPrompt).toContain("Reason: behavior remains wrong");
     expect(fixPrompt).toContain("Recommended correction: update the value");
     expect(fixPrompt).toContain("## Previous Review Artifact");
+  }, 30000);
+
+  it("records initial structured findings as new lifecycle history", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredResolvedApproval },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.findingHistory).toHaveLength(1);
+    expect(run.state.findingHistory[0].findingId).toBe("P1-001");
+    expect(run.state.findingHistory[0].currentStatus).toBe("resolved");
+    expect(run.state.latestFindingLifecycleStatus).toBe("valid");
+    expect(run.state.latestFindingLifecyclePath).toMatch(/finding-lifecycle\.json$/);
+  }, 30000);
+
+  it("starts the next fix cycle for still-open lifecycle findings", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed once\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredStillOpenChanges },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 1 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Maximum fix cycles reached");
+    expect(run.state.findingHistory[0].currentStatus).toBe("still_open");
+    expect(run.state.orchestration.latestFindings[0].id).toBe("P1-001");
+  }, 30000);
+
+  it("targets only new active blockers after resolving old findings", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed once\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredResolvedPlusNew },
+      { stdout: "fixed again", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed twice\n") },
+      { stdout: "revalidation passed" },
+      { stdout: lifecycleReview("approved", [], [
+        { findingId: "P2-001", status: "resolved", explanation: "The new validation gap was fixed." },
+      ]) },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const secondFixPrompt = adapter.calls.filter((call) => call.command === "mock-implementer" && call.input?.includes("Workflow stage: `fix`"))[1]?.input || "";
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(secondFixPrompt).toContain("Finding P2-001:");
+    expect(secondFixPrompt).not.toContain("Finding P1-001:");
+  }, 30000);
+
+  it("blocks invalid lifecycle data before another fix cycle", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed once\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredActionableChanges },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toContain("Finding lifecycle invalid");
+    expect(run.state.fixCycleCount).toBe(1);
+  }, 30000);
+
+  it("blocks Markdown-only re-review when previous structured findings exist", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed once\n") },
+      { stdout: "revalidation passed" },
+      { stdout: approvedReview },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toContain("Valid structured lifecycle data is required");
+  }, 30000);
+
+  it("applies lifecycle only to final review after re-review questions", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed once\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredQuestionsReview },
+      { stdout: structuredAnswers },
+      { stdout: structuredResolvedApproval },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.questionCycle).toBe(1);
+    expect(run.state.reviewSequence).toBe(2);
+    expect(run.state.findingHistory[0].currentStatus).toBe("resolved");
+  }, 30000);
+
+  it("preserves fully resolved history when a resumed re-review introduces a new finding", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const f2 = {
+      id: "P2-001",
+      severity: "P2",
+      filePath: "tracked.txt",
+      location: "line 2",
+      summary: "new validation gap",
+      reason: "a later re-review found a new issue",
+      recommendation: "add the missing validation",
+    };
+    const adapter = createSequenceAdapter([
+      { stdout: lifecycleReview("changes_requested", [f2], [
+        { findingId: "P2-001", status: "new", explanation: "This issue is new after earlier findings resolved." },
+      ]) },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed new finding\n") },
+      { stdout: "revalidation passed" },
+      { stdout: lifecycleReview("approved", [], [
+        { findingId: "P2-001", status: "resolved", explanation: "The new finding was fixed." },
+      ]) },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const state = createState({
+      reviewSequence: 2,
+      findingHistory: [
+        {
+          findingId: "F1",
+          kind: "blocking",
+          severity: "P1",
+          summary: "old issue",
+          recommendation: "fix old issue",
+          firstSeenReviewSequence: 1,
+          lastSeenReviewSequence: 2,
+          currentStatus: "resolved",
+          resolvedReviewSequence: 2,
+          finding: {
+            id: "F1",
+            severity: "P1",
+            summary: "old issue",
+            recommendation: "fix old issue",
+          },
+        },
+      ],
+      orchestration: { currentStage: "re-review", maxFixCycles: 2, maxQuestionCycles: 1 },
+    });
+
+    const run = await runOrchestration(state, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.findingHistory).toHaveLength(2);
+    expect(run.state.findingHistory[0].findingId).toBe("F1");
+    expect(run.state.findingHistory[0].currentStatus).toBe("resolved");
+    expect(run.state.findingHistory[0].firstSeenReviewSequence).toBe(1);
+    expect(run.state.findingHistory[0].resolvedReviewSequence).toBe(2);
+    expect(run.state.findingHistory[1].findingId).toBe("P2-001");
+    expect(run.state.findingHistory[1].currentStatus).toBe("resolved");
   }, 30000);
 
   it("accepts fix cycles that change content without changing diff stats", async () => {

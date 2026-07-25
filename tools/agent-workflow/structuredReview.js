@@ -15,6 +15,7 @@ const STRUCTURED_DECISION_TO_WORKFLOW = {
 const VALID_SEVERITIES = new Set(["P0", "P1", "P2", "P3"]);
 const STRING_FIELDS = ["id", "severity", "filePath", "location", "summary", "reason", "recommendation"];
 const QUESTION_STRING_FIELDS = ["id", "question", "reason"];
+const LIFECYCLE_STRING_FIELDS = ["findingId", "status", "explanation"];
 const UNSAFE_QUESTION_PATTERNS = [
   /\b(secret|token|credential|password|api[-_\s]?key|private\s+env(?:ironment)?)\b/i,
   /\b(git\s+push|gh\s+pr\s+(?:create|merge|ready|edit)|gh\s+api|delete\s+remote\s+branch)\b/i,
@@ -220,6 +221,38 @@ function validateQuestions(value) {
   return { diagnostics, normalized };
 }
 
+function validateFindingLifecycle(value) {
+  if (value === undefined) return { diagnostics: [], normalized: undefined };
+  if (!Array.isArray(value)) return { diagnostics: ["findingLifecycle must be an array."], normalized: [] };
+  const diagnostics = [];
+  const normalized = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      diagnostics.push("findingLifecycle contains a non-object entry.");
+      continue;
+    }
+    const item = {};
+    for (const field of LIFECYCLE_STRING_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(entry, field)) {
+        if (typeof entry[field] !== "string") {
+          diagnostics.push(`findingLifecycle field ${field} must be a string.`);
+          continue;
+        }
+        const text = entry[field].trim();
+        if (text) item[field] = text;
+      }
+    }
+    if (!item.findingId) diagnostics.push("findingLifecycle entry is missing findingId.");
+    if (!item.status) diagnostics.push(`findingLifecycle entry ${item.findingId || "(missing findingId)"} is missing status.`);
+    if (item.status && !["new", "still_open", "resolved"].includes(item.status)) {
+      diagnostics.push(`findingLifecycle entry ${item.findingId || "(missing findingId)"} has invalid status.`);
+    }
+    if (!item.explanation) diagnostics.push(`findingLifecycle entry ${item.findingId || "(missing findingId)"} is missing explanation.`);
+    normalized.push(item);
+  }
+  return { diagnostics, normalized };
+}
+
 function validateStructuredReviewObject(value) {
   const diagnostics = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -250,6 +283,8 @@ function validateStructuredReviewObject(value) {
 
   const questions = validateQuestions(value.questions);
   diagnostics.push(...questions.diagnostics);
+  const lifecycle = validateFindingLifecycle(value.findingLifecycle);
+  diagnostics.push(...lifecycle.diagnostics);
 
   const seenIds = new Set();
   for (const finding of [...blocking.normalized, ...nonBlocking.normalized]) {
@@ -283,6 +318,7 @@ function validateStructuredReviewObject(value) {
     nonBlockingFindings: nonBlocking.normalized,
     questions: questions.normalized,
   };
+  if (lifecycle.normalized !== undefined) review.findingLifecycle = lifecycle.normalized;
   if (typeof value.summary === "string" && value.summary.trim()) review.summary = value.summary.trim();
 
   return {

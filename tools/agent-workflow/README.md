@@ -326,6 +326,44 @@ Conflict and fallback behavior:
 
 When the structured block is valid, a separate JSON artifact is written beside the raw Markdown result, and review run records include additive fields such as `structuredReviewStatus`, `structuredReviewDecision`, `structuredReviewPath`, and `structuredReviewDiagnostics`. Existing state files and old run records without these fields remain readable.
 
+### Finding Lifecycle Tracking
+
+Structured Review schema version 1 also supports optional lifecycle metadata for re-review cycles:
+
+```json
+{
+  "findingLifecycle": [
+    {
+      "findingId": "P1-001",
+      "status": "resolved",
+      "explanation": "The re-review confirmed the missing guard now covers committed branch changes."
+    }
+  ]
+}
+```
+
+Lifecycle statuses are `new`, `still_open`, and `resolved`.
+
+Initial reviews do not need lifecycle metadata. When no prior structured finding history exists, current structured findings are recorded as new. Later decision-producing re-reviews must classify every previous finding exactly once. Previous finding IDs must be reused only for the same underlying issue, new finding IDs must not collide with prior IDs, and approval is rejected while any prior blocking finding remains `still_open`.
+
+Invalid lifecycle data stops conservatively. Examples include missing classifications, duplicate classifications, unknown IDs, previous findings marked `new`, new findings marked `resolved`, still-open findings omitted from current findings, resolved findings still present as current blockers, or incompatible severity/summary/recommendation changes under a reused ID.
+
+Markdown-only initial reviews keep the legacy fallback behavior. Markdown-only re-reviews cannot safely classify previous structured findings, so the workflow blocks instead of inferring resolution from prose.
+
+When lifecycle normalization is applicable, the workflow writes a normalized `*-finding-lifecycle.json` artifact under `.agent-workflow/runs/<feature-id>/` and stores additive state fields such as:
+
+```json
+{
+  "reviewSequence": 2,
+  "findingHistory": [],
+  "latestFindingLifecycleStatus": "valid",
+  "latestFindingLifecyclePath": ".agent-workflow/runs/<feature-id>/...",
+  "latestFindingLifecycleDiagnostics": []
+}
+```
+
+Fix prompts use only active open blocking findings (`new` or `still_open`). Resolved findings remain in history and artifacts for human inspection but are excluded from active fix instructions.
+
 ### Reviewer Question Loop
 
 A Reviewer may ask one structured clarification round before issuing a final decision. The loop is conditional and bounded:
@@ -455,6 +493,7 @@ node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-sta
 
 Dry-run prints the feature, branch, current stage, resolved Implementer/Reviewer, command previews, validation commands, max fix cycles, planned stages, prompt paths, run directory, next expected stage, and `Will spawn: false`.
 It also previews conditional `answer-questions` and `final-review` prompt paths without claiming that the question loop will definitely execute.
+It also notes that previous findings may be supplied to re-review and that a lifecycle artifact may be generated after a decision-producing review.
 
 Useful flags:
 

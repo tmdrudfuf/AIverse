@@ -27,6 +27,7 @@ const {
 } = require("./reviewCommand.js");
 const { analyzeStructuredReview } = require("./structuredReview.js");
 const { parseStructuredAnswers } = require("./structuredAnswers.js");
+const { formatFindingHistoryForPrompt, normalizeFindingLifecycle } = require("./findingLifecycle.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -129,6 +130,21 @@ function formatFindings(findings, rawOutput) {
   return rawOutput || "- none recorded";
 }
 
+function getFindingHistory(state) {
+  const orchestration = getOrchestration(state);
+  return Array.isArray(state.findingHistory)
+    ? state.findingHistory
+    : (Array.isArray(orchestration.findingHistory) ? orchestration.findingHistory : []);
+}
+
+function getActiveBlockingFindings(state) {
+  const orchestration = getOrchestration(state);
+  if (Array.isArray(orchestration.activeBlockingFindings)) return orchestration.activeBlockingFindings;
+  return getFindingHistory(state)
+    .filter((entry) => entry.kind === "blocking" && entry.currentStatus !== "resolved" && entry.finding)
+    .map((entry) => entry.finding);
+}
+
 function buildImplementerPrompt(state, stage, options = {}) {
   const cwd = options.cwd || process.cwd();
   const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
@@ -147,7 +163,7 @@ function buildImplementerPrompt(state, stage, options = {}) {
     specSummary: buildSpecSummary(state, repoRoot),
     taskScope: state.taskScope || `Complete the active Spec Kit tasks for ${state.featureId || "this feature"}.`,
     reviewFindings: stage === "fix"
-      ? formatFindings(orchestration.latestFindings, orchestration.latestReviewOutput || "")
+      ? formatFindings(getActiveBlockingFindings(state).length ? getActiveBlockingFindings(state) : orchestration.latestFindings, orchestration.latestReviewOutput || "")
       : "- none for initial implementation",
     previousReviewPath: orchestration.latestReviewPath || "none",
     validationCommands: formatList(getValidationCommands(state, options)),
@@ -212,6 +228,7 @@ function buildFinalReviewPrompt(state, options = {}) {
     answerPath: orchestration.latestImplementerAnswerPath || "none",
     rawAnswerOutput: orchestration.latestImplementerAnswerOutput || "",
     answersJson: formatJson(orchestration.latestImplementerAnswers || state.latestImplementerAnswers || {}),
+    findingHistory: formatFindingHistoryForPrompt(getFindingHistory(state)),
     validationCommands: formatList(getValidationCommands(state, options)),
     safetyRules: formatList(DEFAULT_SAFETY_RULES),
     humanOnlyCommands: formatList(HUMAN_ONLY_COMMANDS),
@@ -587,6 +604,74 @@ async function executeReviewStage(state, reviewStage, options = {}) {
   };
 }
 
+function nextReviewSequence(state) {
+  const orchestration = getOrchestration(state);
+  return Number(state.reviewSequence || orchestration.reviewSequence || 0) + 1;
+}
+
+function writeLifecycleArtifact(state, lifecycle, label, options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const artifactPath = createRunFilePath(state, `${label}-finding-lifecycle`, { cwd }).replace(/\.md$/i, ".json");
+  fs.writeFileSync(artifactPath, `${JSON.stringify(lifecycle, null, 2)}\n`, "utf8");
+  return relativePath(cwd, artifactPath);
+}
+
+function applyFindingLifecycle(state, review, reviewStage, options = {}) {
+  if (!["Approved", "Changes Requested"].includes(review.outcome)) return { state, ok: true, findings: review.findings };
+  const cwd = options.cwd || process.cwd();
+  const previousHistory = getFindingHistory(state);
+  if (review.structuredReviewAnalysis.status !== "valid") {
+    if (previousHistory.length) {
+      const diagnostics = ["Valid structured lifecycle data is required when previous structured findings exist."];
+      const nextState = setOrchestration({
+        ...state,
+        latestFindingLifecycleStatus: review.structuredReviewAnalysis.status,
+        latestFindingLifecycleDiagnostics: diagnostics,
+      }, {
+        latestFindingLifecycleStatus: review.structuredReviewAnalysis.status,
+        latestFindingLifecycleDiagnostics: diagnostics,
+      });
+      return { state: nextState, ok: false, diagnostics };
+    }
+    return { state, ok: true, findings: review.findings };
+  }
+
+  const reviewSequence = nextReviewSequence(state);
+  const lifecycleResult = normalizeFindingLifecycle(review.structuredReviewAnalysis.review, previousHistory, {
+    reviewSequence,
+    reviewPath: relativePath(cwd, review.resultPath),
+    structuredReviewPath: relativePath(cwd, review.structuredReviewPath),
+  });
+  const lifecyclePath = lifecycleResult.lifecycle
+    ? writeLifecycleArtifact(state, lifecycleResult.lifecycle, reviewStage, { cwd })
+    : undefined;
+  const patch = {
+    reviewSequence,
+    latestFindingLifecycleStatus: lifecycleResult.status,
+    latestFindingLifecycleDiagnostics: lifecycleResult.diagnostics || [],
+    latestFindingLifecyclePath: lifecyclePath,
+  };
+  if (lifecycleResult.status === "valid") {
+    patch.findingHistory = lifecycleResult.history || [];
+    patch.latestFindingLifecycle = lifecycleResult.lifecycle;
+    patch.activeBlockingFindings = lifecycleResult.activeBlockingFindings || [];
+    patch.latestFindings = lifecycleResult.activeBlockingFindings || [];
+  }
+  const nextState = setOrchestration({
+    ...state,
+    ...patch,
+  }, patch);
+  if (lifecycleResult.status !== "valid") {
+    return { state: nextState, ok: false, diagnostics: lifecycleResult.diagnostics || [], lifecyclePath };
+  }
+  return {
+    state: nextState,
+    ok: true,
+    findings: lifecycleResult.activeBlockingFindings || [],
+    lifecyclePath,
+  };
+}
+
 function isQuestionOutcome(review) {
   return review.outcome === "Questions";
 }
@@ -790,6 +875,7 @@ function previewOrchestration(state, options = {}) {
       "validate",
       "review",
       "conditional answer-questions/final-review when Reviewer asks questions",
+      "conditional finding lifecycle normalization on re-review/final-review",
       "fix/revalidate/re-review until approved or max cycles",
       "final-verification",
       "human-merge-decision",
@@ -809,6 +895,12 @@ function previewOrchestration(state, options = {}) {
       review: createRunFilePath(state, "review-independent-review-prompt", { cwd }).replace(/\\/g, "/"),
       answerQuestions: createRunFilePath(state, "answer-questions-implementer-prompt", { cwd }).replace(/\\/g, "/"),
       finalReview: createRunFilePath(state, "final-review-independent-review-prompt", { cwd }).replace(/\\/g, "/"),
+      findingLifecycle: createRunFilePath(state, "review-finding-lifecycle", { cwd }).replace(/\.md$/i, ".json").replace(/\\/g, "/"),
+    },
+    findingLifecycle: {
+      previousFindingsMayBeSupplied: getFindingHistory(state).length > 0,
+      currentFindingCount: getFindingHistory(state).length,
+      artifactMayBeGenerated: true,
     },
     nextExpectedStage: currentStage,
     willSpawn: false,
@@ -909,7 +1001,7 @@ async function runOrchestration(state, options = {}) {
       currentState = review.state;
       steps.push({ stage, status: review.outcome, artifactPath: relativePath(cwd, review.resultPath) });
       if (isQuestionOutcome(review)) {
-        if (stage !== "review") {
+        if (stage === "final-review") {
           currentState = markBlocked(currentState, "Reviewer asked questions after the allowed clarification round");
           if (statePath) writeState(statePath, currentState);
           break;
@@ -943,6 +1035,13 @@ async function runOrchestration(state, options = {}) {
         });
         continue;
       }
+      const lifecycle = applyFindingLifecycle(currentState, review, stage, { cwd });
+      currentState = lifecycle.state;
+      if (!lifecycle.ok) {
+        currentState = markBlocked(currentState, `Finding lifecycle invalid: ${(lifecycle.diagnostics || []).join("; ")}`);
+        if (statePath) writeState(statePath, currentState);
+        break;
+      }
       if (review.outcome === "Approved") {
         currentState = persistStage(statePath, currentState, "final-verification");
         continue;
@@ -952,7 +1051,8 @@ async function runOrchestration(state, options = {}) {
         if (statePath) writeState(statePath, currentState);
         break;
       }
-      if (!review.findings.length) {
+      const activeFindings = getOrchestration(currentState).latestFindings || lifecycle.findings || review.findings;
+      if (!activeFindings.length) {
         currentState = markBlocked(currentState, "Reviewer requested changes without actionable findings");
         if (statePath) writeState(statePath, currentState);
         break;
