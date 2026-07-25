@@ -676,3 +676,146 @@ describe("existing CLI commands remain compatible", () => {
     expect(typeof formatRunSummary).toBe("function");
   });
 });
+
+function createRoleSelectionState(overrides: Partial<WorkflowState> = {}): WorkflowState {
+  return createState({
+    agentRunners: {
+      codex: { agentId: "codex", identity: "Codex Mock", command: "mock-codex", args: [], inputMode: "stdin" },
+      claude: { agentId: "claude", identity: "Claude Mock", command: "mock-claude", args: ["-p", "{{prompt}}"], inputMode: "argument" },
+    },
+    ...overrides,
+  } as Partial<WorkflowState>);
+}
+
+describe("run-review --implementer support", () => {
+  it("auto-derives Reviewer=codex when --implementer claude is given (dry-run)", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const preview = previewIndependentReview(createRoleSelectionState(), {
+      cwd,
+      processAdapter: spy,
+      implementerAgentId: "claude",
+    } as never);
+
+    expect(spy.run).not.toHaveBeenCalled();
+    expect(preview.implementerId).toBe("claude");
+    expect(preview.reviewerId).toBe("codex");
+    expect(preview.roleSource).toBe("cli-override");
+    expect(preview.willSpawn).toBe(false);
+  });
+
+  it("auto-derives Reviewer=claude when --implementer codex is given (dry-run)", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const preview = previewIndependentReview(createRoleSelectionState(), {
+      cwd,
+      processAdapter: spy,
+      implementerAgentId: "codex",
+    } as never);
+
+    expect(preview.implementerId).toBe("codex");
+    expect(preview.reviewerId).toBe("claude");
+    expect(preview.roleSource).toBe("cli-override");
+  });
+
+  it("lets an explicit --agent override take precedence over --implementer auto-derivation", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const state = createRoleSelectionState({
+      agentRunners: {
+        codex: { agentId: "codex", identity: "Codex Mock", command: "mock-codex", args: [], inputMode: "stdin" },
+        claude: { agentId: "claude", identity: "Claude Mock", command: "mock-claude", args: ["-p", "{{prompt}}"], inputMode: "argument" },
+        "explicit-reviewer": { agentId: "explicit-reviewer", identity: "Explicit Reviewer", command: "mock-explicit", args: [], inputMode: "stdin" },
+      },
+    } as never);
+    const preview = previewIndependentReview(state, {
+      cwd,
+      processAdapter: spy,
+      implementerAgentId: "claude",
+      agentId: "explicit-reviewer",
+    } as never);
+
+    expect(preview.implementerId).toBe("claude");
+    expect(preview.reviewerId).toBe("explicit-reviewer");
+    expect(preview.roleSource).toBe("cli-override");
+  });
+
+  it("rejects an unknown --implementer before any spawn, in dry-run and real execution", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const state = createRoleSelectionState();
+
+    expect(() => previewIndependentReview(state, { cwd, processAdapter: spy, implementerAgentId: "unknown-agent" } as never))
+      .toThrow("Requested implementer 'unknown-agent' is not configured.");
+    await expect(runIndependentReview(state, { cwd, processAdapter: spy, implementerAgentId: "unknown-agent" }))
+      .rejects.toThrow("Requested implementer 'unknown-agent' is not configured.");
+    expect(spy.run).not.toHaveBeenCalled();
+  });
+
+  it("runs the actual review against the auto-derived Reviewer and records role source", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\nchanged\n");
+
+    const adapter = createSpyAdapter({
+      stdout: "# Review Decision: Approved\n\n## Blocking Findings\n(none)\n## Non-Blocking Improvements\n(none)\n## Validation Performed\nnpm test\n## Final Recommendation\nShip it.",
+      exitCode: 0,
+    });
+
+    const run = await runIndependentReview(createRoleSelectionState(), {
+      cwd,
+      processAdapter: adapter,
+      implementerAgentId: "claude",
+      now: () => "2026-07-25T00:00:00.000Z",
+    });
+
+    expect(run.outcome).toBe("Approved");
+    expect(run.reviewerId).toBe("codex");
+    expect(run.implementerId).toBe("claude");
+    expect(run.roleSource).toBe("cli-override");
+    expect(adapter.run).toHaveBeenCalledWith("mock-codex", [], expect.objectContaining({ cwd }));
+  });
+
+  it("preserves default role source when --implementer is not supplied", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const preview = previewIndependentReview(createState(), { cwd, processAdapter: spy } as never);
+
+    expect(preview.roleSource).toBe("default");
+  });
+
+  it("preserves state role source when stageAgents overrides exist and --implementer is not supplied", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const state = createState({ stageAgents: { implement: "claude", review: "codex" } });
+    const preview = previewIndependentReview(state, { cwd, processAdapter: spy } as never);
+
+    expect(preview.roleSource).toBe("state");
+  });
+});

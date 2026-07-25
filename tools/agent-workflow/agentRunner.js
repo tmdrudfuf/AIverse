@@ -81,6 +81,7 @@ function normalizeAgentConfig(config) {
     timeoutMs: Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
       ? config.timeoutMs
       : DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
+    enabled: config.enabled !== false,
   };
 }
 

@@ -116,6 +116,15 @@ node tools/agent-workflow/cli.js detect-agent --agent reviewer
 
 The detection command reports whether the configured command appears executable. The default role aliases probe Codex CLI for `implementer` and Claude CLI for `reviewer`. The legacy `codex` and `claude` agent IDs remain available.
 
+Probe an Implementer/Reviewer pair by role instead of by agent ID:
+
+```powershell
+node tools/agent-workflow/cli.js detect-agent --implementer claude
+node tools/agent-workflow/cli.js detect-agent --implementer claude --state .agent-workflow/example-state.json
+```
+
+This resolves the other configured agent (`codex`) as Reviewer the same way `orchestrate --implementer` does, and prints both detection results in one JSON object with a `roleSource` field. `--state` is optional here; without it, detection uses the built-in default roster and runners.
+
 Built-in runner defaults use full local access:
 
 ```text
@@ -208,6 +217,8 @@ node tools/agent-workflow/cli.js run --state .agent-workflow/example-state.json 
 
 The command prints the current stage, selected agent, execution result, next stage, and output paths. Dry-run preview prints the selected stage, selected agent, command preview, prompt path, run directory, and next expected step without spawning an agent. It stops before `human-merge-decision` and never executes push, PR, merge, or branch deletion commands.
 
+`--implementer <agent-id>` also works here: for an Implementer-role stage (`implement`, `fix`, `final-verification`) it selects that agent; for a Reviewer-role stage (`review`, `re-review`) it selects the automatically-derived opposite agent for that stage. An explicit `--agent` still takes precedence when both are supplied. See [Runtime Role Selection](#runtime-role-selection) below for the full resolution rules.
+
 ## Get an Independent Review of the Current Working Tree
 
 Instead of hand-writing a review prompt, ask the workflow to build one automatically from the actual repository state and run the configured Reviewer:
@@ -238,7 +249,9 @@ Preview what would run without spawning the Reviewer:
 node tools/agent-workflow/cli.js run-review --state .agent-workflow/example-state.json --dry-run
 ```
 
-Dry-run prints the resolved Implementer/Reviewer, the sanitized command, the intended prompt path, the run directory, and a repository context summary (branch, base, merge base, and which change categories are non-empty) without spawning any process.
+Dry-run prints the resolved Implementer/Reviewer, the role source, the sanitized command, the intended prompt path, the run directory, and a repository context summary (branch, base, merge base, and which change categories are non-empty) without spawning any process.
+
+`--implementer <agent-id>` is also supported: it sets which agent plays Implementer for context in the generated prompt and, when `--agent` is not also supplied, auto-derives the Reviewer the same way `orchestrate --implementer` does. When both `--implementer` and `--agent` are supplied, `--agent` remains the authoritative Reviewer override (existing behavior).
 
 Optional state fields used by `run-review` (all optional, existing state files remain valid without them):
 
@@ -501,6 +514,7 @@ Useful flags:
 - `--timeout-ms <ms>` applies to local agent and validation subprocesses.
 - `--skip-validation` skips validation stages for controlled smoke tests only.
 - `--validation-command <command>` can be repeated to override validation commands.
+- `--implementer <agent-id>` picks the Implementer for this run and auto-resolves the Reviewer. See [Runtime Role Selection](#runtime-role-selection).
 
 State is persisted after each completed stage in the existing state file. On rerun, `orchestrate` resumes from `state.orchestration.currentStage`, so completed implementation or validation stages are not repeated unless the state says they are still pending.
 
@@ -531,3 +545,104 @@ git diff --check
 ```
 
 Each validation command records stdout, stderr, exit code, signal, timeout/interruption state, duration, status, and artifact path under `.agent-workflow/runs/<feature-id>/`.
+
+## Runtime Role Selection
+
+`--implementer <agent-id>` lets you choose the Implementer for one execution without editing the state file. The workflow automatically resolves the other configured agent as Reviewer, so `--reviewer` is never required for the current two-agent configuration:
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-state.json --implementer claude
+```
+
+resolves:
+
+```text
+Resolved roles
+Implementer: Claude Code CLI (claude)
+Reviewer: OpenAI Codex CLI (codex)
+Role source: CLI override
+```
+
+and
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-state.json --implementer codex
+```
+
+resolves the opposite pair (Implementer=Codex, Reviewer=Claude).
+
+Supported on `orchestrate`, `run`, `run-review`, and `detect-agent`. Not added to `next`, `record`, or `run-agent`, which never resolve a Reviewer role; `--implementer` is silently ignored there.
+
+### Resolution Priority
+
+1. `--implementer` CLI override (this execution only).
+2. State-configured roles (`stageAgents.implement`/`stageAgents.review`).
+3. Existing defaults (Implementer = Codex CLI, Reviewer = Claude CLI).
+
+A CLI override never rewrites `stageAgents`/`agentRunners` in the state file. Run it as many times as you like with different `--implementer` values; the configured file is untouched.
+
+### Automatic Reviewer Resolution
+
+For the default two-agent roster (`codex`, `claude`), the workflow always picks "the other one." For a larger roster (opt in with `state.roleRoster: ["codex", "claude", "gemini", ...]`), it either preserves a distinct, valid, configured Reviewer (`stageAgents.review`) or rejects with an ambiguity diagnostic — it never guesses nondeterministically, and it never assigns the same agent to both roles.
+
+### Validation Before Spawn
+
+Before any process spawns, `--implementer` is rejected when:
+
+- the requested agent does not exist in the merged `agentRunners` configuration,
+- the requested agent is configured with `enabled: false`,
+- the requested or auto-derived agent has no valid or safe runner configuration (the existing Spec 045 remote-mutation checks run against the actual resolved command and arguments, not just the agent name),
+- no distinct Reviewer candidate can be resolved,
+- more than one Reviewer candidate exists and no distinct configured Reviewer could be preserved.
+
+Every rejection names the requested Implementer and lists the available eligible agents, and leaves any persisted state role configuration unchanged.
+
+### Resume Behavior
+
+Once a non-dry-run `orchestrate` run has resolved roles, those roles are pinned into `state.orchestration` (`resolvedImplementerId`, `resolvedReviewerId`, `roleResolutionSource`) and reused for the rest of that run — a resume (re-running `orchestrate` on the same state file while it is not yet at `human-merge-decision`/`blocked`) never recalculates roles from current defaults, edited `stageAgents`, or a missing `--implementer`. A resume with no `--implementer`, or with one matching the pinned Implementer, continues normally. A resume with a **conflicting** `--implementer` is rejected before any process spawns:
+
+```text
+Existing run roles: Implementer=claude, Reviewer=codex.
+Requested resume override: Implementer=codex.
+Rejected before spawn because runtime roles are already fixed for this run.
+```
+
+A state file with no `orchestration.startedAt` (a fresh state, or one reset for a new attempt) is treated as a new run and is free to resolve roles again from `--implementer`/state/defaults; a completed run's pinned roles never leak into an unrelated later run.
+
+Top-level state also gains `latestResolvedRoles: { implementer, reviewer }` and `latestRoleResolutionSource` after every `orchestrate` invocation, for auditability.
+
+### Dry-Run
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-state.json --implementer claude --dry-run
+```
+
+```text
+Dry run: true
+...
+Resolved roles
+Implementer: Claude Code CLI (claude)
+Reviewer: OpenAI Codex CLI (codex)
+Role source: CLI override
+...
+Will spawn agents: no
+Will mutate state: no
+Will run validation: no
+Will perform remote mutation: no
+Will spawn: false
+```
+
+Dry-run performs full role and runner-safety validation and reports the same diagnostic a real run would produce on failure, but never spawns a process, writes state, writes a run artifact, or runs a validation command.
+
+### CLI Parsing Notes
+
+- `--implementer value` (space-separated) is the only supported form, consistent with every other flag in this CLI; `--implementer=value` is not supported.
+- Repeating `--implementer` with the same value normalizes to that value.
+- Repeating `--implementer` with different values is rejected before spawn.
+- `--implementer` with no value (end of the command line, or immediately followed by another flag) is rejected before spawn.
+
+### Multi-Agent Extension Point
+
+`state.roleRoster` (optional array of agent IDs) extends the roster beyond the default `["codex", "claude"]` for maintainers running more than two configured agents. With exactly two eligible agents, resolution is always exact. With three or more, `--implementer` requires a distinct, valid, configured Reviewer to already exist in `stageAgents.review`, or it rejects rather than guessing.
+
+Remote mutation (`git push`, `gh pr create`/`ready`/`merge`, branch deletion, and equivalents) remains human-only regardless of role selection; no runner becomes safe merely because it was selected through `--implementer`.
