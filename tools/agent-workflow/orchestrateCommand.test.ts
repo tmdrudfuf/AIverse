@@ -92,6 +92,48 @@ function createSequenceAdapter(results: MockResult[], cwd: string) {
 
 const approvedReview = "# Review Decision: Approved\n\n## Blocking Findings\n(none)\n## Non-Blocking Improvements\n(none)\n## Validation Performed\nmock\n## Final Recommendation\nApprove.";
 const actionableChanges = "# Review Decision: Changes Requested\n\n## Blocking Findings\n- File: tracked.txt\n  Location: line 1\n  Problem: value is stale\n  Impact: behavior remains wrong\n  Recommendation: update the value\n\n## Non-Blocking Improvements\n(none)\n## Validation Performed\nmock\n## Final Recommendation\nFix the finding.";
+const structuredApprovedReview = [
+  approvedReview,
+  "",
+  "## Structured Review",
+  "",
+  "```json",
+  JSON.stringify({
+    schemaVersion: 1,
+    decision: "approved",
+    summary: "No blocking findings.",
+    blockingFindings: [],
+    nonBlockingFindings: [],
+    questions: [],
+  }, null, 2),
+  "```",
+].join("\n");
+const structuredActionableChanges = [
+  actionableChanges,
+  "",
+  "## Structured Review",
+  "",
+  "```json",
+  JSON.stringify({
+    schemaVersion: 1,
+    decision: "changes_requested",
+    summary: "One blocking finding.",
+    blockingFindings: [
+      {
+        id: "P1-001",
+        severity: "P1",
+        filePath: "tracked.txt",
+        location: "line 1",
+        summary: "value is stale",
+        reason: "behavior remains wrong",
+        recommendation: "update the value",
+      },
+    ],
+    nonBlockingFindings: [],
+    questions: [],
+  }, null, 2),
+  "```",
+].join("\n");
 
 describe("orchestrate dry-run", () => {
   it("does not spawn, validate, mutate state, or write result artifacts", () => {
@@ -165,6 +207,34 @@ describe("orchestrate workflow", () => {
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.fixCycleCount).toBe(1);
     expect(adapter.calls.some((call) => call.input?.includes("File: tracked.txt"))).toBe(true);
+  }, 30000);
+
+  it("uses structured blocking findings in the fix prompt when available", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredApprovedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const fixPrompt = adapter.calls.find((call) => call.command === "mock-implementer" && call.input?.includes("Workflow stage: `fix`"))?.input || "";
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.latestStructuredReviewStatus).toBe("valid");
+    expect(run.state.latestStructuredReviewPath).toMatch(/structured-review\.json$/);
+    expect(run.state.orchestration.latestStructuredReviewStatus).toBe("valid");
+    expect(fixPrompt).toContain("Finding P1-001:");
+    expect(fixPrompt).toContain("Severity: P1");
+    expect(fixPrompt).toContain("Summary: value is stale");
+    expect(fixPrompt).toContain("Reason: behavior remains wrong");
+    expect(fixPrompt).toContain("Recommended correction: update the value");
+    expect(fixPrompt).toContain("## Previous Review Artifact");
   }, 30000);
 
   it("accepts fix cycles that change content without changing diff stats", async () => {
@@ -280,6 +350,76 @@ describe("orchestrate workflow", () => {
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer requested changes without actionable findings");
     expect(adapter.calls).toHaveLength(3);
+  }, 30000);
+
+  it("does not start a blind fix when structured Changes Requested has no blocking findings", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const structuredNoBlockingChanges = [
+      "# Review Decision: Changes Requested",
+      "",
+      "## Blocking Findings",
+      "(none)",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      JSON.stringify({
+        schemaVersion: 1,
+        decision: "changes_requested",
+        summary: "No actionable blocking findings were supplied.",
+        blockingFindings: [],
+        nonBlockingFindings: [
+          { id: "P3-001", severity: "P3", summary: "Consider docs." },
+        ],
+        questions: [],
+      }, null, 2),
+      "```",
+    ].join("\n");
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredNoBlockingChanges },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer requested changes without actionable findings");
+    expect(adapter.calls).toHaveLength(3);
+  }, 30000);
+
+  it("blocks invalid structured review data instead of reaching final verification", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: "# Review Decision: Approved\n\n## Structured Review\n\n```json\n{ nope\n```" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer returned Unknown");
+    expect(run.state.latestStructuredReviewStatus).toBe("invalid");
+    expect(adapter.calls).toHaveLength(3);
+  }, 30000);
+
+  it("blocks conflicting Markdown and structured decisions", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredActionableChanges.replace("# Review Decision: Changes Requested", "# Review Decision: Approved") },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer returned Unknown");
+    expect(run.state.latestStructuredReviewStatus).toBe("invalid");
   }, 30000);
 
   it("blocks no-change fix cycles", async () => {

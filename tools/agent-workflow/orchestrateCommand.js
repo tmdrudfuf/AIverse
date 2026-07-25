@@ -25,6 +25,7 @@ const {
   resolveSpecPaths,
   runnersMatch,
 } = require("./reviewCommand.js");
+const { analyzeStructuredReview } = require("./structuredReview.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -102,13 +103,16 @@ function buildSpecSummary(state, repoRoot) {
 function formatFindings(findings, rawOutput) {
   if (Array.isArray(findings) && findings.length) {
     return findings.map((finding, index) => {
-      const lines = [`Finding ${index + 1}:`];
+      const lines = [`Finding ${finding.id || index + 1}:`];
+      if (finding.severity) lines.push(`Severity: ${finding.severity}`);
       if (finding.filePath) lines.push(`File: ${finding.filePath}`);
       if (finding.location) lines.push(`Location: ${finding.location}`);
+      if (finding.summary) lines.push(`Summary: ${finding.summary}`);
       if (finding.problem) lines.push(`Problem: ${finding.problem}`);
       if (finding.impact) lines.push(`Impact: ${finding.impact}`);
+      if (finding.reason) lines.push(`Reason: ${finding.reason}`);
       if (finding.recommendation) lines.push(`Recommended correction: ${finding.recommendation}`);
-      lines.push(`Raw text: ${finding.rawText}`);
+      if (finding.rawText) lines.push(`Raw text: ${finding.rawText}`);
       return lines.join("\n");
     }).join("\n\n");
   }
@@ -468,11 +472,20 @@ function persistStage(statePath, state, currentStage, extra = {}) {
 async function executeReviewStage(state, reviewStage, options = {}) {
   const cwd = options.cwd || process.cwd();
   const reviewRun = await runReviewWithoutStateWrite(state, reviewStage, options);
-  const findings = reviewRun.outcome === "Changes Requested" ? extractReviewFindings(reviewRun.outputText) : [];
+  const findings = reviewRun.outcome === "Changes Requested"
+    ? extractFindingsForHandoff(reviewRun.outputText, reviewRun.structuredReviewAnalysis)
+    : [];
   const nextState = {
     ...reviewRun.state,
     latestReviewDecision: reviewRun.outcome,
+    latestStructuredReviewStatus: reviewRun.structuredReviewAnalysis.status,
+    latestStructuredReviewDiagnostics: reviewRun.structuredReviewAnalysis.diagnostics || [],
+    latestStructuredReviewDecision: reviewRun.structuredReviewAnalysis.decision || "Unknown",
   };
+  if (reviewRun.structuredReviewAnalysis.status === "valid") {
+    nextState.latestStructuredReview = reviewRun.structuredReviewAnalysis.review;
+    nextState.latestStructuredReviewPath = relativePath(cwd, reviewRun.structuredReviewPath);
+  }
   return {
     ...reviewRun,
     state: setOrchestration(nextState, {
@@ -481,9 +494,22 @@ async function executeReviewStage(state, reviewStage, options = {}) {
       latestReviewPath: relativePath(cwd, reviewRun.resultPath),
       latestReviewOutput: reviewRun.outputText,
       latestFindings: findings,
+      latestStructuredReviewStatus: reviewRun.structuredReviewAnalysis.status,
+      latestStructuredReviewPath: relativePath(cwd, reviewRun.structuredReviewPath),
+      latestStructuredReviewDiagnostics: reviewRun.structuredReviewAnalysis.diagnostics || [],
     }),
     findings,
   };
+}
+
+function extractFindingsForHandoff(outputText, structuredAnalysis) {
+  if (structuredAnalysis && structuredAnalysis.status === "valid") {
+    return structuredAnalysis.review.blockingFindings || [];
+  }
+  if (structuredAnalysis && structuredAnalysis.status && structuredAnalysis.status !== "absent") {
+    return [];
+  }
+  return extractReviewFindings(outputText);
 }
 
 async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
@@ -507,7 +533,8 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   });
   const completedAt = new Date().toISOString();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
-  const outcome = classifyReviewOutcome(result, outputText);
+  const structuredReviewAnalysis = analyzeStructuredReview(outputText);
+  const outcome = classifyReviewOutcome(result, outputText, { structuredAnalysis: structuredReviewAnalysis });
   const executionRecord = {
     featureId: state.featureId,
     kind: reviewStage,
@@ -534,6 +561,9 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     parentSignal: result.parentSignal || null,
     childCloseObservedAt: result.childCloseObservedAt || null,
     outcome,
+    structuredReviewStatus: structuredReviewAnalysis.status,
+    structuredReviewDecision: structuredReviewAnalysis.decision || "Unknown",
+    structuredReviewDiagnostics: structuredReviewAnalysis.diagnostics || [],
     currentBranch: gitContext.currentBranch,
     baseBranch: gitContext.baseBranchRef,
     mergeBase: gitContext.mergeBase,
@@ -542,6 +572,12 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   fs.writeFileSync(executionPath, `${JSON.stringify(executionRecord, null, 2)}\n`, "utf8");
   const resultPath = createRunFilePath(state, `${reviewStage}-independent-review-result`, { cwd });
   fs.writeFileSync(resultPath, outputText || "(empty reviewer output)", "utf8");
+  let structuredReviewPath;
+  if (structuredReviewAnalysis.status === "valid") {
+    structuredReviewPath = createRunFilePath(state, `${reviewStage}-structured-review`, { cwd })
+      .replace(/\.md$/i, ".json");
+    fs.writeFileSync(structuredReviewPath, `${JSON.stringify(structuredReviewAnalysis.review, null, 2)}\n`, "utf8");
+  }
   const reviewRunRecord = {
     outcome,
     reviewerId: reviewerConfig.agentId,
@@ -552,7 +588,11 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     promptPath: relativePath(cwd, promptPath),
     executionPath: relativePath(cwd, executionPath),
     resultPath: relativePath(cwd, resultPath),
+    structuredReviewStatus: structuredReviewAnalysis.status,
+    structuredReviewDecision: structuredReviewAnalysis.decision || "Unknown",
+    structuredReviewDiagnostics: structuredReviewAnalysis.diagnostics || [],
   };
+  if (structuredReviewPath) reviewRunRecord.structuredReviewPath = relativePath(cwd, structuredReviewPath);
   return {
     state: {
       ...state,
@@ -566,6 +606,8 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     promptPath,
     executionPath,
     resultPath,
+    structuredReviewPath,
+    structuredReviewAnalysis,
     executionRecord,
   };
 }
@@ -747,4 +789,5 @@ module.exports = {
   runOrchestration,
   runOrchestrationAndPersist,
   runValidationCommands,
+  extractFindingsForHandoff,
 };

@@ -19,6 +19,7 @@ const {
   createPromptInvocation,
   resolveAgentConfig,
 } = require("./agentRunner.js");
+const { analyzeStructuredReview } = require("./structuredReview.js");
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DIFF_LIMITS = { maxChars: 6000, maxLines: 200 };
@@ -259,12 +260,13 @@ function runnersMatch(a, b) {
   return a.command === b.command && JSON.stringify(a.args) === JSON.stringify(b.args);
 }
 
-function classifyReviewOutcome(result, outputText) {
+function classifyReviewOutcome(result, outputText, options = {}) {
   if (result.timedOut) return "Timed Out";
   if (result.errorMessage || result.interrupted || result.signal || result.exitCode !== 0) {
     return "Execution Failed";
   }
-  return detectDecision(outputText);
+  const structuredAnalysis = options.structuredAnalysis || analyzeStructuredReview(outputText);
+  return structuredAnalysis.decision || detectDecision(outputText);
 }
 
 function previewIndependentReview(state, options = {}) {
@@ -337,7 +339,8 @@ async function runIndependentReview(state, options = {}) {
   });
   const completedAt = now();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
-  const outcome = classifyReviewOutcome(result, outputText);
+  const structuredAnalysis = analyzeStructuredReview(outputText);
+  const outcome = classifyReviewOutcome(result, outputText, { structuredAnalysis });
 
   const executionRecord = {
     featureId: state.featureId,
@@ -365,6 +368,9 @@ async function runIndependentReview(state, options = {}) {
     parentSignal: result.parentSignal || null,
     childCloseObservedAt: result.childCloseObservedAt || null,
     outcome,
+    structuredReviewStatus: structuredAnalysis.status,
+    structuredReviewDecision: structuredAnalysis.decision || "Unknown",
+    structuredReviewDiagnostics: structuredAnalysis.diagnostics || [],
     currentBranch: gitContext.currentBranch,
     baseBranch: gitContext.baseBranchRef,
     mergeBase: gitContext.mergeBase,
@@ -378,6 +384,14 @@ async function runIndependentReview(state, options = {}) {
   fs.mkdirSync(path.dirname(resultPath), { recursive: true });
   fs.writeFileSync(resultPath, outputText || "(empty reviewer output)", "utf8");
 
+  let structuredReviewPath;
+  if (structuredAnalysis.status === "valid") {
+    structuredReviewPath = createRunFilePath(state, "independent-review-structured-review", { cwd, now })
+      .replace(/\.md$/i, ".json");
+    fs.mkdirSync(path.dirname(structuredReviewPath), { recursive: true });
+    fs.writeFileSync(structuredReviewPath, `${JSON.stringify(structuredAnalysis.review, null, 2)}\n`, "utf8");
+  }
+
   const reviewRunRecord = {
     outcome,
     reviewerId: reviewerConfig.agentId,
@@ -388,12 +402,26 @@ async function runIndependentReview(state, options = {}) {
     promptPath: path.relative(cwd, promptPath).replace(/\\/g, "/"),
     executionPath: path.relative(cwd, executionPath).replace(/\\/g, "/"),
     resultPath: path.relative(cwd, resultPath).replace(/\\/g, "/"),
+    structuredReviewStatus: structuredAnalysis.status,
+    structuredReviewDecision: structuredAnalysis.decision || "Unknown",
+    structuredReviewDiagnostics: structuredAnalysis.diagnostics || [],
   };
+  if (structuredReviewPath) {
+    reviewRunRecord.structuredReviewPath = path.relative(cwd, structuredReviewPath).replace(/\\/g, "/");
+  }
 
   const nextState = {
     ...state,
     reviewRuns: [...(Array.isArray(state.reviewRuns) ? state.reviewRuns : []), reviewRunRecord],
+    latestReviewDecision: outcome,
+    latestStructuredReviewStatus: structuredAnalysis.status,
+    latestStructuredReviewDiagnostics: structuredAnalysis.diagnostics || [],
+    latestStructuredReviewDecision: structuredAnalysis.decision || "Unknown",
   };
+  if (structuredAnalysis.status === "valid") {
+    nextState.latestStructuredReview = structuredAnalysis.review;
+    nextState.latestStructuredReviewPath = reviewRunRecord.structuredReviewPath;
+  }
 
   return {
     state: nextState,
@@ -406,6 +434,8 @@ async function runIndependentReview(state, options = {}) {
     promptPath,
     executionPath,
     resultPath,
+    structuredReviewPath,
+    structuredReviewAnalysis: structuredAnalysis,
   };
 }
 

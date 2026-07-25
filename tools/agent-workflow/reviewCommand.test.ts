@@ -71,6 +71,83 @@ function createSpyAdapter(result: Record<string, unknown>) {
   return { run };
 }
 
+function structuredApprovedReview() {
+  return [
+    "# Review Decision: Approved",
+    "",
+    "## Blocking Findings",
+    "(none)",
+    "",
+    "## Non-Blocking Improvements",
+    "(none)",
+    "",
+    "## Validation Performed",
+    "mock",
+    "",
+    "## Final Recommendation",
+    "Approve.",
+    "",
+    "## Structured Review",
+    "",
+    "```json",
+    JSON.stringify({
+      schemaVersion: 1,
+      decision: "approved",
+      summary: "No blocking findings.",
+      blockingFindings: [],
+      nonBlockingFindings: [],
+      questions: [],
+    }, null, 2),
+    "```",
+  ].join("\n");
+}
+
+function structuredChangesReview() {
+  return [
+    "# Review Decision: Changes Requested",
+    "",
+    "## Blocking Findings",
+    "- Severity: P1",
+    "  File: tracked.txt",
+    "  Location: line 1",
+    "  Problem: value is stale",
+    "  Impact: behavior remains wrong",
+    "  Recommendation: update the value",
+    "",
+    "## Non-Blocking Improvements",
+    "(none)",
+    "",
+    "## Validation Performed",
+    "mock",
+    "",
+    "## Final Recommendation",
+    "Fix the finding.",
+    "",
+    "## Structured Review",
+    "",
+    "```json",
+    JSON.stringify({
+      schemaVersion: 1,
+      decision: "changes_requested",
+      summary: "One blocking finding.",
+      blockingFindings: [
+        {
+          id: "P1-001",
+          severity: "P1",
+          filePath: "tracked.txt",
+          location: "line 1",
+          summary: "value is stale",
+          reason: "behavior remains wrong",
+          recommendation: "update the value",
+        },
+      ],
+      nonBlockingFindings: [],
+      questions: [],
+    }, null, 2),
+    "```",
+  ].join("\n");
+}
+
 describe("Reviewer/Implementer resolution", () => {
   it("resolves the default Implementer (Codex CLI) and Reviewer (Claude CLI)", () => {
     const state = createState();
@@ -249,6 +326,12 @@ describe("decision classification", () => {
   it("classifies a spawn error as Execution Failed", () => {
     expect(classifyReviewOutcome({ exitCode: 0, errorMessage: "spawn claude ENOENT" }, "")).toBe("Execution Failed");
   });
+
+  it("classifies conflicting Markdown and structured decisions as Unknown", () => {
+    const output = structuredChangesReview().replace("# Review Decision: Changes Requested", "# Review Decision: Approved");
+
+    expect(classifyReviewOutcome({ exitCode: 0 }, output)).toBe("Unknown");
+  });
 });
 
 describe("independent review dry-run", () => {
@@ -359,6 +442,77 @@ describe("independent review execution", () => {
       "-p",
       expect.stringContaining("Independent Review"),
     ], expect.objectContaining({ cwd }));
+  });
+
+  it("writes a structured review artifact when Reviewer output contains valid structured JSON", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    const adapter = createSpyAdapter({
+      stdout: structuredChangesReview(),
+      exitCode: 0,
+    });
+
+    const run = await runIndependentReview(createState(), {
+      cwd,
+      processAdapter: adapter,
+      now: () => "2026-07-23T00:00:00.000Z",
+    });
+
+    expect(run.outcome).toBe("Changes Requested");
+    expect(run.structuredReviewAnalysis.status).toBe("valid");
+    expect(run.structuredReviewPath).toBeDefined();
+    expect(fs.readFileSync(run.resultPath, "utf8")).toContain("## Structured Review");
+    const structuredArtifact = JSON.parse(fs.readFileSync(run.structuredReviewPath as string, "utf8"));
+    expect(structuredArtifact.blockingFindings[0].id).toBe("P1-001");
+    expect(run.state.reviewRuns[0].structuredReviewStatus).toBe("valid");
+    expect(run.state.reviewRuns[0].structuredReviewPath).toMatch(/structured-review\.json$/);
+    expect(run.state.latestStructuredReview.blockingFindings[0].recommendation).toBe("update the value");
+  });
+
+  it("preserves Markdown-only review output without writing a structured artifact", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    const adapter = createSpyAdapter({
+      stdout: "# Review Decision: Approved\n\n## Blocking Findings\n(none)",
+      exitCode: 0,
+    });
+
+    const run = await runIndependentReview(createState(), {
+      cwd,
+      processAdapter: adapter,
+      now: () => "2026-07-23T00:00:00.000Z",
+    });
+
+    expect(run.outcome).toBe("Approved");
+    expect(run.structuredReviewAnalysis.status).toBe("absent");
+    expect(run.structuredReviewPath).toBeUndefined();
+    expect(run.state.reviewRuns[0].structuredReviewStatus).toBe("absent");
+  });
+
+  it("does not approve malformed structured review data", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    const adapter = createSpyAdapter({
+      stdout: "# Review Decision: Approved\n\n## Structured Review\n\n```json\n{ nope\n```",
+      exitCode: 0,
+    });
+
+    const run = await runIndependentReview(createState(), {
+      cwd,
+      processAdapter: adapter,
+      now: () => "2026-07-23T00:00:00.000Z",
+    });
+
+    expect(run.outcome).toBe("Unknown");
+    expect(run.structuredReviewAnalysis.status).toBe("invalid");
+    expect(run.structuredReviewPath).toBeUndefined();
+    expect(run.state.reviewRuns[0].structuredReviewDiagnostics[0]).toContain("malformed");
   });
 
   it("classifies a timed-out execution and still records artifacts", async () => {
