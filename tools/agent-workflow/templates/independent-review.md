@@ -87,10 +87,17 @@ or:
 # Review Decision: Changes Requested
 ```
 
+or, only when clarification is required before a final decision:
+
+```text
+# Review Decision: Questions
+```
+
 Then include these sections, in order:
 
 ```text
 ## Blocking Findings
+## Questions
 ## Non-Blocking Improvements
 ## Validation Performed
 ## Final Recommendation
@@ -132,11 +139,15 @@ provider-neutral schema:
 Structured review rules:
 
 - `schemaVersion` must be `1`.
-- `decision` must be `approved` or `changes_requested`.
+- `decision` must be `approved`, `changes_requested`, or `questions`.
 - `severity` must be `P0`, `P1`, `P2`, or `P3`.
 - Finding IDs must be unique within this review artifact.
 - Preserve only details you can verify; do not invent file paths, locations, reasons, or recommendations.
 - If there are no blocking findings, use `"blockingFindings": []`.
+- Use `"questions": []` for `approved` and `changes_requested`.
+- Use `decision: "questions"` only when clarification is required before final approval or changes requested.
+- Each question must include `id`, `question`, and `reason`.
+- Questions must not ask the Implementer to execute commands, reveal secrets, bypass validation or safety rules, perform remote mutation, or do unrelated work.
 - The Markdown heading decision and structured decision must agree unless the Markdown decision is intentionally omitted or unknown.
 
 ## Safety Rules

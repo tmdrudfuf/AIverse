@@ -306,10 +306,13 @@ Request changes.
 Structured schema rules:
 
 - `schemaVersion` must be `1`; unsupported versions are rejected.
-- `decision` must be `approved` or `changes_requested`.
+- `decision` must be `approved`, `changes_requested`, or `questions`.
 - Finding `severity` must be `P0`, `P1`, `P2`, or `P3`.
 - Finding IDs must be unique within one review artifact.
 - Blocking findings must include actionable details and a recommendation.
+- `approved` requires no blocking findings and no questions.
+- `changes_requested` requires blocking findings and no questions.
+- `questions` requires one or more valid questions and no blocking findings.
 - The workflow preserves supplied fields and does not invent missing reviewer information.
 
 Conflict and fallback behavior:
@@ -322,6 +325,87 @@ Conflict and fallback behavior:
 - Invalid structured data is never treated as approval and does not start a blind fix cycle.
 
 When the structured block is valid, a separate JSON artifact is written beside the raw Markdown result, and review run records include additive fields such as `structuredReviewStatus`, `structuredReviewDecision`, `structuredReviewPath`, and `structuredReviewDiagnostics`. Existing state files and old run records without these fields remain readable.
+
+### Reviewer Question Loop
+
+A Reviewer may ask one structured clarification round before issuing a final decision. The loop is conditional and bounded:
+
+```text
+review -> questions -> answer-questions -> final-review -> Approved or Changes Requested
+```
+
+Questions are appropriate when the Reviewer needs evidence or clarification before deciding. If the Reviewer already knows a code or documentation change is required, it should return `changes_requested` instead.
+
+A question review uses the same Markdown plus structured review format:
+
+```json
+{
+  "schemaVersion": 1,
+  "decision": "questions",
+  "summary": "Clarification is needed before final decision.",
+  "blockingFindings": [],
+  "nonBlockingFindings": [],
+  "questions": [
+    {
+      "id": "Q1",
+      "question": "Which validation result covers the timeout path?",
+      "reason": "The review artifact does not show evidence for this behavior."
+    }
+  ]
+}
+```
+
+Question validation rules:
+
+- Each question requires unique `id`, non-empty `question`, and non-empty `reason`.
+- Questions must not request secrets, credentials, command execution, remote mutation, validation bypass, safety-rule bypass, or unrelated work.
+- Mixed states such as `approved` with questions, `changes_requested` with questions, or `questions` with blocking findings are invalid and classify as `Unknown`.
+
+The Implementer answers questions in an `answer-questions` stage. This stage is clarification-only: the prompt instructs the Implementer not to edit files, commit, reinterpret the stage as a fix request, or perform remote mutation. If a change is needed, the final Reviewer should return `changes_requested`, and the existing fix loop handles the modification.
+
+The answer output may include human-readable Markdown plus one `## Structured Answers` JSON block:
+
+```json
+{
+  "schemaVersion": 1,
+  "answers": [
+    {
+      "questionId": "Q1",
+      "answer": "The timeout path is covered by orchestrateCommand.test.ts.",
+      "evidence": [
+        "tools/agent-workflow/orchestrateCommand.test.ts"
+      ]
+    }
+  ]
+}
+```
+
+Answer validation rules:
+
+- Every known question ID must receive exactly one answer.
+- Duplicate answers, unknown question IDs, missing answers, and empty answers are invalid.
+- Evidence is optional and preserved only when supplied.
+
+After valid answers, `final-review` asks the Reviewer for a final independent decision. In Spec 051, a second `questions` decision blocks safely instead of starting another round.
+
+Additional state fields may be populated additively:
+
+```json
+{
+  "latestReviewerQuestionStatus": "valid",
+  "latestReviewerQuestions": [],
+  "latestReviewerQuestionPath": ".agent-workflow/runs/<feature-id>/...",
+  "latestReviewerQuestionDiagnostics": [],
+  "latestImplementerAnswerStatus": "valid",
+  "latestImplementerAnswers": {},
+  "latestImplementerAnswerPath": ".agent-workflow/runs/<feature-id>/...",
+  "latestImplementerAnswerDiagnostics": [],
+  "questionCycle": 1,
+  "maxQuestionCycles": 1
+}
+```
+
+Resume behavior uses `state.orchestration.currentStage`. A run interrupted at `answer-questions` resumes by answering the saved questions; a run interrupted at `final-review` resumes by using the saved answers and does not repeat the answer stage.
 
 ## Run the Automated Implement-Review-Fix Loop
 
@@ -345,6 +429,12 @@ Changes Requested flow:
 implement -> validate -> review -> fix -> revalidate -> re-review -> final-verification -> human-merge-decision
 ```
 
+Question flow:
+
+```text
+implement -> validate -> review -> answer-questions -> final-review -> final-verification -> human-merge-decision
+```
+
 Bounded failure flow:
 
 ```text
@@ -355,6 +445,8 @@ The loop stops conservatively when validation fails, a runner times out or exits
 
 When a valid structured `changes_requested` review is present, fix prompts use the structured blocking findings, preserving finding IDs, severity, file path, location, summary, reason, and recommendation. When structured data is absent, the loop falls back to the existing Markdown finding extraction. When structured data is invalid, unsupported, or conflicting, the loop blocks conservatively.
 
+Question requests do not consume fix-cycle count. Fix cycles begin only after the final Reviewer returns valid `changes_requested`.
+
 Preview without spawning agents, running validation, writing execution/result artifacts, or advancing state:
 
 ```powershell
@@ -362,6 +454,7 @@ node tools/agent-workflow/cli.js orchestrate --state .agent-workflow/example-sta
 ```
 
 Dry-run prints the feature, branch, current stage, resolved Implementer/Reviewer, command previews, validation commands, max fix cycles, planned stages, prompt paths, run directory, next expected stage, and `Will spawn: false`.
+It also previews conditional `answer-questions` and `final-review` prompt paths without claiming that the question loop will definitely execute.
 
 Useful flags:
 

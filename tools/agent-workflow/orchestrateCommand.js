@@ -26,11 +26,14 @@ const {
   runnersMatch,
 } = require("./reviewCommand.js");
 const { analyzeStructuredReview } = require("./structuredReview.js");
+const { parseStructuredAnswers } = require("./structuredAnswers.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
   "validate",
   "review",
+  "answer-questions",
+  "final-review",
   "fix",
   "revalidate",
   "re-review",
@@ -40,6 +43,7 @@ const ORCHESTRATION_STAGES = [
 ];
 
 const DEFAULT_MAX_FIX_CYCLES = 2;
+const DEFAULT_MAX_QUESTION_CYCLES = 1;
 const DEFAULT_VALIDATION_TIMEOUT_MS = 5 * 60 * 1000;
 const TERMINAL_STAGES = new Set(["human-merge-decision", "blocked"]);
 
@@ -47,6 +51,12 @@ function normalizeMaxFixCycles(value) {
   if (value === undefined || value === null || value === "") return DEFAULT_MAX_FIX_CYCLES;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : DEFAULT_MAX_FIX_CYCLES;
+}
+
+function normalizeMaxQuestionCycles(value) {
+  if (value === undefined || value === null || value === "") return DEFAULT_MAX_QUESTION_CYCLES;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.min(Math.floor(parsed), DEFAULT_MAX_QUESTION_CYCLES) : DEFAULT_MAX_QUESTION_CYCLES;
 }
 
 function getOrchestration(state) {
@@ -144,6 +154,65 @@ function buildImplementerPrompt(state, stage, options = {}) {
     scopeConstraints: formatList(Array.isArray(state.scopeConstraints) && state.scopeConstraints.length
       ? state.scopeConstraints
       : ["Keep changes scoped to the active feature.", "Do not make unrelated refactors."]),
+    safetyRules: formatList(DEFAULT_SAFETY_RULES),
+    humanOnlyCommands: formatList(HUMAN_ONLY_COMMANDS),
+  };
+  return renderTemplate(template, values);
+}
+
+function formatJson(value) {
+  return JSON.stringify(value || null, null, 2);
+}
+
+function buildAnswerPrompt(state, options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const repoRoot = gitContext.repositoryPath || cwd;
+  const templatePath = options.templatePath || path.join(__dirname, "templates", "orchestrate-answer-questions.md");
+  const template = fs.readFileSync(templatePath, "utf8");
+  const orchestration = getOrchestration(state);
+  const values = {
+    featureId: state.featureId || "unknown-feature",
+    featureName: state.featureName || state.featureId || "Unknown Feature",
+    repositoryPath: repoRoot,
+    currentBranch: gitContext.currentBranch || state.currentBranch || "unknown-branch",
+    baseBranch: gitContext.baseBranchRef || state.baseBranch || "main",
+    specSummary: buildSpecSummary(state, repoRoot),
+    taskScope: state.taskScope || `Answer Reviewer clarification questions for ${state.featureId || "this feature"}.`,
+    questionReviewPath: orchestration.latestReviewPath || "none",
+    structuredQuestionPath: orchestration.latestReviewerQuestionPath || "none",
+    questionsJson: formatJson(orchestration.latestReviewerQuestions || state.latestReviewerQuestions || []),
+    rawQuestionReview: orchestration.latestReviewOutput || "",
+    safetyRules: formatList(DEFAULT_SAFETY_RULES),
+    humanOnlyCommands: formatList(HUMAN_ONLY_COMMANDS),
+  };
+  return renderTemplate(template, values);
+}
+
+function buildFinalReviewPrompt(state, options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const repoRoot = gitContext.repositoryPath || cwd;
+  const templatePath = options.templatePath || path.join(__dirname, "templates", "orchestrate-final-review.md");
+  const template = fs.readFileSync(templatePath, "utf8");
+  const orchestration = getOrchestration(state);
+  const values = {
+    featureId: state.featureId || "unknown-feature",
+    featureName: state.featureName || state.featureId || "Unknown Feature",
+    repositoryPath: repoRoot,
+    currentBranch: gitContext.currentBranch || state.currentBranch || "unknown-branch",
+    baseBranch: gitContext.baseBranchRef || state.baseBranch || "main",
+    mergeBase: gitContext.mergeBase || "(no common ancestor found)",
+    specSummary: buildSpecSummary(state, repoRoot),
+    taskScope: state.taskScope || `Complete final review for ${state.featureId || "this feature"}.`,
+    originalReviewPath: orchestration.latestReviewPath || "none",
+    structuredQuestionPath: orchestration.latestReviewerQuestionPath || "none",
+    rawQuestionReview: orchestration.latestReviewOutput || "",
+    questionsJson: formatJson(orchestration.latestReviewerQuestions || state.latestReviewerQuestions || []),
+    answerPath: orchestration.latestImplementerAnswerPath || "none",
+    rawAnswerOutput: orchestration.latestImplementerAnswerOutput || "",
+    answersJson: formatJson(orchestration.latestImplementerAnswers || state.latestImplementerAnswers || {}),
+    validationCommands: formatList(getValidationCommands(state, options)),
     safetyRules: formatList(DEFAULT_SAFETY_RULES),
     humanOnlyCommands: formatList(HUMAN_ONLY_COMMANDS),
   };
@@ -451,9 +520,25 @@ function getDiffSignature(gitContext) {
   ].join("\n").trim();
 }
 
+function getAnswerStageEditSignature(gitContext) {
+  const nonWorkflowStatus = String(gitContext.statusPorcelain || "")
+    .split(/\r?\n/)
+    .filter((line) => line && !/^\?\?\s+\.agent-workflow(?:\/|\\|$)/.test(line))
+    .join("\n");
+  return [
+    nonWorkflowStatus,
+    gitContext.stagedDiff || "",
+    gitContext.unstagedDiff || "",
+    gitContext.committedLog || "",
+    gitContext.committedDiffStat || "",
+    gitContext.committedDiff || "",
+  ].join("\n").trim();
+}
+
 function nextStageAfterCompleted(state, completedStage) {
   if (completedStage === "implement") return "validate";
   if (completedStage === "validate") return "review";
+  if (completedStage === "answer-questions") return "final-review";
   if (completedStage === "fix") return "revalidate";
   if (completedStage === "revalidate") return "re-review";
   if (completedStage === "final-verification") return "human-merge-decision";
@@ -502,6 +587,10 @@ async function executeReviewStage(state, reviewStage, options = {}) {
   };
 }
 
+function isQuestionOutcome(review) {
+  return review.outcome === "Questions";
+}
+
 function extractFindingsForHandoff(outputText, structuredAnalysis) {
   if (structuredAnalysis && structuredAnalysis.status === "valid") {
     return structuredAnalysis.review.blockingFindings || [];
@@ -519,7 +608,7 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   const reviewerConfig = resolveRoleRunner(state, "reviewer", options.reviewerAgentId);
   assertSafeCommand(reviewerConfig);
   const sameRunner = runnersMatch(implementerConfig, reviewerConfig);
-  const prompt = buildIndependentReviewPrompt(state, gitContext, { cwd, implementerConfig, reviewerConfig });
+  const prompt = options.reviewPrompt || buildIndependentReviewPrompt(state, gitContext, { cwd, implementerConfig, reviewerConfig });
   const promptPath = createRunFilePath(state, `${reviewStage}-independent-review-prompt`, { cwd });
   fs.mkdirSync(path.dirname(promptPath), { recursive: true });
   fs.writeFileSync(promptPath, prompt, "utf8");
@@ -612,6 +701,76 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   };
 }
 
+async function executeAnswerQuestionsStage(state, options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const gitContext = collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const beforeSignature = getAnswerStageEditSignature(gitContext);
+  const implementer = resolveRoleRunner(state, "implementer", options.implementerAgentId);
+  const prompt = buildAnswerPrompt(state, { ...options, cwd, gitContext });
+  const run = await runAgentPrompt(state, "answer-questions", implementer, prompt, options);
+  let nextState = appendRecord(state, "orchestrationRuns", {
+    stage: "answer-questions",
+    status: run.successful ? "completed" : "failed",
+    path: run.record.path,
+    resultPath: run.record.resultPath,
+  });
+  if (!run.successful) {
+    return {
+      state: markBlocked(nextState, "answer-questions execution failed"),
+      run,
+      answerAnalysis: { status: "invalid", diagnostics: ["answer-questions execution failed"] },
+    };
+  }
+  const afterSignature = getAnswerStageEditSignature(collectGitContext({ cwd, baseBranch: state.baseBranch }));
+  if (beforeSignature !== afterSignature) {
+    return {
+      state: markBlocked(nextState, "Answer stage modified repository files"),
+      run,
+      answerAnalysis: { status: "invalid", diagnostics: ["Answer stage modified repository files"] },
+    };
+  }
+
+  const questions = getOrchestration(state).latestReviewerQuestions || state.latestReviewerQuestions || [];
+  const answerAnalysis = parseStructuredAnswers(run.outputText, questions);
+  let answerJsonPath;
+  if (answerAnalysis.status === "valid") {
+    answerJsonPath = createRunFilePath(state, "answer-questions-structured-answers", { cwd }).replace(/\.md$/i, ".json");
+    fs.writeFileSync(answerJsonPath, `${JSON.stringify(answerAnalysis.answers, null, 2)}\n`, "utf8");
+    nextState = {
+      ...nextState,
+      latestImplementerAnswerStatus: "valid",
+      latestImplementerAnswers: answerAnalysis.answers,
+      latestImplementerAnswerPath: relativePath(cwd, answerJsonPath),
+      latestImplementerAnswerDiagnostics: [],
+    };
+    nextState = persistStage(options.statePath, nextState, "final-review", {
+      latestImplementerAnswerStatus: "valid",
+      latestImplementerAnswers: answerAnalysis.answers,
+      latestImplementerAnswerPath: relativePath(cwd, answerJsonPath),
+      latestImplementerAnswerDiagnostics: [],
+      latestImplementerAnswerOutput: run.outputText,
+      latestImplementerAnswerRawPath: run.record.resultPath,
+    });
+    return { state: nextState, run, answerAnalysis, answerJsonPath };
+  }
+
+  nextState = {
+    ...nextState,
+    latestImplementerAnswerStatus: answerAnalysis.status,
+    latestImplementerAnswerDiagnostics: answerAnalysis.diagnostics || [],
+  };
+  return {
+    state: markBlocked(nextState, "Implementer answers were invalid", {
+      latestImplementerAnswerStatus: answerAnalysis.status,
+      latestImplementerAnswerDiagnostics: answerAnalysis.diagnostics || [],
+      latestImplementerAnswerOutput: run.outputText,
+      latestImplementerAnswerRawPath: run.record.resultPath,
+    }),
+    run,
+    answerAnalysis,
+  };
+}
+
 function previewOrchestration(state, options = {}) {
   const cwd = options.cwd || process.cwd();
   const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch });
@@ -630,6 +789,7 @@ function previewOrchestration(state, options = {}) {
       "implement",
       "validate",
       "review",
+      "conditional answer-questions/final-review when Reviewer asks questions",
       "fix/revalidate/re-review until approved or max cycles",
       "final-verification",
       "human-merge-decision",
@@ -639,12 +799,16 @@ function previewOrchestration(state, options = {}) {
     sameRunner: runnersMatch(implementer, reviewer),
     validationCommands: getValidationCommands(state, options),
     maxFixCycles,
+    maxQuestionCycles: normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles),
     fixCycleCount: Number(state.fixCycleCount || getOrchestration(state).fixCycleCount || 0),
+    questionCycle: Number(state.questionCycle || getOrchestration(state).questionCycle || 0),
     runDirectory: getRunDirectory(state, { cwd }).replace(/\\/g, "/"),
     promptPaths: {
       implement: createRunFilePath(state, "implement-implementer-prompt", { cwd }).replace(/\\/g, "/"),
       fix: createRunFilePath(state, "fix-implementer-prompt", { cwd }).replace(/\\/g, "/"),
       review: createRunFilePath(state, "review-independent-review-prompt", { cwd }).replace(/\\/g, "/"),
+      answerQuestions: createRunFilePath(state, "answer-questions-implementer-prompt", { cwd }).replace(/\\/g, "/"),
+      finalReview: createRunFilePath(state, "final-review-independent-review-prompt", { cwd }).replace(/\\/g, "/"),
     },
     nextExpectedStage: currentStage,
     willSpawn: false,
@@ -661,6 +825,7 @@ async function runOrchestration(state, options = {}) {
   let currentState = setOrchestration(state, {
     currentStage: getCurrentStage(state),
     maxFixCycles: normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles),
+    maxQuestionCycles: normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles),
     implementerId: implementerConfig.agentId,
     implementerIdentity: implementerConfig.identity,
     reviewerId: reviewerConfig.agentId,
@@ -669,6 +834,7 @@ async function runOrchestration(state, options = {}) {
     startedAt: getOrchestration(state).startedAt || new Date().toISOString(),
   });
   const maxFixCycles = currentState.orchestration.maxFixCycles;
+  const maxQuestionCycles = currentState.orchestration.maxQuestionCycles;
   const steps = [];
   const initialBranch = collectGitContext({ cwd, baseBranch: currentState.baseBranch }).currentBranch;
 
@@ -706,6 +872,17 @@ async function runOrchestration(state, options = {}) {
       continue;
     }
 
+    if (stage === "answer-questions") {
+      const answer = await executeAnswerQuestionsStage(currentState, { ...options, statePath });
+      currentState = answer.state;
+      steps.push({ stage, status: answer.answerAnalysis.status, artifactPath: answer.run.record.path });
+      if (getCurrentStage(currentState) === "blocked") {
+        if (statePath) writeState(statePath, currentState);
+        break;
+      }
+      continue;
+    }
+
     if (stage === "validate" || stage === "revalidate" || stage === "final-verification") {
       const validation = await runValidationCommands(currentState, stage, options);
       currentState = validation.state;
@@ -724,10 +901,48 @@ async function runOrchestration(state, options = {}) {
       continue;
     }
 
-    if (stage === "review" || stage === "re-review") {
-      const review = await executeReviewStage(currentState, stage, options);
+    if (stage === "review" || stage === "re-review" || stage === "final-review") {
+      const reviewOptions = stage === "final-review"
+        ? { ...options, reviewPrompt: buildFinalReviewPrompt(currentState, options) }
+        : options;
+      const review = await executeReviewStage(currentState, stage, reviewOptions);
       currentState = review.state;
       steps.push({ stage, status: review.outcome, artifactPath: relativePath(cwd, review.resultPath) });
+      if (isQuestionOutcome(review)) {
+        if (stage !== "review") {
+          currentState = markBlocked(currentState, "Reviewer asked questions after the allowed clarification round");
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        if (review.structuredReviewAnalysis.status !== "valid") {
+          currentState = markBlocked(currentState, "Reviewer questions were invalid");
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        const questionCycle = Number(currentState.questionCycle || 0);
+        if (questionCycle >= maxQuestionCycles) {
+          currentState = markBlocked(currentState, "Maximum question cycles reached");
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        const questions = review.structuredReviewAnalysis.review.questions || [];
+        currentState = {
+          ...currentState,
+          questionCycle: questionCycle + 1,
+          latestReviewerQuestionStatus: "valid",
+          latestReviewerQuestions: questions,
+          latestReviewerQuestionPath: relativePath(cwd, review.structuredReviewPath),
+          latestReviewerQuestionDiagnostics: [],
+        };
+        currentState = persistStage(statePath, currentState, "answer-questions", {
+          questionCycle: currentState.questionCycle,
+          latestReviewerQuestionStatus: "valid",
+          latestReviewerQuestions: questions,
+          latestReviewerQuestionPath: relativePath(cwd, review.structuredReviewPath),
+          latestReviewerQuestionDiagnostics: [],
+        });
+        continue;
+      }
       if (review.outcome === "Approved") {
         currentState = persistStage(statePath, currentState, "final-verification");
         continue;

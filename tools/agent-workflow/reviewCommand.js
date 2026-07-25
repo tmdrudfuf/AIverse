@@ -33,6 +33,7 @@ const SAME_RUNNER_WARNING = [
 
 const NEXT_ACTION_BY_OUTCOME = {
   Approved: "human approval before commit, push, PR, or merge.",
+  Questions: "return clarification questions to the Implementer for one answer cycle.",
   "Changes Requested": "return findings to the Implementer for a fix cycle.",
   Unknown: "inspect the saved review output and rerun the Reviewer.",
   "Execution Failed": "inspect the saved execution error and rerun the Reviewer once resolved.",

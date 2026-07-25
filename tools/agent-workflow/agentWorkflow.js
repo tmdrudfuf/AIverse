@@ -66,23 +66,32 @@ function formatOptionalList(value, emptyText) {
 
 function detectDecision(text) {
   const content = String(text || "");
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^#+\s*/, "").replace(/^\*\*(.+)\*\*$/, "$1").trim())
-    .filter(Boolean);
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const normalizeInline = (line) => line.replace(/^\*\*(.+)\*\*$/, "$1").trim();
+  const normalizeDecisionHeading = (line) => normalizeInline(line.replace(/^#+\s*/, "").trim());
+  const normalizeStandaloneDecision = (line) => {
+    if (/^#{2,}\s*/.test(line)) return "";
+    return normalizeInline(line.replace(/^#\s*/, "").trim());
+  };
   const hasChangesRequested = lines.some((line) => (
-    line === "Changes Requested"
-    || line.startsWith("Changes Requested ")
-    || /^(Review\s+)?Decision:\s*Changes Requested\b/i.test(line)
+    /^(Review\s+)?Decision:\s*Changes Requested\b/i.test(normalizeDecisionHeading(line))
+    || normalizeStandaloneDecision(line) === "Changes Requested"
+    || normalizeStandaloneDecision(line).startsWith("Changes Requested ")
   ));
   const hasApproved = lines.some((line) => (
-    line === "Approved"
-    || line.startsWith("Approved ")
-    || /^(Review\s+)?Decision:\s*Approved\b/i.test(line)
+    /^(Review\s+)?Decision:\s*Approved\b/i.test(normalizeDecisionHeading(line))
+    || normalizeStandaloneDecision(line) === "Approved"
+    || normalizeStandaloneDecision(line).startsWith("Approved ")
   ));
-  if (hasChangesRequested && hasApproved) return "Unknown";
+  const hasQuestions = lines.some((line) => (
+    /^(Review\s+)?Decision:\s*Questions\b/i.test(normalizeDecisionHeading(line))
+    || normalizeStandaloneDecision(line) === "Questions"
+    || normalizeStandaloneDecision(line).startsWith("Questions ")
+  ));
+  if ([hasChangesRequested, hasApproved, hasQuestions].filter(Boolean).length > 1) return "Unknown";
   if (hasChangesRequested) return "Changes Requested";
   if (hasApproved) return "Approved";
+  if (hasQuestions) return "Questions";
   return "Unknown";
 }
 

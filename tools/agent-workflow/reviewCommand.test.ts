@@ -148,6 +148,37 @@ function structuredChangesReview() {
   ].join("\n");
 }
 
+function structuredQuestionsReview() {
+  return [
+    "# Review Decision: Questions",
+    "",
+    "## Blocking Findings",
+    "(none)",
+    "",
+    "## Questions",
+    "- Q1: Which validation result covers timeout behavior?",
+    "",
+    "## Structured Review",
+    "",
+    "```json",
+    JSON.stringify({
+      schemaVersion: 1,
+      decision: "questions",
+      summary: "Clarification is needed.",
+      blockingFindings: [],
+      nonBlockingFindings: [],
+      questions: [
+        {
+          id: "Q1",
+          question: "Which validation result covers timeout behavior?",
+          reason: "The review artifact does not show the timeout evidence.",
+        },
+      ],
+    }, null, 2),
+    "```",
+  ].join("\n");
+}
+
 describe("Reviewer/Implementer resolution", () => {
   it("resolves the default Implementer (Codex CLI) and Reviewer (Claude CLI)", () => {
     const state = createState();
@@ -331,6 +362,10 @@ describe("decision classification", () => {
     const output = structuredChangesReview().replace("# Review Decision: Changes Requested", "# Review Decision: Approved");
 
     expect(classifyReviewOutcome({ exitCode: 0 }, output)).toBe("Unknown");
+  });
+
+  it("classifies a valid structured Questions decision", () => {
+    expect(classifyReviewOutcome({ exitCode: 0 }, structuredQuestionsReview())).toBe("Questions");
   });
 });
 
