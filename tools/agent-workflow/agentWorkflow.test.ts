@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  detectDecision,
   determineNextStage,
   generatePrompt,
   getRunDirectory,
@@ -316,6 +317,29 @@ describe("agent workflow result records", () => {
     expect(determineNextStage(decisionApproved.state)).toBe("final-verification");
     expect(decisionChanges.result.decision).toBe("Changes Requested");
     expect(determineNextStage(decisionChanges.state)).toBe("fix");
+  });
+
+  it("does not treat a Questions section heading as a review decision", () => {
+    expect(detectDecision([
+      "# Review Decision: Approved",
+      "",
+      "## Questions",
+      "",
+      "- None.",
+    ].join("\n"))).toBe("Approved");
+
+    expect(detectDecision([
+      "## Decision: Changes Requested",
+      "",
+      "## Questions",
+      "",
+      "- None.",
+    ].join("\n"))).toBe("Changes Requested");
+  });
+
+  it("still recognizes explicit Questions review decisions", () => {
+    expect(detectDecision("# Review Decision: Questions\n\n## Questions\n- Q1")).toBe("Questions");
+    expect(detectDecision("Questions\n\nNeed clarification.")).toBe("Questions");
   });
 
   it("does not treat explanatory decision mentions as final decisions", () => {
