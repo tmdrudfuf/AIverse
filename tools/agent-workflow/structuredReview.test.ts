@@ -206,6 +206,50 @@ describe("structured review validation", () => {
     expect(result.review?.blockingFindings).toHaveLength(2);
   });
 
+  it("preserves optional finding lifecycle entries", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "changes_requested",
+      blockingFindings: [
+        {
+          id: "F1",
+          severity: "P1",
+          summary: "Issue remains.",
+          recommendation: "Fix it.",
+        },
+      ],
+      nonBlockingFindings: [],
+      questions: [],
+      findingLifecycle: [
+        { findingId: "F1", status: "still_open", explanation: "The issue remains present." },
+      ],
+    })));
+
+    expect(result.status).toBe("valid");
+    expect(result.review?.findingLifecycle?.[0].findingId).toBe("F1");
+  });
+
+  it("rejects malformed finding lifecycle entries", () => {
+    const result = analyzeStructuredReview(reviewWith(JSON.stringify({
+      schemaVersion: 1,
+      decision: "changes_requested",
+      blockingFindings: [
+        {
+          id: "F1",
+          severity: "P1",
+          summary: "Issue remains.",
+          recommendation: "Fix it.",
+        },
+      ],
+      findingLifecycle: [
+        { findingId: "F1", status: "open", explanation: "Not a supported status." },
+      ],
+    })));
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("invalid status");
+  });
+
   it("allows non-blocking findings on approved reviews", () => {
     const result = validateStructuredReviewObject({
       schemaVersion: 1,
