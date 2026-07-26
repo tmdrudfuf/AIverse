@@ -249,18 +249,18 @@ function main(argv) {
     }
 
     let resolvedAgentId;
+    let resolvedRoles;
     if (implementerFlag) {
+      const resolution = resolveEffectiveRoles({ state, requestedImplementerId: implementerFlag });
+      if (!resolution.ok) {
+        console.error(resolution.diagnostics.join(" "));
+        process.exitCode = 1;
+        return;
+      }
+      resolvedRoles = resolution.roles;
       const stage = readFlag(args, "--stage") || determineNextStage(state);
       const role = DEFAULT_STAGE_AGENTS[stage];
-      if (role) {
-        const resolution = resolveEffectiveRoles({ state, requestedImplementerId: implementerFlag });
-        if (!resolution.ok) {
-          console.error(resolution.diagnostics.join(" "));
-          process.exitCode = 1;
-          return;
-        }
-        resolvedAgentId = resolution.roles[role];
-      }
+      if (role) resolvedAgentId = resolvedRoles[role];
     }
     const agentId = readFlag(args, "--agent") || resolvedAgentId;
 
@@ -284,6 +284,7 @@ function main(argv) {
       cwd: process.cwd(),
       stage: readFlag(args, "--stage"),
       agentId,
+      resolvedRoles,
       timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
       untilBlocked: hasFlag(args, "--until-blocked"),
       maxSteps: maxStepsText ? Number(maxStepsText) : undefined,

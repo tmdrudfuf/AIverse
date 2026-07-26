@@ -15,6 +15,13 @@ const {
   runWorkflowAgent,
 } = require("./agentRunner.js");
 
+function resolveStepAgentId(stage, stepIndex, options) {
+  if (stepIndex === 0) return options.agentId;
+  if (!options.resolvedRoles) return undefined;
+  const role = DEFAULT_STAGE_AGENTS[stage];
+  return role ? options.resolvedRoles[role] : undefined;
+}
+
 const DEFAULT_MAX_WORKFLOW_RUN_STEPS = 6;
 
 function normalizeMaxSteps(value, fallback) {
@@ -121,7 +128,7 @@ async function runWorkflowCommand(state, options = {}) {
       const run = await runWorkflowAgent(currentState, {
         cwd: options.cwd,
         stage,
-        agentId: stepIndex === 0 ? options.agentId : undefined,
+        agentId: resolveStepAgentId(stage, stepIndex, options),
         timeoutMs: options.timeoutMs,
         processAdapter: options.processAdapter,
         now: options.now,

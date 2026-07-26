@@ -94,6 +94,31 @@ describe("agent workflow run command", () => {
     expect(summary.nextStage).toBe("human-merge-decision");
   });
 
+  it("threads a resolved --implementer role pair through every step, not just the first", async () => {
+    const adapter = createSequenceAdapter([
+      { stdout: "implementation done", exitCode: 0 },
+      { stdout: "Approved", exitCode: 0 },
+      { stdout: "final verification done", exitCode: 0 },
+    ]);
+
+    const summary = await runWorkflowCommand(createState(), {
+      cwd: createTempDir(),
+      untilBlocked: true,
+      maxSteps: 6,
+      agentId: "claude",
+      resolvedRoles: { implementer: "claude", reviewer: "codex" },
+      processAdapter: adapter,
+      now: () => "2026-07-08T00:00:00.000Z",
+    });
+
+    expect(summary.steps.map((step) => step.stage)).toEqual(["implement", "review", "final-verification"]);
+    expect(adapter.run).toHaveBeenNthCalledWith(1, "claude", expect.any(Array), expect.anything());
+    expect(adapter.run).toHaveBeenNthCalledWith(2, "codex", expect.any(Array), expect.anything());
+    expect(adapter.run).toHaveBeenNthCalledWith(3, "claude", expect.any(Array), expect.anything());
+    expect(summary.steps.map((step) => step.agentId)).toEqual(["claude", "codex", "claude"]);
+    expect(summary.stopReason).toBe("human-merge-decision");
+  });
+
   it("runs Implementer then Reviewer and preserves Changes Requested findings for the fix stage", async () => {
     const adapter = createSequenceAdapter([
       { stdout: "implementation done", exitCode: 0 },
