@@ -81,6 +81,7 @@ function normalizeAgentConfig(config) {
     timeoutMs: Number.isFinite(config.timeoutMs) && config.timeoutMs > 0
       ? config.timeoutMs
       : DEFAULT_AGENT_RUNNER_TIMEOUT_MS,
+    enabled: config.enabled !== false,
   };
 }
 
@@ -337,6 +338,7 @@ async function runWorkflowAgent(state, options = {}) {
   });
   const completedAt = new Date().toISOString();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
+  const decisionText = String(result.stdout || "").trim() ? result.stdout : outputText;
   const successful = isSuccessfulExecution(result);
   const executionRecord = {
     featureId: state.featureId,
@@ -363,7 +365,7 @@ async function runWorkflowAgent(state, options = {}) {
     gracePeriodMs: result.gracePeriodMs || null,
     parentSignal: result.parentSignal || null,
     childCloseObservedAt: result.childCloseObservedAt || null,
-    decision: successful ? detectDecision(outputText) : "Unknown",
+    decision: successful ? detectDecision(decisionText) : "Unknown",
   };
 
   const recordPath = createRunFilePath(state, `${stage}-${agent.agentId}-execution`, {

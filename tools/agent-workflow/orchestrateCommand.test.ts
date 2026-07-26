@@ -1029,6 +1029,37 @@ describe("orchestrate workflow", () => {
     expect(run.state.latestStructuredReviewStatus).toBe("invalid");
   }, 30000);
 
+  it("classifies a clean single structured review in stdout as valid even when stderr echoes duplicate example JSON blocks", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const noisyTranscriptEcho = [
+      "Reading prompt from stdin...",
+      "OpenAI Codex v0.145.0",
+      "## Structured Review",
+      "",
+      "```json",
+      "{ \"schemaVersion\": 1, \"decision\": \"changes_requested\" }",
+      "```",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      "{ \"findingLifecycle\": [] }",
+      "```",
+    ].join("\n");
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredApprovedReview, stderr: noisyTranscriptEcho },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.latestStructuredReviewStatus).toBe("valid");
+  }, 30000);
+
   it("blocks no-change fix cycles", async () => {
     const cwd = createTempDir();
     initRepo(cwd);
@@ -1172,6 +1203,216 @@ describe("orchestrate workflow", () => {
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(persisted.orchestration.currentStage).toBe("human-merge-decision");
+  }, 30000);
+});
+
+function createRoleSelectionState(overrides: Record<string, unknown> = {}) {
+  return createState({
+    agentRunners: {
+      codex: { identity: "Codex Mock", command: "mock-codex", args: [], inputMode: "stdin", timeoutMs: 1000 },
+      claude: { identity: "Claude Mock", command: "mock-claude", args: ["-p", "{{prompt}}"], inputMode: "argument", timeoutMs: 1000 },
+    },
+    ...overrides,
+  });
+}
+
+describe("runtime role selection (Spec 053)", () => {
+  it("dry-run resolves --implementer claude to Claude Implementer / Codex Reviewer and spawns nothing", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const state = createRoleSelectionState();
+    const preview = previewOrchestration(state, { cwd, implementerAgentId: "claude" });
+
+    expect(preview.willSpawn).toBe(false);
+    expect(preview.roleSource).toBe("cli-override");
+    expect(preview.implementer).toMatchObject({ id: "claude", identity: "Claude Mock" });
+    expect(preview.reviewer).toMatchObject({ id: "codex", identity: "Codex Mock" });
+    expect(state).not.toHaveProperty("orchestration");
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow"))).toBe(false);
+  });
+
+  it("dry-run resolves --implementer codex to Codex Implementer / Claude Reviewer and spawns nothing", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const state = createRoleSelectionState();
+    const preview = previewOrchestration(state, { cwd, implementerAgentId: "codex" });
+
+    expect(preview.willSpawn).toBe(false);
+    expect(preview.roleSource).toBe("cli-override");
+    expect(preview.implementer).toMatchObject({ id: "codex", identity: "Codex Mock" });
+    expect(preview.reviewer).toMatchObject({ id: "claude", identity: "Claude Mock" });
+  });
+
+  it("dry-run rejects an unknown --implementer before any spawn", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    expect(() => previewOrchestration(createRoleSelectionState(), { cwd, implementerAgentId: "unknown-agent" }))
+      .toThrow("Requested implementer 'unknown-agent' is not configured.");
+  });
+
+  it("real orchestration sends the implementation prompt to the resolved Implementer and the review prompt to the resolved Reviewer", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "claude" });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.orchestration.implementerId).toBe("claude");
+    expect(run.state.orchestration.reviewerId).toBe("codex");
+    expect(run.state.orchestration.resolvedImplementerId).toBe("claude");
+    expect(run.state.orchestration.resolvedReviewerId).toBe("codex");
+    expect(run.state.orchestration.roleResolutionSource).toBe("cli-override");
+    expect(run.state.latestResolvedRoles).toEqual({ implementer: "claude", reviewer: "codex" });
+    expect(run.state.latestRoleResolutionSource).toBe("cli-override");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-claude", expect.any(String), "mock-codex", expect.any(String)]);
+  }, 30000);
+
+  it("routes Reviewer questions to the resolved Implementer and the answers back to the resolved Reviewer", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredQuestionsReview },
+      { stdout: structuredAnswers },
+      { stdout: structuredResolvedApproval },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "claude", maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(adapter.calls.map((call) => call.command)).toEqual([
+      "mock-claude", expect.any(String), "mock-codex", "mock-claude", "mock-codex", expect.any(String),
+    ]);
+  }, 30000);
+
+  it("targets the resolved Implementer for the fix stage after Changes Requested, with roles reversed", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: actionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      { stdout: "revalidation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "codex", maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(adapter.calls.map((call) => call.command)).toEqual([
+      "mock-codex", expect.any(String), "mock-claude", "mock-codex", expect.any(String), "mock-claude", expect.any(String),
+    ]);
+  }, 30000);
+
+  it("resumes a pinned in-progress run with the originally resolved roles when no --implementer is supplied", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const pinnedState = createRoleSelectionState({
+      orchestration: {
+        currentStage: "review",
+        startedAt: "2026-07-25T00:00:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+        maxFixCycles: 2,
+      },
+      validationRuns: [{ stage: "validate", status: "passed", path: ".agent-workflow/runs/x/validation.md" }],
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(pinnedState, { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(adapter.calls[0].command).toBe("mock-codex");
+    expect(run.state.orchestration.resolvedImplementerId).toBe("claude");
+    expect(run.state.orchestration.resolvedReviewerId).toBe("codex");
+  }, 30000);
+
+  it("accepts a matching --implementer on resume", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const pinnedState = createRoleSelectionState({
+      orchestration: {
+        currentStage: "review",
+        startedAt: "2026-07-25T00:00:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+        maxFixCycles: 2,
+      },
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(pinnedState, { cwd, processAdapter: adapter, implementerAgentId: "claude" });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+  }, 30000);
+
+  it("rejects a conflicting --implementer on resume before any spawn and leaves persisted roles unchanged", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = path.join(cwd, ".agent-workflow", "state.json");
+    const pinnedState = createRoleSelectionState({
+      orchestration: {
+        currentStage: "review",
+        startedAt: "2026-07-25T00:00:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+        maxFixCycles: 2,
+      },
+    });
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify(pinnedState), "utf8");
+    const adapter = createSequenceAdapter([{ stdout: "should not run" }], cwd);
+
+    await expect(runOrchestrationAndPersist(statePath, { cwd, processAdapter: adapter, implementerAgentId: "codex" }))
+      .rejects.toThrow("Rejected before spawn because runtime roles are already fixed for this run.");
+
+    expect(adapter.run).not.toHaveBeenCalled();
+    const persisted = readState(statePath);
+    expect(persisted.orchestration.resolvedImplementerId).toBe("claude");
+    expect(persisted.orchestration.resolvedReviewerId).toBe("codex");
+  }, 30000);
+
+  it("does not leak a completed run's resolved roles into a new run on a fresh state file", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const firstAdapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const firstRun = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: firstAdapter, implementerAgentId: "claude" });
+    expect(firstRun.decision).toBe("Ready for human merge decision");
+
+    const secondAdapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const secondRun = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: secondAdapter, implementerAgentId: "codex" });
+
+    expect(secondRun.state.orchestration.resolvedImplementerId).toBe("codex");
+    expect(secondRun.state.orchestration.resolvedReviewerId).toBe("claude");
   }, 30000);
 });
 

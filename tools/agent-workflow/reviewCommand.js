@@ -21,6 +21,7 @@ const {
 } = require("./agentRunner.js");
 const { analyzeStructuredReview } = require("./structuredReview.js");
 const { formatFindingHistoryForPrompt } = require("./findingLifecycle.js");
+const { resolveEffectiveRoles, validateAgentForRole } = require("./roleResolver.js");
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DIFF_LIMITS = { maxChars: 6000, maxLines: 200 };
@@ -263,6 +264,29 @@ function runnersMatch(a, b) {
   return a.command === b.command && JSON.stringify(a.args) === JSON.stringify(b.args);
 }
 
+function resolveReviewRoles(state, options = {}) {
+  if (options.implementerAgentId && !options.agentId) {
+    const resolution = resolveEffectiveRoles({ state, requestedImplementerId: options.implementerAgentId });
+    if (!resolution.ok) throw new Error(resolution.diagnostics.join(" "));
+    return {
+      implementerConfig: resolveAgentConfig(state, resolution.roles.implementer),
+      reviewerConfig: resolveAgentConfig(state, resolution.roles.reviewer),
+      roleSource: resolution.source,
+    };
+  }
+  if (options.implementerAgentId) {
+    const implementerValidation = validateAgentForRole(state, options.implementerAgentId, "implementer");
+    if (!implementerValidation.ok) throw new Error(implementerValidation.diagnostics.join(" "));
+  }
+  const implementerConfig = resolveRoleRunner(state, "implementer", options.implementerAgentId);
+  const reviewerConfig = resolveRoleRunner(state, "reviewer", options.agentId);
+  const stageAgents = state.stageAgents || {};
+  const roleSource = (options.agentId || options.implementerAgentId)
+    ? "cli-override"
+    : ((stageAgents.implement || stageAgents.review) ? "state" : "default");
+  return { implementerConfig, reviewerConfig, roleSource };
+}
+
 function classifyReviewOutcome(result, outputText, options = {}) {
   if (result.timedOut) return "Timed Out";
   if (result.errorMessage || result.interrupted || result.signal || result.exitCode !== 0) {
@@ -279,8 +303,7 @@ function previewIndependentReview(state, options = {}) {
     baseBranch: options.baseBranch || state.baseBranch,
     gitAdapter: options.gitAdapter,
   });
-  const implementerConfig = resolveRoleRunner(state, "implementer");
-  const reviewerConfig = resolveRoleRunner(state, "reviewer", options.agentId);
+  const { implementerConfig, reviewerConfig, roleSource } = resolveReviewRoles(state, options);
   assertSafeCommand(reviewerConfig);
   const sameRunner = runnersMatch(implementerConfig, reviewerConfig);
 
@@ -295,6 +318,7 @@ function previewIndependentReview(state, options = {}) {
     reviewerIdentity: reviewerConfig.identity,
     implementerId: implementerConfig.agentId,
     implementerIdentity: implementerConfig.identity,
+    roleSource,
     sameRunner,
     commandPreview: [reviewerConfig.command, ...invocation.args].filter(Boolean).join(" "),
     promptPreview: truncate(prompt, { maxChars: 1200, maxLines: 40 }),
@@ -321,8 +345,7 @@ async function runIndependentReview(state, options = {}) {
     baseBranch: options.baseBranch || state.baseBranch,
     gitAdapter: options.gitAdapter,
   });
-  const implementerConfig = resolveRoleRunner(state, "implementer");
-  const reviewerConfig = resolveRoleRunner(state, "reviewer", options.agentId);
+  const { implementerConfig, reviewerConfig, roleSource } = resolveReviewRoles(state, options);
   assertSafeCommand(reviewerConfig);
   const sameRunner = runnersMatch(implementerConfig, reviewerConfig);
 
@@ -342,8 +365,9 @@ async function runIndependentReview(state, options = {}) {
   });
   const completedAt = now();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
-  const structuredAnalysis = analyzeStructuredReview(outputText);
-  const outcome = classifyReviewOutcome(result, outputText, { structuredAnalysis });
+  const decisionText = String(result.stdout || "").trim() ? result.stdout : outputText;
+  const structuredAnalysis = analyzeStructuredReview(decisionText);
+  const outcome = classifyReviewOutcome(result, decisionText, { structuredAnalysis });
 
   const executionRecord = {
     featureId: state.featureId,
@@ -432,6 +456,7 @@ async function runIndependentReview(state, options = {}) {
     reviewerId: reviewerConfig.agentId,
     reviewerIdentity: reviewerConfig.identity,
     implementerId: implementerConfig.agentId,
+    roleSource,
     sameRunner,
     executionRecord,
     promptPath,
@@ -458,6 +483,7 @@ module.exports = {
   collectGitContext,
   createDefaultGitAdapter,
   previewIndependentReview,
+  resolveReviewRoles,
   resolveRoleRunner,
   resolveSpecPaths,
   runIndependentReview,

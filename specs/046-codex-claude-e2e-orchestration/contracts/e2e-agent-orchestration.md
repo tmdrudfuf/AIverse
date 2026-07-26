@@ -1,11 +1,4 @@
-# Contract: Role-Based E2E Agent Orchestration
-
-The workflow is organized around logical roles:
-
-- Implementer: runs `implement`, `fix`, and `final-verification` stages.
-- Reviewer: runs `review` and `re-review` stages.
-
-Default assignment is Implementer = Codex CLI and Reviewer = Claude CLI. Fallback assignment may swap these or use another supported CLI when the default Implementer is unavailable. The reviewer should be different from the implementer whenever possible.
+# Contract: E2E Agent Orchestration
 
 ## `runWorkflowAgent(state, options)`
 
@@ -15,21 +8,21 @@ Runs exactly one workflow stage with the configured agent.
 
 - `state`: workflow state with optional runner configuration and review metadata.
 - `options.stage`: stage override.
-- `options.agentId`: agent override, typically a role runner such as `implementer` or `reviewer`.
+- `options.agentId`: agent override.
 - `options.processAdapter`: injectable fake process adapter for tests.
 - `options.cwd`: repository root for run records.
 
 ### Required Behavior
 
 - Reject `human-merge-decision`.
-- Resolve stage-to-role/agent mapping from state or defaults.
+- Resolve stage-to-agent mapping from state or defaults.
 - Reject remote-mutating commands before subprocess execution.
 - Generate the stage prompt from existing templates.
 - For `inputMode: "stdin"`, pass the prompt through process input.
 - For `inputMode: "argument"`, replace `{{prompt}}` or `{prompt}` arguments with the generated prompt.
 - Write execution diagnostics under `.agent-workflow/runs/<feature-id>/`.
 - Record stage result only for successful executions.
-- Append review findings only for successful `Changes Requested` Reviewer outputs.
+- Append review findings only for successful `Changes Requested` review/re-review outputs.
 
 ## Review Prompt Contract
 
@@ -56,8 +49,4 @@ The workflow must never execute:
 - branch deletion
 - remote-mutating equivalents
 
-Automated tests must use fake process adapters and must not invoke real CLI agents.
-
-## Extensibility Contract
-
-The workflow must not depend on a specific vendor. Supported runners may include Codex CLI, Claude CLI, Gemini CLI, OpenAI CLI, Qwen CLI, and future local agents, provided they can be represented by local runner configuration and pass the safety checks.
+Automated tests must use fake process adapters and must not invoke real Codex or Claude services.

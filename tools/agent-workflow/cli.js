@@ -2,6 +2,7 @@
 
 const path = require("path");
 const {
+  determineNextStage,
   generatePrompt,
   readState,
   recordAgentResult,
@@ -10,7 +11,9 @@ const {
 } = require("./agentWorkflow.js");
 const {
   DEFAULT_AGENT_RUNNERS,
+  DEFAULT_STAGE_AGENTS,
   detectAgentCli,
+  resolveAgentConfig,
   runWorkflowAgentAndPersist,
 } = require("./agentRunner.js");
 const { previewWorkflowCommand, runWorkflowCommandAndPersist } = require("./agentWorkflowRun.js");
@@ -24,6 +27,18 @@ const {
   previewOrchestration,
   runOrchestrationAndPersist,
 } = require("./orchestrateCommand.js");
+const { resolveEffectiveRoles } = require("./roleResolver.js");
+
+const ROLE_SOURCE_LABELS = {
+  "cli-override": "CLI override",
+  state: "state",
+  default: "default",
+  resume: "resume (pinned)",
+};
+
+function describeRoleSource(source) {
+  return ROLE_SOURCE_LABELS[source] || source || "unknown";
+}
 
 function readFlag(args, name) {
   const index = args.indexOf(name);
@@ -35,16 +50,49 @@ function hasFlag(args, name) {
   return args.includes(name);
 }
 
+/**
+ * Strict reader for --implementer: rejects a missing value (end of argv, or
+ * immediately followed by another flag) and rejects conflicting repeats.
+ * An identical value repeated more than once normalizes to that one value.
+ */
+function readImplementerFlag(args) {
+  const indices = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--implementer") indices.push(index);
+  }
+  if (!indices.length) return undefined;
+  const values = indices.map((index) => args[index + 1]);
+  for (const value of values) {
+    if (value === undefined || value.startsWith("--")) {
+      throw new Error("--implementer requires a value.");
+    }
+  }
+  const unique = [...new Set(values)];
+  if (unique.length > 1) {
+    throw new Error(`--implementer was provided multiple times with conflicting values: ${unique.join(", ")}.`);
+  }
+  return unique[0];
+}
+
 function printUsage() {
   console.log([
     "Usage:",
     "  node tools/agent-workflow/cli.js next --state <state.json> [--write]",
     "  node tools/agent-workflow/cli.js record --state <state.json> --stage <stage> --agent <name> (--result-text <text> | --result-file <path>)",
     "  node tools/agent-workflow/cli.js detect-agent --agent <implementer|reviewer|agent-id>",
+    "  node tools/agent-workflow/cli.js detect-agent --implementer <agent-id> [--state <state.json>]",
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--base <branch>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>]",
+    "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--implementer <agent-id>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--implementer <agent-id>] [--base <branch>] [--timeout-ms <ms>]",
+    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--implementer <agent-id>] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>]",
+    "",
+    "Role selection:",
+    "  --implementer <agent-id> picks the Implementer for this execution only and resolves the other",
+    "  configured agent as Reviewer automatically. Priority: --implementer > state-configured roles > defaults.",
+    "  It never rewrites the state file's configured role mapping. --implementer=value (equals form) is not",
+    "  supported, consistent with every other flag in this CLI. Repeating --implementer with the same value",
+    "  is accepted; repeating it with different values is rejected before any process spawns.",
+    "  --implementer is ignored by next, record, and run-agent, which do not resolve a Reviewer role.",
     "",
     "Safety:",
     "  This script does not push, create PRs, merge PRs, or delete branches.",
@@ -64,6 +112,51 @@ function main(argv) {
   }
 
   if (command === "detect-agent") {
+    let implementerFlag;
+    try {
+      implementerFlag = readImplementerFlag(args);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+
+    const detectStatePath = readFlag(args, "--state");
+    let detectState;
+    try {
+      detectState = detectStatePath ? readState(path.resolve(process.cwd(), detectStatePath)) : {};
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (implementerFlag) {
+      const resolution = resolveEffectiveRoles({ state: detectState, requestedImplementerId: implementerFlag });
+      if (!resolution.ok) {
+        console.error(resolution.diagnostics.join(" "));
+        process.exitCode = 1;
+        return;
+      }
+      Promise.all([
+        detectAgentCli(resolveAgentConfig(detectState, resolution.roles.implementer)),
+        detectAgentCli(resolveAgentConfig(detectState, resolution.roles.reviewer)),
+      ])
+        .then(([implementerResult, reviewerResult]) => {
+          console.log(JSON.stringify({
+            roleSource: resolution.source,
+            implementer: implementerResult,
+            reviewer: reviewerResult,
+          }, null, 2));
+          if (!implementerResult.installed || !reviewerResult.installed) process.exitCode = 2;
+        })
+        .catch((error) => {
+          console.error(error.message);
+          process.exitCode = 1;
+        });
+      return;
+    }
+
     const agentId = readFlag(args, "--agent");
     const config = DEFAULT_AGENT_RUNNERS[agentId];
     if (!config) {
@@ -146,12 +239,37 @@ function main(argv) {
   }
 
   if (command === "run") {
+    let implementerFlag;
+    try {
+      implementerFlag = readImplementerFlag(args);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+
+    let resolvedAgentId;
+    let resolvedRoles;
+    if (implementerFlag) {
+      const resolution = resolveEffectiveRoles({ state, requestedImplementerId: implementerFlag });
+      if (!resolution.ok) {
+        console.error(resolution.diagnostics.join(" "));
+        process.exitCode = 1;
+        return;
+      }
+      resolvedRoles = resolution.roles;
+      const stage = readFlag(args, "--stage") || determineNextStage(state);
+      const role = DEFAULT_STAGE_AGENTS[stage];
+      if (role) resolvedAgentId = resolvedRoles[role];
+    }
+    const agentId = readFlag(args, "--agent") || resolvedAgentId;
+
     if (hasFlag(args, "--dry-run")) {
       try {
         console.log(formatDryRunPreview(previewWorkflowCommand(state, {
           cwd: process.cwd(),
           stage: readFlag(args, "--stage"),
-          agentId: readFlag(args, "--agent"),
+          agentId,
         })));
       } catch (error) {
         console.error(error.message);
@@ -165,7 +283,8 @@ function main(argv) {
     runWorkflowCommandAndPersist(resolvedStatePath, {
       cwd: process.cwd(),
       stage: readFlag(args, "--stage"),
-      agentId: readFlag(args, "--agent"),
+      agentId,
+      resolvedRoles,
       timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
       untilBlocked: hasFlag(args, "--until-blocked"),
       maxSteps: maxStepsText ? Number(maxStepsText) : undefined,
@@ -182,11 +301,21 @@ function main(argv) {
   }
 
   if (command === "run-review") {
+    let implementerFlag;
+    try {
+      implementerFlag = readImplementerFlag(args);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+
     if (hasFlag(args, "--dry-run")) {
       try {
         console.log(formatIndependentReviewDryRunPreview(previewIndependentReview(state, {
           cwd: process.cwd(),
           agentId: readFlag(args, "--agent"),
+          implementerAgentId: implementerFlag,
           baseBranch: readFlag(args, "--base"),
         })));
       } catch (error) {
@@ -200,6 +329,7 @@ function main(argv) {
     runIndependentReviewAndPersist(resolvedStatePath, {
       cwd: process.cwd(),
       agentId: readFlag(args, "--agent"),
+      implementerAgentId: implementerFlag,
       baseBranch: readFlag(args, "--base"),
       timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
     })
@@ -215,11 +345,21 @@ function main(argv) {
   }
 
   if (command === "orchestrate") {
+    let implementerFlag;
+    try {
+      implementerFlag = readImplementerFlag(args);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+      return;
+    }
+
     const timeoutMsText = readFlag(args, "--timeout-ms");
     const maxFixCyclesText = readFlag(args, "--max-fix-cycles");
     const validationCommands = readAllFlags(args, "--validation-command");
     const options = {
       cwd: process.cwd(),
+      implementerAgentId: implementerFlag,
       timeoutMs: timeoutMsText ? Number(timeoutMsText) : undefined,
       maxFixCycles: maxFixCyclesText ? Number(maxFixCyclesText) : undefined,
       skipValidation: hasFlag(args, "--skip-validation"),
@@ -264,8 +404,10 @@ function formatIndependentReviewDryRunPreview(preview) {
   if (preview.sameRunner) lines.push(SAME_RUNNER_WARNING, "");
   lines.push(
     "Dry run: true",
-    `Implementer: ${preview.implementerId} (${preview.implementerIdentity})`,
-    `Reviewer: ${preview.reviewerId} (${preview.reviewerIdentity})`,
+    "Resolved roles",
+    `Implementer: ${preview.implementerIdentity} (${preview.implementerId})`,
+    `Reviewer: ${preview.reviewerIdentity} (${preview.reviewerId})`,
+    `Role source: ${describeRoleSource(preview.roleSource)}`,
     `Command: ${preview.commandPreview}`,
     `Prompt path: ${preview.promptPath}`,
     `Run directory: ${preview.runDirectory}`,
@@ -285,9 +427,11 @@ function formatIndependentReviewResult(run) {
   const lines = [];
   if (run.sameRunner) lines.push(SAME_RUNNER_WARNING, "");
   lines.push(`Review Decision: ${run.outcome}`);
+  lines.push(`Implementer: ${run.implementerId}`);
   if (run.outcome === "Approved" || run.outcome === "Changes Requested") {
     lines.push(`Reviewer: ${run.reviewerId}`);
   }
+  lines.push(`Role source: ${describeRoleSource(run.roleSource)}`);
   lines.push(`Next action: ${NEXT_ACTION_BY_OUTCOME[run.outcome] || "inspect the saved review output."}`);
   return lines.join("\n");
 }
@@ -298,10 +442,12 @@ function formatOrchestrationDryRun(preview) {
     `Feature: ${preview.featureId}`,
     `Branch: ${preview.branch}`,
     `Current stage: ${preview.currentStage}`,
-    `Implementer: ${preview.implementer.id} (${preview.implementer.identity})`,
+    "Resolved roles",
+    `Implementer: ${preview.implementer.identity} (${preview.implementer.id})`,
     `Implementer command: ${preview.implementer.commandPreview}`,
-    `Reviewer: ${preview.reviewer.id} (${preview.reviewer.identity})`,
+    `Reviewer: ${preview.reviewer.identity} (${preview.reviewer.id})`,
     `Reviewer command: ${preview.reviewer.commandPreview}`,
+    `Role source: ${describeRoleSource(preview.roleSource)}`,
     `Validation: ${preview.validationCommands.length ? preview.validationCommands.join("; ") : "skipped"}`,
     `Fix cycle: ${preview.fixCycleCount || 0}/${preview.maxFixCycles}`,
     `Question cycle: ${preview.questionCycle || 0}/${preview.maxQuestionCycles}`,
@@ -310,6 +456,10 @@ function formatOrchestrationDryRun(preview) {
     `Run directory: ${preview.runDirectory}`,
     `Artifacts: implement prompt=${preview.promptPaths.implement}; review prompt=${preview.promptPaths.review}; answer prompt=${preview.promptPaths.answerQuestions}; final-review prompt=${preview.promptPaths.finalReview}; fix prompt=${preview.promptPaths.fix}; lifecycle=${preview.promptPaths.findingLifecycle}`,
     `Planned stages: ${preview.plannedStages.join(" -> ")}`,
+    "Will spawn agents: no",
+    "Will mutate state: no",
+    "Will run validation: no",
+    "Will perform remote mutation: no",
     `Will spawn: ${preview.willSpawn}`,
   ];
   if (preview.sameRunner) lines.splice(1, 0, SAME_RUNNER_WARNING, "");
@@ -323,8 +473,10 @@ function formatOrchestrationResult(run) {
   lines.push(
     `Feature: ${run.state.featureId || "unknown-feature"}`,
     `Branch: ${run.state.currentBranch || orchestration.branch || "unknown-branch"}`,
-    `Implementer: ${orchestration.implementerId || "unknown"} (${orchestration.implementerIdentity || "unknown"})`,
-    `Reviewer: ${orchestration.reviewerId || "unknown"} (${orchestration.reviewerIdentity || "unknown"})`,
+    "Resolved roles",
+    `Implementer: ${orchestration.implementerIdentity || "unknown"} (${orchestration.implementerId || "unknown"})`,
+    `Reviewer: ${orchestration.reviewerIdentity || "unknown"} (${orchestration.reviewerId || "unknown"})`,
+    `Role source: ${describeRoleSource(orchestration.roleResolutionSource || run.state.latestRoleResolutionSource)}`,
     `Current stage: ${orchestration.currentStage || "unknown"}`,
     `Validation: ${Array.isArray(run.state.validationRuns) && run.state.validationRuns.length ? run.state.validationRuns.at(-1).status : "not run"}`,
     `Review decision: ${run.state.latestReviewDecision || "none"}`,
@@ -376,6 +528,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  describeRoleSource,
   formatDryRunPreview,
   formatIndependentReviewDryRunPreview,
   formatIndependentReviewResult,
@@ -383,4 +536,5 @@ module.exports = {
   formatOrchestrationResult,
   formatRunSummary,
   main,
+  readImplementerFlag,
 };

@@ -16,6 +16,7 @@ const {
   createDefaultProcessAdapter,
   createPromptInvocation,
   isRemoteMutatingCommand,
+  resolveAgentConfig,
 } = require("./agentRunner.js");
 const {
   buildIndependentReviewPrompt,
@@ -28,6 +29,7 @@ const {
 const { analyzeStructuredReview } = require("./structuredReview.js");
 const { parseStructuredAnswers } = require("./structuredAnswers.js");
 const { formatFindingHistoryForPrompt, normalizeFindingLifecycle } = require("./findingLifecycle.js");
+const { resolveEffectiveRoles } = require("./roleResolver.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -70,6 +72,35 @@ function getCurrentStage(state) {
   if (state.terminalState === "human-merge-decision") return "human-merge-decision";
   if (state.terminalState === "blocked") return "blocked";
   return "implement";
+}
+
+function getPinnedRunRoles(state) {
+  const orchestration = getOrchestration(state);
+  if (
+    orchestration.startedAt
+    && orchestration.resolvedImplementerId
+    && orchestration.resolvedReviewerId
+    && !TERMINAL_STAGES.has(getCurrentStage(state))
+  ) {
+    return {
+      implementer: orchestration.resolvedImplementerId,
+      reviewer: orchestration.resolvedReviewerId,
+      source: orchestration.roleResolutionSource || "resume",
+    };
+  }
+  return undefined;
+}
+
+function resolveOrchestrationRoles(state, options = {}) {
+  const resolution = resolveEffectiveRoles({
+    state,
+    requestedImplementerId: options.implementerAgentId,
+    existingRunRoles: getPinnedRunRoles(state),
+  });
+  if (!resolution.ok) {
+    throw new Error(resolution.diagnostics.join(" "));
+  }
+  return resolution;
 }
 
 function getValidationCommands(state, options = {}) {
@@ -689,7 +720,7 @@ function extractFindingsForHandoff(outputText, structuredAnalysis) {
 async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   const cwd = options.cwd || process.cwd();
   const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch });
-  const implementerConfig = resolveRoleRunner(state, "implementer");
+  const implementerConfig = resolveRoleRunner(state, "implementer", options.implementerAgentId);
   const reviewerConfig = resolveRoleRunner(state, "reviewer", options.reviewerAgentId);
   assertSafeCommand(reviewerConfig);
   const sameRunner = runnersMatch(implementerConfig, reviewerConfig);
@@ -707,8 +738,9 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   });
   const completedAt = new Date().toISOString();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
-  const structuredReviewAnalysis = analyzeStructuredReview(outputText);
-  const outcome = classifyReviewOutcome(result, outputText, { structuredAnalysis: structuredReviewAnalysis });
+  const decisionText = String(result.stdout || "").trim() ? result.stdout : outputText;
+  const structuredReviewAnalysis = analyzeStructuredReview(decisionText);
+  const outcome = classifyReviewOutcome(result, decisionText, { structuredAnalysis: structuredReviewAnalysis });
   const executionRecord = {
     featureId: state.featureId,
     kind: reviewStage,
@@ -773,7 +805,7 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
       reviewRuns: [...(Array.isArray(state.reviewRuns) ? state.reviewRuns : []), reviewRunRecord],
     },
     outcome,
-    outputText,
+    outputText: decisionText,
     sameRunner,
     reviewerId: reviewerConfig.agentId,
     reviewerIdentity: reviewerConfig.identity,
@@ -859,8 +891,9 @@ async function executeAnswerQuestionsStage(state, options = {}) {
 function previewOrchestration(state, options = {}) {
   const cwd = options.cwd || process.cwd();
   const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch });
-  const implementer = resolveRoleRunner(state, "implementer", options.implementerAgentId);
-  const reviewer = resolveRoleRunner(state, "reviewer", options.reviewerAgentId);
+  const roleResolution = resolveOrchestrationRoles(state, options);
+  const implementer = resolveAgentConfig(state, roleResolution.roles.implementer);
+  const reviewer = resolveAgentConfig(state, roleResolution.roles.reviewer);
   assertSafeCommand(implementer);
   assertSafeCommand(reviewer);
   const maxFixCycles = normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles);
@@ -870,6 +903,7 @@ function previewOrchestration(state, options = {}) {
     featureId: state.featureId || "unknown-feature",
     branch: gitContext.currentBranch,
     currentStage,
+    roleSource: roleResolution.source,
     plannedStages: [
       "implement",
       "validate",
@@ -910,8 +944,14 @@ function previewOrchestration(state, options = {}) {
 async function runOrchestration(state, options = {}) {
   const cwd = options.cwd || process.cwd();
   const statePath = options.statePath;
-  const implementerConfig = resolveRoleRunner(state, "implementer", options.implementerAgentId);
-  const reviewerConfig = resolveRoleRunner(state, "reviewer", options.reviewerAgentId);
+  const roleResolution = resolveOrchestrationRoles(state, options);
+  const pinnedOptions = {
+    ...options,
+    implementerAgentId: roleResolution.roles.implementer,
+    reviewerAgentId: roleResolution.roles.reviewer,
+  };
+  const implementerConfig = resolveAgentConfig(state, roleResolution.roles.implementer);
+  const reviewerConfig = resolveAgentConfig(state, roleResolution.roles.reviewer);
   assertSafeCommand(implementerConfig);
   assertSafeCommand(reviewerConfig);
   let currentState = setOrchestration(state, {
@@ -924,7 +964,15 @@ async function runOrchestration(state, options = {}) {
     reviewerIdentity: reviewerConfig.identity,
     sameRunner: runnersMatch(implementerConfig, reviewerConfig),
     startedAt: getOrchestration(state).startedAt || new Date().toISOString(),
+    resolvedImplementerId: roleResolution.roles.implementer,
+    resolvedReviewerId: roleResolution.roles.reviewer,
+    roleResolutionSource: roleResolution.source,
   });
+  currentState = {
+    ...currentState,
+    latestResolvedRoles: { implementer: roleResolution.roles.implementer, reviewer: roleResolution.roles.reviewer },
+    latestRoleResolutionSource: roleResolution.source,
+  };
   const maxFixCycles = currentState.orchestration.maxFixCycles;
   const maxQuestionCycles = currentState.orchestration.maxQuestionCycles;
   const steps = [];
@@ -940,9 +988,9 @@ async function runOrchestration(state, options = {}) {
     const stage = getCurrentStage(currentState);
     if (stage === "implement" || stage === "fix") {
       const beforeSignature = getDiffSignature(gitContext);
-      const implementer = resolveRoleRunner(currentState, "implementer", options.implementerAgentId);
-      const prompt = buildImplementerPrompt(currentState, stage, { ...options, cwd, gitContext });
-      const run = await runAgentPrompt(currentState, stage, implementer, prompt, options);
+      const implementer = resolveAgentConfig(currentState, roleResolution.roles.implementer);
+      const prompt = buildImplementerPrompt(currentState, stage, { ...pinnedOptions, cwd, gitContext });
+      const run = await runAgentPrompt(currentState, stage, implementer, prompt, pinnedOptions);
       currentState = appendRecord(currentState, "orchestrationRuns", { stage, status: run.successful ? "completed" : "failed", path: run.record.path, resultPath: run.record.resultPath });
       currentState = persistStage(statePath, currentState, nextStageAfterCompleted(currentState, stage), {
         latestImplementerPath: run.record.resultPath,
@@ -965,7 +1013,7 @@ async function runOrchestration(state, options = {}) {
     }
 
     if (stage === "answer-questions") {
-      const answer = await executeAnswerQuestionsStage(currentState, { ...options, statePath });
+      const answer = await executeAnswerQuestionsStage(currentState, { ...pinnedOptions, statePath });
       currentState = answer.state;
       steps.push({ stage, status: answer.answerAnalysis.status, artifactPath: answer.run.record.path });
       if (getCurrentStage(currentState) === "blocked") {
@@ -995,8 +1043,8 @@ async function runOrchestration(state, options = {}) {
 
     if (stage === "review" || stage === "re-review" || stage === "final-review") {
       const reviewOptions = stage === "final-review"
-        ? { ...options, reviewPrompt: buildFinalReviewPrompt(currentState, options) }
-        : options;
+        ? { ...pinnedOptions, reviewPrompt: buildFinalReviewPrompt(currentState, pinnedOptions) }
+        : pinnedOptions;
       const review = await executeReviewStage(currentState, stage, reviewOptions);
       currentState = review.state;
       steps.push({ stage, status: review.outcome, artifactPath: relativePath(cwd, review.resultPath) });
