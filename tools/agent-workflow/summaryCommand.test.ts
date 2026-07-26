@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -6,6 +7,20 @@ import { getRunSummaryForDisplay, formatSummaryCommandOutput } from "./summaryCo
 
 function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "summary-command-test-"));
+}
+
+function git(cwd: string, args: string[]) {
+  execFileSync("git", args, { cwd, stdio: "pipe" });
+}
+
+function initRepo(cwd: string) {
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+  git(cwd, ["config", "user.email", "test@example.com"]);
+  git(cwd, ["config", "user.name", "Test"]);
+  fs.writeFileSync(path.join(cwd, "tracked.txt"), "base\n");
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "init"]);
 }
 
 describe("summaryCommand", () => {
@@ -37,5 +52,20 @@ describe("summaryCommand", () => {
     expect(() => getRunSummaryForDisplay(legacyState)).not.toThrow();
     const summary = getRunSummaryForDisplay(legacyState);
     expect(summary.run.status).toBe("planned");
+  });
+
+  it("populates commits.currentBranchHead from the live repository, matching orchestrate-written summaries", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+
+    const summary = getRunSummaryForDisplay({ featureId: "x", baseBranch: "main", results: [] }, { cwd });
+
+    expect(summary.commits.currentBranchHead).toBe(head);
+  });
+
+  it("does not crash when the supplied cwd is not a git repository", () => {
+    const cwd = createTempDir();
+    expect(() => getRunSummaryForDisplay({ featureId: "x", baseBranch: "main", results: [] }, { cwd })).not.toThrow();
   });
 });

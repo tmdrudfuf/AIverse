@@ -550,12 +550,30 @@ function buildHumanGate(status, review, validation, findings, evidenceVerified) 
 
 // --- Artifacts / warnings ---------------------------------------------------
 
-function buildArtifactIndex(stageTimeline) {
+function buildArtifactIndex(stageTimeline, state, cwd, options, warnings) {
   const paths = [];
   for (const entry of stageTimeline) {
     for (const artifactPath of entry.artifactPaths) {
       if (!paths.includes(artifactPath)) paths.push(artifactPath);
     }
+  }
+  // These orchestration-level paths (Reviewer question artifact, Implementer
+  // answer artifact, finding lifecycle artifact) are persisted but do not
+  // correspond to any orchestrationRuns/reviewRuns/validationRuns record
+  // buildStageTimeline consumes, so they are never reachable through
+  // stageTimeline[].artifactPaths and must be collected separately.
+  const orchestration = getOrchestration(state);
+  const supplementary = [
+    orchestration.latestReviewerQuestionPath,
+    orchestration.latestImplementerAnswerPath,
+    orchestration.latestImplementerAnswerRawPath,
+    orchestration.latestFindingLifecyclePath,
+    orchestration.failedValidationPath,
+  ].filter(Boolean);
+  for (const rawPath of supplementary) {
+    checkArtifactExists(cwd, rawPath, warnings);
+    const normalized = toRunRelativePath(cwd, state, rawPath, options, warnings);
+    if (normalized && !paths.includes(normalized)) paths.push(normalized);
   }
   return paths;
 }
@@ -612,7 +630,7 @@ function buildRunSummary(state, options = {}) {
       exactCommitMatch: "unknown",
     },
     humanGate,
-    artifacts: buildArtifactIndex(stageTimeline),
+    artifacts: buildArtifactIndex(stageTimeline, state, cwd, options, warnings),
     warnings,
   };
 }

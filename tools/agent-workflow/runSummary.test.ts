@@ -703,3 +703,30 @@ describe("buildRunSummary: consistent artifact evidence verification", () => {
     expect(summary.warnings.some((w: { code: string }) => w.code === "missing-or-malformed-artifact")).toBe(true);
   });
 });
+
+describe("buildRunSummary: supplementary artifact index", () => {
+  it("includes Reviewer question, Implementer answer, and finding lifecycle artifacts not tied to any stage-timeline record", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of ["question.json", "answer.json", "answer-raw.md", "lifecycle.json"]) {
+      fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    }
+    const p = (name: string) => `.agent-workflow/runs/054-review-run-summary-audit-trail/${name}`;
+    const state = baseState({
+      orchestration: {
+        startedAt: "2026-07-26T00:00:00.000Z",
+        currentStage: "answer-questions",
+        latestReviewerQuestionPath: p("question.json"),
+        latestImplementerAnswerPath: p("answer.json"),
+        latestImplementerAnswerRawPath: p("answer-raw.md"),
+        latestFindingLifecyclePath: p("lifecycle.json"),
+      },
+    });
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.artifacts).toContain("question.json");
+    expect(summary.artifacts).toContain("answer.json");
+    expect(summary.artifacts).toContain("answer-raw.md");
+    expect(summary.artifacts).toContain("lifecycle.json");
+  });
+});
