@@ -683,11 +683,11 @@ See `specs/054-review-run-summary-audit-trail/contracts/run-summary-schema.md` f
 
 **Stage timeline** (`stageTimeline[]`): reconstructed by replaying the same fixed stage-transition rules the orchestrator itself uses, driven by the `stage`/`status`/`outcome` fields already recorded in `state.orchestrationRuns` (implement/fix/answer-questions), `state.reviewRuns` (review/re-review/final-review — an additive `stage` field distinguishes these), and `state.validationRuns` (validate/revalidate/final-verification). Because these are durable, append-only arrays, resuming a run never duplicates a stage that already ran and never loses history from an earlier invocation.
 
-**Validation**: `validation.status` reflects the most recent validation attempt (`passed`/`failed`/`timed-out`/`interrupted`), or `skipped` when the run used `--skip-validation` (an additive `orchestration.validationSkipped` flag distinguishes this from `not-run`, which means validation simply has not happened yet).
+**Validation**: `validation.status` mirrors the **full** validation phase only (`passed`/`failed`/`timed-out`/`interrupted`), or `skipped` when the run used `--skip-validation` (an additive `orchestration.validationSkipped` flag distinguishes this from `not-run`, which means validation simply has not happened yet). Under the Spec 055 `focused-final-full` strategy, a focused-only pass is never reported as aggregate `"passed"` — see [Focused Validation Review Loop](#focused-validation-review-loop) for the two-phase breakdown (`validation.focused`/`validation.full`).
 
 **Findings**: integrates Spec 052 finding lifecycle tracking (`state.findingHistory`) directly — `opened`, `resolved`, `carriedForward`, `remainingBlocking`, `remainingNonBlocking`, and a per-finding `openedReviewAttempt`/`resolvedReviewAttempt`. `remainingBlocking` always matches the orchestrator's own `activeBlockingFindings` count.
 
-**Commit provenance**: this workflow reviews the live branch/working-tree diff rather than persisting an implementation commit SHA, so `commits.implementationCommit`/`reviewedCommit`/`exactCommitMatch` are `null`/`"unknown"` by design — never fabricated as a match. `commits.currentBranchHead` reports the live `git rev-parse HEAD` **only** for a summary written by a real `orchestrate` run (which already has live git context from that run itself, at zero marginal process cost); the read-only `summary` CLI command never spawns a process — including git — so it always reports `currentBranchHead` as `null` rather than add a new subprocess call just for this field.
+**Commit provenance**: this workflow reviews the live branch/working-tree diff rather than persisting an implementation commit SHA, so `commits.implementationCommit`/`reviewedCommit` remain `null` by design — never fabricated. `commits.reviewedTarget`/`fullValidationTarget` (Spec 055) record the exact tree state (`{ commit, dirty, dirtyHash }`) the Reviewer approved and the exact tree state `final-verification` validated; `commits.exactCommitMatch` is `true`/`false` once both exist, `"unknown"` otherwise — never fabricated, and never a positive mismatch verdict just because one side lacks target evidence (see [Focused Validation Review Loop](#focused-validation-review-loop)). `commits.currentBranchHead` reports the live `git rev-parse HEAD` **only** for a summary written by a real `orchestrate` run (which already has live git context from that run itself, at zero marginal process cost); the read-only `summary` CLI command never spawns a process — including git — so it always reports `currentBranchHead` as `null` rather than add a new subprocess call just for this field.
 
 **Secrets**: raw command stdout/stderr, full Reviewer/Implementer output, and environment values are never copied into either summary artifact — only command text, status, exit code, duration, and artifact *paths* (the full text remains in the existing detailed audit artifacts referenced by path).
 
@@ -714,3 +714,102 @@ node tools/agent-workflow/cli.js summary --state .agent-workflow/example-state.j
 ### Backward Compatibility
 
 Old state files and run directories remain fully readable. Missing Spec 052/053/054 fields degrade to explicit `null`/`"unknown"`/empty values rather than crashes or fabricated activity; a missing or malformed optional artifact (e.g. a validation log referenced by a stale path) produces a `warnings[]` entry, not a crash, and downgrades `humanGate.ready` when the missing evidence was required for readiness. Reading a state file for `summary`/`buildRunSummary` never writes back to it.
+
+## Focused Validation Review Loop
+
+Large changes with many independent-review fix cycles (Spec 054 needed 17 rounds) pay the full validation suite's cost after *every* fix, even when a focused, targeted test run would have been enough evidence to continue iterating. This feature lets `validate`/`revalidate` run a smaller, explicitly configured command list during implementation and fix cycles, while keeping `final-verification` — the sole gate for merge readiness — always running the complete list. No new orchestration stages are introduced; only which command list a given `validate`/`revalidate`/`final-verification` occurrence uses.
+
+### Strategies
+
+- **`full-every-cycle`** (default, and the only strategy prior to this feature): every `validate`/`revalidate`/`final-verification` occurrence runs the same full command list. Explicit backward compatibility — a state file or invocation that specifies nothing behaves exactly as before this feature existed.
+- **`focused-final-full`** (opt-in): `validate`/`revalidate` run the configured focused command list; `final-verification` always runs the full command list, regardless of strategy. A focused-only pass can **never** satisfy `humanGate.ready` — only a passing `final-verification` against the exact tree the Reviewer approved can.
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate `
+  --state .agent-workflow/example-state.json `
+  --implementer claude `
+  --validation-strategy focused-final-full `
+  --focused-validation-command "node --test tools/agent-workflow/validationPolicy.test.ts" `
+  --focused-validation-command "node --test tools/agent-workflow/orchestrateCommand.test.ts" `
+  --full-validation-command "npm test" `
+  --full-validation-command "npx tsc --noEmit" `
+  --full-validation-command "npm run build" `
+  --full-validation-command "git diff --check"
+```
+
+Equivalent state configuration (`state.validationPolicy`):
+
+```json
+{
+  "validationPolicy": {
+    "strategy": "focused-final-full",
+    "focusedCommands": ["node --test tools/agent-workflow/validationPolicy.test.ts"],
+    "fullCommands": ["npm test", "npx tsc --noEmit", "npm run build", "git diff --check"]
+  }
+}
+```
+
+CLI flags take precedence over state for a single invocation and never rewrite the state file's configured policy, matching the existing `--implementer`/`--validation-command` precedent. The legacy repeatable `--validation-command` flag and `state.validationCommands` field remain valid full-command-list sources when the new flags/fields are absent.
+
+### Fallback When No Focused Commands Are Configured
+
+If `focused-final-full` is selected but no focused commands are configured (by flag or state), `validate`/`revalidate` fall back to running the **full** command list for that occurrence. Validation is never silently skipped and no subset is silently guessed.
+
+### Final Full Validation Failure Is Fix-Capable, Not a Hard Block
+
+If `final-verification` fails, or passes but modifies the tracked working tree (e.g. a formatter, generated snapshot, or build artifact under version control changes), the prior Approved decision is not treated as final. The run routes back to `fix` (reusing the existing `fix -> revalidate -> re-review` loop) instead of hard-blocking immediately, up to a dedicated `fullValidationFixCycleCount` ceiling — capped by the same `--max-fix-cycles` value, but tracked **separately** from the Reviewer-requested `fixCycleCount`, so a defect the full suite found can never silently consume the Reviewer's own fix-cycle budget, or vice versa. Exceeding the ceiling hard-blocks with a distinct reason ("Maximum full-validation fix cycles reached"). A fresh focused validation pass and a fresh Reviewer Approved decision are always required before `final-verification` runs again.
+
+Plain `validate`/`revalidate` failures (not reached via this recovery path) keep today's hard-block behavior unchanged.
+
+### Exact-Head Integrity
+
+Every validation and review record additively carries a `target: { commit, dirty, dirtyHash }` — the exact `HEAD` commit, whether the tree was dirty, and (only when dirty) a deterministic `sha256`-derived hash of the uncommitted diff. `humanGate.ready`/`validation.finalReadinessSatisfied` require the latest `final-verification` target to not *positively disagree* with the latest Approved review's target; a genuine mismatch (both present, values differ) withholds readiness, while absent target evidence (legacy data, or state built without target tracking) is treated as unknown, not a disproven match, preserving Spec 054's existing readiness behavior for old runs.
+
+### `--force-full-validation`
+
+Elevates the very next `validate`/`revalidate` occurrence in this invocation to the full command list (`triggerReason: "manual-request"`), regardless of strategy. It never skips a stage, never touches `fixCycleCount`, and never marks anything ready by itself.
+
+### `--skip-validation` Interaction
+
+Unchanged: skipping applies to every validation occurrence (focused and full alike) in that invocation and marks `validationSkipped: true`; `humanGate.ready` already requires `validation.status === "passed"`, and skipped validation is reported as `"skipped"`, never `"passed"` — a skipped run can never become merge-ready.
+
+### High-Risk Change Flag
+
+`state.validationPolicy.requiresFullValidation: true` forces every `validate`/`revalidate` occurrence to run the full command list for that run, overriding `focused-final-full`'s normal focused mapping — an explicit escape hatch for changes to shared/high-risk infrastructure (build config, TypeScript config, command safety code, process spawning, state schema). No automatic changed-path inference is implemented; a heuristic that silently under-covers a risky change would provide false safety.
+
+### Dry-Run
+
+`orchestrate --dry-run` previews the resolved strategy, both command lists, and which phase would run next, without executing anything:
+
+```text
+Validation strategy: focused-final-full
+Focused validation commands: node --test tools/agent-workflow/validationPolicy.test.ts
+Final full validation commands: npm test; npx tsc --noEmit; npm run build; git diff --check
+Next validation phase: focused (strategy=focused-final-full)
+```
+
+### Run Summary Integration
+
+`validation` in `run-summary.json`/`.md` reports the strategy and a per-phase breakdown alongside the existing flat `commands[]` array (each entry gains an additive `phase` field):
+
+```json
+{
+  "validation": {
+    "strategy": "focused-final-full",
+    "status": "passed",
+    "focused": { "status": "passed", "attempts": 5 },
+    "full": { "status": "passed", "attempts": 1 },
+    "finalReadinessSatisfied": true
+  }
+}
+```
+
+The aggregate `validation.status` mirrors the **full** phase only — a focused-only pass is never reported as `"passed"`. `schemaVersion` remains `1`; every field above is additive to the Spec 054 model.
+
+### Resume
+
+Attempt counts, the configured strategy, and per-occurrence targets persist in `state.validationRuns`/`state.reviewRuns`/`state.validationPolicy` across invocations. Re-invoking `orchestrate` on a state file already at a terminal stage (`human-merge-decision` or `blocked`) never re-enters the stage loop at all (existing guard, unmodified), so a completed run's full-validation evidence is never redundantly re-executed just by invoking the command again.
+
+### Backward Compatibility
+
+A state file with no `validationPolicy` resolves to `strategy: "full-every-cycle"` with commands resolved exactly as before this feature existed. A `validationRuns`/`reviewRuns` record with no `phase`/`target` field is interpreted as `phase: "full"` with target evidence absent (never fabricated), preserving Spec 045-054 behavior and readiness for old runs.

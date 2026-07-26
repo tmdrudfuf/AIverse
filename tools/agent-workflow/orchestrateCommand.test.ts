@@ -1603,3 +1603,333 @@ describe("orchestrate run summaries", () => {
     });
   }, 30000);
 });
+
+describe("focused validation review loop (Spec 055)", () => {
+  function focusedFinalFullState(overrides: Record<string, unknown> = {}) {
+    return createState({
+      validationPolicy: {
+        strategy: "focused-final-full",
+        focusedCommands: ["mock focused"],
+        fullCommands: ["mock full"],
+      },
+      ...overrides,
+    });
+  }
+
+  it("Smoke A: multiple fix cycles run only focused validation; final-verification runs full validation exactly once", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "focused validation 1 passed" },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed 1", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fix1\n") },
+      { stdout: "focused validation 2 passed" },
+      { stdout: structuredStillOpenChanges },
+      { stdout: "fixed 2", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fix2\n") },
+      { stdout: "focused validation 3 passed" },
+      { stdout: structuredResolvedApproval },
+      { stdout: "full validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter, maxFixCycles: 3 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    const summary = run.summary!;
+    expect(summary.validation.focused.attempts).toBe(3);
+    expect(summary.validation.focused.status).toBe("passed");
+    expect(summary.validation.full.attempts).toBe(1);
+    expect(summary.validation.full.status).toBe("passed");
+    expect(summary.validation.status).toBe("passed");
+    expect(summary.review.fixCycles).toBe(2);
+    expect(summary.humanGate.ready).toBe(true);
+  }, 30000);
+
+  it("Smoke B: full validation failure after Approved does not become ready; it routes back to fix (not a hard block) and must pass focused validation + a fresh review before full validation runs again", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    // One continuous invocation: the loop only pauses at a terminal
+    // (human-merge-decision/blocked) stage, so the fix -> revalidate ->
+    // re-review -> final-verification recovery happens within this same run.
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "focused validation passed" },
+      { stdout: structuredApprovedReview },
+      { stdout: "full validation failed", exitCode: 1 },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fix1\n") },
+      { stdout: "focused validation passed again" },
+      { stdout: structuredApprovedReview },
+      { stdout: "full validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.orchestration.fullValidationFixCycleCount).toBe(1);
+    // A full-validation-triggered fix must never consume the Reviewer's own
+    // fix-cycle budget (spec.md FR-006, Architecture Decision 3).
+    expect(run.state.fixCycleCount || 0).toBe(0);
+    const summary = run.summary!;
+    expect(summary.validation.full.attempts).toBe(2);
+    expect(summary.validation.focused.attempts).toBe(2);
+    expect(summary.humanGate.ready).toBe(true);
+  }, 30000);
+
+  it("Smoke B (ceiling): repeated full-validation failures hard-block once fullValidationFixCycleCount reaches maxFixCycles", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "focused validation passed" },
+      { stdout: structuredApprovedReview },
+      { stdout: "full validation failed", exitCode: 1 },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fix1\n") },
+      { stdout: "focused validation passed again" },
+      { stdout: structuredApprovedReview },
+      { stdout: "full validation failed again", exitCode: 1 },
+    ], cwd);
+
+    const run = await runOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter, maxFixCycles: 1 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.currentStage).toBe("blocked");
+    expect(run.reason).toMatch(/Maximum full-validation fix cycles reached/);
+    expect(run.state.fixCycleCount || 0).toBe(0);
+  }, 30000);
+
+  it("full validation modifying the tracked tree is treated the same as a full-validation failure (hard-blocks immediately when no retry budget remains)", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "focused validation passed" },
+      { stdout: structuredApprovedReview },
+      {
+        stdout: "full validation passed but modified the tree",
+        exitCode: 0,
+        mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "modified-by-validation\n"),
+      },
+    ], cwd);
+
+    const run = await runOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter, maxFixCycles: 0 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.currentStage).toBe("blocked");
+    expect(run.reason).toMatch(/Maximum full-validation fix cycles reached/);
+    expect(run.reason).toMatch(/modified the tracked working tree/);
+    expect(run.summary!.humanGate.ready).toBe(false);
+  }, 30000);
+
+  it("Smoke D: full-every-cycle (explicit) reproduces the same stage/command behavior as the default", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredApprovedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const state = createState({ validationPolicy: { strategy: "full-every-cycle" } });
+    const run = await runOrchestration(state, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.summary!.validation.focused.attempts).toBe(0);
+    expect(run.summary!.validation.full.attempts).toBe(2);
+    expect(run.summary!.validation.commands.every((command: { phase: string }) => command.phase === "full")).toBe(true);
+  }, 30000);
+
+  it("Smoke E: dry-run previews the strategy, both command lists, and the next phase without executing anything", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([{ stdout: "should not run" }], cwd);
+
+    const preview = previewOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter });
+
+    expect(preview.validationPolicy).toEqual({
+      strategy: "focused-final-full",
+      focusedCommands: ["mock focused"],
+      fullCommands: ["mock full"],
+    });
+    expect(preview.nextValidationPhase.phase).toBe("focused");
+    expect(preview.willSpawn).toBe(false);
+    expect(adapter.run).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow"))).toBe(false);
+  });
+
+  it("Smoke E: dry-run previews the full phase at final-verification regardless of strategy", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const preview = previewOrchestration(focusedFinalFullState({
+      orchestration: { currentStage: "final-verification", startedAt: "2026-07-26T00:00:00.000Z" },
+    }), { cwd });
+    expect(preview.nextValidationPhase.phase).toBe("full");
+  });
+
+  it("Smoke C: resume after the second focused-validation attempt preserves strategy, roles, and attempt history without duplication", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fix1\n") },
+      { stdout: "focused validation 2 passed" },
+      { stdout: structuredResolvedApproval },
+      { stdout: "full validation passed" },
+    ], cwd);
+
+    const resumedState = focusedFinalFullState({
+      orchestration: {
+        currentStage: "review",
+        maxFixCycles: 2,
+        startedAt: "2026-07-26T00:00:00.000Z",
+        implementerId: "implementer",
+        reviewerId: "reviewer",
+        nextValidationBatchId: 1,
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: "implement.md", resultPath: "implement-result.md" }],
+      validationRuns: [{ stage: "validate", status: "passed", path: "validate.md", phase: "focused", batchId: 1 }],
+    });
+
+    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    const summary = run.summary!;
+    expect(summary.validation.focused.attempts).toBe(2);
+    expect(summary.validation.full.attempts).toBe(1);
+    // No duplicate stage-timeline entries for the pre-resume "validate" occurrence.
+    const validateEntries = summary.stageTimeline.filter((entry: { stage: string }) => entry.stage === "validate");
+    expect(validateEntries).toHaveLength(1);
+  }, 30000);
+
+  it("does not re-run validation when resuming a state already at a terminal stage", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([], cwd);
+    const terminalState = focusedFinalFullState({
+      orchestration: {
+        currentStage: "human-merge-decision",
+        terminalState: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+      },
+      validationRuns: [{ stage: "final-verification", status: "passed", path: "final.md", phase: "full", batchId: 1 }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", resultPath: "review.md" }],
+    });
+
+    const run = await runOrchestration(terminalState, { cwd, processAdapter: adapter });
+
+    expect(adapter.run).not.toHaveBeenCalled();
+    expect(run.state.orchestration.currentStage).toBe("human-merge-decision");
+  }, 30000);
+
+  it("--skip-validation still makes readiness unreachable under focused-final-full", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: structuredApprovedReview },
+    ], cwd);
+
+    const run = await runOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter, skipValidation: true, maxFixCycles: 2 });
+
+    expect(run.summary!.validation.status).toBe("skipped");
+    expect(run.summary!.humanGate.ready).toBe(false);
+  }, 30000);
+
+  it("--force-full-validation elevates a validate/revalidate occurrence to full, tagged manual-request, without touching fixCycleCount", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([{ stdout: "full validation forced" }], cwd);
+    const state = focusedFinalFullState();
+
+    const result = await runValidationCommands(state, "validate", { cwd, processAdapter: adapter, forceFullValidation: true });
+
+    expect(result.passed).toBe(true);
+    expect(result.phase).toBe("full");
+    expect(result.records[0].phase).toBe("full");
+    expect(result.records[0].triggerReason).toBe("manual-request");
+    expect(result.records[0].command).toBe("mock full");
+    expect(result.state.fixCycleCount || 0).toBe(0);
+  });
+
+  it("rejects an unsafe focused validation command before spawn", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([{ stdout: "implemented" }], cwd);
+    const state = focusedFinalFullState({
+      validationPolicy: {
+        strategy: "focused-final-full",
+        focusedCommands: ["git push origin main"],
+        fullCommands: ["mock full"],
+      },
+    });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
+  }, 30000);
+
+  it("rejects an unsafe full validation command before spawn", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "focused validation passed" },
+      { stdout: structuredApprovedReview },
+    ], cwd);
+    const state = focusedFinalFullState({
+      validationPolicy: {
+        strategy: "focused-final-full",
+        focusedCommands: ["mock focused"],
+        fullCommands: ["git push origin main"],
+      },
+    });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer", "mock", "mock-reviewer"]);
+  }, 30000);
+
+  it("falls back to full validation at validate/revalidate when focused-final-full is selected with no focused commands configured", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "full validation ran as fallback" },
+      { stdout: structuredApprovedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const state = createState({ validationPolicy: { strategy: "focused-final-full" } });
+    const run = await runOrchestration(state, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.validationRuns[0].phase).toBe("full");
+    expect(run.summary!.validation.focused.attempts).toBe(0);
+    expect(run.summary!.validation.full.attempts).toBe(2);
+  }, 30000);
+
+  it("legacy validationRuns records without a phase field remain valid and are treated as full", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: structuredApprovedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const resumedState = createState({
+      orchestration: {
+        currentStage: "review",
+        maxFixCycles: 2,
+        startedAt: "2026-07-26T00:00:00.000Z",
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: "implement.md", resultPath: "implement-result.md" }],
+      // Legacy shape: no phase/triggerReason/target fields at all.
+      validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
+    });
+
+    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.summary!.validation.full.attempts).toBe(2);
+    expect(run.summary!.validation.focused.attempts).toBe(0);
+    expect(run.summary!.humanGate.ready).toBe(true);
+  }, 30000);
+});

@@ -118,6 +118,113 @@ describe("orchestrate dry-run output contains no hard-coded incorrect role label
   });
 });
 
+describe("orchestrate dry-run output: focused validation review loop (Spec 055)", () => {
+  function basePreview(overrides: Record<string, unknown> = {}) {
+    return {
+      featureId: "x",
+      branch: "b",
+      currentStage: "implement",
+      roleSource: "cli-override",
+      implementer: { id: "claude", identity: "Claude Code CLI", commandPreview: "claude ..." },
+      reviewer: { id: "codex", identity: "OpenAI Codex CLI", commandPreview: "codex ..." },
+      sameRunner: false,
+      validationCommands: ["npm test"],
+      maxFixCycles: 2,
+      questionCycle: 0,
+      maxQuestionCycles: 1,
+      findingLifecycle: { previousFindingsMayBeSupplied: false, currentFindingCount: 0 },
+      nextExpectedStage: "implement",
+      runDirectory: "dir",
+      promptPaths: { implement: "a", fix: "b", review: "c", answerQuestions: "d", finalReview: "e", findingLifecycle: "f" },
+      summaryPaths: { json: "run-summary.json", markdown: "run-summary.md", willWrite: false },
+      plannedStages: ["implement"],
+      willSpawn: false,
+      ...overrides,
+    };
+  }
+
+  it("prints the resolved strategy, both command lists, and the next phase when present", () => {
+    const output = formatOrchestrationDryRun(basePreview({
+      validationPolicy: { strategy: "focused-final-full", focusedCommands: ["node --test a.test.ts"], fullCommands: ["npm test"] },
+      nextValidationPhase: { phase: "focused", reason: "strategy=focused-final-full" },
+    }) as never);
+    expect(output).toContain("Validation strategy: focused-final-full");
+    expect(output).toContain("Focused validation commands: node --test a.test.ts");
+    expect(output).toContain("Final full validation commands: npm test");
+    expect(output).toContain("Next validation phase: focused (strategy=focused-final-full)");
+  });
+
+  it("reports (none configured) when no focused commands are configured", () => {
+    const output = formatOrchestrationDryRun(basePreview({
+      validationPolicy: { strategy: "focused-final-full", focusedCommands: [], fullCommands: ["npm test"] },
+      nextValidationPhase: { phase: "full", reason: "strategy=focused-final-full" },
+    }) as never);
+    expect(output).toContain("Focused validation commands: (none configured)");
+  });
+
+  it("does not crash and omits the new lines when validationPolicy/nextValidationPhase are absent (older preview shape)", () => {
+    const output = formatOrchestrationDryRun(basePreview() as never);
+    expect(output).not.toContain("Validation strategy:");
+    expect(output).not.toContain("Next validation phase:");
+  });
+});
+
+describe("CLI process: orchestrate --validation-strategy dry-run (Spec 055)", () => {
+  function writeState(cwd: string, extra: Record<string, unknown> = {}) {
+    const statePath = path.join(cwd, ".agent-workflow", "state.json");
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify({
+      featureId: "cli-validation-policy-test",
+      featureName: "CLI Validation Policy Test",
+      baseBranch: "main",
+      results: [],
+      ...extra,
+    }), "utf8");
+    return statePath;
+  }
+
+  it("previews the focused strategy and both command lists without spawning or writing anything", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd);
+    const result = runCli([
+      "orchestrate", "--state", statePath, "--dry-run",
+      "--validation-strategy", "focused-final-full",
+      "--focused-validation-command", "node --test a.test.ts",
+      "--full-validation-command", "npm test",
+    ], cwd);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Validation strategy: focused-final-full");
+    expect(result.stdout).toContain("Focused validation commands: node --test a.test.ts");
+    expect(result.stdout).toContain("Final full validation commands: npm test");
+    expect(result.stdout).toContain("Next validation phase: focused");
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow", "runs"))).toBe(false);
+  });
+
+  it("defaults to full-every-cycle when no strategy flag is provided", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd, { validationCommands: ["npm test"] });
+    const result = runCli(["orchestrate", "--state", statePath, "--dry-run"], cwd);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Validation strategy: full-every-cycle");
+  });
+
+  it("accepts --force-full-validation in dry-run without error", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd, {
+      validationPolicy: { strategy: "focused-final-full", focusedCommands: ["node --test a.test.ts"] },
+    });
+    const result = runCli(["orchestrate", "--state", statePath, "--dry-run", "--force-full-validation"], cwd);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("Next validation phase: full");
+  });
+});
+
 describe("orchestrate result output states which agents served each role", () => {
   it("reflects the actual resolved implementer/reviewer identities from state.orchestration", () => {
     const output = formatOrchestrationResult({

@@ -10,6 +10,9 @@ const {
   HUMAN_GATE_STATES,
   normalizeValidationStatus,
 } = require("./runSummarySchema.js");
+const { DEFAULT_VALIDATION_STRATEGY, targetsMatch } = require("./validationPolicy.js");
+const { isFullPhaseRecord, isFocusedPhaseRecord } = require("./validationPhase.js");
+const { isFinalValidationSatisfied } = require("./validationPlan.js");
 
 function getOrchestration(state) {
   return state && state.orchestration && typeof state.orchestration === "object" ? state.orchestration : {};
@@ -361,6 +364,25 @@ function redactSecretsFromText(text) {
 
 // --- Validation summary ------------------------------------------------------
 
+// validationRuns records from one runValidationCommands call share a single
+// monotonically increasing batchId (Spec 054 round 9); since batchId only
+// ever increases, counting distinct values (rather than replaying the
+// consumeValidationBatch heuristic buildStageTimeline needs) is sufficient
+// and correct here. Legacy records predating batchId (none expected in
+// practice, but never assumed) each count as their own attempt.
+function countPhaseAttempts(records) {
+  const batchIds = new Set();
+  let legacyCount = 0;
+  for (const record of records) {
+    if (record.batchId !== undefined && record.batchId !== null) {
+      batchIds.add(record.batchId);
+    } else {
+      legacyCount += 1;
+    }
+  }
+  return batchIds.size + legacyCount;
+}
+
 function buildValidationSummary(state, cwd, options, warnings) {
   const orchestration = getOrchestration(state);
   const validationRuns = asArray(state.validationRuns);
@@ -369,6 +391,7 @@ function buildValidationSummary(state, cwd, options, warnings) {
     const artifactPath = toRunRelativePath(cwd, state, record.path, options, warnings);
     return {
       stage: record.stage || "unknown",
+      phase: isFullPhaseRecord(record) ? "full" : "focused",
       command: redactSecretsFromText(record.command || ""),
       status: normalizeValidationStatus(record.status),
       exitCode: typeof record.exitCode === "number" ? record.exitCode : null,
@@ -377,32 +400,58 @@ function buildValidationSummary(state, cwd, options, warnings) {
     };
   });
 
+  // A record with no `phase` field predates Spec 055 (every occurrence was
+  // uniformly "full" then), so isFullPhaseRecord already buckets it as full;
+  // this preserves Spec 054's exact aggregate-status behavior for old data.
+  const focusedRecords = validationRuns.filter((record) => isFocusedPhaseRecord(record));
+  const fullRecords = validationRuns.filter((record) => isFullPhaseRecord(record));
+
   // orchestration.validationSkipped is freshly (re)set on every
   // runValidationCommands call to reflect only the current occurrence (see
-  // orchestrateCommand.js), so it takes precedence here: an explicit skip on
-  // the run's latest validation-stage occurrence must not be masked by an
-  // earlier, unrelated occurrence's stale "passed"/"failed" record.
+  // orchestrateCommand.js): an explicit skip on the run's latest
+  // validation-stage occurrence must not be masked by an earlier, unrelated
+  // occurrence's stale "passed"/"failed" record, for the aggregate status or
+  // either phase breakdown.
+  let full;
   let status;
   if (orchestration.validationSkipped) {
     status = VALIDATION_STATUSES.SKIPPED;
-  } else if (validationRuns.length) {
-    // The most recent validation attempt reflects the run's current validation
-    // state: a failure/timeout/interruption immediately blocks the run (no
-    // further validation attempts follow it in this architecture), and a run
-    // that reaches human-merge-decision always has its last attempt "passed"
-    // (final-verification). Earlier failed-then-fixed-then-passed cycles are
-    // a normal part of the fix loop, not a reason to report overall failure.
-    status = normalizeValidationStatus(validationRuns[validationRuns.length - 1].status);
+    full = { status: VALIDATION_STATUSES.SKIPPED, attempts: countPhaseAttempts(fullRecords) };
+  } else if (fullRecords.length) {
+    // The aggregate `status` mirrors the full phase's status, never the
+    // focused phase's (Architecture Decision 5): a focused-only pass must
+    // never be reported as aggregate "passed" -- that is exactly the
+    // false-success failure mode this feature exists to prevent.
+    const fullStatus = normalizeValidationStatus(fullRecords[fullRecords.length - 1].status);
+    full = { status: fullStatus, attempts: countPhaseAttempts(fullRecords) };
+    status = fullStatus;
   } else {
+    full = { status: VALIDATION_STATUSES.NOT_RUN, attempts: 0 };
     status = VALIDATION_STATUSES.NOT_RUN;
   }
 
-  return { status, commands };
+  const focused = {
+    status: orchestration.validationSkipped
+      ? VALIDATION_STATUSES.SKIPPED
+      : (focusedRecords.length ? normalizeValidationStatus(focusedRecords[focusedRecords.length - 1].status) : VALIDATION_STATUSES.NOT_RUN),
+    attempts: countPhaseAttempts(focusedRecords),
+  };
+
+  const strategy = (state.validationPolicy && state.validationPolicy.strategy) || DEFAULT_VALIDATION_STRATEGY;
+
+  return {
+    status,
+    strategy,
+    commands,
+    focused,
+    full,
+    finalReadinessSatisfied: isFinalValidationSatisfied(state).satisfied,
+  };
 }
 
 // --- Review summary -----------------------------------------------------------
 
-function buildReviewSummary(state) {
+function buildReviewSummary(state, exactReviewedCommitMatch) {
   const reviewRuns = asArray(state.reviewRuns);
   const last = reviewRuns.length ? reviewRuns[reviewRuns.length - 1] : undefined;
   const orchestration = getOrchestration(state);
@@ -419,7 +468,10 @@ function buildReviewSummary(state) {
     fixCycles: Number(state.fixCycleCount || orchestration.fixCycleCount || 0),
     blockingFindingCount: blockingCount,
     nonBlockingFindingCount: nonBlockingOpenCount,
-    exactReviewedCommitMatch: "unknown",
+    // Mirrors commits.exactCommitMatch (computed once, from the same
+    // reviewed/full-validation targets) rather than a second, independently
+    // maintained "unknown" placeholder -- the two must never disagree.
+    exactReviewedCommitMatch: exactReviewedCommitMatch,
   };
 }
 
@@ -593,9 +645,16 @@ function buildHumanGate(status, review, validation, findings, evidenceVerified) 
   // "absent" (no structured review block at all) is legitimate Markdown-only
   // Approved compatibility (Spec 050); only "invalid" (malformed structured
   // data) blocks readiness -- never reinterpret malformed data as approval.
+  // validation.status already mirrors the full phase only (never the focused
+  // phase, see buildValidationSummary), and finalReadinessSatisfied
+  // additionally requires the full-validation target to exactly match the
+  // Approved review's target (Spec 055 FR-005/FR-010) -- a focused-only pass,
+  // or a full pass against a target that no longer matches what was
+  // reviewed, can never make a run ready.
   const ready = review.finalDecision === "Approved"
     && review.structuredReviewStatus !== "invalid"
     && validation.status === VALIDATION_STATUSES.PASSED
+    && validation.finalReadinessSatisfied
     && findings.remainingBlocking === 0
     && evidenceVerified;
   return {
@@ -603,6 +662,32 @@ function buildHumanGate(status, review, validation, findings, evidenceVerified) 
     action: "merge-decision",
     ready,
     state: ready ? HUMAN_GATE_STATES.READY_FOR_MERGE_DECISION : HUMAN_GATE_STATES.NOT_READY,
+  };
+}
+
+// --- Commit provenance -------------------------------------------------------
+
+// reviewedCommit is preserved (always null) for strict backward compatibility
+// with Spec 054 consumers that read it; it was never populated with real
+// data even before this feature. reviewedTarget/fullValidationTarget are the
+// new, additive fields that actually carry evidence, letting exactCommitMatch
+// move from a permanent "unknown" placeholder to a real true/false once both
+// targets exist.
+function buildCommitProvenance(state, options) {
+  const validationRuns = asArray(state.validationRuns);
+  const reviewRuns = asArray(state.reviewRuns);
+  const lastFullRecord = [...validationRuns].reverse().find((record) => isFullPhaseRecord(record));
+  const lastReview = reviewRuns.length ? reviewRuns[reviewRuns.length - 1] : undefined;
+  const reviewedTarget = (lastReview && lastReview.target) || null;
+  const fullValidationTarget = (lastFullRecord && lastFullRecord.target) || null;
+  const exactCommitMatch = (reviewedTarget && fullValidationTarget) ? targetsMatch(reviewedTarget, fullValidationTarget) : "unknown";
+  return {
+    implementationCommit: null,
+    reviewedCommit: null,
+    reviewedTarget,
+    fullValidationTarget,
+    currentBranchHead: options.currentBranchHead || null,
+    exactCommitMatch,
   };
 }
 
@@ -647,7 +732,8 @@ function buildRunSummary(state, options = {}) {
   const roles = buildRoles(state);
   const stageTimeline = buildStageTimeline(state, roles, cwd, options, warnings);
   const validation = buildValidationSummary(state, cwd, options, warnings);
-  const review = buildReviewSummary(state);
+  const commits = buildCommitProvenance(state, options);
+  const review = buildReviewSummary(state, commits.exactCommitMatch);
   const findings = buildFindingsSummary(state, cwd, options, warnings);
   let evidenceVerified = true;
   if (status === RUN_STATUSES.AWAITING_HUMAN_DECISION) {
@@ -686,12 +772,7 @@ function buildRunSummary(state, options = {}) {
     validation,
     review,
     findings,
-    commits: {
-      implementationCommit: null,
-      reviewedCommit: null,
-      currentBranchHead: options.currentBranchHead || null,
-      exactCommitMatch: "unknown",
-    },
+    commits,
     humanGate,
     artifacts: buildArtifactIndex(stageTimeline, state, cwd, options, warnings),
     warnings,

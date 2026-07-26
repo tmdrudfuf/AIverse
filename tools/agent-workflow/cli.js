@@ -85,7 +85,7 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--implementer <agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--implementer <agent-id>] [--base <branch>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--implementer <agent-id>] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>]",
+    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--implementer <agent-id>] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>] [--validation-strategy full-every-cycle|focused-final-full] [--focused-validation-command <command>] [--full-validation-command <command>] [--force-full-validation]",
     "  node tools/agent-workflow/cli.js summary --state <state.json> [--format markdown|json]",
     "",
     "Run summaries:",
@@ -94,6 +94,15 @@ function printUsage() {
     "  it recomputes the same normalized summary directly from the supplied state file on demand -- it never",
     "  spawns a process, runs validation, mutates state, or writes any artifact, and works for state files",
     "  that predate this feature. --format defaults to markdown.",
+    "",
+    "Validation strategy:",
+    "  --validation-strategy full-every-cycle (default) runs the same full command list at every validate/",
+    "  revalidate/final-verification occurrence, exactly as before this option existed. focused-final-full runs",
+    "  a smaller --focused-validation-command list at validate/revalidate and reserves the full",
+    "  --full-validation-command list for final-verification only, which remains the sole gate for merge",
+    "  readiness -- focused validation passing alone can never make a run ready. --force-full-validation runs",
+    "  the full list at the very next validation occurrence without skipping any stage or marking anything",
+    "  ready by itself. See tools/agent-workflow/README.md#focused-validation-review-loop.",
     "",
     "Role selection:",
     "  --implementer <agent-id> picks the Implementer for this execution only and resolves the other",
@@ -366,6 +375,8 @@ function main(argv) {
     const timeoutMsText = readFlag(args, "--timeout-ms");
     const maxFixCyclesText = readFlag(args, "--max-fix-cycles");
     const validationCommands = readAllFlags(args, "--validation-command");
+    const focusedValidationCommands = readAllFlags(args, "--focused-validation-command");
+    const fullValidationCommands = readAllFlags(args, "--full-validation-command");
     const options = {
       cwd: process.cwd(),
       implementerAgentId: implementerFlag,
@@ -373,6 +384,10 @@ function main(argv) {
       maxFixCycles: maxFixCyclesText ? Number(maxFixCyclesText) : undefined,
       skipValidation: hasFlag(args, "--skip-validation"),
       validationCommands: validationCommands.length ? validationCommands : undefined,
+      validationStrategy: readFlag(args, "--validation-strategy"),
+      focusedValidationCommands: focusedValidationCommands.length ? focusedValidationCommands : undefined,
+      fullValidationCommands: fullValidationCommands.length ? fullValidationCommands : undefined,
+      forceFullValidation: hasFlag(args, "--force-full-validation"),
     };
     if (hasFlag(args, "--dry-run")) {
       try {
@@ -457,6 +472,19 @@ function formatIndependentReviewResult(run) {
   return lines.join("\n");
 }
 
+// Defensive against hand-built preview objects (existing tests construct one
+// directly without validationPolicy/nextValidationPhase) as well as real
+// previewOrchestration() output, which always includes both.
+function formatValidationPolicyPreview(preview) {
+  if (!preview.validationPolicy || !preview.nextValidationPhase) return [];
+  return [
+    `Validation strategy: ${preview.validationPolicy.strategy}`,
+    `Focused validation commands: ${preview.validationPolicy.focusedCommands.length ? preview.validationPolicy.focusedCommands.join("; ") : "(none configured)"}`,
+    `Final full validation commands: ${preview.validationPolicy.fullCommands.join("; ")}`,
+    `Next validation phase: ${preview.nextValidationPhase.phase} (${preview.nextValidationPhase.reason})`,
+  ];
+}
+
 function formatOrchestrationDryRun(preview) {
   const lines = [
     "Dry run: true",
@@ -470,6 +498,7 @@ function formatOrchestrationDryRun(preview) {
     `Reviewer command: ${preview.reviewer.commandPreview}`,
     `Role source: ${describeRoleSource(preview.roleSource)}`,
     `Validation: ${preview.validationCommands.length ? preview.validationCommands.join("; ") : "skipped"}`,
+    ...formatValidationPolicyPreview(preview),
     `Fix cycle: ${preview.fixCycleCount || 0}/${preview.maxFixCycles}`,
     `Question cycle: ${preview.questionCycle || 0}/${preview.maxQuestionCycles}`,
     `Finding lifecycle: previous findings may be supplied=${preview.findingLifecycle.previousFindingsMayBeSupplied}; current findings=${preview.findingLifecycle.currentFindingCount}`,

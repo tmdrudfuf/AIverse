@@ -15,6 +15,33 @@ function statusLabel(status) {
   return STATUS_LABELS[status] || status || "unknown";
 }
 
+const VALIDATION_STRATEGY_LABELS = {
+  "focused-final-full": "Focused, then final full",
+  "full-every-cycle": "Full validation every cycle",
+};
+
+const VALIDATION_STATUS_LABELS = {
+  passed: "Passed",
+  failed: "Failed",
+  "timed-out": "Timed out",
+  interrupted: "Interrupted",
+  skipped: "Skipped",
+  "not-run": "Not run",
+};
+
+function validationStrategyLabel(strategy) {
+  return VALIDATION_STRATEGY_LABELS[strategy] || strategy || "unknown";
+}
+
+function validationStatusLabel(status) {
+  return VALIDATION_STATUS_LABELS[status] || status || "unknown";
+}
+
+function formatTarget(target) {
+  if (!target || !target.commit) return "unknown";
+  return target.dirty ? `${target.commit} (dirty:${target.dirtyHash})` : target.commit;
+}
+
 function formatValue(value, fallback = "unknown") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
@@ -79,15 +106,26 @@ function renderRunSummaryMarkdown(summary) {
   lines.push("");
 
   const validationTable = renderTable(
-    ["Command", "Status", "Exit code", "Duration"],
+    ["Command", "Phase", "Status", "Exit code", "Duration"],
     summary.validation.commands.map((command) => [
       command.command || "(unknown)",
+      formatValue(command.phase, "-"),
       command.status,
       command.exitCode === null ? "-" : String(command.exitCode),
       command.durationMs === null ? "-" : `${command.durationMs}ms`,
     ]),
   );
   lines.push("## Validation");
+  lines.push("");
+  // Never a bare "Validation: Passed" line unless the full phase specifically
+  // passed -- summary.validation.status already mirrors the full phase only
+  // (see runSummary.js buildValidationSummary), so this line is safe by
+  // construction, not by a separate check here.
+  lines.push(`- Strategy: ${validationStrategyLabel(summary.validation.strategy)}`);
+  lines.push(`- Focused validation attempts: ${summary.validation.focused.attempts}`);
+  lines.push(`- Focused result: ${validationStatusLabel(summary.validation.focused.status)}`);
+  lines.push(`- Final full validation attempts: ${summary.validation.full.attempts}`);
+  lines.push(`- Final full result: ${validationStatusLabel(summary.validation.full.status)}`);
   lines.push("");
   lines.push(validationTable || "_No validation commands recorded._");
   lines.push("");
@@ -115,6 +153,8 @@ function renderRunSummaryMarkdown(summary) {
   lines.push(`- Current branch head: ${formatValue(summary.commits.currentBranchHead)}`);
   lines.push(`- Implementation commit: ${formatValue(summary.commits.implementationCommit)}`);
   lines.push(`- Reviewed commit: ${formatValue(summary.commits.reviewedCommit)}`);
+  lines.push(`- Reviewed target: ${formatTarget(summary.commits.reviewedTarget)}`);
+  lines.push(`- Full validation target: ${formatTarget(summary.commits.fullValidationTarget)}`);
   lines.push(`- Exact match: ${summary.commits.exactCommitMatch === true ? "Yes" : (summary.commits.exactCommitMatch === false ? "No" : "Unknown")}`);
   lines.push("");
 
