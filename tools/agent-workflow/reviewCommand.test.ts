@@ -550,6 +550,69 @@ describe("independent review execution", () => {
     expect(run.state.reviewRuns[0].structuredReviewDiagnostics[0]).toContain("malformed");
   });
 
+  it("classifies a clean single structured review in stdout as Approved even when stderr echoes duplicate example JSON blocks", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+    const cleanApproved = [
+      "# Review Decision: Approved",
+      "",
+      "## Blocking Findings",
+      "(none)",
+      "## Non-Blocking Improvements",
+      "(none)",
+      "## Validation Performed",
+      "npm test",
+      "## Final Recommendation",
+      "Ship it.",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      "{",
+      "  \"schemaVersion\": 1,",
+      "  \"decision\": \"approved\",",
+      "  \"summary\": \"Clean single approval.\",",
+      "  \"blockingFindings\": [],",
+      "  \"nonBlockingFindings\": [],",
+      "  \"questions\": []",
+      "}",
+      "```",
+    ].join("\n");
+    const noisyTranscriptEcho = [
+      "Reading prompt from stdin...",
+      "OpenAI Codex v0.145.0",
+      "## Structured Review",
+      "",
+      "```json",
+      "{ \"schemaVersion\": 1, \"decision\": \"changes_requested\" }",
+      "```",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      "{ \"findingLifecycle\": [] }",
+      "```",
+    ].join("\n");
+    const adapter = createSpyAdapter({
+      stdout: cleanApproved,
+      stderr: noisyTranscriptEcho,
+      exitCode: 0,
+    });
+
+    const run = await runIndependentReview(createState(), {
+      cwd,
+      processAdapter: adapter,
+      now: () => "2026-07-23T00:00:00.000Z",
+    });
+
+    expect(run.outcome).toBe("Approved");
+    expect(run.structuredReviewAnalysis.status).toBe("valid");
+    expect(run.state.reviewRuns[0].structuredReviewStatus).toBe("valid");
+    expect(fs.readFileSync(run.resultPath, "utf8")).toContain("Reading prompt from stdin...");
+  });
+
   it("classifies a timed-out execution and still records artifacts", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

@@ -738,8 +738,9 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   });
   const completedAt = new Date().toISOString();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
-  const structuredReviewAnalysis = analyzeStructuredReview(outputText);
-  const outcome = classifyReviewOutcome(result, outputText, { structuredAnalysis: structuredReviewAnalysis });
+  const decisionText = String(result.stdout || "").trim() ? result.stdout : outputText;
+  const structuredReviewAnalysis = analyzeStructuredReview(decisionText);
+  const outcome = classifyReviewOutcome(result, decisionText, { structuredAnalysis: structuredReviewAnalysis });
   const executionRecord = {
     featureId: state.featureId,
     kind: reviewStage,
@@ -804,7 +805,7 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
       reviewRuns: [...(Array.isArray(state.reviewRuns) ? state.reviewRuns : []), reviewRunRecord],
     },
     outcome,
-    outputText,
+    outputText: decisionText,
     sameRunner,
     reviewerId: reviewerConfig.agentId,
     reviewerIdentity: reviewerConfig.identity,

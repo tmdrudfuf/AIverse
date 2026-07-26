@@ -1029,6 +1029,37 @@ describe("orchestrate workflow", () => {
     expect(run.state.latestStructuredReviewStatus).toBe("invalid");
   }, 30000);
 
+  it("classifies a clean single structured review in stdout as valid even when stderr echoes duplicate example JSON blocks", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const noisyTranscriptEcho = [
+      "Reading prompt from stdin...",
+      "OpenAI Codex v0.145.0",
+      "## Structured Review",
+      "",
+      "```json",
+      "{ \"schemaVersion\": 1, \"decision\": \"changes_requested\" }",
+      "```",
+      "",
+      "## Structured Review",
+      "",
+      "```json",
+      "{ \"findingLifecycle\": [] }",
+      "```",
+    ].join("\n");
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredApprovedReview, stderr: noisyTranscriptEcho },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.latestStructuredReviewStatus).toBe("valid");
+  }, 30000);
+
   it("blocks no-change fix cycles", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

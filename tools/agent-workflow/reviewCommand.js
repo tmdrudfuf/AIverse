@@ -365,8 +365,9 @@ async function runIndependentReview(state, options = {}) {
   });
   const completedAt = now();
   const outputText = [result.stdout || "", result.stderr || ""].filter(Boolean).join("\n");
-  const structuredAnalysis = analyzeStructuredReview(outputText);
-  const outcome = classifyReviewOutcome(result, outputText, { structuredAnalysis });
+  const decisionText = String(result.stdout || "").trim() ? result.stdout : outputText;
+  const structuredAnalysis = analyzeStructuredReview(decisionText);
+  const outcome = classifyReviewOutcome(result, decisionText, { structuredAnalysis });
 
   const executionRecord = {
     featureId: state.featureId,
