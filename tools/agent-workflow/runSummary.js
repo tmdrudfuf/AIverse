@@ -334,7 +334,11 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
 // best-effort textual redaction, not a guarantee that no secret can ever
 // leak through an unrecognized format.
 
-const SECRET_ASSIGNMENT_PATTERN = /\b([A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASSWD|PASS|CREDENTIAL|AUTH)[A-Za-z0-9_]*)\s*=\s*(\S+)/gi;
+// Value alternation tries a double-quoted, then single-quoted, then bare
+// non-whitespace token, in that order -- a bare \S+ alone would stop at the
+// first space inside "API_SECRET=\"top secret value\"", leaving everything
+// after the first word of a quoted value unredacted.
+const SECRET_ASSIGNMENT_PATTERN = /\b([A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASSWD|PASS|CREDENTIAL|AUTH)[A-Za-z0-9_]*)\s*=\s*("[^"]*"|'[^']*'|\S+)/gi;
 const SECRET_VALUE_PATTERNS = [
   /\bghp_[A-Za-z0-9]{20,}\b/g,
   /\bgho_[A-Za-z0-9]{20,}\b/g,

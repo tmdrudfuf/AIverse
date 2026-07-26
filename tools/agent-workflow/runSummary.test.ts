@@ -495,6 +495,23 @@ describe("buildRunSummary: secret safety", () => {
     expect(summary.validation.commands[0].command).not.toContain("abc123supersecret");
     expect(summary.validation.commands[1].command).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz012345");
   });
+
+  it("redacts quoted secret assignment values containing whitespace, not just their first token", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "validate failed: npm test", terminalState: "blocked" },
+      validationRuns: [
+        { stage: "validate", command: 'API_SECRET="top secret value" npm test', status: "failed", exitCode: 1, path: "validate.md" },
+        { stage: "validate", command: "DB_PASSWORD='another secret phrase' npm test", status: "failed", exitCode: 1, path: "validate2.md" },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.commands[0].command).toContain("API_SECRET=***REDACTED***");
+    expect(summary.validation.commands[0].command).not.toContain("top");
+    expect(summary.validation.commands[0].command).not.toContain("secret value");
+    expect(summary.validation.commands[1].command).toContain("DB_PASSWORD=***REDACTED***");
+    expect(summary.validation.commands[1].command).not.toContain("another");
+    expect(summary.validation.commands[1].command).not.toContain("secret phrase");
+  });
 });
 
 describe("buildRunSummary: artifact path safety", () => {
