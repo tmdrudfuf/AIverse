@@ -1155,6 +1155,18 @@ async function runOrchestration(state, options = {}) {
       }
 
       if (stage === "final-verification") {
+        // A skipped final-verification (--skip-validation) trivially "passes"
+        // with zero commands executed; it must never reach the human merge
+        // gate at the orchestration-decision/CLI-exit-code level, matching
+        // the run-summary's own humanGate.ready: false for this same case
+        // (spec.md FR-012, Codex review round 1 finding P1-001) -- the two
+        // signals must never disagree about whether skipping permits
+        // readiness.
+        if (getOrchestration(currentState).validationSkipped) {
+          currentState = markBlocked(currentState, "final-verification skipped via --skip-validation; human merge decision requires actual validation evidence");
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
         currentState = markHumanGate(currentState);
         if (statePath) writeState(statePath, currentState);
         break;

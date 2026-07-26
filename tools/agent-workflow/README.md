@@ -771,7 +771,7 @@ Elevates the very next `validate`/`revalidate` occurrence in this invocation to 
 
 ### `--skip-validation` Interaction
 
-Unchanged: skipping applies to every validation occurrence (focused and full alike) in that invocation and marks `validationSkipped: true`; `humanGate.ready` already requires `validation.status === "passed"`, and skipped validation is reported as `"skipped"`, never `"passed"` — a skipped run can never become merge-ready.
+Skipping applies to every validation occurrence (focused and full alike) in that invocation and marks `validationSkipped: true`; `humanGate.ready` requires `validation.status === "passed"`, and skipped validation is reported as `"skipped"`, never `"passed"` — a skipped run can never become merge-ready. A skipped `final-verification` also cannot reach `human-merge-decision` at the orchestration-decision level (it blocks instead, with a clear reason) — the top-level orchestration decision/CLI exit code and the run-summary's `humanGate.ready` can never disagree about whether skipping permits readiness.
 
 ### High-Risk Change Flag
 

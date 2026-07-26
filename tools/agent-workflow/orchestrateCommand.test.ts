@@ -1821,7 +1821,7 @@ describe("focused validation review loop (Spec 055)", () => {
     expect(run.state.orchestration.currentStage).toBe("human-merge-decision");
   }, 30000);
 
-  it("--skip-validation still makes readiness unreachable under focused-final-full", async () => {
+  it("--skip-validation still makes readiness unreachable under focused-final-full, at both the summary and the top-level orchestration-decision/CLI-exit-code signal", async () => {
     const cwd = createTempDir();
     initRepo(cwd);
     const adapter = createSequenceAdapter([
@@ -1833,6 +1833,14 @@ describe("focused validation review loop (Spec 055)", () => {
 
     expect(run.summary!.validation.status).toBe("skipped");
     expect(run.summary!.humanGate.ready).toBe(false);
+    // A skipped final-verification must not reach the human merge gate at the
+    // orchestration-decision level either -- this is exactly what the CLI's
+    // own exit-code check (`decision !== "Ready for human merge decision"`)
+    // and `run` command's success condition key off, so these two signals
+    // must never disagree about whether skipping permits readiness.
+    expect(run.decision).not.toBe("Ready for human merge decision");
+    expect(run.state.orchestration.currentStage).toBe("blocked");
+    expect(run.reason).toMatch(/final-verification skipped via --skip-validation/);
   }, 30000);
 
   it("--force-full-validation elevates a validate/revalidate occurrence to full, tagged manual-request, without touching fixCycleCount", async () => {
