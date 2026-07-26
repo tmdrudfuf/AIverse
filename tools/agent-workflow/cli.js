@@ -28,6 +28,7 @@ const {
   runOrchestrationAndPersist,
 } = require("./orchestrateCommand.js");
 const { resolveEffectiveRoles } = require("./roleResolver.js");
+const { getRunSummaryForDisplay, formatSummaryCommandOutput } = require("./summaryCommand.js");
 
 const ROLE_SOURCE_LABELS = {
   "cli-override": "CLI override",
@@ -85,6 +86,14 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--implementer <agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--implementer <agent-id>] [--base <branch>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--implementer <agent-id>] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>]",
+    "  node tools/agent-workflow/cli.js summary --state <state.json> [--format markdown|json]",
+    "",
+    "Run summaries:",
+    "  `orchestrate` (non-dry-run) writes run-summary.json/run-summary.md to the run directory once, after",
+    "  its internal loop stops (approved/blocked/timed-out/awaiting human decision). `summary` is read-only:",
+    "  it recomputes the same normalized summary directly from the supplied state file on demand -- it never",
+    "  spawns a process, runs validation, mutates state, or writes any artifact, and works for state files",
+    "  that predate this feature. --format defaults to markdown.",
     "",
     "Role selection:",
     "  --implementer <agent-id> picks the Implementer for this execution only and resolves the other",
@@ -387,6 +396,18 @@ function main(argv) {
     return;
   }
 
+  if (command === "summary") {
+    const format = readFlag(args, "--format") || "markdown";
+    if (format !== "markdown" && format !== "json") {
+      console.error(`Unsupported --format value: ${format}. Use "markdown" or "json".`);
+      process.exitCode = 1;
+      return;
+    }
+    const summary = getRunSummaryForDisplay(state, { cwd: process.cwd() });
+    console.log(formatSummaryCommandOutput(summary, format));
+    return;
+  }
+
   printUsage();
   process.exitCode = 1;
 }
@@ -456,6 +477,10 @@ function formatOrchestrationDryRun(preview) {
     `Run directory: ${preview.runDirectory}`,
     `Artifacts: implement prompt=${preview.promptPaths.implement}; review prompt=${preview.promptPaths.review}; answer prompt=${preview.promptPaths.answerQuestions}; final-review prompt=${preview.promptPaths.finalReview}; fix prompt=${preview.promptPaths.fix}; lifecycle=${preview.promptPaths.findingLifecycle}`,
     `Planned stages: ${preview.plannedStages.join(" -> ")}`,
+    "Run summary artifacts:",
+    `  Would write: ${preview.summaryPaths.json}`,
+    `  Would write: ${preview.summaryPaths.markdown}`,
+    `  Actual writes: no`,
     "Will spawn agents: no",
     "Will mutate state: no",
     "Will run validation: no",
@@ -488,7 +513,25 @@ function formatOrchestrationResult(run) {
     `Decision: ${run.decision}`,
   );
   if (run.reason) lines.push(`Reason: ${run.reason}`);
+  lines.push("", ...formatOrchestrationSummaryPointer(run));
   return lines.join("\n");
+}
+
+function formatOrchestrationSummaryPointer(run) {
+  const lines = ["Run summary"];
+  if (run.summaryPaths) {
+    lines.push(`Markdown: ${run.summaryPaths.markdown}`);
+    lines.push(`JSON: ${run.summaryPaths.json}`);
+  } else {
+    lines.push(`Markdown: unavailable (${run.summaryWarning || "unknown error"})`);
+    lines.push("JSON: unavailable");
+  }
+  if (run.summary) {
+    lines.push(`Status: ${run.summary.run.status}`);
+    lines.push(`Reviewer decision: ${run.summary.review.finalDecision}`);
+    lines.push(`Validation: ${run.summary.validation.status}`);
+  }
+  return lines;
 }
 
 function formatRunSummary(summary) {
@@ -534,6 +577,7 @@ module.exports = {
   formatIndependentReviewResult,
   formatOrchestrationDryRun,
   formatOrchestrationResult,
+  formatOrchestrationSummaryPointer,
   formatRunSummary,
   main,
   readImplementerFlag,

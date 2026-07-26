@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/053-runtime-role-selection/plan.md
+shell commands, and other important information, read specs/054-review-run-summary-audit-trail/plan.md
 <!-- SPECKIT END -->
