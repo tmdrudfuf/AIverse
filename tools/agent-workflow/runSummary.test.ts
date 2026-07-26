@@ -39,7 +39,19 @@ describe("buildRunSummary: planned (no run started)", () => {
 });
 
 describe("buildRunSummary: clean approved run", () => {
-  function approvedState() {
+  const runDirRelative = ".agent-workflow/runs/054-review-run-summary-audit-trail";
+
+  function approvedState(cwd: string) {
+    const runDir = path.join(cwd, runDirRelative);
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of [
+      "implement-claude-execution.md", "implement-claude-result.md", "validate-validation.md",
+      "review-independent-review-execution.md", "review-independent-review-result.md",
+      "review-structured-review.json", "final-verification-validation.md",
+    ]) {
+      fs.writeFileSync(path.join(runDir, name), "fixture content", "utf8");
+    }
+    const p = (name: string) => `${runDirRelative}/${name}`;
     return baseState({
       orchestration: {
         currentStage: "human-merge-decision",
@@ -54,11 +66,11 @@ describe("buildRunSummary: clean approved run", () => {
         decision: "Ready for human merge decision",
       },
       orchestrationRuns: [
-        { stage: "implement", status: "completed", path: "implement-claude-execution.md", resultPath: "implement-claude-result.md" },
+        { stage: "implement", status: "completed", path: p("implement-claude-execution.md"), resultPath: p("implement-claude-result.md") },
       ],
       validationRuns: [
-        { stage: "validate", command: "npm test", status: "passed", exitCode: 0, durationMs: 1000, path: "validate-validation.md" },
-        { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: "final-verification-validation.md" },
+        { stage: "validate", command: "npm test", status: "passed", exitCode: 0, durationMs: 1000, path: p("validate-validation.md") },
+        { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final-verification-validation.md") },
       ],
       reviewRuns: [
         {
@@ -67,9 +79,9 @@ describe("buildRunSummary: clean approved run", () => {
           reviewerId: "codex",
           structuredReviewStatus: "valid",
           structuredReviewDecision: "Approved",
-          executionPath: "review-independent-review-execution.md",
-          resultPath: "review-independent-review-result.md",
-          structuredReviewPath: "review-structured-review.json",
+          executionPath: p("review-independent-review-execution.md"),
+          resultPath: p("review-independent-review-result.md"),
+          structuredReviewPath: p("review-structured-review.json"),
         },
       ],
       latestReviewDecision: "Approved",
@@ -80,7 +92,8 @@ describe("buildRunSummary: clean approved run", () => {
   }
 
   it("reports awaiting-human-decision with humanGate.ready true", () => {
-    const summary = buildRunSummary(approvedState());
+    const cwd = createTempDir();
+    const summary = buildRunSummary(approvedState(cwd), { cwd });
     expect(summary.run.status).toBe("awaiting-human-decision");
     expect(summary.run.stopReason).toBeNull();
     expect(summary.roles).toEqual({
@@ -92,13 +105,24 @@ describe("buildRunSummary: clean approved run", () => {
     expect(summary.review.structuredReviewStatus).toBe("valid");
     expect(summary.validation.status).toBe("passed");
     expect(summary.findings.remainingBlocking).toBe(0);
+    expect(summary.warnings).toEqual([]);
     expect(summary.humanGate.ready).toBe(true);
     expect(summary.humanGate.state).toBe("ready-for-merge-decision");
     expect(summary.humanGate.required).toBe(true);
   });
 
+  it("downgrades readiness with a warning when the final review's evidence artifact is missing", () => {
+    const cwd = createTempDir();
+    const state = approvedState(cwd);
+    fs.rmSync(path.join(cwd, runDirRelative, "review-independent-review-result.md"));
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.humanGate.ready).toBe(false);
+    expect(summary.warnings.some((w: { code: string }) => w.code === "missing-or-malformed-artifact")).toBe(true);
+  });
+
   it("builds a correctly-ordered stage timeline: implement -> validate -> review -> final-verification", () => {
-    const summary = buildRunSummary(approvedState());
+    const cwd = createTempDir();
+    const summary = buildRunSummary(approvedState(cwd), { cwd });
     expect(summary.stageTimeline.map((entry: any) => entry.stage)).toEqual([
       "implement",
       "validate",
@@ -111,8 +135,9 @@ describe("buildRunSummary: clean approved run", () => {
     expect(summary.execution.stagesCompleted).toEqual(["implement", "validate", "review", "final-verification"]);
   });
 
-  it("indexes artifacts without duplicates, in stage order", () => {
-    const summary = buildRunSummary(approvedState());
+  it("indexes artifacts without duplicates, in stage order, normalized run-directory-relative", () => {
+    const cwd = createTempDir();
+    const summary = buildRunSummary(approvedState(cwd), { cwd });
     expect(summary.artifacts).toEqual([
       "implement-claude-execution.md",
       "implement-claude-result.md",
@@ -125,9 +150,10 @@ describe("buildRunSummary: clean approved run", () => {
   });
 
   it("is deterministic across repeated calls on unchanged state", () => {
-    const state = approvedState();
-    const first = JSON.stringify(buildRunSummary(state));
-    const second = JSON.stringify(buildRunSummary(state));
+    const cwd = createTempDir();
+    const state = approvedState(cwd);
+    const first = JSON.stringify(buildRunSummary(state, { cwd }));
+    const second = JSON.stringify(buildRunSummary(state, { cwd }));
     expect(first).toBe(second);
   });
 });

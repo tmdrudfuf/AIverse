@@ -18,6 +18,17 @@ function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
 
+// Persisted records store paths relative to the repository cwd (via
+// agentWorkflow.js/orchestrateCommand.js's `relativePath(cwd, fullPath)`).
+// The summary schema requires run-directory-relative paths, so normalize
+// before they ever reach the summary model.
+function toRunRelativePath(cwd, state, repoRelativePath, options) {
+  if (!repoRelativePath) return undefined;
+  const runDirectory = getRunDirectory(state, { ...options, cwd });
+  const absolutePath = path.resolve(cwd, repoRelativePath);
+  return path.relative(runDirectory, absolutePath).replace(/\\/g, "/");
+}
+
 function readJsonArtifactSafe(cwd, relativeFilePath, warnings) {
   if (!relativeFilePath) return undefined;
   try {
@@ -76,11 +87,11 @@ const VALIDATION_STAGES = new Set(["validate", "revalidate", "final-verification
 
 function roleForStage(stage) {
   if (stage === "review" || stage === "re-review" || stage === "final-review") return "reviewer";
-  if (VALIDATION_STAGES.has(stage)) return null;
+  if (VALIDATION_STAGES.has(stage) || stage === "unknown") return null;
   return "implementer";
 }
 
-function buildStageTimeline(state, roles) {
+function buildStageTimeline(state, roles, cwd, options) {
   const orchestrationRuns = asArray(state.orchestrationRuns);
   const reviewRuns = asArray(state.reviewRuns);
   const validationRuns = asArray(state.validationRuns);
@@ -92,10 +103,15 @@ function buildStageTimeline(state, roles) {
     validate: validationRuns.filter((r) => r.stage === "validate").slice(),
     revalidate: validationRuns.filter((r) => r.stage === "revalidate").slice(),
     "final-verification": validationRuns.filter((r) => r.stage === "final-verification").slice(),
-    review: reviewRuns.filter((r) => (r.stage || "review") === "review").slice(),
+    review: reviewRuns.filter((r) => r.stage === "review").slice(),
     "re-review": reviewRuns.filter((r) => r.stage === "re-review").slice(),
     "final-review": reviewRuns.filter((r) => r.stage === "final-review").slice(),
   };
+  // Pre-Spec-054 reviewRuns entries have no `stage` field at all. Rather than
+  // guessing which review stage produced them, report them as their own
+  // `unknown` stage so backward-compat data is visible without being
+  // misattributed to "review".
+  const legacyUnstagedReviews = reviewRuns.filter((r) => !r.stage).slice();
 
   const attemptCounts = {};
   const timeline = [];
@@ -110,11 +126,13 @@ function buildStageTimeline(state, roles) {
     const artifactPaths = [];
     if (record) {
       // orchestrationRuns/validationRuns records use `path`; reviewRuns records
-      // use `executionPath` for the same purpose (no shared field name).
-      if (record.path) artifactPaths.push(record.path);
-      if (record.executionPath) artifactPaths.push(record.executionPath);
-      if (record.resultPath) artifactPaths.push(record.resultPath);
-      if (record.structuredReviewPath) artifactPaths.push(record.structuredReviewPath);
+      // use `executionPath` for the same purpose (no shared field name). Paths
+      // are persisted repo-relative; normalize to run-directory-relative here.
+      const rawPaths = [record.path, record.executionPath, record.resultPath, record.structuredReviewPath].filter(Boolean);
+      for (const rawPath of rawPaths) {
+        const normalized = toRunRelativePath(cwd, state, rawPath, options);
+        if (normalized) artifactPaths.push(normalized);
+      }
     }
     timeline.push({
       stage,
@@ -173,6 +191,10 @@ function buildStageTimeline(state, roles) {
 
     // Unknown / Timed Out / Execution Failed -> terminal; nothing further ran.
     break;
+  }
+
+  for (const record of legacyUnstagedReviews) {
+    push("unknown", record, { status: "unknown", result: record.outcome || null });
   }
 
   return timeline;
@@ -242,7 +264,7 @@ function getFindingHistory(state) {
   return [];
 }
 
-function buildFindingsSummary(state) {
+function buildFindingsSummary(state, cwd, options) {
   const history = asArray(getFindingHistory(state));
   const items = history.map((entry) => ({
     findingId: entry.findingId,
@@ -252,7 +274,10 @@ function buildFindingsSummary(state) {
     status: entry.currentStatus || "unknown",
     openedReviewAttempt: entry.firstSeenReviewSequence ?? null,
     resolvedReviewAttempt: entry.resolvedReviewSequence ?? null,
-    artifactPaths: [entry.latestReviewArtifactPath, entry.latestStructuredReviewPath].filter(Boolean),
+    artifactPaths: [entry.latestReviewArtifactPath, entry.latestStructuredReviewPath]
+      .filter(Boolean)
+      .map((rawPath) => toRunRelativePath(cwd, state, rawPath, options))
+      .filter(Boolean),
   }));
 
   const resolved = history.filter((entry) => entry.currentStatus === "resolved").length;
@@ -346,7 +371,30 @@ function computeStatusAndStopReason(state, cwd, warnings) {
 
 // --- Human gate -----------------------------------------------------------
 
-function buildHumanGate(status, review, validation, findings) {
+// Verifies the evidence backing the final Approved decision actually exists
+// on disk (rather than trusting the persisted path reference alone), so
+// readiness can never be claimed on the strength of a record whose
+// underlying artifact was deleted, moved, or never actually written.
+function verifyLatestReviewEvidence(state, cwd, warnings) {
+  const reviewRuns = asArray(state.reviewRuns);
+  const last = reviewRuns.length ? reviewRuns[reviewRuns.length - 1] : undefined;
+  if (!last) {
+    warnings.push({ code: "missing-review-evidence", message: "No reviewRuns entry exists to back the final review decision." });
+    return false;
+  }
+  let ok = true;
+  if (last.resultPath && !fs.existsSync(path.resolve(cwd, last.resultPath))) {
+    warnings.push({ code: "missing-or-malformed-artifact", message: `Could not find ${last.resultPath}: referenced review result artifact is missing.` });
+    ok = false;
+  }
+  if (last.structuredReviewStatus === "valid" && last.structuredReviewPath && !fs.existsSync(path.resolve(cwd, last.structuredReviewPath))) {
+    warnings.push({ code: "missing-or-malformed-artifact", message: `Could not find ${last.structuredReviewPath}: referenced structured review artifact is missing.` });
+    ok = false;
+  }
+  return ok;
+}
+
+function buildHumanGate(status, review, validation, findings, evidenceVerified) {
   if (status === RUN_STATUSES.PLANNED) {
     return { required: false, action: null, ready: false, state: HUMAN_GATE_STATES.NOT_READY };
   }
@@ -359,7 +407,8 @@ function buildHumanGate(status, review, validation, findings) {
   const ready = review.finalDecision === "Approved"
     && review.structuredReviewStatus !== "invalid"
     && validation.status === VALIDATION_STATUSES.PASSED
-    && findings.remainingBlocking === 0;
+    && findings.remainingBlocking === 0
+    && evidenceVerified;
   return {
     required: true,
     action: "merge-decision",
@@ -389,11 +438,14 @@ function buildRunSummary(state, options = {}) {
 
   const { status, stopReason } = computeStatusAndStopReason(state, cwd, warnings);
   const roles = buildRoles(state);
-  const stageTimeline = buildStageTimeline(state, roles);
+  const stageTimeline = buildStageTimeline(state, roles, cwd, options);
   const validation = buildValidationSummary(state);
   const review = buildReviewSummary(state);
-  const findings = buildFindingsSummary(state);
-  const humanGate = buildHumanGate(status, review, validation, findings);
+  const findings = buildFindingsSummary(state, cwd, options);
+  const evidenceVerified = status === RUN_STATUSES.AWAITING_HUMAN_DECISION
+    ? verifyLatestReviewEvidence(state, cwd, warnings)
+    : true;
+  const humanGate = buildHumanGate(status, review, validation, findings, evidenceVerified);
 
   const startedAt = orchestration.startedAt || null;
   const completedAt = (status === RUN_STATUSES.AWAITING_HUMAN_DECISION || status === RUN_STATUSES.BLOCKED || status === RUN_STATUSES.FAILED || status === RUN_STATUSES.TIMED_OUT || status === RUN_STATUSES.INTERRUPTED)
