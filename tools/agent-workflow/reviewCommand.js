@@ -112,6 +112,7 @@ function collectGitContext(options = {}) {
 
   const repositoryPath = gitAdapter.run(["rev-parse", "--show-toplevel"], cwd) || cwd;
   const currentBranch = gitAdapter.run(["rev-parse", "--abbrev-ref", "HEAD"], cwd) || "unknown-branch";
+  const headCommit = gitAdapter.run(["rev-parse", "HEAD"], cwd) || "";
   const baseBranchInput = options.baseBranch || "main";
   const baseBranchRef = resolveBaseBranchRef(gitAdapter, cwd, baseBranchInput);
   const mergeBase = gitAdapter.verify(baseBranchRef, cwd)
@@ -130,6 +131,7 @@ function collectGitContext(options = {}) {
   return {
     repositoryPath,
     currentBranch,
+    headCommit,
     baseBranch: baseBranchInput,
     baseBranchRef,
     mergeBase,

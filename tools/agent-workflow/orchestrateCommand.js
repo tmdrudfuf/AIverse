@@ -30,6 +30,7 @@ const { analyzeStructuredReview } = require("./structuredReview.js");
 const { parseStructuredAnswers } = require("./structuredAnswers.js");
 const { formatFindingHistoryForPrompt, normalizeFindingLifecycle } = require("./findingLifecycle.js");
 const { resolveEffectiveRoles } = require("./roleResolver.js");
+const { refreshRunSummary } = require("./runSummary.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -422,7 +423,7 @@ async function runValidationCommands(state, stage, options = {}) {
   const adapter = options.processAdapter || createDefaultProcessAdapter();
   const commands = getValidationCommands(state, options);
   const records = [];
-  let nextState = state;
+  let nextState = options.skipValidation ? setOrchestration(state, { validationSkipped: true }) : state;
 
   for (const commandText of commands) {
     const validationInvocation = parseValidationCommand(commandText);
@@ -785,6 +786,7 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     fs.writeFileSync(structuredReviewPath, `${JSON.stringify(structuredReviewAnalysis.review, null, 2)}\n`, "utf8");
   }
   const reviewRunRecord = {
+    stage: reviewStage,
     outcome,
     reviewerId: reviewerConfig.agentId,
     reviewerIdentity: reviewerConfig.identity,
@@ -935,6 +937,11 @@ function previewOrchestration(state, options = {}) {
       previousFindingsMayBeSupplied: getFindingHistory(state).length > 0,
       currentFindingCount: getFindingHistory(state).length,
       artifactMayBeGenerated: true,
+    },
+    summaryPaths: {
+      json: path.join(getRunDirectory(state, { cwd }), "run-summary.json").replace(/\\/g, "/"),
+      markdown: path.join(getRunDirectory(state, { cwd }), "run-summary.md").replace(/\\/g, "/"),
+      willWrite: false,
     },
     nextExpectedStage: currentStage,
     willSpawn: false,
@@ -1125,12 +1132,22 @@ async function runOrchestration(state, options = {}) {
     if (statePath) writeState(statePath, currentState);
   }
 
+  const finalGitContext = collectGitContext({ cwd, baseBranch: currentState.baseBranch });
+  const summaryRefresh = refreshRunSummary({
+    state: currentState,
+    cwd,
+    currentBranchHead: finalGitContext.headCommit || null,
+  });
+
   return {
     state: currentState,
     steps,
     decision: getOrchestration(currentState).decision || (getCurrentStage(currentState) === "human-merge-decision" ? "Ready for human merge decision" : "Blocked"),
     reason: getOrchestration(currentState).reason || "",
     nextAction: currentState.nextExpectedAction || getOrchestration(currentState).nextExpectedAction || "",
+    summary: summaryRefresh.summary,
+    summaryPaths: summaryRefresh.ok ? { json: summaryRefresh.jsonPath, markdown: summaryRefresh.markdownPath } : null,
+    summaryWarning: summaryRefresh.warning,
   };
 }
 

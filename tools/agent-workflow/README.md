@@ -646,3 +646,71 @@ Dry-run performs full role and runner-safety validation and reports the same dia
 `state.roleRoster` (optional array of agent IDs) extends the roster beyond the default `["codex", "claude"]` for maintainers running more than two configured agents. With exactly two eligible agents, resolution is always exact. With three or more, `--implementer` requires a distinct, valid, configured Reviewer to already exist in `stageAgents.review`, or it rejects rather than guessing.
 
 Remote mutation (`git push`, `gh pr create`/`ready`/`merge`, branch deletion, and equivalents) remains human-only regardless of role selection; no runner becomes safe merely because it was selected through `--implementer`.
+
+## Run Summaries and Audit Trail
+
+Every non-dry-run `orchestrate` invocation writes a normalized, versioned run summary once it reaches the natural end of its internal loop (approved and awaiting the human merge decision, blocked for any reason, timed out, etc.):
+
+```text
+.agent-workflow/runs/<feature-id>/run-summary.json
+.agent-workflow/runs/<feature-id>/run-summary.md
+```
+
+`run-summary.json` is the normalized source of truth (`schemaVersion: 1`); `run-summary.md` is a deterministic Markdown rendering of the exact same model, produced by `tools/agent-workflow/runSummaryRenderer.js` — there is only one summary-generation code path, not two. Both files are derived entirely from already-persisted workflow evidence (`state.orchestration`, `state.orchestrationRuns`, `state.reviewRuns`, `state.validationRuns`, `state.findingHistory`); nothing is fabricated, and unknown/absent evidence is reported as such rather than as false success.
+
+At the end of a real `orchestrate` run, the CLI prints a pointer:
+
+```text
+Run summary
+Markdown: .agent-workflow/runs/<feature-id>/run-summary.md
+JSON: .agent-workflow/runs/<feature-id>/run-summary.json
+Status: awaiting-human-decision
+Reviewer decision: Approved
+Validation: passed
+```
+
+### Schema (`schemaVersion: 1`)
+
+See `specs/054-review-run-summary-audit-trail/contracts/run-summary-schema.md` for the full shape and its enforced invariants. Top-level sections: `run` (status/stopReason/timing), `roles`, `execution` (stages attempted/completed), `stageTimeline[]`, `validation`, `review`, `findings`, `commits`, `humanGate`, `artifacts[]`, `warnings[]`.
+
+**Run status** (`run.status`) is one of: `planned`, `running`, `blocked`, `failed`, `interrupted`, `timed-out`, `completed`, `awaiting-human-decision`. A run that reaches the human merge boundary is always `awaiting-human-decision` — never a status implying a push/PR/merge occurred.
+
+**Stop reason** (`run.stopReason`, populated only when `status` is not `awaiting-human-decision`): `validation-failed`, `changes-requested-limit-reached`, `reviewer-questions-unresolved`, `structured-review-invalid`, `review-decision-unknown`, `timeout`, `interrupted`, `unsafe-runner`, `role-resolution-failed`, `command-failed`, `state-invalid`, `manual-stop`. Derived from the same small set of exact `orchestration.reason` strings the orchestrator already produces (never inferred from free-form log prose) plus the structured `latestReviewDecision`/validation-record `status` fields already in state.
+
+**Human gate** (`humanGate`): `ready` is computed independently from `review.finalDecision === "Approved"`, `review.structuredReviewStatus !== "invalid"` (Markdown-only Approved reviews with an *absent* structured block remain valid — only genuinely malformed structured data blocks readiness), `validation.status === "passed"`, and `findings.remainingBlocking === 0` — it is not simply copied from `run.status`, so a future state-machine bug that reached `human-merge-decision` without actually satisfying those conditions would still be caught and reported as `ready: false`.
+
+**Roles**: sourced from the Spec 053 pinned fields (`orchestration.resolvedImplementerId`/`resolvedReviewerId`/`roleResolutionSource`), falling back to `latestResolvedRoles`/`latestRoleResolutionSource`, then to legacy `orchestration.implementerId`/`reviewerId`, then to an explicit `null` source rather than a fabricated default. A resumed run reports its original pinned roles, never newly recalculated ones.
+
+**Stage timeline** (`stageTimeline[]`): reconstructed by replaying the same fixed stage-transition rules the orchestrator itself uses, driven by the `stage`/`status`/`outcome` fields already recorded in `state.orchestrationRuns` (implement/fix/answer-questions), `state.reviewRuns` (review/re-review/final-review — an additive `stage` field distinguishes these), and `state.validationRuns` (validate/revalidate/final-verification). Because these are durable, append-only arrays, resuming a run never duplicates a stage that already ran and never loses history from an earlier invocation.
+
+**Validation**: `validation.status` reflects the most recent validation attempt (`passed`/`failed`/`timed-out`/`interrupted`), or `skipped` when the run used `--skip-validation` (an additive `orchestration.validationSkipped` flag distinguishes this from `not-run`, which means validation simply has not happened yet).
+
+**Findings**: integrates Spec 052 finding lifecycle tracking (`state.findingHistory`) directly — `opened`, `resolved`, `carriedForward`, `remainingBlocking`, `remainingNonBlocking`, and a per-finding `openedReviewAttempt`/`resolvedReviewAttempt`. `remainingBlocking` always matches the orchestrator's own `activeBlockingFindings` count.
+
+**Commit provenance**: this workflow reviews the live branch/working-tree diff rather than persisting an implementation commit SHA, so `commits.implementationCommit`/`reviewedCommit`/`exactCommitMatch` are `null`/`"unknown"` by design — never fabricated as a match — while `commits.currentBranchHead` reports the live `git rev-parse HEAD` at the moment the summary was generated.
+
+**Secrets**: raw command stdout/stderr, full Reviewer/Implementer output, and environment values are never copied into either summary artifact — only command text, status, exit code, duration, and artifact *paths* (the full text remains in the existing detailed audit artifacts referenced by path).
+
+### Dry-Run
+
+`orchestrate --dry-run` writes no summary artifacts (matching every other dry-run guarantee) and instead previews the paths that a real run would write:
+
+```text
+Run summary artifacts:
+  Would write: .agent-workflow/runs/<feature-id>/run-summary.json
+  Would write: .agent-workflow/runs/<feature-id>/run-summary.md
+  Actual writes: no
+```
+
+### Inspect a Run Summary (Read-Only)
+
+```powershell
+node tools/agent-workflow/cli.js summary --state .agent-workflow/example-state.json
+node tools/agent-workflow/cli.js summary --state .agent-workflow/example-state.json --format json
+```
+
+`summary` recomputes the model directly from the supplied state file every time (the same pure `buildRunSummary` function `orchestrate` uses to write the cached artifact) rather than reading back the cached `run-summary.json` — so it can never disagree with a stale file, and it works unchanged for state files created before this feature existed. It never spawns a process, runs validation, mutates state, or writes any artifact, under any input, including old/legacy state.
+
+### Backward Compatibility
+
+Old state files and run directories remain fully readable. Missing Spec 052/053/054 fields degrade to explicit `null`/`"unknown"`/empty values rather than crashes or fabricated activity; a missing or malformed optional artifact (e.g. a validation log referenced by a stale path) produces a `warnings[]` entry, not a crash, and downgrades `humanGate.ready` when the missing evidence was required for readiness. Reading a state file for `summary`/`buildRunSummary` never writes back to it.

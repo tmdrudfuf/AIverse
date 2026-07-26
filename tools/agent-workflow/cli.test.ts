@@ -103,6 +103,7 @@ describe("orchestrate dry-run output contains no hard-coded incorrect role label
       nextExpectedStage: "implement",
       runDirectory: "dir",
       promptPaths: { implement: "a", fix: "b", review: "c", answerQuestions: "d", finalReview: "e", findingLifecycle: "f" },
+      summaryPaths: { json: "run-summary.json", markdown: "run-summary.md", willWrite: false },
       plannedStages: ["implement"],
       willSpawn: false,
     } as never);
@@ -229,4 +230,86 @@ describe("CLI process: orchestrate --implementer validation before spawn", () =>
     expect(codexResult.stdout).toContain("Implementer: OpenAI Codex CLI (codex)");
     expect(codexResult.stdout).toContain("Reviewer: Claude Code CLI (claude)");
   }, 20000);
+});
+
+describe("CLI process: summary command is read-only", () => {
+  function writeState(cwd: string, extra: Record<string, unknown> = {}) {
+    const statePath = path.join(cwd, ".agent-workflow", "state.json");
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    fs.writeFileSync(statePath, JSON.stringify({
+      featureId: "cli-test-feature",
+      featureName: "CLI Test Feature",
+      baseBranch: "main",
+      results: [],
+      ...extra,
+    }), "utf8");
+    return statePath;
+  }
+
+  it("renders markdown by default and never spawns, mutates state, or writes artifacts", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd);
+    const stateBefore = fs.readFileSync(statePath, "utf8");
+
+    const result = runCli(["summary", "--state", statePath], cwd);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("# Agent Workflow Run Summary");
+    expect(result.stdout).toContain("Status: Planned (not started)");
+    expect(fs.readFileSync(statePath, "utf8")).toBe(stateBefore);
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow", "runs"))).toBe(false);
+  });
+
+  it("renders JSON with --format json", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd);
+
+    const result = runCli(["summary", "--state", statePath, "--format", "json"], cwd);
+
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.run.status).toBe("planned");
+  });
+
+  it("rejects an unsupported --format value", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd);
+
+    const result = runCli(["summary", "--state", statePath, "--format", "yaml"], cwd);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("Unsupported --format value");
+  });
+
+  it("reads a UTF-8 BOM state file without crashing or mutating it", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = path.join(cwd, ".agent-workflow", "state.json");
+    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    const bomContent = `﻿${JSON.stringify({ featureId: "bom-feature", baseBranch: "main", results: [] })}`;
+    fs.writeFileSync(statePath, bomContent, "utf8");
+
+    const result = runCli(["summary", "--state", statePath, "--format", "json"], cwd);
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout).run.featureId).toBe("bom-feature");
+    expect(fs.readFileSync(statePath, "utf8")).toBe(bomContent);
+  });
+
+  it("produces a safe partial summary for a legacy state file with no Spec 054 fields", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const statePath = writeState(cwd, { currentBranch: "codex/legacy-feature" });
+
+    const result = runCli(["summary", "--state", statePath, "--format", "json"], cwd);
+
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.run.status).toBe("planned");
+    expect(parsed.roles.source).toBeNull();
+  });
 });

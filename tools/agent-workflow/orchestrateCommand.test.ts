@@ -1432,3 +1432,174 @@ describe("review finding extraction", () => {
     expect(extractReviewFindings("Please improve it.")).toEqual([]);
   });
 });
+
+describe("orchestrate run summaries", () => {
+  it("reports correct question/fix cycle counts and a resolved finding after Questions -> Changes Requested -> fix -> Approved", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredQuestionsReview },
+      { stdout: structuredAnswers },
+      { stdout: structuredActionableChanges },
+      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      { stdout: "revalidation passed" },
+      { stdout: structuredResolvedApproval },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    const summary = run.summary!;
+    expect(summary.review.questionCycles).toBe(1);
+    expect(summary.review.fixCycles).toBe(1);
+    expect(summary.review.reviewAttempts).toBe(3);
+    expect(summary.findings.opened).toBe(1);
+    expect(summary.findings.resolved).toBe(1);
+    expect(summary.findings.remainingBlocking).toBe(0);
+    expect(summary.findings.items[0]).toMatchObject({ findingId: "P1-001", status: "resolved" });
+    expect(summary.humanGate.ready).toBe(true);
+  }, 30000);
+
+  it("writes agreeing run-summary.json/run-summary.md for a clean approved run", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.summaryPaths).not.toBeNull();
+    expect(run.summaryWarning).toBeNull();
+    const jsonPath = path.join(cwd, run.summaryPaths!.json!);
+    const markdownPath = path.join(cwd, run.summaryPaths!.markdown!);
+    expect(fs.existsSync(jsonPath)).toBe(true);
+    expect(fs.existsSync(markdownPath)).toBe(true);
+
+    const persistedSummary = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+    expect(persistedSummary.run.status).toBe("awaiting-human-decision");
+    expect(persistedSummary.humanGate.ready).toBe(true);
+    expect(persistedSummary.review.finalDecision).toBe("Approved");
+    expect(persistedSummary.validation.status).toBe("passed");
+    expect(persistedSummary.roles.implementer.agentId).toBe("implementer");
+    expect(persistedSummary.roles.reviewer.agentId).toBe("reviewer");
+
+    const markdown = fs.readFileSync(markdownPath, "utf8");
+    expect(markdown).toContain("Awaiting human merge decision");
+    expect(markdown).toContain("Ready for human merge decision.");
+    expect(markdown.endsWith("\n")).toBe(true);
+    expect(JSON.parse(fs.readFileSync(jsonPath, "utf8")).schemaVersion).toBe(1);
+
+    expect(run.summary).toEqual(persistedSummary);
+  }, 30000);
+
+  it("writes a summary reporting readiness=false when validation fails", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation failed", exitCode: 1 },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    const persistedSummary = JSON.parse(fs.readFileSync(path.join(cwd, run.summaryPaths!.json!), "utf8"));
+    expect(persistedSummary.run.status).toBe("failed");
+    expect(persistedSummary.run.stopReason).toBe("validation-failed");
+    expect(persistedSummary.humanGate.ready).toBe(false);
+    expect(persistedSummary.review.finalDecision).not.toBe("Approved");
+  }, 30000);
+
+  it("writes a partial timed-out summary with no approval claim when the Reviewer times out", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedReview, timedOut: true, signal: "SIGTERM", exitCode: null },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.reason).toBe("Reviewer returned Timed Out");
+    const persistedSummary = JSON.parse(fs.readFileSync(path.join(cwd, run.summaryPaths!.json!), "utf8"));
+    expect(persistedSummary.run.status).toBe("timed-out");
+    expect(persistedSummary.run.stopReason).toBe("timeout");
+    expect(persistedSummary.humanGate.ready).toBe(false);
+    expect(persistedSummary.review.finalDecision).not.toBe("Approved");
+    expect(persistedSummary.stageTimeline.map((entry: { stage: string }) => entry.stage)).toEqual(["implement", "validate", "review"]);
+    const reviewEntry = persistedSummary.stageTimeline.find((entry: { stage: string }) => entry.stage === "review");
+    expect(reviewEntry.result).toBe("Timed Out");
+  }, 30000);
+
+  it("does not write any summary artifact during dry-run, and previews the paths it would write", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const preview = previewOrchestration(createState(), { cwd });
+
+    expect(preview.summaryPaths.willWrite).toBe(false);
+    expect(preview.summaryPaths.json).toContain("run-summary.json");
+    expect(preview.summaryPaths.markdown).toContain("run-summary.md");
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow"))).toBe(false);
+  });
+
+  it("does not duplicate stage-timeline entries when resuming from review", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const resumedState = createState({
+      orchestration: { currentStage: "review", maxFixCycles: 2, startedAt: "2026-07-26T00:00:00.000Z" },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: "implement.md", resultPath: "implement-result.md" }],
+      validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
+    });
+
+    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.orchestrationRuns.filter((r: { stage: string }) => r.stage === "implement")).toHaveLength(1);
+    expect(run.state.validationRuns.filter((r: { stage: string }) => r.stage === "validate")).toHaveLength(1);
+    expect(run.summary!.stageTimeline.map((entry: { stage: string }) => entry.stage)).toEqual([
+      "implement", "validate", "review", "final-verification",
+    ]);
+  }, 30000);
+
+  it("reports unchanged roles and source after a resumed --implementer run", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: approvedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+    const resumedState = createRoleSelectionState({
+      orchestration: {
+        currentStage: "review",
+        maxFixCycles: 2,
+        startedAt: "2026-07-26T00:00:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: "implement.md", resultPath: "implement-result.md" }],
+      validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
+    });
+
+    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter });
+
+    expect(run.summary!.roles).toEqual({
+      implementer: { agentId: "claude", displayName: expect.any(String) },
+      reviewer: { agentId: "codex", displayName: expect.any(String) },
+      source: "cli-override",
+    });
+  }, 30000);
+});
