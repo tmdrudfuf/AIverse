@@ -248,17 +248,26 @@ function redactSecretsFromText(text) {
 
 // --- Validation summary ------------------------------------------------------
 
-function buildValidationSummary(state) {
+function buildValidationSummary(state, cwd, options, warnings) {
   const orchestration = getOrchestration(state);
   const validationRuns = asArray(state.validationRuns);
-  const commands = validationRuns.map((record) => ({
-    stage: record.stage || "unknown",
-    command: redactSecretsFromText(record.command || ""),
-    status: record.status || VALIDATION_STATUSES.NOT_RUN,
-    exitCode: typeof record.exitCode === "number" ? record.exitCode : null,
-    durationMs: typeof record.durationMs === "number" ? record.durationMs : null,
-    artifactPath: record.path || null,
-  }));
+  const commands = validationRuns.map((record) => {
+    if (record.path && !fs.existsSync(path.resolve(cwd, record.path))) {
+      warnings.push({
+        code: "missing-or-malformed-artifact",
+        message: `Could not find ${record.path}: referenced validation artifact is missing.`,
+      });
+    }
+    const artifactPath = toRunRelativePath(cwd, state, record.path, options, warnings);
+    return {
+      stage: record.stage || "unknown",
+      command: redactSecretsFromText(record.command || ""),
+      status: record.status || VALIDATION_STATUSES.NOT_RUN,
+      exitCode: typeof record.exitCode === "number" ? record.exitCode : null,
+      durationMs: typeof record.durationMs === "number" ? record.durationMs : null,
+      artifactPath: artifactPath || null,
+    };
+  });
 
   let status;
   if (validationRuns.length) {
@@ -485,7 +494,7 @@ function buildRunSummary(state, options = {}) {
   const { status, stopReason } = computeStatusAndStopReason(state, cwd, warnings);
   const roles = buildRoles(state);
   const stageTimeline = buildStageTimeline(state, roles, cwd, options, warnings);
-  const validation = buildValidationSummary(state);
+  const validation = buildValidationSummary(state, cwd, options, warnings);
   const review = buildReviewSummary(state);
   const findings = buildFindingsSummary(state, cwd, options, warnings);
   const evidenceVerified = status === RUN_STATUSES.AWAITING_HUMAN_DECISION

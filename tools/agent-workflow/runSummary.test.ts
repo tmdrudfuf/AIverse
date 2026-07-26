@@ -411,6 +411,31 @@ describe("buildRunSummary: missing/malformed optional artifacts", () => {
     expect(summary.run.stopReason).toBe("timeout");
     expect(summary.warnings).toEqual([]);
   });
+
+  it("does not crash and adds a warning when a referenced validation artifact is missing", () => {
+    const cwd = createTempDir();
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "validate failed: npm test", terminalState: "blocked" },
+      validationRuns: [{ stage: "validate", command: "npm test", status: "failed", exitCode: 1, path: "does-not-exist-validation.md" }],
+    });
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.validation.commands[0].artifactPath).toBeNull();
+    expect(summary.warnings.some((w: { code: string }) => w.code === "missing-or-malformed-artifact")).toBe(true);
+  });
+
+  it("reports the validation artifact path, normalized, when it exists", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "validate.md"), "fixture", "utf8");
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "validate failed: npm test", terminalState: "blocked" },
+      validationRuns: [{ stage: "validate", command: "npm test", status: "failed", exitCode: 1, path: ".agent-workflow/runs/054-review-run-summary-audit-trail/validate.md" }],
+    });
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.validation.commands[0].artifactPath).toBe("validate.md");
+    expect(summary.warnings).toEqual([]);
+  });
 });
 
 describe("buildRunSummary: commit provenance", () => {
