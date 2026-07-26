@@ -140,15 +140,25 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
   // A single validate/revalidate/final-verification *stage occurrence* can
   // produce multiple validationRuns records (one per configured command --
   // see runValidationCommands in orchestrateCommand.js). Consume every
-  // record belonging to that occurrence: the orchestrator itself stops
-  // running commands at the first non-"passed" result, so draining up to
-  // and including the first non-"passed" record (or the end of the queue)
-  // reconstructs exactly the commands that actually ran for this occurrence,
-  // never fewer.
+  // record belonging to that occurrence, using the explicit `batchId`
+  // orchestrateCommand.js stamps on every record from one call (grouping by
+  // identity, not by outcome, is the only way to correctly separate two
+  // fully-passing occurrences of the same named stage -- e.g. two successful
+  // revalidate cycles -- which share no other distinguishing signal). Legacy
+  // records predating this field (`batchId` undefined) fall back to draining
+  // up to and including the first non-"passed" record, the best inference
+  // available without it.
   function consumeValidationBatch(stage) {
     const queue = queues[stage];
     if (!queue || !queue.length) return undefined;
     const batch = [];
+    const firstBatchId = queue[0].batchId;
+    if (firstBatchId !== undefined && firstBatchId !== null) {
+      while (queue.length && queue[0].batchId === firstBatchId) {
+        batch.push(queue.shift());
+      }
+      return batch;
+    }
     while (queue.length) {
       const record = queue.shift();
       batch.push(record);

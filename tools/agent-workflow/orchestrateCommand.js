@@ -424,6 +424,14 @@ async function runValidationCommands(state, stage, options = {}) {
   const commands = getValidationCommands(state, options);
   const records = [];
   let nextState = options.skipValidation ? setOrchestration(state, { validationSkipped: true }) : state;
+  // A monotonically increasing marker shared by every command in this one
+  // call, so consumers (the run-summary stage-timeline reconstruction) can
+  // reliably group records into the occurrence they actually belong to,
+  // regardless of whether every command in it passed (no other signal --
+  // like "stops at the first failure" -- can distinguish a fully-passing
+  // occurrence from the next one).
+  const validationBatchId = Number(getOrchestration(nextState).nextValidationBatchId || 0) + 1;
+  nextState = setOrchestration(nextState, { nextValidationBatchId: validationBatchId });
 
   for (const commandText of commands) {
     const validationInvocation = parseValidationCommand(commandText);
@@ -438,6 +446,7 @@ async function runValidationCommands(state, stage, options = {}) {
     const record = {
       featureId: state.featureId,
       stage,
+      batchId: validationBatchId,
       command: commandText,
       commandExecutable: spawnInvocation.command,
       args: spawnInvocation.args,

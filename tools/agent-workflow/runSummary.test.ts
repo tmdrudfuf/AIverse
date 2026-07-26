@@ -213,6 +213,63 @@ describe("buildRunSummary: multi-command validation stages", () => {
     expect(validateEntries[0].status).toBe("passed");
     expect(validateEntries[0].artifactPaths).toEqual(["validate-1.md", "validate-2.md", "validate-3.md"]);
   });
+
+  it("separates two fully-passing revalidate occurrences using batchId, across two fix cycles", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    const names = [
+      "implement-execution.md", "implement-result.md",
+      "validate-1.md",
+      "fix1-execution.md", "fix1-result.md", "revalidate1a.md", "revalidate1b.md",
+      "fix2-execution.md", "fix2-result.md", "revalidate2a.md", "revalidate2b.md",
+      "final-verification.md",
+    ];
+    for (const name of names) fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    const p = (name: string) => `.agent-workflow/runs/054-review-run-summary-audit-trail/${name}`;
+
+    const state = baseState({
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        updatedAt: "2026-07-26T00:20:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+      },
+      orchestrationRuns: [
+        { stage: "implement", status: "completed", path: p("implement-execution.md"), resultPath: p("implement-result.md") },
+        { stage: "fix", status: "completed", path: p("fix1-execution.md"), resultPath: p("fix1-result.md") },
+        { stage: "fix", status: "completed", path: p("fix2-execution.md"), resultPath: p("fix2-result.md") },
+      ],
+      validationRuns: [
+        { stage: "validate", batchId: 1, command: "npm test", status: "passed", path: p("validate-1.md") },
+        { stage: "revalidate", batchId: 2, command: "npm test", status: "passed", path: p("revalidate1a.md") },
+        { stage: "revalidate", batchId: 2, command: "npx tsc --noEmit", status: "passed", path: p("revalidate1b.md") },
+        { stage: "revalidate", batchId: 3, command: "npm test", status: "passed", path: p("revalidate2a.md") },
+        { stage: "revalidate", batchId: 3, command: "npx tsc --noEmit", status: "passed", path: p("revalidate2b.md") },
+        { stage: "final-verification", batchId: 4, command: "npm test", status: "passed", path: p("final-verification.md") },
+      ],
+      reviewRuns: [
+        { stage: "review", outcome: "Changes Requested", reviewerId: "codex", structuredReviewStatus: "valid" },
+        { stage: "re-review", outcome: "Changes Requested", reviewerId: "codex", structuredReviewStatus: "valid" },
+        { stage: "re-review", outcome: "Approved", reviewerId: "codex", structuredReviewStatus: "valid" },
+      ],
+      latestReviewDecision: "Approved",
+      fixCycleCount: 2,
+    });
+
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.stageTimeline.map((e: any) => e.stage)).toEqual([
+      "implement", "validate", "review", "fix", "revalidate", "re-review", "fix", "revalidate", "re-review", "final-verification",
+    ]);
+    const revalidateEntries = summary.stageTimeline.filter((e: any) => e.stage === "revalidate");
+    expect(revalidateEntries).toHaveLength(2);
+    expect(revalidateEntries[0].artifactPaths).toEqual(["revalidate1a.md", "revalidate1b.md"]);
+    expect(revalidateEntries[1].artifactPaths).toEqual(["revalidate2a.md", "revalidate2b.md"]);
+    expect(revalidateEntries[0].attempt).toBe(1);
+    expect(revalidateEntries[1].attempt).toBe(2);
+  });
 });
 
 describe("buildRunSummary: never reports false success", () => {
