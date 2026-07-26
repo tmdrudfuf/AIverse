@@ -47,10 +47,15 @@ describe("buildRunSummary: clean approved run", () => {
     for (const name of [
       "implement-claude-execution.md", "implement-claude-result.md", "validate-validation.md",
       "review-independent-review-execution.md", "review-independent-review-result.md",
-      "review-structured-review.json", "final-verification-validation.md",
+      "final-verification-validation.md",
     ]) {
       fs.writeFileSync(path.join(runDir, name), "fixture content", "utf8");
     }
+    fs.writeFileSync(
+      path.join(runDir, "review-structured-review.json"),
+      JSON.stringify({ schemaVersion: 1, decision: "approved", blockingFindings: [], nonBlockingFindings: [], questions: [] }),
+      "utf8",
+    );
     const p = (name: string) => `${runDirRelative}/${name}`;
     return baseState({
       orchestration: {
@@ -619,5 +624,67 @@ describe("buildRunSummary: backward compatibility with legacy state", () => {
     expect(summary.review.reviewAttempts).toBe(1);
     expect(summary.stageTimeline).toHaveLength(1);
     expect(summary.stageTimeline[0]).toMatchObject({ stage: "unknown", role: null, agentId: null, result: "Approved" });
+  });
+});
+
+describe("buildRunSummary: consistent artifact evidence verification", () => {
+  it("warns when a stage-timeline artifact (not just review/validation evidence) is missing", () => {
+    const cwd = createTempDir();
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "implement execution failed", terminalState: "blocked" },
+      orchestrationRuns: [{ stage: "implement", status: "failed", path: "does-not-exist-implement.md", resultPath: "does-not-exist-result.md" }],
+    });
+    const summary = buildRunSummary(state, { cwd });
+    const missingWarnings = summary.warnings.filter((w: { code: string }) => w.code === "missing-or-malformed-artifact");
+    expect(missingWarnings.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("warns when a finding's artifact reference is missing", () => {
+    const cwd = createTempDir();
+    const state = baseState({
+      findingHistory: [{
+        findingId: "F1",
+        kind: "blocking",
+        severity: "P1",
+        currentStatus: "resolved",
+        firstSeenReviewSequence: 1,
+        resolvedReviewSequence: 2,
+        latestReviewArtifactPath: "does-not-exist-finding.md",
+      }],
+    });
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.warnings.some((w: { code: string }) => w.code === "missing-or-malformed-artifact")).toBe(true);
+  });
+
+  it("does not treat malformed structured review content as Approved-ready", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "review-result.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "structured-review.json"), "{ not valid json", "utf8");
+    const state = baseState({
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        updatedAt: "2026-07-26T00:05:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed" }],
+      validationRuns: [{ stage: "validate", status: "passed" }, { stage: "final-verification", status: "passed" }],
+      reviewRuns: [{
+        stage: "review",
+        outcome: "Approved",
+        reviewerId: "codex",
+        structuredReviewStatus: "valid",
+        resultPath: ".agent-workflow/runs/054-review-run-summary-audit-trail/review-result.md",
+        structuredReviewPath: ".agent-workflow/runs/054-review-run-summary-audit-trail/structured-review.json",
+      }],
+      latestReviewDecision: "Approved",
+    });
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.humanGate.ready).toBe(false);
+    expect(summary.warnings.some((w: { code: string }) => w.code === "missing-or-malformed-artifact")).toBe(true);
   });
 });

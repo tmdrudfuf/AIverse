@@ -45,6 +45,20 @@ function toRunRelativePath(cwd, state, repoRelativePath, options, warnings) {
   return rawRelative.replace(/\\/g, "/");
 }
 
+// Shared existence check reused everywhere a repo-relative artifact path
+// enters the summary model (stage timeline, findings, validation commands),
+// so "missing artifact" is warned on consistently rather than only for the
+// paths a given call site happened to check.
+function checkArtifactExists(cwd, repoRelativePath, warnings) {
+  if (!repoRelativePath) return true;
+  if (fs.existsSync(path.resolve(cwd, repoRelativePath))) return true;
+  warnings.push({
+    code: "missing-or-malformed-artifact",
+    message: `Could not find ${repoRelativePath}: referenced artifact is missing.`,
+  });
+  return false;
+}
+
 function readJsonArtifactSafe(cwd, relativeFilePath, warnings) {
   if (!relativeFilePath) return undefined;
   try {
@@ -176,6 +190,7 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
       // are persisted repo-relative; normalize to run-directory-relative here.
       const rawPaths = [record.path, record.executionPath, record.resultPath, record.structuredReviewPath].filter(Boolean);
       for (const rawPath of rawPaths) {
+        checkArtifactExists(cwd, rawPath, warnings);
         const normalized = toRunRelativePath(cwd, state, rawPath, options, warnings);
         if (normalized) artifactPaths.push(normalized);
       }
@@ -308,12 +323,7 @@ function buildValidationSummary(state, cwd, options, warnings) {
   const orchestration = getOrchestration(state);
   const validationRuns = asArray(state.validationRuns);
   const commands = validationRuns.map((record) => {
-    if (record.path && !fs.existsSync(path.resolve(cwd, record.path))) {
-      warnings.push({
-        code: "missing-or-malformed-artifact",
-        message: `Could not find ${record.path}: referenced validation artifact is missing.`,
-      });
-    }
+    checkArtifactExists(cwd, record.path, warnings);
     const artifactPath = toRunRelativePath(cwd, state, record.path, options, warnings);
     return {
       stage: record.stage || "unknown",
@@ -387,7 +397,10 @@ function buildFindingsSummary(state, cwd, options, warnings) {
     resolvedReviewAttempt: entry.resolvedReviewSequence ?? null,
     artifactPaths: [entry.latestReviewArtifactPath, entry.latestStructuredReviewPath]
       .filter(Boolean)
-      .map((rawPath) => toRunRelativePath(cwd, state, rawPath, options, warnings))
+      .map((rawPath) => {
+        checkArtifactExists(cwd, rawPath, warnings);
+        return toRunRelativePath(cwd, state, rawPath, options, warnings);
+      })
       .filter(Boolean),
   }));
 
@@ -494,13 +507,15 @@ function verifyLatestReviewEvidence(state, cwd, warnings) {
     return false;
   }
   let ok = true;
-  if (last.resultPath && !fs.existsSync(path.resolve(cwd, last.resultPath))) {
-    warnings.push({ code: "missing-or-malformed-artifact", message: `Could not find ${last.resultPath}: referenced review result artifact is missing.` });
+  if (last.resultPath && !checkArtifactExists(cwd, last.resultPath, warnings)) {
     ok = false;
   }
-  if (last.structuredReviewStatus === "valid" && last.structuredReviewPath && !fs.existsSync(path.resolve(cwd, last.structuredReviewPath))) {
-    warnings.push({ code: "missing-or-malformed-artifact", message: `Could not find ${last.structuredReviewPath}: referenced structured review artifact is missing.` });
-    ok = false;
+  if (last.structuredReviewStatus === "valid" && last.structuredReviewPath) {
+    // Existence alone does not prove the evidence backing "Approved" is
+    // intact -- verify the file actually contains valid, parseable JSON.
+    if (readJsonArtifactSafe(cwd, last.structuredReviewPath, warnings) === undefined) {
+      ok = false;
+    }
   }
   return ok;
 }
