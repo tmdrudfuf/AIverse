@@ -33,22 +33,34 @@ function tryResolveAgent(state, agentId) {
   }
 }
 
+function validateAgentForRole(state, agentId, roleLabel, verb = "Requested") {
+  const lookup = tryResolveAgent(state, agentId);
+  if (!lookup.config) {
+    return { ok: false, config: undefined, diagnostics: [`${verb} ${roleLabel} '${agentId}' is not configured.`] };
+  }
+  if (lookup.config.enabled === false) {
+    return { ok: false, config: undefined, diagnostics: [`${verb} ${roleLabel} '${agentId}' is disabled.`] };
+  }
+  try {
+    assertSafeCommand(lookup.config);
+  } catch (error) {
+    return {
+      ok: false,
+      config: undefined,
+      diagnostics: [`${verb} ${roleLabel} '${agentId}' has an unsafe or invalid runner configuration: ${error.message}`],
+    };
+  }
+  return { ok: true, config: lookup.config, diagnostics: [] };
+}
+
 function resolveCliOverride(requestedImplementerId, state) {
   const roster = getRoleRoster(state);
 
-  const implementerLookup = tryResolveAgent(state, requestedImplementerId);
-  if (!implementerLookup.config) {
-    return fail([
-      `Requested implementer '${requestedImplementerId}' is not configured.`,
-      describeRoster(roster),
-    ]);
+  const implementerValidation = validateAgentForRole(state, requestedImplementerId, "implementer");
+  if (!implementerValidation.ok) {
+    return fail([...implementerValidation.diagnostics, describeRoster(roster)]);
   }
-  if (implementerLookup.config.enabled === false) {
-    return fail([
-      `Requested implementer '${requestedImplementerId}' is disabled.`,
-      describeRoster(roster),
-    ]);
-  }
+  const implementerLookup = { config: implementerValidation.config };
 
   if (!roster.includes(requestedImplementerId)) {
     return fail([
@@ -85,33 +97,9 @@ function resolveCliOverride(requestedImplementerId, state) {
     ]);
   }
 
-  const reviewerLookup = tryResolveAgent(state, reviewerId);
-  if (!reviewerLookup.config) {
-    return fail([
-      `Resolved reviewer '${reviewerId}' is not configured.`,
-      describeRoster(roster),
-    ]);
-  }
-  if (reviewerLookup.config.enabled === false) {
-    return fail([
-      `Resolved reviewer '${reviewerId}' is disabled.`,
-      describeRoster(roster),
-    ]);
-  }
-
-  try {
-    assertSafeCommand(implementerLookup.config);
-  } catch (error) {
-    return fail([
-      `Requested implementer '${requestedImplementerId}' has an unsafe or invalid runner configuration: ${error.message}`,
-    ]);
-  }
-  try {
-    assertSafeCommand(reviewerLookup.config);
-  } catch (error) {
-    return fail([
-      `Resolved reviewer '${reviewerId}' has an unsafe or invalid runner configuration: ${error.message}`,
-    ]);
+  const reviewerValidation = validateAgentForRole(state, reviewerId, "reviewer", "Resolved");
+  if (!reviewerValidation.ok) {
+    return fail([...reviewerValidation.diagnostics, describeRoster(roster)]);
   }
 
   return {
@@ -180,4 +168,5 @@ module.exports = {
   getConfiguredRoleAgentId,
   getRoleRoster,
   resolveEffectiveRoles,
+  validateAgentForRole,
 };

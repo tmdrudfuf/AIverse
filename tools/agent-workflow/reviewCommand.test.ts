@@ -752,6 +752,60 @@ describe("run-review --implementer support", () => {
     expect(preview.roleSource).toBe("cli-override");
   });
 
+  it("rejects a disabled --implementer before any spawn even when --agent is also supplied", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const state = createRoleSelectionState({
+      agentRunners: {
+        codex: { agentId: "codex", identity: "Codex Mock", command: "mock-codex", args: [], inputMode: "stdin" },
+        claude: { agentId: "claude", identity: "Claude Mock", command: "mock-claude", args: [], inputMode: "stdin", enabled: false },
+        "explicit-reviewer": { agentId: "explicit-reviewer", identity: "Explicit Reviewer", command: "mock-explicit", args: [], inputMode: "stdin" },
+      },
+    } as never);
+
+    expect(() => previewIndependentReview(state, {
+      cwd,
+      processAdapter: spy,
+      implementerAgentId: "claude",
+      agentId: "explicit-reviewer",
+    } as never)).toThrow("Requested implementer 'claude' is disabled.");
+    await expect(runIndependentReview(state, {
+      cwd,
+      processAdapter: spy,
+      implementerAgentId: "claude",
+      agentId: "explicit-reviewer",
+    })).rejects.toThrow("Requested implementer 'claude' is disabled.");
+    expect(spy.run).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsafe --implementer before any spawn even when --agent is also supplied", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
+    commitAll(cwd, "init");
+
+    const spy = createSpyAdapter({ stdout: "should not run" });
+    const state = createRoleSelectionState({
+      agentRunners: {
+        codex: { agentId: "codex", identity: "Codex Mock", command: "mock-codex", args: [], inputMode: "stdin" },
+        claude: { agentId: "claude", identity: "Unsafe Claude", command: "gh", args: ["pr", "merge"], inputMode: "stdin" },
+        "explicit-reviewer": { agentId: "explicit-reviewer", identity: "Explicit Reviewer", command: "mock-explicit", args: [], inputMode: "stdin" },
+      },
+    } as never);
+
+    expect(() => previewIndependentReview(state, {
+      cwd,
+      processAdapter: spy,
+      implementerAgentId: "claude",
+      agentId: "explicit-reviewer",
+    } as never)).toThrow("unsafe or invalid runner configuration");
+    expect(spy.run).not.toHaveBeenCalled();
+  });
+
   it("rejects an unknown --implementer before any spawn, in dry-run and real execution", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

@@ -21,7 +21,7 @@ const {
 } = require("./agentRunner.js");
 const { analyzeStructuredReview } = require("./structuredReview.js");
 const { formatFindingHistoryForPrompt } = require("./findingLifecycle.js");
-const { resolveEffectiveRoles } = require("./roleResolver.js");
+const { resolveEffectiveRoles, validateAgentForRole } = require("./roleResolver.js");
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DIFF_LIMITS = { maxChars: 6000, maxLines: 200 };
@@ -273,6 +273,10 @@ function resolveReviewRoles(state, options = {}) {
       reviewerConfig: resolveAgentConfig(state, resolution.roles.reviewer),
       roleSource: resolution.source,
     };
+  }
+  if (options.implementerAgentId) {
+    const implementerValidation = validateAgentForRole(state, options.implementerAgentId, "implementer");
+    if (!implementerValidation.ok) throw new Error(implementerValidation.diagnostics.join(" "));
   }
   const implementerConfig = resolveRoleRunner(state, "implementer", options.implementerAgentId);
   const reviewerConfig = resolveRoleRunner(state, "reviewer", options.agentId);
