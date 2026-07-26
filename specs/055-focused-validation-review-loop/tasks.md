@@ -68,5 +68,5 @@
 
 - [x] T033 Update `tools/agent-workflow/README.md`: strategies, commands, CLI options, defaults, fallback, dry-run, resume, exact-head validation, high-risk flag, summary integration, human readiness
 - [x] T034 Run full `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`
-- [ ] T035 Request independent Codex review (Implementer: Claude) and complete the fix cycle to Approved with zero blocking findings
-- [ ] T036 Local commit and final report
+- [x] T035 Request independent Codex review (Implementer: Claude) and complete the fix cycle to Approved with zero blocking findings
+- [x] T036 Local commit and final report
