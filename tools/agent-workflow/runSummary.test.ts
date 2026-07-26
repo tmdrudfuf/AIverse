@@ -411,4 +411,18 @@ describe("buildRunSummary: backward compatibility with legacy state", () => {
     expect(summary.roles.source).toBeNull();
     expect(summary.findings.items).toEqual([]);
   });
+
+  it("never drops a legacy stage-less reviewRuns entry, even when no implement record exists", () => {
+    const legacyState = {
+      featureId: "010-legacy-review-only",
+      baseBranch: "main",
+      results: [],
+      orchestration: { currentStage: "blocked", startedAt: "2026-01-01T00:00:00.000Z", reason: "Reviewer returned Approved", terminalState: "blocked" },
+      reviewRuns: [{ outcome: "Approved", reviewerId: "codex" }],
+    };
+    const summary = buildRunSummary(legacyState);
+    expect(summary.review.reviewAttempts).toBe(1);
+    expect(summary.stageTimeline).toHaveLength(1);
+    expect(summary.stageTimeline[0]).toMatchObject({ stage: "unknown", role: null, agentId: null, result: "Approved" });
+  });
 });

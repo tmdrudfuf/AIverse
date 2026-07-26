@@ -145,15 +145,26 @@ function buildStageTimeline(state, roles, cwd, options) {
     });
   }
 
+  // Always appends any legacy (pre-Spec-054, stage-less) reviewRuns entries
+  // before returning, regardless of which exit path below is taken -- so
+  // that persisted review evidence is never silently dropped just because
+  // the implement/validate reconstruction couldn't start or continue.
+  function finalize() {
+    for (const legacyRecord of legacyUnstagedReviews) {
+      push("unknown", legacyRecord, { status: "unknown", result: legacyRecord.outcome || null });
+    }
+    return timeline;
+  }
+
   let record = consume("implement");
-  if (!record) return timeline;
+  if (!record) return finalize();
   push("implement", record, { status: record.status === "completed" ? "completed" : "failed" });
-  if (record.status !== "completed") return timeline;
+  if (record.status !== "completed") return finalize();
 
   record = consume("validate");
-  if (!record) return timeline;
+  if (!record) return finalize();
   push("validate", record, { status: record.status });
-  if (record.status !== "passed") return timeline;
+  if (record.status !== "passed") return finalize();
 
   let reviewStageName = "review";
   for (let guard = 0; guard < 50; guard += 1) {
@@ -193,11 +204,7 @@ function buildStageTimeline(state, roles, cwd, options) {
     break;
   }
 
-  for (const record of legacyUnstagedReviews) {
-    push("unknown", record, { status: "unknown", result: record.outcome || null });
-  }
-
-  return timeline;
+  return finalize();
 }
 
 // --- Validation summary ------------------------------------------------------
