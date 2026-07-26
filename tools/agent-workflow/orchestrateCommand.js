@@ -452,6 +452,17 @@ async function runValidationCommands(state, stage, options = {}) {
   const policy = resolveValidationPolicy(state, options);
   const phase = options.skipValidation ? null : resolvePhaseForStage(policy, stage, options);
   const commands = options.skipValidation ? [] : commandsForPhase(policy, phase);
+  // Pre-parse and safety-check every command before spawning any of them.
+  // Checking inside the execution loop (parse -> check -> spawn -> repeat)
+  // would let an earlier safe command actually run before a later unsafe
+  // command in the same list is ever discovered (Codex review round 4,
+  // finding P1-001) -- this violates the "rejected before any subprocess
+  // execution" guarantee (spec.md FR-013) for every command but the first.
+  const validationInvocations = commands.map((commandText) => {
+    const invocation = parseValidationCommand(commandText);
+    assertSafeValidationCommand(invocation);
+    return { commandText, invocation };
+  });
   const triggerReason = options.skipValidation ? null : determineValidationTriggerReason(state, stage, phase, options);
   const gitContextForTarget = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
   const target = options.skipValidation ? null : computeValidationTarget(gitContextForTarget);
@@ -480,9 +491,7 @@ async function runValidationCommands(state, stage, options = {}) {
   const validationBatchId = Number(getOrchestration(nextState).nextValidationBatchId || 0) + 1;
   nextState = setOrchestration(nextState, { nextValidationBatchId: validationBatchId });
 
-  for (const commandText of commands) {
-    const validationInvocation = parseValidationCommand(commandText);
-    assertSafeValidationCommand(validationInvocation);
+  for (const { commandText, invocation: validationInvocation } of validationInvocations) {
     const spawnInvocation = resolveValidationInvocation(validationInvocation);
     const startedAt = new Date().toISOString();
     const result = await adapter.run(spawnInvocation.command, spawnInvocation.args, {

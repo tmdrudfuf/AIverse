@@ -46,9 +46,9 @@ describe("isFinalValidationSatisfied", () => {
     expect(isFinalValidationSatisfied({}).satisfied).toBe(false);
   });
 
-  it("is not satisfied when the latest full-phase attempt did not pass", () => {
+  it("is not satisfied when the latest final-verification attempt did not pass", () => {
     const state = {
-      validationRuns: [{ phase: "full", status: "failed", target: { commit: "a", dirty: false, dirtyHash: null } }],
+      validationRuns: [{ stage: "final-verification", phase: "full", status: "failed", target: { commit: "a", dirty: false, dirtyHash: null } }],
       reviewRuns: [{ outcome: "Approved", target: { commit: "a", dirty: false, dirtyHash: null } }],
     };
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "no-passed-full-validation" });
@@ -56,7 +56,7 @@ describe("isFinalValidationSatisfied", () => {
 
   it("is not satisfied when the latest review is not Approved", () => {
     const state = {
-      validationRuns: [{ phase: "full", status: "passed", target: { commit: "a", dirty: false, dirtyHash: null } }],
+      validationRuns: [{ stage: "final-verification", phase: "full", status: "passed", target: { commit: "a", dirty: false, dirtyHash: null } }],
       reviewRuns: [{ outcome: "Changes Requested", target: { commit: "a", dirty: false, dirtyHash: null } }],
     };
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "no-approved-review" });
@@ -64,7 +64,7 @@ describe("isFinalValidationSatisfied", () => {
 
   it("is not satisfied when the full-validation target and reviewed target differ", () => {
     const state = {
-      validationRuns: [{ phase: "full", status: "passed", target: { commit: "b", dirty: false, dirtyHash: null } }],
+      validationRuns: [{ stage: "final-verification", phase: "full", status: "passed", target: { commit: "b", dirty: false, dirtyHash: null } }],
       reviewRuns: [{ outcome: "Approved", target: { commit: "a", dirty: false, dirtyHash: null } }],
     };
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "target-mismatch" });
@@ -72,7 +72,7 @@ describe("isFinalValidationSatisfied", () => {
 
   it("is not satisfied when neither record has target evidence at all (exact-match evidence is required, never assumed)", () => {
     const state = {
-      validationRuns: [{ phase: "full", status: "passed" }],
+      validationRuns: [{ stage: "final-verification", phase: "full", status: "passed" }],
       reviewRuns: [{ outcome: "Approved" }],
     };
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "target-evidence-missing" });
@@ -80,37 +80,64 @@ describe("isFinalValidationSatisfied", () => {
 
   it("is not satisfied when only one side has target evidence", () => {
     const state = {
-      validationRuns: [{ phase: "full", status: "passed", target: { commit: "a", dirty: false, dirtyHash: null } }],
+      validationRuns: [{ stage: "final-verification", phase: "full", status: "passed", target: { commit: "a", dirty: false, dirtyHash: null } }],
       reviewRuns: [{ outcome: "Approved" }],
     };
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "target-evidence-missing" });
   });
 
-  it("is satisfied when the latest full validation passed and matches the latest Approved review's target", () => {
+  it("is satisfied when the latest final-verification passed and matches the latest Approved review's target", () => {
     const target = { commit: "abc123", dirty: false, dirtyHash: null };
     const state = {
-      validationRuns: [{ phase: "full", status: "passed", target }],
+      validationRuns: [{ stage: "final-verification", phase: "full", status: "passed", target }],
       reviewRuns: [{ outcome: "Approved", target }],
     };
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: true, reason: null });
   });
 
-  it("only considers the latest full-phase record, ignoring earlier focused records", () => {
+  it("only considers the latest final-verification record, ignoring earlier focused records", () => {
     const target = { commit: "abc123", dirty: false, dirtyHash: null };
     const state = {
       validationRuns: [
-        { phase: "focused", status: "failed", target: { commit: "old", dirty: false, dirtyHash: null } },
-        { phase: "full", status: "passed", target },
+        { stage: "validate", phase: "focused", status: "failed", target: { commit: "old", dirty: false, dirtyHash: null } },
+        { stage: "final-verification", phase: "full", status: "passed", target },
       ],
       reviewRuns: [{ outcome: "Approved", target }],
     };
     expect(isFinalValidationSatisfied(state).satisfied).toBe(true);
   });
 
-  it("treats legacy records with no phase field as full", () => {
+  it("is not satisfied when only an earlier validate/revalidate full-phase record exists and final-verification has not run yet (full-every-cycle)", () => {
+    // Under full-every-cycle (or --force-full-validation/requiresFullValidation/
+    // focused-command fallback), validate/revalidate occurrences are ALSO
+    // phase "full" -- an earlier passing one must never be mistaken for the
+    // final gate itself, even if its target happens to match the Approved
+    // review's target (Codex review round 4, finding P1-002).
     const target = { commit: "abc123", dirty: false, dirtyHash: null };
     const state = {
-      validationRuns: [{ status: "passed", target }],
+      validationRuns: [{ stage: "validate", phase: "full", status: "passed", target }],
+      reviewRuns: [{ outcome: "Approved", target }],
+    };
+    expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "no-passed-full-validation" });
+  });
+
+  it("uses the latest final-verification record even when an earlier validate/revalidate full-phase record also exists", () => {
+    const staleTarget = { commit: "old", dirty: false, dirtyHash: null };
+    const target = { commit: "abc123", dirty: false, dirtyHash: null };
+    const state = {
+      validationRuns: [
+        { stage: "validate", phase: "full", status: "passed", target: staleTarget },
+        { stage: "final-verification", phase: "full", status: "passed", target },
+      ],
+      reviewRuns: [{ outcome: "Approved", target }],
+    };
+    expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: true, reason: null });
+  });
+
+  it("treats a legacy record with no phase field (but a final-verification stage) as full", () => {
+    const target = { commit: "abc123", dirty: false, dirtyHash: null };
+    const state = {
+      validationRuns: [{ stage: "final-verification", status: "passed", target }],
       reviewRuns: [{ outcome: "Approved", target }],
     };
     expect(isFinalValidationSatisfied(state).satisfied).toBe(true);

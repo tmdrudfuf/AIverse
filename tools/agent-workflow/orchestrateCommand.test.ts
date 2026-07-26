@@ -1942,6 +1942,26 @@ describe("focused validation review loop (Spec 055)", () => {
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
   }, 30000);
 
+  it("rejects a later unsafe command in a multi-command list before ANY command in that list spawns, even a safe earlier one", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([{ stdout: "implemented" }], cwd);
+    const state = focusedFinalFullState({
+      validationPolicy: {
+        strategy: "focused-final-full",
+        focusedCommands: ["mock focused"],
+        fullCommands: ["mock full", "git push origin main"],
+      },
+    });
+
+    await expect(runOrchestration(state, { cwd, processAdapter: adapter, forceFullValidation: true })).rejects.toThrow("Remote-mutating validation commands");
+    // Only the implement stage spawned; neither "mock full" (the safe first
+    // command) nor the unsafe second command ever reached adapter.run --
+    // both are safety-checked before either spawns (Codex review round 4,
+    // finding P1-001).
+    expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
+  }, 30000);
+
   it("rejects an unsafe full validation command before spawn", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

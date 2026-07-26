@@ -55,7 +55,16 @@ function isFinalValidationSatisfied(state) {
   const validationRuns = asArray(state && state.validationRuns);
   const reviewRuns = asArray(state && state.reviewRuns);
 
-  const lastFullRecord = [...validationRuns].reverse().find((record) => isFullPhaseRecord(record));
+  // Must be specifically the final-verification stage, not merely any
+  // full-phase record: under full-every-cycle (or --force-full-validation,
+  // requiresFullValidation, or the focused-command fallback),
+  // validate/revalidate occurrences are ALSO phase "full", so filtering by
+  // phase alone could accept an earlier validate/revalidate pass as if it
+  // were the final gate -- a false-readiness risk if state is inspected
+  // (e.g. via the `summary` command) between an Approved review and
+  // final-verification actually running (Codex review round 4, finding
+  // P1-002).
+  const lastFullRecord = [...validationRuns].reverse().find((record) => record.stage === "final-verification" && isFullPhaseRecord(record));
   if (!lastFullRecord || lastFullRecord.status !== "passed") {
     return { satisfied: false, reason: "no-passed-full-validation" };
   }
