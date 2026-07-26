@@ -775,3 +775,66 @@ describe("buildRunSummary: partial/corrupted state safety net", () => {
     expect(summary.warnings.some((w: { code: string }) => w.code === "unreconciled-stage-record")).toBe(false);
   });
 });
+
+describe("buildRunSummary: validation evidence readiness", () => {
+  it("reports humanGate.ready false when the final validation artifact backing a passed status is missing", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "implement.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "review-result.md"), "fixture", "utf8");
+    const p = (name: string) => `.agent-workflow/runs/054-review-run-summary-audit-trail/${name}`;
+    const state = baseState({
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        updatedAt: "2026-07-26T00:05:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement.md"), resultPath: p("implement.md") }],
+      validationRuns: [
+        { stage: "validate", status: "passed", path: p("does-not-exist-validate.md") },
+        { stage: "final-verification", status: "passed", path: p("does-not-exist-final.md") },
+      ],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md") }],
+      latestReviewDecision: "Approved",
+    });
+
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.validation.status).toBe("passed");
+    expect(summary.humanGate.ready).toBe(false);
+    expect(summary.warnings.some((w: { code: string }) => w.code === "missing-or-malformed-artifact")).toBe(true);
+  });
+
+  it("reports humanGate.ready true when the final validation artifact genuinely exists", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of ["implement.md", "review-result.md", "validate.md", "final.md"]) {
+      fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    }
+    const p = (name: string) => `.agent-workflow/runs/054-review-run-summary-audit-trail/${name}`;
+    const state = baseState({
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        updatedAt: "2026-07-26T00:05:00.000Z",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement.md"), resultPath: p("implement.md") }],
+      validationRuns: [
+        { stage: "validate", status: "passed", path: p("validate.md") },
+        { stage: "final-verification", status: "passed", path: p("final.md") },
+      ],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md") }],
+      latestReviewDecision: "Approved",
+    });
+
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.humanGate.ready).toBe(true);
+  });
+});

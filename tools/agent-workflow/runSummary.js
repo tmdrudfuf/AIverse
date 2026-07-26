@@ -562,6 +562,22 @@ function verifyLatestReviewEvidence(state, cwd, warnings) {
   return ok;
 }
 
+// buildValidationSummary trusts each record's persisted `status` field
+// as-is and already warns (per-record, via checkArtifactExists) when an
+// artifact is missing, but that warning alone does not affect readiness.
+// Verify the artifact backing the *specific* validation record readiness is
+// about to be claimed from actually exists -- not just checked-for-warning
+// -- so a deleted/moved final-verification log cannot leave humanGate.ready
+// true on the strength of a bare in-memory "passed" string alone. No
+// separate warning is pushed here: buildValidationSummary already recorded
+// one for this exact record if it is missing.
+function verifyLatestValidationEvidence(state, cwd) {
+  const validationRuns = asArray(state.validationRuns);
+  const last = validationRuns.length ? validationRuns[validationRuns.length - 1] : undefined;
+  if (!last || !last.path) return false;
+  return fs.existsSync(path.resolve(cwd, last.path));
+}
+
 function buildHumanGate(status, review, validation, findings, evidenceVerified) {
   if (status === RUN_STATUSES.PLANNED) {
     return { required: false, action: null, ready: false, state: HUMAN_GATE_STATES.NOT_READY };
@@ -628,9 +644,14 @@ function buildRunSummary(state, options = {}) {
   const validation = buildValidationSummary(state, cwd, options, warnings);
   const review = buildReviewSummary(state);
   const findings = buildFindingsSummary(state, cwd, options, warnings);
-  const evidenceVerified = status === RUN_STATUSES.AWAITING_HUMAN_DECISION
-    ? verifyLatestReviewEvidence(state, cwd, warnings)
-    : true;
+  let evidenceVerified = true;
+  if (status === RUN_STATUSES.AWAITING_HUMAN_DECISION) {
+    // Both calls must run regardless of the first result (not short-circuit
+    // via &&), since verifyLatestReviewEvidence has warning side effects.
+    const reviewEvidenceOk = verifyLatestReviewEvidence(state, cwd, warnings);
+    const validationEvidenceOk = verifyLatestValidationEvidence(state, cwd);
+    evidenceVerified = reviewEvidenceOk && validationEvidenceOk;
+  }
   const humanGate = buildHumanGate(status, review, validation, findings, evidenceVerified);
 
   const startedAt = orchestration.startedAt || null;
