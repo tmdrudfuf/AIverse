@@ -98,8 +98,8 @@ An integer counter, separate from `orchestration.fixCycleCount`/`state.fixCycleC
 - `validation.status` (existing field, redefined): mirrors the **full** phase's status, never the focused phase's — see plan.md Architecture Decision 5. For `full-every-cycle`, every record is phase `"full"`, so this is unchanged from Spec 054 behavior.
 - `validation.commands[]` (existing field): unchanged shape, each entry gains an additive `phase`.
 - `validation.focused`/`validation.full` (new): `{ status, attempts }`, computed by grouping `validationRuns` by `phase` (legacy records bucket as `full`) and by distinct `batchId` occurrence for `attempts`.
-- `validation.finalReadinessSatisfied` (new): `true` only when the full phase has passed **and** its target exactly matches the latest Approved review's target.
-- `commits.exactCommitMatch` (existing field, refined): `true`/`false` once both `reviewedTarget` and `fullValidationTarget` exist; `"unknown"` when either is absent, exactly Spec 054's original placeholder behavior for a run that hasn't reached that point yet.
+- `validation.finalReadinessSatisfied` (new): `true` only when the full phase has passed, **both** the full-validation target and the latest Approved review's target are present, and they exactly match. Missing target evidence on either side is `false` (not a free pass) — exact-match evidence is a requirement this feature introduces, not an optional enhancement.
+- `commits.exactCommitMatch` (existing field, refined): `true`/`false` once both `reviewedTarget` and `fullValidationTarget` exist and are compared; `"unknown"` when either is absent (this is a reporting distinction only — `"unknown"` still means `finalReadinessSatisfied`/`humanGate.ready` are `false`, never a silent pass).
 
 ## Backward Compatibility
 

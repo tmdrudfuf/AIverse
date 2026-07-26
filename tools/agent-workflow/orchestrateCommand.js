@@ -460,7 +460,17 @@ async function runValidationCommands(state, stage, options = {}) {
   // reflect whether *this* occurrence was skipped, not "was any occurrence
   // ever skipped" -- otherwise a later invocation that runs real validation
   // commands would still be masked behind an earlier skip.
-  let nextState = setOrchestration(state, { validationSkipped: Boolean(options.skipValidation) });
+  // effectiveValidationStrategy persists the *actually resolved* strategy
+  // (CLI --validation-strategy takes precedence over state.validationPolicy
+  // per resolveValidationPolicy's own precedence) so the run summary reports
+  // what really ran, not just what happens to be configured in state --
+  // otherwise a CLI-only strategy override could be misreported as
+  // full-every-cycle by any consumer reading state.validationPolicy directly
+  // (Codex review round 2, finding P2-001).
+  let nextState = setOrchestration(state, {
+    validationSkipped: Boolean(options.skipValidation),
+    effectiveValidationStrategy: policy.strategy,
+  });
   // A monotonically increasing marker shared by every command in this one
   // call, so consumers (the run-summary stage-timeline reconstruction) can
   // reliably group records into the occurrence they actually belong to,

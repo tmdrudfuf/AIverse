@@ -1739,6 +1739,31 @@ describe("focused validation review loop (Spec 055)", () => {
     expect(run.summary!.validation.commands.every((command: { phase: string }) => command.phase === "full")).toBe(true);
   }, 30000);
 
+  it("persists the effective validation strategy so a CLI-only override is never misreported by the run summary", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "focused validation passed" },
+      { stdout: structuredApprovedReview },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    // state.validationPolicy has no strategy at all -- only the CLI option
+    // resolves focused-final-full for this invocation.
+    const state = createState({ validationPolicy: { focusedCommands: ["mock focused"], fullCommands: ["mock full"] } });
+    const run = await runOrchestration(state, {
+      cwd,
+      processAdapter: adapter,
+      maxFixCycles: 2,
+      validationStrategy: "focused-final-full",
+    });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.state.orchestration.effectiveValidationStrategy).toBe("focused-final-full");
+    expect(run.summary!.validation.strategy).toBe("focused-final-full");
+  }, 30000);
+
   it("Smoke E: dry-run previews the strategy, both command lists, and the next phase without executing anything", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

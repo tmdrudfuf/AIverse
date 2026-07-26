@@ -75,13 +75,14 @@ describe("buildRunSummary: clean approved run", () => {
       ],
       validationRuns: [
         { stage: "validate", command: "npm test", status: "passed", exitCode: 0, durationMs: 1000, path: p("validate-validation.md") },
-        { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final-verification-validation.md") },
+        { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final-verification-validation.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } },
       ],
       reviewRuns: [
         {
           stage: "review",
           outcome: "Approved",
           reviewerId: "codex",
+          target: { commit: "abc123", dirty: false, dirtyHash: null },
           structuredReviewStatus: "valid",
           structuredReviewDecision: "Approved",
           executionPath: p("review-independent-review-execution.md"),
@@ -845,9 +846,9 @@ describe("buildRunSummary: validation evidence readiness", () => {
       orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement.md"), resultPath: p("implement.md") }],
       validationRuns: [
         { stage: "validate", status: "passed", path: p("validate.md") },
-        { stage: "final-verification", status: "passed", path: p("final.md") },
+        { stage: "final-verification", status: "passed", path: p("final.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } },
       ],
-      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md") }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } }],
       latestReviewDecision: "Approved",
     });
 
@@ -929,6 +930,33 @@ describe("buildRunSummary: focused/full validation phases (Spec 055)", () => {
     });
     const summary = buildRunSummary(state);
     expect(summary.validation.full.attempts).toBe(1);
+  });
+
+  it("reports the effective resolved strategy from orchestration.effectiveValidationStrategy, not just state.validationPolicy.strategy", () => {
+    const state = baseState({
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "state-invalid",
+        terminalState: "blocked",
+        effectiveValidationStrategy: "focused-final-full",
+      },
+      // state.validationPolicy.strategy is absent/different -- the CLI-only
+      // resolved strategy actually used for this run must win.
+      validationPolicy: { strategy: "full-every-cycle" },
+      validationRuns: [{ stage: "validate", command: "focused 1", status: "passed", phase: "focused", batchId: 1 }],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.strategy).toBe("focused-final-full");
+  });
+
+  it("falls back to state.validationPolicy.strategy when validation has never run (no effectiveValidationStrategy persisted yet)", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationPolicy: { strategy: "focused-final-full" },
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.strategy).toBe("focused-final-full");
   });
 
   it("legacy validationRuns records with no phase field bucket entirely as full (backward compatible)", () => {
@@ -1025,7 +1053,7 @@ describe("buildRunSummary: commit provenance and exact-match readiness (Spec 055
     expect(summary.humanGate.ready).toBe(false);
   });
 
-  it("reports exactCommitMatch: unknown (not false) when target evidence is absent, without blocking legacy readiness", () => {
+  it("reports exactCommitMatch: unknown (not false) when target evidence is absent, and withholds readiness since exact-match evidence is required, never fabricated", () => {
     const cwd = createTempDir();
     const runDir = path.join(cwd, runDirRelative);
     fs.mkdirSync(runDir, { recursive: true });
@@ -1038,8 +1066,12 @@ describe("buildRunSummary: commit provenance and exact-match readiness (Spec 055
     }), { cwd });
     expect(summary.commits.exactCommitMatch).toBe("unknown");
     expect(summary.review.exactReviewedCommitMatch).toBe("unknown");
-    expect(summary.validation.finalReadinessSatisfied).toBe(true);
-    expect(summary.humanGate.ready).toBe(true);
+    // Missing target evidence on either side is inconclusive, not a free
+    // pass: Spec 055 FR-010 requires exact-match evidence for readiness, so
+    // "unknown" must withhold readiness the same way a positive mismatch
+    // does (Codex review round 2, finding P1-001).
+    expect(summary.validation.finalReadinessSatisfied).toBe(false);
+    expect(summary.humanGate.ready).toBe(false);
   });
 
   it("preserves the always-null reviewedCommit placeholder for strict backward compatibility", () => {

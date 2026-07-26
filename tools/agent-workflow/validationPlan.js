@@ -33,20 +33,24 @@ function buildValidationPlanPreview(state, stage, options = {}) {
 }
 
 // Inspects durable state only (no I/O): satisfied iff the latest full-phase
-// validation attempt passed and its target does not *positively disagree*
-// with the target of the latest review attempt, which must itself be
-// Approved. Used identically by runSummary.js's
+// validation attempt passed, its target exactly matches the target of the
+// latest review attempt (which must itself be Approved), and BOTH targets
+// are actually present. Used identically by runSummary.js's
 // humanGate/finalReadinessSatisfied computation so the two can never
 // disagree about what "final validation satisfied" means.
 //
-// A record with no `target` at all predates Spec 055 (or was built without
-// target tracking, e.g. legacy/hand-built state); this is "unknown", not a
-// disagreement -- Spec 054 already reported humanGate.ready: true whenever
-// every other condition held, with no commit-match evidence at all, and this
-// feature must not retroactively withdraw that readiness for legacy data
-// just because target tracking did not exist yet. Only a *positive*
-// mismatch -- both targets present and actually different -- withholds
-// readiness.
+// Per spec.md FR-010, readiness MUST be false whenever the comparison is
+// inconclusive OR either target is missing -- exact-match evidence is a
+// requirement this feature introduces, not an optional enhancement, so
+// absent evidence must never be read as a free pass (Codex review round 2,
+// finding P1-001). This is a deliberate change from this feature's earlier
+// draft behavior, which treated missing evidence as "unknown, not
+// disproven" for backward compatibility with pre-Spec-055 data; that
+// permissiveness contradicted this function's own written contract and is
+// corrected here. Genuinely old run directories remain fully *readable*
+// (FR-023 is about reading, not about claiming a stricter, newer readiness
+// guarantee retroactively) -- they simply report `finalReadinessSatisfied:
+// false` / `exactCommitMatch: "unknown"` rather than a confident `true`.
 function isFinalValidationSatisfied(state) {
   const validationRuns = asArray(state && state.validationRuns);
   const reviewRuns = asArray(state && state.reviewRuns);
@@ -61,7 +65,11 @@ function isFinalValidationSatisfied(state) {
     return { satisfied: false, reason: "no-approved-review" };
   }
 
-  if (lastFullRecord.target && lastReview.target && !targetsMatch(lastFullRecord.target, lastReview.target)) {
+  if (!lastFullRecord.target || !lastReview.target) {
+    return { satisfied: false, reason: "target-evidence-missing" };
+  }
+
+  if (!targetsMatch(lastFullRecord.target, lastReview.target)) {
     return { satisfied: false, reason: "target-mismatch" };
   }
 

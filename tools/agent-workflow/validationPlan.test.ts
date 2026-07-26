@@ -70,20 +70,20 @@ describe("isFinalValidationSatisfied", () => {
     expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "target-mismatch" });
   });
 
-  it("is satisfied when neither record has target evidence at all (legacy/pre-Spec-055 data, unknown not disproven)", () => {
+  it("is not satisfied when neither record has target evidence at all (exact-match evidence is required, never assumed)", () => {
     const state = {
       validationRuns: [{ phase: "full", status: "passed" }],
       reviewRuns: [{ outcome: "Approved" }],
     };
-    expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: true, reason: null });
+    expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "target-evidence-missing" });
   });
 
-  it("is satisfied when only one side has target evidence (unknown, not a positive mismatch)", () => {
+  it("is not satisfied when only one side has target evidence", () => {
     const state = {
       validationRuns: [{ phase: "full", status: "passed", target: { commit: "a", dirty: false, dirtyHash: null } }],
       reviewRuns: [{ outcome: "Approved" }],
     };
-    expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: true, reason: null });
+    expect(isFinalValidationSatisfied(state)).toEqual({ satisfied: false, reason: "target-evidence-missing" });
   });
 
   it("is satisfied when the latest full validation passed and matches the latest Approved review's target", () => {

@@ -437,7 +437,15 @@ function buildValidationSummary(state, cwd, options, warnings) {
     attempts: countPhaseAttempts(focusedRecords),
   };
 
-  const strategy = (state.validationPolicy && state.validationPolicy.strategy) || DEFAULT_VALIDATION_STRATEGY;
+  // orchestration.effectiveValidationStrategy (persisted by runValidationCommands
+  // every time validation actually runs) reflects what was really resolved for
+  // this invocation, including a CLI-only --validation-strategy override that
+  // was never written into state.validationPolicy; only fall back to reading
+  // state.validationPolicy.strategy directly for states where validation has
+  // not run yet (e.g. dry-run preview construction, or a brand-new state).
+  const strategy = orchestration.effectiveValidationStrategy
+    || (state.validationPolicy && state.validationPolicy.strategy)
+    || DEFAULT_VALIDATION_STRATEGY;
 
   return {
     status,

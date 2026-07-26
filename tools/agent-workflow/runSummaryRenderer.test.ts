@@ -35,9 +35,9 @@ function approvedState(cwd: string) {
     orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement-claude-execution.md"), resultPath: p("implement-claude-result.md") }],
     validationRuns: [
       { stage: "validate", command: "npm test", status: "passed", exitCode: 0, durationMs: 1000, path: p("validate.md") },
-      { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final.md") },
+      { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } },
     ],
-    reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", structuredReviewStatus: "valid", structuredReviewDecision: "Approved", resultPath: p("review-result.md") }],
+    reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", structuredReviewStatus: "valid", structuredReviewDecision: "Approved", resultPath: p("review-result.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } }],
     latestReviewDecision: "Approved",
   };
 }
