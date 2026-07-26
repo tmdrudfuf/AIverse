@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildRunSummary } from "./runSummary.js";
 
 function createTempDir() {
@@ -377,6 +377,29 @@ describe("buildRunSummary: artifact path safety", () => {
       }],
     });
     const summary = buildRunSummary(state);
+    expect(summary.findings.items[0].artifactPaths).toEqual([]);
+    expect(summary.warnings.some((w: { code: string }) => w.code === "artifact-path-outside-run-directory")).toBe(true);
+  });
+
+  it("omits and warns instead of emitting an absolute cross-drive artifact path", () => {
+    // path.relative() returns an unchanged absolute (drive-qualified) path,
+    // not a "../"-prefixed one, when the two paths are on different Windows
+    // drives. Simulate that case deterministically via a spy, since it
+    // cannot be reproduced reliably without a genuine second drive.
+    const relativeSpy = vi.spyOn(path, "relative").mockReturnValueOnce("D:\\other-drive\\outside.md");
+    const state = baseState({
+      findingHistory: [{
+        findingId: "F2",
+        kind: "blocking",
+        severity: "P1",
+        currentStatus: "resolved",
+        firstSeenReviewSequence: 1,
+        resolvedReviewSequence: 2,
+        latestReviewArtifactPath: "some/path.md",
+      }],
+    });
+    const summary = buildRunSummary(state);
+    relativeSpy.mockRestore();
     expect(summary.findings.items[0].artifactPaths).toEqual([]);
     expect(summary.warnings.some((w: { code: string }) => w.code === "artifact-path-outside-run-directory")).toBe(true);
   });

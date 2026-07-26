@@ -26,8 +26,14 @@ function toRunRelativePath(cwd, state, repoRelativePath, options, warnings) {
   if (!repoRelativePath) return undefined;
   const runDirectory = getRunDirectory(state, { ...options, cwd });
   const absolutePath = path.resolve(cwd, repoRelativePath);
-  const relative = path.relative(runDirectory, absolutePath).replace(/\\/g, "/");
-  if (relative === ".." || relative.startsWith("../")) {
+  // path.relative() escapes the run directory as either a "../"-prefixed
+  // path (same drive) or -- on Windows, when the two paths are on different
+  // drives -- an unchanged absolute (drive-qualified) path with no relative
+  // form at all. Both must be rejected; neither is a valid run-directory-
+  // relative path.
+  const rawRelative = path.relative(runDirectory, absolutePath);
+  const escapesRunDirectory = rawRelative === ".." || rawRelative.startsWith(`..${path.sep}`) || path.isAbsolute(rawRelative);
+  if (escapesRunDirectory) {
     if (warnings) {
       warnings.push({
         code: "artifact-path-outside-run-directory",
@@ -36,7 +42,7 @@ function toRunRelativePath(cwd, state, repoRelativePath, options, warnings) {
     }
     return undefined;
   }
-  return relative;
+  return rawRelative.replace(/\\/g, "/");
 }
 
 function readJsonArtifactSafe(cwd, relativeFilePath, warnings) {
