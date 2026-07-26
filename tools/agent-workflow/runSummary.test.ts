@@ -428,6 +428,21 @@ describe("buildRunSummary: validation skipped vs not-run", () => {
     const summary = buildRunSummary(baseState({ orchestration: { startedAt: "2026-07-26T00:00:00.000Z", currentStage: "implement" } }));
     expect(summary.validation.status).toBe("not-run");
   });
+
+  it("does not let a stale earlier 'passed' record mask the current occurrence being skipped", () => {
+    // Simulates a resumed run: an earlier validate occurrence genuinely
+    // passed, but the latest (e.g. final-verification) occurrence was
+    // explicitly skipped via --skip-validation. The current occurrence's
+    // skip must not be hidden behind the earlier unrelated "passed" record.
+    const summary = buildRunSummary(baseState({
+      orchestration: { startedAt: "2026-07-26T00:00:00.000Z", currentStage: "human-merge-decision", validationSkipped: true },
+      validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex" }],
+      latestReviewDecision: "Approved",
+    }));
+    expect(summary.validation.status).toBe("skipped");
+    expect(summary.humanGate.ready).toBe(false);
+  });
 });
 
 describe("buildRunSummary: role fallback chain", () => {

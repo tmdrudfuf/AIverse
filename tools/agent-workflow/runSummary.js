@@ -335,8 +335,15 @@ function buildValidationSummary(state, cwd, options, warnings) {
     };
   });
 
+  // orchestration.validationSkipped is freshly (re)set on every
+  // runValidationCommands call to reflect only the current occurrence (see
+  // orchestrateCommand.js), so it takes precedence here: an explicit skip on
+  // the run's latest validation-stage occurrence must not be masked by an
+  // earlier, unrelated occurrence's stale "passed"/"failed" record.
   let status;
-  if (validationRuns.length) {
+  if (orchestration.validationSkipped) {
+    status = VALIDATION_STATUSES.SKIPPED;
+  } else if (validationRuns.length) {
     // The most recent validation attempt reflects the run's current validation
     // state: a failure/timeout/interruption immediately blocks the run (no
     // further validation attempts follow it in this architecture), and a run
@@ -344,8 +351,6 @@ function buildValidationSummary(state, cwd, options, warnings) {
     // (final-verification). Earlier failed-then-fixed-then-passed cycles are
     // a normal part of the fix loop, not a reason to report overall failure.
     status = validationRuns[validationRuns.length - 1].status || VALIDATION_STATUSES.NOT_RUN;
-  } else if (orchestration.validationSkipped) {
-    status = VALIDATION_STATUSES.SKIPPED;
   } else {
     status = VALIDATION_STATUSES.NOT_RUN;
   }

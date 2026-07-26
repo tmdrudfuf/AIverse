@@ -423,7 +423,11 @@ async function runValidationCommands(state, stage, options = {}) {
   const adapter = options.processAdapter || createDefaultProcessAdapter();
   const commands = getValidationCommands(state, options);
   const records = [];
-  let nextState = options.skipValidation ? setOrchestration(state, { validationSkipped: true }) : state;
+  // Always set explicitly (never conditionally left stale): this must
+  // reflect whether *this* occurrence was skipped, not "was any occurrence
+  // ever skipped" -- otherwise a later invocation that runs real validation
+  // commands would still be masked behind an earlier skip.
+  let nextState = setOrchestration(state, { validationSkipped: Boolean(options.skipValidation) });
   // A monotonically increasing marker shared by every command in this one
   // call, so consumers (the run-summary stage-timeline reconstruction) can
   // reliably group records into the occurrence they actually belong to,
