@@ -137,6 +137,26 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
     return queue && queue.length ? queue.shift() : undefined;
   }
 
+  // A single validate/revalidate/final-verification *stage occurrence* can
+  // produce multiple validationRuns records (one per configured command --
+  // see runValidationCommands in orchestrateCommand.js). Consume every
+  // record belonging to that occurrence: the orchestrator itself stops
+  // running commands at the first non-"passed" result, so draining up to
+  // and including the first non-"passed" record (or the end of the queue)
+  // reconstructs exactly the commands that actually ran for this occurrence,
+  // never fewer.
+  function consumeValidationBatch(stage) {
+    const queue = queues[stage];
+    if (!queue || !queue.length) return undefined;
+    const batch = [];
+    while (queue.length) {
+      const record = queue.shift();
+      batch.push(record);
+      if (record.status !== "passed") break;
+    }
+    return batch;
+  }
+
   function push(stage, record, extra = {}) {
     attemptCounts[stage] = (attemptCounts[stage] || 0) + 1;
     const artifactPaths = [];
@@ -161,6 +181,26 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
     });
   }
 
+  function pushValidationBatch(stage, batch) {
+    attemptCounts[stage] = (attemptCounts[stage] || 0) + 1;
+    const artifactPaths = [];
+    for (const record of batch) {
+      if (!record.path) continue;
+      const normalized = toRunRelativePath(cwd, state, record.path, options, warnings);
+      if (normalized) artifactPaths.push(normalized);
+    }
+    const lastRecord = batch[batch.length - 1];
+    timeline.push({
+      stage,
+      role: roleForStage(stage),
+      agentId: null,
+      status: lastRecord.status || "unknown",
+      attempt: attemptCounts[stage],
+      artifactPaths,
+      result: null,
+    });
+  }
+
   // Always appends any legacy (pre-Spec-054, stage-less) reviewRuns entries
   // before returning, regardless of which exit path below is taken -- so
   // that persisted review evidence is never silently dropped just because
@@ -172,15 +212,15 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
     return timeline;
   }
 
-  let record = consume("implement");
+  const record = consume("implement");
   if (!record) return finalize();
   push("implement", record, { status: record.status === "completed" ? "completed" : "failed" });
   if (record.status !== "completed") return finalize();
 
-  record = consume("validate");
-  if (!record) return finalize();
-  push("validate", record, { status: record.status });
-  if (record.status !== "passed") return finalize();
+  const validateBatch = consumeValidationBatch("validate");
+  if (!validateBatch) return finalize();
+  pushValidationBatch("validate", validateBatch);
+  if (validateBatch[validateBatch.length - 1].status !== "passed") return finalize();
 
   let reviewStageName = "review";
   for (let guard = 0; guard < 50; guard += 1) {
@@ -198,8 +238,8 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
     }
 
     if (reviewRecord.outcome === "Approved") {
-      const finalVerificationRecord = consume("final-verification");
-      if (finalVerificationRecord) push("final-verification", finalVerificationRecord, { status: finalVerificationRecord.status });
+      const finalVerificationBatch = consumeValidationBatch("final-verification");
+      if (finalVerificationBatch) pushValidationBatch("final-verification", finalVerificationBatch);
       break;
     }
 
@@ -208,10 +248,10 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
       if (!fixRecord) break;
       push("fix", fixRecord, { status: fixRecord.status === "completed" ? "completed" : "failed" });
       if (fixRecord.status !== "completed") break;
-      const revalidateRecord = consume("revalidate");
-      if (!revalidateRecord) break;
-      push("revalidate", revalidateRecord, { status: revalidateRecord.status });
-      if (revalidateRecord.status !== "passed") break;
+      const revalidateBatch = consumeValidationBatch("revalidate");
+      if (!revalidateBatch) break;
+      pushValidationBatch("revalidate", revalidateBatch);
+      if (revalidateBatch[revalidateBatch.length - 1].status !== "passed") break;
       reviewStageName = "re-review";
       continue;
     }

@@ -158,6 +158,63 @@ describe("buildRunSummary: clean approved run", () => {
   });
 });
 
+describe("buildRunSummary: multi-command validation stages", () => {
+  it("preserves every command's artifact and reports the failing command's status, not the first command's", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "implement-execution.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "implement-result.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "validate-1.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "validate-2.md"), "fixture", "utf8");
+    const p = (name: string) => `.agent-workflow/runs/054-review-run-summary-audit-trail/${name}`;
+
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "validate failed: npx tsc --noEmit", terminalState: "blocked" },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement-execution.md"), resultPath: p("implement-result.md") }],
+      validationRuns: [
+        { stage: "validate", command: "npm test", status: "passed", exitCode: 0, path: p("validate-1.md") },
+        { stage: "validate", command: "npx tsc --noEmit", status: "failed", exitCode: 1, path: p("validate-2.md") },
+      ],
+    });
+
+    const summary = buildRunSummary(state, { cwd });
+    const validateEntries = summary.stageTimeline.filter((e: any) => e.stage === "validate");
+    expect(validateEntries).toHaveLength(1);
+    expect(validateEntries[0].status).toBe("failed");
+    expect(validateEntries[0].artifactPaths).toEqual(["validate-1.md", "validate-2.md"]);
+    expect(summary.artifacts).toContain("validate-1.md");
+    expect(summary.artifacts).toContain("validate-2.md");
+  });
+
+  it("preserves every command's artifact for a fully passing multi-command stage", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, ".agent-workflow/runs/054-review-run-summary-audit-trail");
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of ["implement-execution.md", "implement-result.md", "validate-1.md", "validate-2.md", "validate-3.md"]) {
+      fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    }
+    const p = (name: string) => `.agent-workflow/runs/054-review-run-summary-audit-trail/${name}`;
+
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "Reviewer returned Unknown", terminalState: "blocked" },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement-execution.md"), resultPath: p("implement-result.md") }],
+      validationRuns: [
+        { stage: "validate", command: "npm test", status: "passed", exitCode: 0, path: p("validate-1.md") },
+        { stage: "validate", command: "npx tsc --noEmit", status: "passed", exitCode: 0, path: p("validate-2.md") },
+        { stage: "validate", command: "npm run build", status: "passed", exitCode: 0, path: p("validate-3.md") },
+      ],
+      latestReviewDecision: "Unknown",
+    });
+
+    const summary = buildRunSummary(state, { cwd });
+    const validateEntries = summary.stageTimeline.filter((e: any) => e.stage === "validate");
+    expect(validateEntries).toHaveLength(1);
+    expect(validateEntries[0].status).toBe("passed");
+    expect(validateEntries[0].artifactPaths).toEqual(["validate-1.md", "validate-2.md", "validate-3.md"]);
+  });
+});
+
 describe("buildRunSummary: never reports false success", () => {
   it("reports failed/validation-failed when validation fails", () => {
     const state = baseState({
