@@ -1720,6 +1720,48 @@ describe("focused validation review loop (Spec 055)", () => {
     expect(run.summary!.humanGate.ready).toBe(false);
   }, 30000);
 
+  it("does not reach human-merge-decision when final-verification passes but the Approved review's target cannot be verified (resumed run with a legacy, target-less review record)", async () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    // .agent-workflow/ is gitignored in the real repository (matching
+    // AGENTS.md/README); replicate that here so this resume-directly-at-
+    // final-verification scenario (where nothing has written to
+    // .agent-workflow/ yet in this invocation) does not spuriously trip the
+    // tree-modification check purely because final-verification's own first
+    // artifact write creates a newly-untracked directory.
+    fs.writeFileSync(path.join(cwd, ".gitignore"), ".agent-workflow/\n");
+    git(cwd, ["add", "-A"]);
+    git(cwd, ["commit", "-q", "-m", "ignore agent-workflow"]);
+    const adapter = createSequenceAdapter([
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    // Simulates a resumed run where an older (pre-target-tracking) Approved
+    // review record is already persisted, and only final-verification runs
+    // fresh in this invocation. The tree-diff check alone would see no
+    // change during final-verification's own execution and would otherwise
+    // proceed straight to markHumanGate; isFinalValidationSatisfied must
+    // still catch the missing review target and prevent this (Codex review
+    // round 3, finding P1-001).
+    const resumedState = focusedFinalFullState({
+      orchestration: {
+        currentStage: "final-verification",
+        maxFixCycles: 0,
+        startedAt: "2026-07-26T00:00:00.000Z",
+      },
+      orchestrationRuns: [{ stage: "implement", status: "completed", path: "implement.md", resultPath: "implement-result.md" }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", resultPath: "review.md" }],
+    });
+
+    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter, maxFixCycles: 0 });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.currentStage).toBe("blocked");
+    expect(run.reason).toMatch(/Maximum full-validation fix cycles reached/);
+    expect(run.reason).toMatch(/target-evidence-missing/);
+    expect(run.summary!.humanGate.ready).toBe(false);
+  }, 30000);
+
   it("Smoke D: full-every-cycle (explicit) reproduces the same stage/command behavior as the default", async () => {
     const cwd = createTempDir();
     initRepo(cwd);

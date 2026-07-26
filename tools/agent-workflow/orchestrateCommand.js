@@ -39,7 +39,7 @@ const {
   resolveValidationPolicy,
 } = require("./validationPolicy.js");
 const { buildValidationRecordFields } = require("./validationPhase.js");
-const { buildValidationPlanPreview } = require("./validationPlan.js");
+const { buildValidationPlanPreview, isFinalValidationSatisfied } = require("./validationPlan.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -1126,32 +1126,62 @@ async function runOrchestration(state, options = {}) {
       currentState = validation.state;
       steps.push({ stage, status: validation.passed ? "passed" : "failed", artifactPath: validation.records.at(-1)?.path });
 
+      // A skipped final-verification (--skip-validation) trivially "passes"
+      // with zero commands executed and no target evidence; check this
+      // first and hard-block immediately, before any of the readiness/
+      // retry-routing logic below, which is for genuine validation activity
+      // that ran and did not establish readiness -- not for an explicit,
+      // one-shot user choice not to validate at all (spec.md FR-012, Codex
+      // review round 1 finding P1-001). This must never reach the human
+      // merge gate at the orchestration-decision/CLI-exit-code level,
+      // matching the run-summary's own humanGate.ready: false for this case.
+      if (stage === FULL_STAGE_NAME && getOrchestration(currentState).validationSkipped) {
+        currentState = markBlocked(currentState, "final-verification skipped via --skip-validation; human merge decision requires actual validation evidence");
+        if (statePath) writeState(statePath, currentState);
+        break;
+      }
+
       const treeModifiedByFullValidation = stage === FULL_STAGE_NAME
         && validation.passed
         && getDiffSignature(preValidationGitContext) !== getDiffSignature(collectGitContext({ cwd, baseBranch: currentState.baseBranch }));
 
-      if (!validation.passed || treeModifiedByFullValidation) {
+      // Consults the exact same isFinalValidationSatisfied function the run
+      // summary uses for humanGate.ready/finalReadinessSatisfied, so the
+      // orchestration-level decision can never disagree with it (Codex
+      // review round 3, finding P1-001: the tree-diff check above only
+      // detects validation modifying the tree during its own execution -- it
+      // has no visibility into whether the Approved review's target actually
+      // matches what was validated, e.g. after a resumed run supplies a
+      // review record predating target tracking).
+      const finalReadiness = (stage === FULL_STAGE_NAME && validation.passed && !treeModifiedByFullValidation)
+        ? isFinalValidationSatisfied(currentState)
+        : { satisfied: true, reason: null };
+
+      if (!validation.passed || treeModifiedByFullValidation || !finalReadiness.satisfied) {
         if (stage !== FULL_STAGE_NAME) {
           // Focused validation (or full-every-cycle at validate/revalidate)
           // failing keeps today's hard-block behavior unchanged -- only a
-          // final-verification failure/tree-modification is routed to a
-          // fix-capable stage (see below).
+          // final-verification failure/tree-modification/readiness-mismatch
+          // is routed to a fix-capable stage (see below).
           currentState = markBlocked(currentState, `${stage} failed: ${validation.failedRecord.command}`, { failedValidationPath: validation.failedRecord.path });
           if (statePath) writeState(statePath, currentState);
           break;
         }
-        // final-verification failed, or passed but modified the tracked
-        // working tree: do not treat the prior Approved decision as final.
-        // Route back to fix (reusing the existing fix -> revalidate ->
-        // re-review loop) up to a dedicated, separately-tracked ceiling, so a
-        // defect the full suite found cannot silently consume the Reviewer's
-        // own fix-cycle budget (spec.md FR-006/FR-007, Architecture Decision 3).
+        // final-verification failed, passed but modified the tracked working
+        // tree, or passed but its exact-match readiness check failed: do not
+        // treat the prior Approved decision as final. Route back to fix
+        // (reusing the existing fix -> revalidate -> re-review loop) up to a
+        // dedicated, separately-tracked ceiling, so a defect the full suite
+        // found cannot silently consume the Reviewer's own fix-cycle budget
+        // (spec.md FR-006/FR-007, Architecture Decision 3).
         const fullValidationFixCycleCount = Number(getOrchestration(currentState).fullValidationFixCycleCount || 0);
         const failureSummary = treeModifiedByFullValidation
           ? "final-verification passed, but its commands modified the tracked working tree (e.g. a formatter, generated snapshot, or build artifact under version control changed). Reconcile and commit this change so a fresh review can be obtained."
-          : `final-verification failed: ${validation.failedRecord.command} (exit code ${validation.failedRecord.exitCode}).${validation.failedRecord.errorMessage ? ` ${validation.failedRecord.errorMessage}` : ""}`;
+          : (!validation.passed
+            ? `final-verification failed: ${validation.failedRecord.command} (exit code ${validation.failedRecord.exitCode}).${validation.failedRecord.errorMessage ? ` ${validation.failedRecord.errorMessage}` : ""}`
+            : `final-verification passed, but its exact-match readiness check failed (${finalReadiness.reason}): the Approved review's target does not verifiably match what final-verification validated. Obtain a fresh review against the current exact commit before this can be trusted.`);
         if (fullValidationFixCycleCount >= maxFixCycles) {
-          const extra = treeModifiedByFullValidation ? {} : { failedValidationPath: validation.failedRecord.path };
+          const extra = validation.passed ? {} : { failedValidationPath: validation.failedRecord.path };
           currentState = markBlocked(currentState, `Maximum full-validation fix cycles reached (${failureSummary})`, extra);
           if (statePath) writeState(statePath, currentState);
           break;
@@ -1165,18 +1195,6 @@ async function runOrchestration(state, options = {}) {
       }
 
       if (stage === "final-verification") {
-        // A skipped final-verification (--skip-validation) trivially "passes"
-        // with zero commands executed; it must never reach the human merge
-        // gate at the orchestration-decision/CLI-exit-code level, matching
-        // the run-summary's own humanGate.ready: false for this same case
-        // (spec.md FR-012, Codex review round 1 finding P1-001) -- the two
-        // signals must never disagree about whether skipping permits
-        // readiness.
-        if (getOrchestration(currentState).validationSkipped) {
-          currentState = markBlocked(currentState, "final-verification skipped via --skip-validation; human merge decision requires actual validation evidence");
-          if (statePath) writeState(statePath, currentState);
-          break;
-        }
         currentState = markHumanGate(currentState);
         if (statePath) writeState(statePath, currentState);
         break;
