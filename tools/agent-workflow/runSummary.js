@@ -234,6 +234,43 @@ function buildStageTimeline(state, roles, cwd, options, warnings) {
     for (const legacyRecord of legacyUnstagedReviews) {
       push("unknown", legacyRecord, { status: "unknown", result: legacyRecord.outcome || null });
     }
+    // Safety net for partial/corrupted state (e.g. staged validate/review
+    // records exist but no leading implement record, so the chronology
+    // reconstruction above never started or stopped early): every durable
+    // persisted record must appear in the timeline somewhere. Anything left
+    // in any queue at this point could not be placed in its reconstructed
+    // chronological position, so append it out of sequence with a warning
+    // rather than silently dropping evidence that summary.review/validation
+    // (which read the full arrays directly, not through this replay) still
+    // report as having happened.
+    const reviewStageNames = new Set(["review", "re-review", "final-review"]);
+    for (const stageName of Object.keys(queues)) {
+      if (VALIDATION_STAGES.has(stageName)) {
+        let leftoverBatch = consumeValidationBatch(stageName);
+        while (leftoverBatch) {
+          pushValidationBatch(stageName, leftoverBatch);
+          warnings.push({
+            code: "unreconciled-stage-record",
+            message: `Persisted ${stageName} record(s) could not be placed in their expected chronological position and were appended out of sequence.`,
+          });
+          leftoverBatch = consumeValidationBatch(stageName);
+        }
+        continue;
+      }
+      const queue = queues[stageName];
+      while (queue && queue.length) {
+        const leftover = queue.shift();
+        if (reviewStageNames.has(stageName)) {
+          push(stageName, leftover, { status: "completed", result: leftover.outcome || null });
+        } else {
+          push(stageName, leftover, { status: leftover.status === "completed" ? "completed" : "failed" });
+        }
+        warnings.push({
+          code: "unreconciled-stage-record",
+          message: `A persisted ${stageName} record could not be placed in its expected chronological position and was appended out of sequence.`,
+        });
+      }
+    }
     return timeline;
   }
 
