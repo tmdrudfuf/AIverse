@@ -687,7 +687,7 @@ See `specs/054-review-run-summary-audit-trail/contracts/run-summary-schema.md` f
 
 **Findings**: integrates Spec 052 finding lifecycle tracking (`state.findingHistory`) directly — `opened`, `resolved`, `carriedForward`, `remainingBlocking`, `remainingNonBlocking`, and a per-finding `openedReviewAttempt`/`resolvedReviewAttempt`. `remainingBlocking` always matches the orchestrator's own `activeBlockingFindings` count.
 
-**Commit provenance**: this workflow reviews the live branch/working-tree diff rather than persisting an implementation commit SHA, so `commits.implementationCommit`/`reviewedCommit`/`exactCommitMatch` are `null`/`"unknown"` by design — never fabricated as a match — while `commits.currentBranchHead` reports the live `git rev-parse HEAD` at the moment the summary was generated.
+**Commit provenance**: this workflow reviews the live branch/working-tree diff rather than persisting an implementation commit SHA, so `commits.implementationCommit`/`reviewedCommit`/`exactCommitMatch` are `null`/`"unknown"` by design — never fabricated as a match. `commits.currentBranchHead` reports the live `git rev-parse HEAD` **only** for a summary written by a real `orchestrate` run (which already has live git context from that run itself, at zero marginal process cost); the read-only `summary` CLI command never spawns a process — including git — so it always reports `currentBranchHead` as `null` rather than add a new subprocess call just for this field.
 
 **Secrets**: raw command stdout/stderr, full Reviewer/Implementer output, and environment values are never copied into either summary artifact — only command text, status, exit code, duration, and artifact *paths* (the full text remains in the existing detailed audit artifacts referenced by path).
 

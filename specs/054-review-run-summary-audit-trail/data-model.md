@@ -123,7 +123,7 @@ Directly derived from `state.findingHistory` (Spec 052): `opened = findingHistor
 }
 ```
 
-This workflow's review prompts are built from the working tree/branch diff at review time (`collectGitContext`), not from a persisted implementation commit SHA recorded in state; the summary reports `currentBranchHead` (read from the live repository, best-effort, `null` if unavailable) and reports `implementationCommit`/`reviewedCommit`/`exactCommitMatch` as `null`/`"unknown"` rather than fabricating a match, unless/until a future feature persists explicit commit SHAs into state. This is a deliberate, documented "unknown, not false success" choice (spec.md FR-013).
+This workflow's review prompts are built from the working tree/branch diff at review time (`collectGitContext`), not from a persisted implementation commit SHA recorded in state; the summary reports `implementationCommit`/`reviewedCommit`/`exactCommitMatch` as `null`/`"unknown"` rather than fabricating a match, unless/until a future feature persists explicit commit SHAs into state. This is a deliberate, documented "unknown, not false success" choice (spec.md FR-013). `currentBranchHead` is populated only when `buildRunSummary` is called by a real `orchestrate` run, which passes it in from git context that run already collected for its own purposes (`options.currentBranchHead`); the read-only `summary` CLI command never spawns a process (including git) under any invocation, so it always reports `currentBranchHead: null` rather than add a new subprocess call solely for this field.
 
 ## Human Gate (`humanGate`)
 

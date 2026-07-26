@@ -54,14 +54,24 @@ describe("summaryCommand", () => {
     expect(summary.run.status).toBe("planned");
   });
 
-  it("populates commits.currentBranchHead from the live repository, matching orchestrate-written summaries", () => {
+  it("reports currentBranchHead as unknown even in a real repository (no git call is made)", () => {
     const cwd = createTempDir();
     initRepo(cwd);
-    const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
 
     const summary = getRunSummaryForDisplay({ featureId: "x", baseBranch: "main", results: [] }, { cwd });
 
-    expect(summary.commits.currentBranchHead).toBe(head);
+    expect(summary.commits.currentBranchHead).toBeNull();
+  });
+
+  it("does not import any process-spawning module (git context collection, child_process), enforced at the source level", () => {
+    // vi.spyOn cannot intercept a CommonJS module's own already-destructured
+    // reference to child_process.execFileSync from within an ESM test
+    // (Vitest cannot redefine the export), so this is verified structurally
+    // instead: summaryCommand.js must never require the modules that would
+    // let it spawn a process, not just happen to avoid calling them today.
+    const source = fs.readFileSync(path.join(__dirname, "summaryCommand.js"), "utf8");
+    expect(source).not.toMatch(/require\(["']\.\/reviewCommand\.js["']\)/);
+    expect(source).not.toMatch(/require\(["']child_process["']\)/);
   });
 
   it("does not crash when the supplied cwd is not a git repository", () => {

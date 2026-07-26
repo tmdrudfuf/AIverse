@@ -1,25 +1,18 @@
 const { buildRunSummary } = require("./runSummary.js");
 const { renderRunSummaryMarkdown } = require("./runSummaryRenderer.js");
-const { collectGitContext } = require("./reviewCommand.js");
 
 /**
  * Read-only: computes the latest logical run summary directly from the
  * supplied state (never from a possibly-stale cached run-summary.json), and
- * never spawns a process, runs validation, mutates state, or writes any
- * artifact. Best-effort reads the live HEAD commit (a read-only `git
- * rev-parse`, the same call collectGitContext already makes for other
- * read-only commands) so commits.currentBranchHead is populated the same
- * way it is for an orchestrate-written summary.
+ * never spawns a process (including git), runs validation, mutates state, or
+ * writes any artifact. commits.currentBranchHead is therefore only ever
+ * populated by an orchestrate-written summary (which already has live git
+ * context from its own real run and passes it in) -- reading it here would
+ * require a new git subprocess this command must never spawn, so read-only
+ * summary inspection reports it as unknown/null instead.
  */
 function getRunSummaryForDisplay(state, options = {}) {
-  const cwd = options.cwd || process.cwd();
-  let currentBranchHead = null;
-  try {
-    currentBranchHead = collectGitContext({ cwd, baseBranch: state.baseBranch }).headCommit || null;
-  } catch (error) {
-    currentBranchHead = null;
-  }
-  return buildRunSummary(state, { cwd, currentBranchHead });
+  return buildRunSummary(state, { cwd: options.cwd || process.cwd() });
 }
 
 function formatSummaryCommandOutput(summary, format = "markdown") {
