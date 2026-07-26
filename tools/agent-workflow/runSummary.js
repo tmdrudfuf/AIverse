@@ -22,11 +22,21 @@ function asArray(value) {
 // agentWorkflow.js/orchestrateCommand.js's `relativePath(cwd, fullPath)`).
 // The summary schema requires run-directory-relative paths, so normalize
 // before they ever reach the summary model.
-function toRunRelativePath(cwd, state, repoRelativePath, options) {
+function toRunRelativePath(cwd, state, repoRelativePath, options, warnings) {
   if (!repoRelativePath) return undefined;
   const runDirectory = getRunDirectory(state, { ...options, cwd });
   const absolutePath = path.resolve(cwd, repoRelativePath);
-  return path.relative(runDirectory, absolutePath).replace(/\\/g, "/");
+  const relative = path.relative(runDirectory, absolutePath).replace(/\\/g, "/");
+  if (relative === ".." || relative.startsWith("../")) {
+    if (warnings) {
+      warnings.push({
+        code: "artifact-path-outside-run-directory",
+        message: `Referenced artifact path resolves outside the run directory and was omitted: ${repoRelativePath}`,
+      });
+    }
+    return undefined;
+  }
+  return relative;
 }
 
 function readJsonArtifactSafe(cwd, relativeFilePath, warnings) {
@@ -91,7 +101,7 @@ function roleForStage(stage) {
   return "implementer";
 }
 
-function buildStageTimeline(state, roles, cwd, options) {
+function buildStageTimeline(state, roles, cwd, options, warnings) {
   const orchestrationRuns = asArray(state.orchestrationRuns);
   const reviewRuns = asArray(state.reviewRuns);
   const validationRuns = asArray(state.validationRuns);
@@ -130,7 +140,7 @@ function buildStageTimeline(state, roles, cwd, options) {
       // are persisted repo-relative; normalize to run-directory-relative here.
       const rawPaths = [record.path, record.executionPath, record.resultPath, record.structuredReviewPath].filter(Boolean);
       for (const rawPath of rawPaths) {
-        const normalized = toRunRelativePath(cwd, state, rawPath, options);
+        const normalized = toRunRelativePath(cwd, state, rawPath, options, warnings);
         if (normalized) artifactPaths.push(normalized);
       }
     }
@@ -207,6 +217,35 @@ function buildStageTimeline(state, roles, cwd, options) {
   return finalize();
 }
 
+// --- Secret redaction --------------------------------------------------------
+//
+// Configured validation command text is user-controlled and may contain
+// inline secret-bearing environment assignments or recognizable token
+// values (FR-019: never copy secrets into the summary). This is a
+// best-effort textual redaction, not a guarantee that no secret can ever
+// leak through an unrecognized format.
+
+const SECRET_ASSIGNMENT_PATTERN = /\b([A-Za-z_][A-Za-z0-9_]*(?:TOKEN|SECRET|KEY|PASSWORD|PASSWD|PASS|CREDENTIAL|AUTH)[A-Za-z0-9_]*)\s*=\s*(\S+)/gi;
+const SECRET_VALUE_PATTERNS = [
+  /\bghp_[A-Za-z0-9]{20,}\b/g,
+  /\bgho_[A-Za-z0-9]{20,}\b/g,
+  /\bghs_[A-Za-z0-9]{20,}\b/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{10,}\b/gi,
+  /\bsk-[A-Za-z0-9]{20,}\b/g,
+];
+
+function redactSecretsFromText(text) {
+  if (!text) return text;
+  let redacted = String(text).replace(SECRET_ASSIGNMENT_PATTERN, (match, name) => `${name}=***REDACTED***`);
+  for (const pattern of SECRET_VALUE_PATTERNS) {
+    redacted = redacted.replace(pattern, "***REDACTED***");
+  }
+  return redacted;
+}
+
 // --- Validation summary ------------------------------------------------------
 
 function buildValidationSummary(state) {
@@ -214,7 +253,7 @@ function buildValidationSummary(state) {
   const validationRuns = asArray(state.validationRuns);
   const commands = validationRuns.map((record) => ({
     stage: record.stage || "unknown",
-    command: record.command || "",
+    command: redactSecretsFromText(record.command || ""),
     status: record.status || VALIDATION_STATUSES.NOT_RUN,
     exitCode: typeof record.exitCode === "number" ? record.exitCode : null,
     durationMs: typeof record.durationMs === "number" ? record.durationMs : null,
@@ -271,7 +310,7 @@ function getFindingHistory(state) {
   return [];
 }
 
-function buildFindingsSummary(state, cwd, options) {
+function buildFindingsSummary(state, cwd, options, warnings) {
   const history = asArray(getFindingHistory(state));
   const items = history.map((entry) => ({
     findingId: entry.findingId,
@@ -283,7 +322,7 @@ function buildFindingsSummary(state, cwd, options) {
     resolvedReviewAttempt: entry.resolvedReviewSequence ?? null,
     artifactPaths: [entry.latestReviewArtifactPath, entry.latestStructuredReviewPath]
       .filter(Boolean)
-      .map((rawPath) => toRunRelativePath(cwd, state, rawPath, options))
+      .map((rawPath) => toRunRelativePath(cwd, state, rawPath, options, warnings))
       .filter(Boolean),
   }));
 
@@ -445,10 +484,10 @@ function buildRunSummary(state, options = {}) {
 
   const { status, stopReason } = computeStatusAndStopReason(state, cwd, warnings);
   const roles = buildRoles(state);
-  const stageTimeline = buildStageTimeline(state, roles, cwd, options);
+  const stageTimeline = buildStageTimeline(state, roles, cwd, options, warnings);
   const validation = buildValidationSummary(state);
   const review = buildReviewSummary(state);
-  const findings = buildFindingsSummary(state, cwd, options);
+  const findings = buildFindingsSummary(state, cwd, options, warnings);
   const evidenceVerified = status === RUN_STATUSES.AWAITING_HUMAN_DECISION
     ? verifyLatestReviewEvidence(state, cwd, warnings)
     : true;

@@ -347,6 +347,39 @@ describe("buildRunSummary: secret safety", () => {
     expect(serialized).not.toContain("ghp_supersecrettoken123");
     expect(serialized).not.toContain("GITHUB_TOKEN");
   });
+
+  it("redacts secret-bearing env assignments and recognizable tokens from validation command text", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "validate failed: npm test", terminalState: "blocked" },
+      validationRuns: [
+        { stage: "validate", command: "MY_API_TOKEN=abc123supersecret npm test", status: "failed", exitCode: 1, path: "validate.md" },
+        { stage: "validate", command: "curl -H \"Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz012345\"", status: "passed", exitCode: 0, path: "validate2.md" },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.commands[0].command).toContain("MY_API_TOKEN=***REDACTED***");
+    expect(summary.validation.commands[0].command).not.toContain("abc123supersecret");
+    expect(summary.validation.commands[1].command).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz012345");
+  });
+});
+
+describe("buildRunSummary: artifact path safety", () => {
+  it("omits and warns instead of emitting a path-traversal artifact path outside the run directory", () => {
+    const state = baseState({
+      findingHistory: [{
+        findingId: "F1",
+        kind: "blocking",
+        severity: "P1",
+        currentStatus: "resolved",
+        firstSeenReviewSequence: 1,
+        resolvedReviewSequence: 2,
+        latestReviewArtifactPath: "../../outside-run-directory.md",
+      }],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.findings.items[0].artifactPaths).toEqual([]);
+    expect(summary.warnings.some((w: { code: string }) => w.code === "artifact-path-outside-run-directory")).toBe(true);
+  });
 });
 
 describe("buildRunSummary: missing/malformed optional artifacts", () => {
