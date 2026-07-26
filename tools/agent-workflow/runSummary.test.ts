@@ -838,3 +838,15 @@ describe("buildRunSummary: validation evidence readiness", () => {
     expect(summary.humanGate.ready).toBe(true);
   });
 });
+
+describe("buildRunSummary: validation status normalization", () => {
+  it("normalizes an unrecognized persisted validation status to not-run rather than passing it through", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationRuns: [{ stage: "validate", command: "npm test", status: "weird-legacy-value", path: "validate.md" }],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.status).toBe("not-run");
+    expect(summary.validation.commands[0].status).toBe("not-run");
+  });
+});

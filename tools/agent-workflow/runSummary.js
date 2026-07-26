@@ -8,6 +8,7 @@ const {
   STOP_REASONS,
   VALIDATION_STATUSES,
   HUMAN_GATE_STATES,
+  normalizeValidationStatus,
 } = require("./runSummarySchema.js");
 
 function getOrchestration(state) {
@@ -365,7 +366,7 @@ function buildValidationSummary(state, cwd, options, warnings) {
     return {
       stage: record.stage || "unknown",
       command: redactSecretsFromText(record.command || ""),
-      status: record.status || VALIDATION_STATUSES.NOT_RUN,
+      status: normalizeValidationStatus(record.status),
       exitCode: typeof record.exitCode === "number" ? record.exitCode : null,
       durationMs: typeof record.durationMs === "number" ? record.durationMs : null,
       artifactPath: artifactPath || null,
@@ -387,7 +388,7 @@ function buildValidationSummary(state, cwd, options, warnings) {
     // that reaches human-merge-decision always has its last attempt "passed"
     // (final-verification). Earlier failed-then-fixed-then-passed cycles are
     // a normal part of the fix loop, not a reason to report overall failure.
-    status = validationRuns[validationRuns.length - 1].status || VALIDATION_STATUSES.NOT_RUN;
+    status = normalizeValidationStatus(validationRuns[validationRuns.length - 1].status);
   } else {
     status = VALIDATION_STATUSES.NOT_RUN;
   }
