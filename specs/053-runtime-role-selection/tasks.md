@@ -86,6 +86,56 @@
 
 ---
 
+## Phase 7: Review-Discovered Corrections
+
+**Purpose**: Fix defects found by independent Codex CLI review of `e533d77` and re-validate before merge readiness. See [plan.md](plan.md#review-discovered-corrections) for full defect descriptions.
+
+- [x] T031 Fix `run-review --implementer` skipping validation when `--agent` is also supplied; always route the requested Implementer through `resolveEffectiveRoles()` in `tools/agent-workflow/reviewCommand.js`/`tools/agent-workflow/roleResolver.js`; add regression tests in `tools/agent-workflow/reviewCommand.test.ts` (commit `f503e2b`)
+- [x] T032 Fix structured-review classification combining stdout+stderr; analyze stdout alone (falling back to combined text only when stdout is empty) in `tools/agent-workflow/agentRunner.js`, `tools/agent-workflow/orchestrateCommand.js`, `tools/agent-workflow/reviewCommand.js`, while still persisting combined output to the run artifact; add regression tests in `tools/agent-workflow/reviewCommand.test.ts`/`tools/agent-workflow/orchestrateCommand.test.ts` (commit `0a4122e`)
+- [x] T033 Fix `run --implementer <id> --until-blocked` only applying the resolved role pair to the first step; thread the full `resolvedRoles` pair from `tools/agent-workflow/cli.js` through every step of `tools/agent-workflow/agentWorkflowRun.js` via `DEFAULT_STAGE_AGENTS` stage-to-role mapping; add regression test in `tools/agent-workflow/agentWorkflowRun.test.ts` (commit `fafbeac`)
+
+---
+
+## Phase 8: Documentation Integrity (Governance Follow-Up)
+
+**Purpose**: Address a blocking PR #44 review finding: Spec 046 had been rewritten in place to describe later role-abstraction work that was not part of its original, already-shipped-and-merged scope, and Runtime Role Selection (this feature) needed its own complete, traceable Spec Kit trail rather than relying on a retroactively-edited historical spec.
+
+- [x] T034 Identify the exact commit (`4524a33`, `feat: add independent agent review workflow`) that rewrote `specs/046-codex-claude-e2e-orchestration/*` to generalize Codex/Claude into Implementer/Reviewer terminology and add role-swap/multi-agent-extensibility requirements (FR-011/012/013) that were not part of Spec 046's original scope
+- [x] T035 Restore `specs/046-codex-claude-e2e-orchestration/{spec,plan,tasks,quickstart,research,data-model,checklists/requirements,contracts/e2e-agent-orchestration}.md` to their historically accurate content as of `fb5571d` (the last legitimate Spec 046 fix commit, predating the `4524a33` rewrite), via `git checkout fb5571d -- specs/046-codex-claude-e2e-orchestration/`
+- [x] T036 Add a `## Clarifications` section to `specs/053-runtime-role-selection/spec.md` capturing resolved design decisions (single-flag selection, two-agent/multi-agent Reviewer resolution, non-destructive CLI override, resume role pinning, legacy alias/provider-neutral id compatibility, `--agent` precedence, dry-run validation, human-only remote mutation)
+- [x] T037 Document the three review-discovered corrections (T031-T033) and their FR traceability in `specs/053-runtime-role-selection/plan.md`
+- [x] T038 Add this Traceability section mapping requirements to implementation files, test files, and task IDs in `specs/053-runtime-role-selection/tasks.md`
+- [x] T039 Verify `.specify/feature.json` and the `AGENTS.md` SPECKIT pointer already target `specs/053-runtime-role-selection` (confirmed unchanged, no edit needed)
+- [x] T040 Audit `git grep` for "046", "runtime role", "--implementer", "role ID", "role swap" across `AGENTS.md`, `CLAUDE.md`, `tools/agent-workflow/README.md`, and `specs/046-*`/`specs/047-*`/`specs/053-*` for statements that falsely attribute Spec 053 functionality to Spec 046 (none found beyond the restored Spec 046 content itself)
+- [x] T041 Run full validation (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`) after the documentation-integrity fix
+- [x] T042 Commit the documentation-integrity fix separately from feature/runtime work (`docs: restore spec history and trace runtime roles`), push `codex/runtime-role-selection`, and request a fresh independent Codex CLI review of the new PR head
+
+---
+
+## Traceability
+
+Requirement → implementation file → test file → task ID:
+
+| Requirement | Implementation | Test(s) | Task(s) |
+|---|---|---|---|
+| FR-001/FR-016 CLI `--implementer` parsing, missing/repeated-value handling | `tools/agent-workflow/cli.js` (`parseImplementerFlag`) | `cli.test.ts`: "rejects a missing value...", "rejects repeated conflicting values", "normalizes repeated identical values to one value" | T012, T020 |
+| FR-003 Role resolution priority (CLI override > state > default) | `tools/agent-workflow/roleResolver.js` (`resolveEffectiveRoles`) | `roleResolver.test.ts`: "resolves defaults when no state role override exists", "resolves state-configured roles when stageAgents overrides exist", "resolves --implementer claude/codex to..." | T007, T009 |
+| FR-002/FR-007 Automatic opposite-Reviewer selection; multi-agent ambiguity handling | `tools/agent-workflow/roleResolver.js` (`getRoleRoster`, `resolveEffectiveRoles`) | `roleResolver.test.ts`: "defaults to codex/claude", "preserves an existing configured distinct Reviewer...", "rejects with an ambiguity diagnostic..." | T006, T007, T016 |
+| FR-004 CLI override does not rewrite state | `tools/agent-workflow/orchestrateCommand.js` (`previewOrchestration`/`runOrchestration`) | `orchestrateCommand.test.ts` dry-run role-selection tests (T008) | T008, T009 |
+| FR-005/FR-006 Reject unknown/disabled/unsafe/same-agent Implementer before spawn | `tools/agent-workflow/roleResolver.js` (`assertSafeCommand` integration) | `roleResolver.test.ts`: "rejects an unknown requested implementer...", "rejects a disabled requested implementer", "rejects an unsafe requested implementer runner...", "rejects when no distinct Reviewer candidate exists..." | T016, T017 |
+| FR-008 Persisted run-level effective roles | `tools/agent-workflow/orchestrateCommand.js` (`state.orchestration`, `latestResolvedRoles`) | `orchestrateCommand.test.ts` resume-continuity tests (T013) | T014 |
+| FR-009/FR-010 Resume continuity; conflicting-resume rejection; no cross-run leakage | `tools/agent-workflow/orchestrateCommand.js` (`existingRunRoles` derivation) | `roleResolver.test.ts`: "preserves pinned roles when no override is supplied", "accepts a matching --implementer on resume", "rejects a conflicting --implementer on resume before spawn" | T013, T015 |
+| FR-011 Dry-run full validation, no spawn/state/artifacts | `tools/agent-workflow/orchestrateCommand.js` (`previewOrchestration`) | `orchestrateCommand.test.ts` dry-run tests; quickstart.md step 2/4 | T008, T024 |
+| FR-012/FR-014 Effective-role propagation through every stage, including multi-step `run --until-blocked` | `tools/agent-workflow/orchestrateCommand.js` (stage routing), `tools/agent-workflow/agentWorkflowRun.js` (`resolvedRoles` step mapping), `tools/agent-workflow/cli.js` | `orchestrateCommand.test.ts` (T010); `agentWorkflowRun.test.ts`: "threads a resolved --implementer role pair through every step, not just the first" | T010, T033 |
+| FR-013 Prompt/artifact identity accuracy | `tools/agent-workflow/reviewCommand.js` (`runReviewWithoutStateWrite` implementer override) | `orchestrateCommand.test.ts`/`reviewCommand.test.ts` (T011) | T011 |
+| FR-005 (run-review validation gap) | `tools/agent-workflow/reviewCommand.js`, `tools/agent-workflow/roleResolver.js` | `reviewCommand.test.ts`: "rejects a disabled --implementer before any spawn even when --agent is also supplied", "rejects an unsafe --implementer before any spawn even when --agent is also supplied" | T031 |
+| FR-015 Structured-review stdout-only parsing (regression fix) | `tools/agent-workflow/agentRunner.js`, `tools/agent-workflow/orchestrateCommand.js`, `tools/agent-workflow/reviewCommand.js` | `orchestrateCommand.test.ts`/`reviewCommand.test.ts`: "classifies a clean single structured review in stdout as valid/Approved even when stderr echoes duplicate example JSON blocks" | T032 |
+| FR-016 Legacy `codex`/`claude` alias compatibility | `tools/agent-workflow/roleResolver.js`, `tools/agent-workflow/agentRunner.js` (`DEFAULT_STAGE_AGENTS`) | `roleResolver.test.ts`: "defaults to codex/claude"; `cli.test.ts` role-labeling tests | T005, T007 |
+| Explicit `--agent` precedence on `run-review` | `tools/agent-workflow/reviewCommand.js` (`resolveReviewRoles`) | `reviewCommand.test.ts` `--implementer`+`--agent` tests | T018, T031 |
+| Human-only remote mutation boundary (unchanged) | `tools/agent-workflow/agentRunner.js` (`assertSafeCommand`), `tools/agent-workflow/cli.js` | Existing Spec 045 safety tests (unmodified) | T017 |
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

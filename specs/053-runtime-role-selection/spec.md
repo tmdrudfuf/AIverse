@@ -8,6 +8,21 @@
 
 **Input**: User description: "Add a safe CLI-level Runtime Role Selection feature: choose only the Implementer at execution time (`--implementer <agent-id>`) and have the workflow automatically resolve the other configured agent as Reviewer, without editing the state file, without weakening runner safety, and without changing roles mid-resume."
 
+## Clarifications
+
+### Session 2026-07-25
+
+- Q: Why does the CLI accept only `--implementer` instead of a paired `--implementer`/`--reviewer` flag pair? A: For the current default two-agent roster, the Reviewer is always "the other configured agent," so a second flag would be redundant and would open a path to accidentally configuring the same agent for both roles. A distinct `--reviewer`/multi-flag design is deferred until a roster larger than two agents is the common case.
+- Q: How is the Reviewer resolved when exactly two agents are eligible? A: Deterministically — whichever agent was not named by `--implementer` (or, absent an override, not resolved as Implementer by state/default) is auto-selected as Reviewer. No configuration or guessing is required.
+- Q: What happens with more than two eligible agents (an opt-in `roleRoster`)? A: The workflow preserves the previously configured, distinct, valid Reviewer if one exists in the roster; otherwise it rejects with an ambiguity diagnostic before any process spawns rather than nondeterministically picking one.
+- Q: Why doesn't a CLI `--implementer` override permanently rewrite the configured `stageAgents` in the state file? A: The flag is scoped to one execution by design, so a maintainer can try the opposite role direction without editing or corrupting the durable configuration, and so repeated runs with different overrides remain safe and reversible.
+- Q: Why can't a resumed run change roles mid-flight? A: A run's Reviewer must stay independent and stable for the duration of that run; allowing roles to rotate mid-run could let an agent that already acted as Implementer become the Reviewer of its own work, or vice versa, silently defeating independent review. Resolved roles are pinned into `state.orchestration` the first time a non-terminal run resolves them and reused until that run reaches a terminal stage.
+- Q: How do legacy `codex`/`claude` runner ids stay compatible? A: `--implementer` and the resolver accept the existing `codex`/`claude` agent ids used by `stageAgents`/`agentRunners` today; no renaming or migration of existing state files or configuration is required.
+- Q: How do runtime role ids stay provider-neutral? A: Resolution operates on the configured `agentRunners` roster and agent ids/display names (not literal vendor branching); orchestration logic reads the resolved Implementer/Reviewer ids rather than branching on the strings `codex` or `claude`, so additional agents can be added by configuration alone.
+- Q: Does an explicit `--agent` override still take precedence where both `--agent` and `--implementer` are supported (`run-review`)? A: Yes. `--agent` remains the authoritative Reviewer override for backward compatibility; `--implementer` supplies Implementer context and is still validated (existence, enabled, safety) even when `--agent` is also supplied, but it only auto-derives the Reviewer when `--agent` is absent.
+- Q: Why does `--dry-run` still perform full role validation instead of skipping it? A: Dry-run exists to let a maintainer safely preview what a real run would do, including rejections; skipping validation would let an invalid `--implementer` value appear to "work" in preview and only fail during a real run, undermining the purpose of dry-run.
+- Q: Why do push, PR creation, PR-ready marking, approval, merge, and branch deletion remain human-gated regardless of resolved roles? A: Runtime role selection changes which configured local CLI performs implementation/review stages; it does not change the repository's remote-mutation boundary. No resolved role, CLI override, or fallback swap is permitted to trigger remote actions — those remain exclusively human-triggered, consistent with every prior spec in this workflow.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Pick the Implementer for One Run (Priority: P1)

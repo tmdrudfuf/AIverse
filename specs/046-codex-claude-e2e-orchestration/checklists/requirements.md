@@ -1,4 +1,4 @@
-# Specification Quality Checklist: Role-Based E2E Agent Orchestration
+# Specification Quality Checklist: Codex Claude E2E Orchestration
 
 **Purpose**: Validate specification completeness and quality before proceeding to planning
 **Created**: 2026-07-09
