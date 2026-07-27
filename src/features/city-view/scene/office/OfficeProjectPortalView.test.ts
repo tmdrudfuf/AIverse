@@ -173,6 +173,47 @@ describe("OfficeProjectPortalView", () => {
     expect(renderedText.map((item) => item.text)).toContain("Company: AIverse Internal");
   });
 
+  it("keeps Repository/Company rows clear of the bottom instruction row when a placeholder action was just recorded", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "detail" });
+    state.selectedProjectId = "daily-proof";
+    state.lastPlaceholderAction = {
+      projectId: "daily-proof",
+      actionLabel: "Review project workspace",
+      status: "placeholder",
+    };
+    state.projects = [{
+      id: "daily-proof",
+      name: "Daily Proof",
+      status: "Active",
+      type: "Company",
+      enabled: true,
+      description: "Daily Proof is the active company workspace for validating AIverse office workflows.",
+      linkedServices: [],
+      nextAction: { label: "Review project workspace", enabled: true, placeholder: true },
+      ownerCompany: "Daily Proof Inc.",
+      localRepositoryLabel: "Connected (local)",
+    }];
+
+    new OfficeProjectPortalView(scene, state);
+
+    const repositoryRow = renderedText.find((item) => item.text === "Repository: Connected (local)");
+    const companyRow = renderedText.find((item) => item.text === "Company: Daily Proof Inc.");
+    const lastActionRow = renderedText.find((item) => item.text.startsWith("Placeholder action recorded"));
+    const instructionRow = renderedText.find((item) => item.text.startsWith("Esc back"));
+
+    expect(repositoryRow).toBeDefined();
+    expect(companyRow).toBeDefined();
+    expect(lastActionRow).toBeDefined();
+    expect(instructionRow).toBeDefined();
+
+    const ROW_LINE_HEIGHT = 18;
+    expect((repositoryRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
+    expect((companyRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
+    expect((lastActionRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
+  });
+
   it("omits the registry detail line for a project with no owner or repository metadata", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);

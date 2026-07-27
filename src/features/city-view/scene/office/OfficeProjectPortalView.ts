@@ -261,20 +261,20 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 44, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
 
+    let projectInfoY = this.panelY + 174;
+    if (project.localRepositoryLabel) {
+      this.addText(this.panelX + 390, projectInfoY, `Repository: ${project.localRepositoryLabel}`, mutedStyle());
+      projectInfoY += 26;
+    }
+    if (project.ownerCompany) {
+      this.addText(this.panelX + 390, projectInfoY, `Company: ${project.ownerCompany}`, mutedStyle());
+    }
+
     this.addText(this.panelX + 28, this.panelY + 326, "Next Action", headingStyle());
     this.addText(this.panelX + 44, this.panelY + 358, getNextActionText(project), rowStyle(project.nextAction.enabled, false));
 
     const lastActionText = getLastActionText(state, project);
     if (lastActionText) this.addText(this.panelX + 44, this.panelY + 386, lastActionText, mutedStyle());
-
-    let registryLineY = this.panelY + (lastActionText ? 406 : 386);
-    if (project.localRepositoryLabel) {
-      this.addText(this.panelX + 44, registryLineY, `Repository: ${project.localRepositoryLabel}`, mutedStyle());
-      registryLineY += 18;
-    }
-    if (project.ownerCompany) {
-      this.addText(this.panelX + 44, registryLineY, `Company: ${project.ownerCompany}`, mutedStyle());
-    }
 
     const instructionText = project.nextAction.enabled ? "Esc back  Enter/Space action" : "Esc back";
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, instructionText, instructionStyle()).setOrigin(1, 0.5);
