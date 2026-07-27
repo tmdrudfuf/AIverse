@@ -72,7 +72,7 @@ description: "Task list for Spec 059 — Project Registry Foundation"
 
 - [X] T013 [P] Update `.specify/feature.json` to point at `specs/059-project-registry-foundation` and update the `<!-- SPECKIT START/END -->` pointer block in `AGENTS.md` to reference this Spec's `plan.md`, per the pattern set by prior Specs (056/057/058).
 - [X] T014a Run `npx vitest run` (full suite) and `npx tsc --noEmit` as focused validation during implementation and after each review fix cycle.
-- [ ] T014b Run the full validation gate (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`) exactly once, after Codex review reaches Approved with 0 open blocking findings.
+- [X] T014b Run the full validation gate (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`) exactly once, after Codex review reaches Approved with 0 open blocking findings.
 
 ---
 
