@@ -359,6 +359,11 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
     }
   }
 
+  const activeBlockingFindings = Array.from(nextHistoryById.values())
+    .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
+    .map((entry) => entry.finding)
+    .filter(Boolean);
+
   if (review.decision === "approved") {
     const stillOpenBlocking = stillOpenFindings.filter((findingId) => {
       const entry = previousById.get(findingId);
@@ -368,12 +373,19 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
     if ((Array.isArray(review.blockingFindings) ? review.blockingFindings : []).length) {
       diagnostics.push("approved review must not include current blocking findings.");
     }
+    // Spec 056 Codex review round 5 fix (P1-001): the two checks above only
+    // catch a still-open PREVIOUS blocking finding or a raw current
+    // blockingFindings entry -- neither catches a brand-new finding that
+    // getCurrentFindings reclassified from nonBlockingFindings to kind
+    // "blocking" via the high-risk-category override (round 4's P1-001
+    // fix). This comprehensive check on the final activeBlockingFindings
+    // list -- already used by the other two lifecycle functions
+    // (applyInitialLifecycle/preserveResolvedHistoryLifecycle) -- closes
+    // that gap here too, so all three lifecycle paths are now consistent.
+    if (activeBlockingFindings.length) {
+      diagnostics.push(`approved review has active blocking findings: ${activeBlockingFindings.map((finding) => finding.id).join(", ")}.`);
+    }
   }
-
-  const activeBlockingFindings = Array.from(nextHistoryById.values())
-    .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
-    .map((entry) => entry.finding)
-    .filter(Boolean);
 
   if (review.decision === "changes_requested" && activeBlockingFindings.length === 0) {
     diagnostics.push("changes_requested lifecycle review must leave at least one active blocking finding.");

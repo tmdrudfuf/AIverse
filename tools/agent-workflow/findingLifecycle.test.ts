@@ -430,4 +430,41 @@ describe("critical-risk (high-risk-category) findings always block, regardless o
     expect(result.status).toBe("invalid");
     expect(result.diagnostics.join("\n")).toContain("approved review has active blocking findings");
   });
+
+  it("rejects an approved re-review that resolves a still-open prior finding but introduces a new high-risk finding in nonBlockingFindings (regression for Codex Spec 056 review round 5, P1-001)", () => {
+    // initialHistory() has F1 still open; this re-review resolves F1 while
+    // introducing a brand-new high-risk finding (F9) hidden in
+    // nonBlockingFindings. This exercises normalizeFindingLifecycle's main
+    // "has open previous findings" branch, the one occurrence round 4's
+    // fix missed: its approved-review checks only inspected still-open
+    // PREVIOUS blockers and the raw blockingFindings array, neither of
+    // which covers a brand-new reclassified finding.
+    const result = normalizeLifecycle(review({
+      decision: "approved",
+      blockingFindings: [],
+      nonBlockingFindings: [highRiskNonBlocker],
+      findingLifecycle: [
+        { findingId: "F1", status: "resolved", explanation: "Fixed." },
+        { findingId: "F9", status: "new", explanation: "First reported here." },
+      ],
+    }), initialHistory(), { reviewSequence: 2 });
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("approved review has active blocking findings");
+  });
+
+  it("still approves a re-review that resolves a still-open prior finding and introduces only a normal non-high-risk P3 finding", () => {
+    const result = normalizeLifecycle(review({
+      decision: "approved",
+      blockingFindings: [],
+      nonBlockingFindings: [normalP3],
+      findingLifecycle: [
+        { findingId: "F1", status: "resolved", explanation: "Fixed." },
+        { findingId: "F10", status: "new", explanation: "First reported here." },
+      ],
+    }), initialHistory(), { reviewSequence: 2 });
+
+    expect(result.status).toBe("valid");
+    expect(result.activeBlockingFindings).toHaveLength(0);
+  });
 });
