@@ -192,6 +192,20 @@ describe("renderRunSummaryMarkdown: performance and review convergence (Spec 056
     expect(markdown).toContain("- Status: Not started");
   });
 
+  it("reports not-started (not an active status) for a legacy pre-Spec-056 state with reviewRuns but no convergence evidence -- JSON/Markdown agree (regression for Codex Spec 056 review round 4, P2-002)", () => {
+    const legacyState = {
+      featureId: "010-legacy",
+      baseBranch: "main",
+      results: [],
+      orchestration: { currentStage: "blocked", startedAt: "2026-01-01T00:00:00.000Z", reason: "Reviewer returned Approved", terminalState: "blocked" },
+      reviewRuns: [{ outcome: "Approved", reviewerId: "codex" }],
+    };
+    const summary = buildRunSummary(legacyState);
+    const markdown = renderRunSummaryMarkdown(summary);
+    expect(summary.reviewConvergence.status).toBe("not-started");
+    expect(markdown).toContain("- Status: Not started");
+  });
+
   it("renders 'Budget exhausted' for the reviewer-question-cycle exhaustion path (regression for Codex Spec 056 review round 3, P2-001)", () => {
     const state = {
       featureId: "x",

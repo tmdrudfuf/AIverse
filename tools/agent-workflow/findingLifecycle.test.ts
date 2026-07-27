@@ -363,3 +363,71 @@ describe("finding lifecycle normalization", () => {
     expect(result.diagnostics.join("\n")).toContain("changed summary");
   });
 });
+
+describe("critical-risk (high-risk-category) findings always block, regardless of the array a Reviewer put them in (Spec 056 Codex review round 4, P1-001)", () => {
+  const highRiskNonBlocker = {
+    id: "F9",
+    severity: "P3",
+    filePath: "tools/agent-workflow/orchestrateCommand.js",
+    location: "1",
+    summary: "Human-gate weakening: this could allow false readiness under a specific resume sequence.",
+    reason: "Explains why the gate could be weakened.",
+    recommendation: "Fix the gate.",
+  };
+  const normalP3 = {
+    id: "F10",
+    severity: "P3",
+    filePath: "docs/notes.md",
+    location: "1",
+    summary: "Consider clarifying a comment.",
+    reason: "Minor readability nit.",
+    recommendation: "Clarify the wording.",
+  };
+
+  it("classifies a high-risk finding reported non-blocking as kind 'blocking' on the very first review", () => {
+    const result = normalizeLifecycle(review({
+      decision: "changes_requested",
+      blockingFindings: [],
+      nonBlockingFindings: [highRiskNonBlocker],
+    }), [], { reviewSequence: 1 });
+
+    expect(result.status).toBe("valid");
+    expect(result.activeBlockingFindings.map((finding: any) => finding.id)).toContain("F9");
+    expect(result.history.find((entry: any) => entry.findingId === "F9").kind).toBe("blocking");
+  });
+
+  it("rejects a first-round 'approved' review that hides a high-risk finding in nonBlockingFindings -- convergence cannot happen", () => {
+    const result = normalizeLifecycle(review({
+      decision: "approved",
+      blockingFindings: [],
+      nonBlockingFindings: [highRiskNonBlocker],
+    }), [], { reviewSequence: 1 });
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("approved review has active blocking findings");
+  });
+
+  it("leaves a normal (non-high-risk) P3 finding non-blocking -- no broad promotion of unrelated findings", () => {
+    const result = normalizeLifecycle(review({
+      decision: "approved",
+      blockingFindings: [],
+      nonBlockingFindings: [normalP3],
+    }), [], { reviewSequence: 1 });
+
+    expect(result.status).toBe("valid");
+    expect(result.activeBlockingFindings).toHaveLength(0);
+    expect(result.history.find((entry: any) => entry.findingId === "F10").kind).toBe("non_blocking");
+  });
+
+  it("also rejects a hidden high-risk finding on the preserveResolvedHistoryLifecycle path (all prior findings already resolved)", () => {
+    const result = normalizeLifecycle(review({
+      decision: "approved",
+      blockingFindings: [],
+      nonBlockingFindings: [highRiskNonBlocker],
+      findingLifecycle: [{ findingId: "F9", status: "new", explanation: "First reported here." }],
+    }), resolvedHistory(), { reviewSequence: 3 });
+
+    expect(result.status).toBe("invalid");
+    expect(result.diagnostics.join("\n")).toContain("approved review has active blocking findings");
+  });
+});

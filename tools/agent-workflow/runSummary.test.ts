@@ -826,7 +826,7 @@ describe("buildRunSummary: performance and review convergence (Spec 056)", () =>
     expect(summary.review.completenessStatus).toBe("incomplete");
   });
 
-  it("keeps old run-summary readable: a pre-Spec-056 state with no reviewConvergenceMetrics remains valid", () => {
+  it("keeps old run-summary readable: a pre-Spec-056 state with no reviewConvergenceMetrics remains valid and reports not-started (corrected per Codex Spec 056 review round 4, P2-002 -- this assertion previously encoded the bug: it expected reviewAttempts: 1 for a state with zero Spec 056 convergence evidence)", () => {
     const legacyState = {
       featureId: "010-legacy",
       baseBranch: "main",
@@ -838,8 +838,47 @@ describe("buildRunSummary: performance and review convergence (Spec 056)", () =>
     const summary = buildRunSummary(legacyState);
     expect(summary.schemaVersion).toBe(1);
     expect(summary.review.completenessStatus).toBe("complete");
-    expect(summary.reviewConvergence.reviewAttempts).toBe(1);
-    expect(summary.reviewConvergence.status).not.toBe("converged");
+    expect(summary.reviewConvergence.reviewAttempts).toBe(0);
+    expect(summary.reviewConvergence.status).toBe("not-started");
+  });
+
+  it("reports not-started for a 'partially migrated' state that has reviewBudget resolved (Spec 056-aware code ran) but has not reached any review attempt yet (regression for Codex Spec 056 review round 4, P2-002)", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "validate",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reviewBudget: { maxReviewAttempts: 3, maxAutomaticFixCycles: 2, maxIncompleteReviewRetries: 1, maxReviewerQuestionCycles: 1 },
+      },
+    };
+    const summary = buildRunSummary(state);
+    expect(summary.reviewConvergence.status).toBe("not-started");
+    expect(summary.reviewConvergence.reviewAttempts).toBe(0);
+  });
+
+  it("still reports budget-exhausted (not not-started) for a reviewer-question-cycle exhaustion on the very first review attempt, where orchestration.reviewAttempts is never written at all", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "Reviewer question-cycle budget exhausted (maxReviewerQuestionCycles)",
+        stopReason: "review-convergence-failed",
+        terminalState: "blocked",
+        activeBlockingFindings: [],
+        // Deliberately no reviewAttempts field and no reviewConvergenceMetrics:
+        // a Questions outcome never reaches the code that writes either.
+      },
+      reviewRuns: [
+        { stage: "review", outcome: "Questions", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 3000 },
+      ],
+    };
+    const summary = buildRunSummary(state);
+    expect(summary.reviewConvergence.status).toBe("budget-exhausted");
   });
 
   it("does not duplicate metrics on a repeated resume of the same completed run", () => {

@@ -511,6 +511,14 @@ function formatValidationPolicyPreview(preview) {
 }
 
 function formatOrchestrationDryRun(preview) {
+  // Spec 056 Codex review round 4 fix (P2-001): tolerate an older/minimal
+  // preview shape (predating this feature, or a hand-built test fixture)
+  // that omits these fields entirely, rather than throwing -- matching
+  // every other additive Spec 053-056 field this workflow already treats
+  // absence-safely.
+  const changedFileInventory = Array.isArray(preview.changedFileInventory) ? preview.changedFileInventory : [];
+  const reviewBudget = preview.reviewBudget || {};
+  const reviewBudgetUsage = preview.reviewBudgetUsage || {};
   const lines = [
     "Dry run: true",
     `Feature: ${preview.featureId}`,
@@ -527,6 +535,17 @@ function formatOrchestrationDryRun(preview) {
     `Fix cycle: ${preview.fixCycleCount || 0}/${preview.maxFixCycles}`,
     `Question cycle: ${preview.questionCycle || 0}/${preview.maxQuestionCycles}`,
     `Finding lifecycle: previous findings may be supplied=${preview.findingLifecycle.previousFindingsMayBeSupplied}; current findings=${preview.findingLifecycle.currentFindingCount}`,
+    // Spec 056 Codex review round 4 fix (P2-001): previewOrchestration
+    // already computes changedFileInventory/reviewBudget/reviewBudgetUsage/
+    // openBlockingFindingsCount/nextReviewAction, but this formatter never
+    // printed them -- a human running `orchestrate --dry-run` from the
+    // terminal never saw this Part C/D information. Read-only formatting of
+    // already-computed preview fields; does not spawn/write/validate/mutate.
+    `Changed files: ${changedFileInventory.length} (${changedFileInventory.filter((entry) => entry.highRisk).length} high-risk)`,
+    `High-risk files: ${changedFileInventory.filter((entry) => entry.highRisk).map((entry) => entry.path).join("; ") || "(none)"}`,
+    `Review budget: attempts ${reviewBudgetUsage.reviewAttempts || 0}/${reviewBudget.maxReviewAttempts ?? "unknown"}; automatic fix cycles ${reviewBudgetUsage.automaticFixCycles || 0}/${reviewBudget.maxAutomaticFixCycles ?? "unknown"}; incomplete-review retries ${reviewBudgetUsage.incompleteReviewRetries || 0}/${reviewBudget.maxIncompleteReviewRetries ?? "unknown"}`,
+    `Open blocking findings: ${preview.openBlockingFindingsCount || 0}`,
+    `Next review action: ${preview.nextReviewAction || "unknown"}`,
     `Next action: ${preview.nextExpectedStage}`,
     `Run directory: ${preview.runDirectory}`,
     `Artifacts: implement prompt=${preview.promptPaths.implement}; review prompt=${preview.promptPaths.review}; answer prompt=${preview.promptPaths.answerQuestions}; final-review prompt=${preview.promptPaths.finalReview}; fix prompt=${preview.promptPaths.fix}; lifecycle=${preview.promptPaths.findingLifecycle}`,

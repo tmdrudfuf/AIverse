@@ -498,24 +498,15 @@ function buildReviewSummary(state, exactReviewedCommitMatch) {
 
 // The single shared computation for "has review/fix converged", consulted
 // here for reporting and by nothing else that could compute it differently
-// (Spec 055 isFinalValidationSatisfied precedent). A state file predating
-// this feature has no reviewConvergenceMetrics at all -- reported as
-// `not-started` rather than a fabricated value (Spec 056 §26/FR-019).
+// (Spec 055 isFinalValidationSatisfied precedent). A state file with no
+// Spec 056 convergence evidence at all (no reviewConvergenceMetrics, no
+// orchestration.reviewAttempts field, no review-convergence-failed
+// stopReason) -- e.g. one produced entirely by pre-Spec-056 code -- is
+// reported as `not-started` rather than a fabricated active status (Spec
+// 056 §26/FR-019).
 function buildReviewConvergenceSummary(state, review, validation, findings, humanGateReady) {
   const orchestration = getOrchestration(state);
   const metrics = orchestration.reviewConvergenceMetrics;
-  const hasAnyReviewAttempt = review.reviewAttempts > 0;
-  if (!hasAnyReviewAttempt) {
-    return {
-      reviewAttempts: 0,
-      firstReviewBlockingFindings: 0,
-      newBlockingFindingsAfterFirstReview: 0,
-      reopenedFindings: 0,
-      resolvedFindingsVerified: 0,
-      automaticFixCycles: review.fixCycles,
-      status: "not-started",
-    };
-  }
   // Spec 056 Codex review round 3 fix (P2-001): derive budgetExhausted from
   // the authoritative orchestration.stopReason (normalized), not from
   // regex-matching orchestration.reason's free text. The prior two-string
@@ -527,6 +518,36 @@ function buildReviewConvergenceSummary(state, review, validation, findings, huma
   // check now covers all of them, including any future one, without
   // depending on message text at all.
   const budgetExhausted = normalizeStopReason(orchestration.stopReason) === REVIEW_CONVERGENCE_FAILED_STOP_REASON;
+  // Spec 056 Codex review round 4 fix (P2-002): review.reviewAttempts
+  // (reviewRuns.length) is too broad a "has anything happened" signal --
+  // it is positive for ANY reviewRuns entry, including one written by
+  // pre-Spec-056 code that never touched this feature's convergence
+  // tracking at all, so a legacy state with reviewRuns but no convergence
+  // evidence incorrectly derived an active status instead of not-started
+  // (FR-019). orchestration.reviewAttempts (this feature's own budget
+  // counter, distinct from reviewRuns.length) is written for every
+  // completed non-Questions review attempt regardless of whether it turned
+  // out complete or incomplete, so its mere presence (even value 0) proves
+  // Spec 056 tracking has engaged; reviewConvergenceMetrics proves the same
+  // for a complete attempt; budgetExhausted proves it for the
+  // reviewer-question-cycle-only exhaustion path, where a Questions outcome
+  // never reaches the reviewAttempts-writing code at all. Any one of the
+  // three being true is sufficient evidence this is not a never-started or
+  // purely-legacy run.
+  const hasAnyReviewAttempt = Boolean(metrics)
+    || Object.prototype.hasOwnProperty.call(orchestration, "reviewAttempts")
+    || budgetExhausted;
+  if (!hasAnyReviewAttempt) {
+    return {
+      reviewAttempts: 0,
+      firstReviewBlockingFindings: 0,
+      newBlockingFindingsAfterFirstReview: 0,
+      reopenedFindings: 0,
+      resolvedFindingsVerified: 0,
+      automaticFixCycles: review.fixCycles,
+      status: "not-started",
+    };
+  }
   const status = humanGateReady
     ? "converged"
     : computeConvergenceStatus({
