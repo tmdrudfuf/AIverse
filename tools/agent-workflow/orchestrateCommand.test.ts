@@ -2379,4 +2379,38 @@ describe("review convergence and budgets (Spec 056)", () => {
     expect(preview.willSpawn).toBe(false);
     expect(fs.existsSync(path.join(cwd, ".agent-workflow"))).toBe(false);
   });
+
+  it("reviewBudget.maxReviewerQuestionCycles mirrors the resolved maxQuestionCycles by default", () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    // normalizeMaxQuestionCycles caps at DEFAULT_MAX_QUESTION_CYCLES (1), so
+    // 0 is the only value distinguishable from the default (1) here.
+    const preview = previewOrchestration(createState(), { cwd, gitAdapter, maxQuestionCycles: 0 });
+
+    expect(preview.maxQuestionCycles).toBe(0);
+    expect(preview.reviewBudget.maxReviewerQuestionCycles).toBe(0);
+  });
+
+  it("an explicit reviewBudget.maxReviewerQuestionCycles override stricter than maxQuestionCycles stops the Questions outcome safely with stopReason review-convergence-failed (regression for Codex Spec 056 review P2-001: this ceiling was resolved but never enforced)", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredQuestionsReview },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), {
+      cwd, gitAdapter, processAdapter: adapter, reviewBudget: { maxReviewerQuestionCycles: 0 },
+    });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.reason).toMatch(/Reviewer question-cycle budget exhausted/);
+    expect(run.state.orchestration.stopReason).toBe("review-convergence-failed");
+    // The legacy maxQuestionCycles ceiling (default 1) was not itself
+    // reached -- only the stricter reviewBudget override was.
+    expect(run.state.questionCycle || 0).toBe(0);
+    expect(run.summary!.humanGate.ready).toBe(false);
+    expect(run.summary!.run.stopReason).toBe(run.state.orchestration.stopReason);
+  }, 30000);
 });

@@ -1013,6 +1013,7 @@ function previewOrchestration(state, options = {}) {
   assertSafeCommand(implementer);
   assertSafeCommand(reviewer);
   const maxFixCycles = normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles);
+  const maxQuestionCycles = normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles);
   const currentStage = getCurrentStage(state);
   const validationPlan = buildValidationPlanPreview(state, inferNextValidationStage(currentStage), options);
   // Spec 056 Part C/dry-run (Smoke H): preview review-budget usage, the
@@ -1023,6 +1024,7 @@ function previewOrchestration(state, options = {}) {
     cliOverrides: options.reviewBudget || {},
     state,
     maxFixCyclesFallback: maxFixCycles,
+    maxQuestionCyclesFallback: maxQuestionCycles,
   });
   const changedFileInventory = buildChangedFileInventory(gitContext);
   const openBlockingFindingsCount = getActiveBlockingFindings(state).length;
@@ -1057,7 +1059,7 @@ function previewOrchestration(state, options = {}) {
       reason: validationPlan.reason,
     },
     maxFixCycles,
-    maxQuestionCycles: normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles),
+    maxQuestionCycles,
     fixCycleCount: Number(state.fixCycleCount || getOrchestration(state).fixCycleCount || 0),
     questionCycle: Number(state.questionCycle || getOrchestration(state).questionCycle || 0),
     runDirectory: getRunDirectory(state, { cwd }).replace(/\\/g, "/"),
@@ -1112,13 +1114,15 @@ async function runOrchestration(state, options = {}) {
   const resolvedMaxQuestionCycles = normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles);
   // Spec 056 Part C: reviewBudget is resolved once per invocation, the same
   // way maxFixCycles/maxQuestionCycles already are -- maxAutomaticFixCycles
-  // mirrors the resolved maxFixCycles by default so the two never silently
-  // diverge unless a state/CLI reviewBudget override is explicit (see
+  // mirrors the resolved maxFixCycles and maxReviewerQuestionCycles mirrors
+  // the resolved maxQuestionCycles by default so neither pair ever silently
+  // diverges unless a state/CLI reviewBudget override is explicit (see
   // clarifications.md Q16).
   const reviewBudget = resolveReviewBudget({
     cliOverrides: options.reviewBudget || {},
     state,
     maxFixCyclesFallback: resolvedMaxFixCycles,
+    maxQuestionCyclesFallback: resolvedMaxQuestionCycles,
   });
   let currentState = setOrchestration(state, {
     currentStage: getCurrentStage(state),
@@ -1308,6 +1312,31 @@ async function runOrchestration(state, options = {}) {
         const questionCycle = Number(currentState.questionCycle || 0);
         if (questionCycle >= maxQuestionCycles) {
           currentState = markBlocked(currentState, "Maximum question cycles reached");
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        // Spec 056 Part C: an additional, separately-tracked budget gate,
+        // checked only after the existing maxQuestionCycles gate above -- so
+        // a default-configuration run's stop reason/message is completely
+        // unchanged (maxReviewerQuestionCycles mirrors maxQuestionCycles by
+        // default); this only ever fires for an explicit reviewBudget
+        // override stricter than --max-reviewer-question-cycles's mirrored
+        // default. Without this gate, reviewBudget.maxReviewerQuestionCycles
+        // was resolved but never enforced (found by the Spec 056 Codex
+        // review, P2-001).
+        const questionBudgetUsage = {
+          reviewAttempts: Number(getOrchestration(currentState).reviewAttempts || 0),
+          reviewerQuestionCycles: questionCycle,
+        };
+        const questionBudgetExhaustion = isBudgetExhausted(questionBudgetUsage, reviewBudget);
+        if (questionBudgetExhaustion.exhausted) {
+          const report = buildExhaustionReport(questionBudgetUsage, reviewBudget, {
+            openBlockingFindingsCount: (getOrchestration(currentState).activeBlockingFindings || []).length,
+          });
+          currentState = markBlocked(currentState, `Reviewer question-cycle budget exhausted (${questionBudgetExhaustion.ceiling})`, {
+            stopReason: report.stopReason,
+            reviewConvergenceReport: report,
+          });
           if (statePath) writeState(statePath, currentState);
           break;
         }

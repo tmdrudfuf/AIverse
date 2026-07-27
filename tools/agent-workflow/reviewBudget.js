@@ -24,15 +24,20 @@ function normalizePositiveInt(value, fallback) {
 // Precedence (Spec 056 clarifications.md Q16/Q17): an explicit CLI
 // `--review-*` flag wins; otherwise an explicit `state.reviewBudget.*` value
 // wins; otherwise `maxAutomaticFixCycles` mirrors the existing
-// `--max-fix-cycles`/`state.maxFixCycles` value (so the two never silently
-// diverge for the Reviewer-requested fix path unless a state file
-// explicitly overrides `reviewBudget.maxAutomaticFixCycles`); every other
-// ceiling falls back to its documented default.
-function resolveReviewBudget({ cliOverrides = {}, state = {}, maxFixCyclesFallback } = {}) {
+// `--max-fix-cycles`/`state.maxFixCycles` value and `maxReviewerQuestionCycles`
+// mirrors the existing `--max-question-cycles`/`state.maxQuestionCycles`
+// value (so neither pair ever silently diverges unless a state file
+// explicitly overrides the `reviewBudget.*` field); every other ceiling
+// falls back to its documented default.
+function resolveReviewBudget({ cliOverrides = {}, state = {}, maxFixCyclesFallback, maxQuestionCyclesFallback } = {}) {
   const stateBudget = (state && typeof state.reviewBudget === "object" && state.reviewBudget) || {};
   const fixCyclesFallback = normalizePositiveInt(
     maxFixCyclesFallback ?? state.maxFixCycles,
     DEFAULT_REVIEW_BUDGET.maxAutomaticFixCycles,
+  );
+  const questionCyclesFallback = normalizePositiveInt(
+    maxQuestionCyclesFallback ?? state.maxQuestionCycles,
+    DEFAULT_REVIEW_BUDGET.maxReviewerQuestionCycles,
   );
 
   return {
@@ -50,7 +55,7 @@ function resolveReviewBudget({ cliOverrides = {}, state = {}, maxFixCyclesFallba
     ),
     maxReviewerQuestionCycles: normalizePositiveInt(
       cliOverrides.maxReviewerQuestionCycles ?? stateBudget.maxReviewerQuestionCycles,
-      DEFAULT_REVIEW_BUDGET.maxReviewerQuestionCycles,
+      questionCyclesFallback,
     ),
   };
 }
