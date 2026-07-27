@@ -70,6 +70,50 @@ function parseDiffStat(statText) {
   return entries;
 }
 
+// git diff --numstat gives exact per-file addition/deletion counts as plain
+// tab-separated integers and never truncates or scales the way --stat's
+// human-readable bar graph does (Spec 056 Codex review round 2, P1-001): a
+// long path is abbreviated with a leading "..." in --stat output, and the
+// +/- bar is scaled to fit a fixed display width once a diff is large
+// enough, silently corrupting the changed-file path and undercounting the
+// line-count-based high-risk classification for exactly the large,
+// deeply-nested changes this feature most needs to classify correctly.
+// Confirmed empirically: `git diff --stat` on a 499-line change to a long
+// path renders ` .../deeply/nested/.../file.js | 499 +++++++++++++++++++++`
+// (21 `+` characters for 499 real insertions, and a mangled path), while
+// `git diff --numstat` on the same change renders the exact
+// `499\t0\tfull/real/path/file.js`. --numstat's rename notation matches
+// --stat's (the same brace/arrow condensed form for a similar-directory
+// rename), so resolveRenameTargetPath is reused unchanged; a binary file is
+// reported as `-\t-\t<path>` and treated as 0/0, consistent with this
+// module's existing "Bin" handling for --stat.
+function parseNumstat(statText) {
+  const lines = String(statText || "").split(/\r?\n/);
+  const entries = [];
+  for (const line of lines) {
+    const match = line.match(/^(\d+|-)\t(\d+|-)\t(.+)$/);
+    if (!match) continue;
+    const rawPath = normalizePath(resolveRenameTargetPath(match[3].trim()));
+    if (!rawPath) continue;
+    const additions = match[1] === "-" ? 0 : Number(match[1]) || 0;
+    const deletions = match[2] === "-" ? 0 : Number(match[2]) || 0;
+    entries.push({ path: rawPath, additions, deletions });
+  }
+  return entries;
+}
+
+// Whether the supplied gitContext was collected with numstat support (real
+// collectGitContext always includes these keys, even as "" for "no changes
+// in that diff"). Distinguishing by key presence, not content, keeps every
+// pre-existing test/fixture that hand-builds a gitContext-shaped object with
+// only the `*DiffStat` fields exercising the exact bar-parsing behavior it
+// always has -- this fix does not retroactively change their expectations.
+function hasNumstatSupport(gitContext) {
+  return gitContext.committedDiffNumstat !== undefined
+    || gitContext.stagedDiffNumstat !== undefined
+    || gitContext.unstagedDiffNumstat !== undefined;
+}
+
 function parseStatusCodes(statusPorcelain) {
   const map = new Map();
   const lines = String(statusPorcelain || "").split(/\r?\n/).filter(Boolean);
@@ -101,30 +145,47 @@ function classifyHighRisk(filePath, stats = {}, options = {}) {
   return netChange >= threshold;
 }
 
-// Builds the deterministic changed-file inventory from a gitContext object
-// (committed + staged + unstaged diff --stat sections, cross-referenced
-// against `git status --porcelain` for status codes). Line counts are
-// approximate (per spec.md FR-007 / the feature request's own wording),
-// derived from the `+`/`-` characters in git's diff --stat bar rather than
-// exact --numstat counts, since collectGitContext does not compute
-// --numstat and adding it is out of this feature's scope.
+// Builds the deterministic changed-file inventory from a gitContext object,
+// cross-referenced against `git status --porcelain` for status codes. When
+// the supplied gitContext includes numstat data (real collectGitContext
+// always does; see hasNumstatSupport), exact per-file additions/deletions
+// come from `git diff --numstat`, which never truncates a long path or
+// scales its counts the way --stat's bar graph does (Codex Spec 056 review
+// round 2, P1-001). Callers that only supply `*DiffStat` fields (every
+// pre-Spec-056-round-2 test fixture) fall back to the original --stat
+// bar-character parsing unchanged.
 function buildChangedFileInventory(gitContext = {}, options = {}) {
   const statusMap = parseStatusCodes(gitContext.statusPorcelain);
   const combined = new Map();
-  const sources = [gitContext.committedDiffStat, gitContext.stagedDiffStat, gitContext.unstagedDiffStat];
-  for (const source of sources) {
-    for (const entry of parseDiffStat(source)) {
-      const existing = combined.get(entry.path);
-      if (existing) {
-        existing.additions = Math.max(existing.additions, entry.additions);
-        existing.deletions = Math.max(existing.deletions, entry.deletions);
-      } else {
-        combined.set(entry.path, { ...entry });
+  if (hasNumstatSupport(gitContext)) {
+    const numstatSources = [gitContext.committedDiffNumstat, gitContext.stagedDiffNumstat, gitContext.unstagedDiffNumstat];
+    for (const source of numstatSources) {
+      for (const entry of parseNumstat(source)) {
+        const existing = combined.get(entry.path);
+        if (existing) {
+          existing.additions = Math.max(existing.additions, entry.additions);
+          existing.deletions = Math.max(existing.deletions, entry.deletions);
+        } else {
+          combined.set(entry.path, { additions: entry.additions, deletions: entry.deletions });
+        }
+      }
+    }
+  } else {
+    const statSources = [gitContext.committedDiffStat, gitContext.stagedDiffStat, gitContext.unstagedDiffStat];
+    for (const source of statSources) {
+      for (const entry of parseDiffStat(source)) {
+        const existing = combined.get(entry.path);
+        if (existing) {
+          existing.additions = Math.max(existing.additions, entry.additions);
+          existing.deletions = Math.max(existing.deletions, entry.deletions);
+        } else {
+          combined.set(entry.path, { additions: entry.additions, deletions: entry.deletions });
+        }
       }
     }
   }
   for (const path of statusMap.keys()) {
-    if (!combined.has(path)) combined.set(path, { path, changes: 0, additions: 0, deletions: 0 });
+    if (!combined.has(path)) combined.set(path, { additions: 0, deletions: 0 });
   }
 
   const inventory = [];

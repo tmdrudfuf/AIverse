@@ -72,7 +72,7 @@
 
 ## Phase 8: Documentation and final validation
 
-- [ ] T043 Update `tools/agent-workflow/README.md` per spec.md's documentation list, with PowerShell examples.
-- [ ] T044 Run `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`; record results.
+- [X] T043 Update `tools/agent-workflow/README.md` per spec.md's documentation list, with PowerShell examples.
+- [X] T044 Run `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`; record results.
 - [ ] T045 Request an independent Codex review under the new comprehensive-review protocol; iterate via consolidated fix cycles until `Approved` with zero open blocking findings and exact-head match.
 - [ ] T046 Create the final local commit (no push, no PR, no merge, no remote branch mutation).

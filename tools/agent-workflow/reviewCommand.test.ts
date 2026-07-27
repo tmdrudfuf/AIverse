@@ -16,6 +16,7 @@ import {
 } from "./reviewCommand.js";
 import { writeState } from "./agentWorkflow.js";
 import { CLAUDE_FULL_ACCESS_ARGS, CODEX_FULL_ACCESS_ARGS } from "./agentRunner.js";
+import { buildChangedFileInventory } from "./reviewCoverage.js";
 
 type WorkflowState = {
   featureId: string;
@@ -314,6 +315,38 @@ describe("git context collection", () => {
     expect(ctx.committedLog).toContain("feature commit");
     expect(ctx.hasUnstagedChanges).toBe(true);
     expect(ctx.unstagedDiff).toContain("changed");
+  });
+
+  it("collects exact numstat additions/deletions and untruncated paths for a large change under a deeply nested path (regression for Codex Spec 056 review round 2, P1-001: --stat's bar graph abbreviates long paths and scales large counts)", () => {
+    const cwd = createTempDir();
+    initRepo(cwd);
+    const deepDir = path.join(cwd, "a", "very", "deeply", "nested", "directory", "structure", "that", "is", "quite", "long", "indeed", "for", "testing");
+    fs.mkdirSync(deepDir, { recursive: true });
+    const deepFile = path.join(deepDir, "file.js");
+    fs.writeFileSync(deepFile, "line1\n");
+    commitAll(cwd, "init");
+    fs.writeFileSync(deepFile, Array.from({ length: 500 }, (_, i) => `line${i}`).join("\n") + "\n");
+
+    const ctx = collectGitContext({ cwd, baseBranch: "main" });
+
+    // --stat truncates this path with a leading "..." and scales the +/-
+    // bar far below the real 499 insertions -- confirmed empirically against
+    // real git output during this fix.
+    expect(ctx.unstagedDiffStat).toMatch(/\.\.\./);
+    expect((ctx.unstagedDiffStat.match(/\+/g) || []).length).toBeLessThan(100);
+    // --numstat has neither problem.
+    expect(ctx.unstagedDiffNumstat).toContain("a/very/deeply/nested/directory/structure/that/is/quite/long/indeed/for/testing/file.js");
+    expect(ctx.unstagedDiffNumstat).toMatch(/^499\t0\t/m);
+
+    const inventory = buildChangedFileInventory(ctx);
+    const entry = inventory.find((item) => item.path.endsWith("for/testing/file.js"));
+    expect(entry).toBeDefined();
+    expect(entry!.path).not.toContain("...");
+    expect(entry!.additions).toBe(499);
+    // 499 >= the default high-risk line threshold (40): this large change
+    // must be classified high-risk, which the --stat-scaled bar (21 "+"
+    // characters) would have missed.
+    expect(entry!.highRisk).toBe(true);
   });
 });
 

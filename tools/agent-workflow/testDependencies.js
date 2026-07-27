@@ -23,11 +23,14 @@ const DEFAULT_GIT_STATE = {
   mergeBase: "b".repeat(40),
   stagedDiffStat: "",
   stagedDiff: "",
+  stagedDiffNumstat: "",
   unstagedDiffStat: "",
   unstagedDiff: "",
+  unstagedDiffNumstat: "",
   committedLog: "",
   committedDiffStat: "",
   committedDiff: "",
+  committedDiffNumstat: "",
   statusPorcelain: "",
 };
 
@@ -44,11 +47,14 @@ function createFakeGitAdapter(config = {}) {
     if (key === "rev-parse HEAD") return state.headCommit;
     if (args[0] === "merge-base") return state.mergeBase;
     if (key === "diff --cached --stat") return state.stagedDiffStat;
+    if (key === "diff --cached --numstat") return state.stagedDiffNumstat;
     if (key === "diff --cached") return state.stagedDiff;
     if (key === "diff --stat") return state.unstagedDiffStat;
+    if (key === "diff --numstat") return state.unstagedDiffNumstat;
     if (key === "diff") return state.unstagedDiff;
     if (args[0] === "log") return state.committedLog;
     if (args[0] === "diff" && args.length === 3 && args[2] === "--stat") return state.committedDiffStat;
+    if (args[0] === "diff" && args.length === 3 && args[2] === "--numstat") return state.committedDiffNumstat;
     if (args[0] === "diff" && args.length === 2) return state.committedDiff;
     if (key === "status --porcelain") return state.statusPorcelain;
     return "";
