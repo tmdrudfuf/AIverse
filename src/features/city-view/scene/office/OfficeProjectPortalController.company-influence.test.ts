@@ -153,6 +153,47 @@ describe("OfficeProjectPortalController company influence planning", () => {
   });
 });
 
+describe("OfficeProjectPortalController office zone progression unlocks", () => {
+  it("reports the Reception zone as locked, required at level 2, with no employees hired", () => {
+    const state = createProjectPortalState();
+    const controller = createControllerHarness(state);
+
+    expect(controller.getNextOfficeZoneUnlock()).toEqual({
+      zoneType: "reception",
+      label: "Reception",
+      requiredLevel: 2,
+    });
+
+    const dashboardSnapshot = controller.getCompanyDashboardSnapshot();
+    expect(dashboardSnapshot.officeZoneProgress).toEqual({
+      unlockedZoneCount: 5,
+      nextUnlock: { zoneType: "reception", label: "Reception", requiredLevel: 2 },
+    });
+  });
+
+  it("unlocks Reception once level 2's milestones are met by real employee/task counts", () => {
+    const state = createProjectPortalState();
+    state.employees = Array.from({ length: 5 }, (_, index) =>
+      createEmployee({ id: `employee-${index + 1}`, name: `Employee ${index + 1}`, status: "Idle" }));
+    state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [createTask({ id: "task-done", status: "Done" })],
+    };
+    const controller = createControllerHarness(state);
+
+    expect(controller.getCompanyProgressionSnapshot().companyLevel).toBe(2);
+    expect(controller.getCompanyProgressionSnapshot().unlockedOfficeZones).toContain("reception");
+
+    const dashboardSnapshot = controller.getCompanyDashboardSnapshot();
+    expect(dashboardSnapshot.officeZoneProgress.unlockedZoneCount).toBe(7);
+    expect(dashboardSnapshot.officeZoneProgress.nextUnlock).toEqual({
+      zoneType: "serverArea",
+      label: "Server Room",
+      requiredLevel: 3,
+    });
+  });
+});
+
 type ControllerInternals = {
   state: ProjectPortalState;
   view: {

@@ -26,3 +26,9 @@ export type CompanyProgressionInput = {
   activeEmployees?: number;
   revenue?: number;
 };
+
+export type OfficeZoneUnlockPreview = {
+  zoneType: OfficeZoneType;
+  label: string;
+  requiredLevel: number;
+};

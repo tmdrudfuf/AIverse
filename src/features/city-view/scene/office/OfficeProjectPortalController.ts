@@ -46,7 +46,7 @@ import type {
   ProjectDashboardSourceMetadata,
 } from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
-import type { CompanyProgressionSnapshot } from "./progression/CompanyProgressionTypes";
+import type { CompanyProgressionSnapshot, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type {
   EmployeeDailyScheduleSnapshot,
@@ -244,10 +244,18 @@ export class OfficeProjectPortalController {
   }
 
   getCompanyProgressionSnapshot(): CompanyProgressionSnapshot {
-    return this.companyProgressionService.getProgressionSnapshot({
+    return this.companyProgressionService.getProgressionSnapshot(this.getCompanyProgressionInput());
+  }
+
+  getNextOfficeZoneUnlock(): OfficeZoneUnlockPreview | undefined {
+    return this.companyProgressionService.getNextOfficeZoneUnlock(this.getCompanyProgressionInput());
+  }
+
+  private getCompanyProgressionInput() {
+    return {
       activeEmployees: this.state.employees.length,
       completedProjects: getAllLoadedTasks(this.state.taskCollections).filter((task) => task.status === "Done").length,
-    });
+    };
   }
 
   getActiveOfficeLayout(): OfficeLayoutSnapshot {
@@ -393,6 +401,7 @@ export class OfficeProjectPortalController {
         workSessions: Object.values(this.state.workSessions).flat(),
         workstations: this.getWorkstationSnapshots(),
         companyProgression: this.getCompanyProgressionSnapshot(),
+        nextOfficeZoneUnlock: this.getNextOfficeZoneUnlock(),
         repositoryMappings: this.state.repositoryMappings,
         repositorySummaries: this.state.repositorySummaries,
       }),

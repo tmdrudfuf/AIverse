@@ -151,4 +151,42 @@ describe("CompanyProgressionService", () => {
       expect(future).toEqual([]);
     });
   });
+
+  describe("getNextOfficeZoneUnlock", () => {
+    it("reports Reception as the next zone unlock, required at level 2, while still at level 1", () => {
+      const service = new CompanyProgressionService();
+
+      expect(service.getNextOfficeZoneUnlock({ activeEmployees: 0, completedProjects: 0 })).toEqual({
+        zoneType: "reception",
+        label: "Reception",
+        requiredLevel: 2,
+      });
+    });
+
+    it("reports the level 3 zone unlock once level 2 is reached (boundary: exact level-2 thresholds)", () => {
+      const service = new CompanyProgressionService();
+
+      expect(service.getNextOfficeZoneUnlock({ activeEmployees: 5, completedProjects: 1 })).toEqual({
+        zoneType: "serverArea",
+        label: "Server Room",
+        requiredLevel: 3,
+      });
+    });
+
+    it("reports the level 4 zone unlock once level 3 is reached", () => {
+      const service = new CompanyProgressionService();
+
+      expect(service.getNextOfficeZoneUnlock({ activeEmployees: 10, completedProjects: 3 })).toEqual({
+        zoneType: "executiveArea",
+        label: "Executive Suite",
+        requiredLevel: 4,
+      });
+    });
+
+    it("returns undefined once every zone is unlocked at the highest defined level", () => {
+      const service = new CompanyProgressionService();
+
+      expect(service.getNextOfficeZoneUnlock({ activeEmployees: 20, completedProjects: 10 })).toBeUndefined();
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import type { EmployeeAIState } from "../employees/EmployeeAITypes";
 import type { EmployeeRole } from "../employees/EmployeeTypes";
 import type { CompanyFocusSummary } from "../influence/CompanyInfluencePlanningTypes";
+import type { OfficeZoneUnlockPreview } from "../progression/CompanyProgressionTypes";
 import type { EmployeeScheduleState } from "../schedules/EmployeeDailyScheduleTypes";
 import type { ProjectPortalProjectStatus } from "../OfficeProjectPortalTypes";
 import type { TaskStatus } from "../tasks/ProjectTaskTypes";
@@ -37,6 +38,7 @@ export type CompanyDashboardSectionId =
   | "project_progress"
   | "current_workload"
   | "office_occupancy"
+  | "office_zones"
   | "current_bottlenecks"
   | "recent_company_activity"
   | "recent_conversations"
@@ -167,6 +169,11 @@ export type OfficeOccupancySummary = {
   unavailableWorkstations: number;
 };
 
+export type OfficeZoneProgressSummary = {
+  unlockedZoneCount: number;
+  nextUnlock?: OfficeZoneUnlockPreview;
+};
+
 export type CompanyDashboardObservationSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 export type BottleneckSummary = {
@@ -227,6 +234,7 @@ export type CompanyDashboardSnapshot = {
   projects: ProjectDashboardSummary;
   workload: WorkloadSummary;
   occupancy: OfficeOccupancySummary;
+  officeZoneProgress: OfficeZoneProgressSummary;
   bottlenecks: BottleneckSummary[];
   activity: CompanyActivityItem[];
   conversations: ConversationDashboardSummary;
@@ -324,6 +332,10 @@ export function createEmptyCompanyDashboardSnapshot(
       reservedWorkstations: 0,
       unavailableWorkstations: 0,
     },
+    officeZoneProgress: {
+      unlockedZoneCount: 0,
+      nextUnlock: undefined,
+    },
     bottlenecks: [],
     activity: [],
     conversations: {
@@ -352,6 +364,7 @@ function createDefaultUnavailableSections(): CompanyDashboardSectionAvailability
     createUnavailableCompanyDashboardSection("project_progress", "Project Progress", ["projects", "task_activity"]),
     createUnavailableCompanyDashboardSection("current_workload", "Current Workload", ["projects", "work_session"]),
     createUnavailableCompanyDashboardSection("office_occupancy", "Office Occupancy", ["office_layout"]),
+    createUnavailableCompanyDashboardSection("office_zones", "Office Zones", ["company_progression"]),
     createUnavailableCompanyDashboardSection("current_bottlenecks", "Current Bottlenecks", ["employee_ai", "projects"]),
     createUnavailableCompanyDashboardSection("recent_company_activity", "Recent Company Activity", ["task_activity", "work_session"]),
     createUnavailableCompanyDashboardSection("recent_conversations", "Recent Conversations", ["conversation"]),

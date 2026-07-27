@@ -103,6 +103,7 @@ describe("CompanyDashboardView read-only rows", () => {
       projectSourceText: "Sources: No projects",
       workloadText: "Workload: 4 unassigned, 1 running",
       occupancyText: "Office: 2 occupied, 1 open",
+      officeZonesText: "Zones: 0 unlocked",
       bottleneckText: "Bottleneck: Employee workload is concentrated",
       conversationText: "Conversations: 1 recent",
       productivityText: "Productivity: 1 completed task(s), 2 finished work session(s).",
@@ -134,6 +135,36 @@ describe("CompanyDashboardView read-only rows", () => {
     });
 
     expect(rows.focusText).toBe("Focus: Reduce project risk");
+  });
+
+  it("renders the office zones locked state with the next zone's label and required level", () => {
+    const rows = createCompanyDashboardPanelRows({
+      ...createEmptyCompanyDashboardSnapshot(
+        INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
+        "2026-01-01T00:00:00.000Z",
+      ),
+      officeZoneProgress: {
+        unlockedZoneCount: 5,
+        nextUnlock: { zoneType: "reception", label: "Reception", requiredLevel: 2 },
+      },
+    });
+
+    expect(rows.officeZonesText).toBe("Zones: 5 unlocked, next: Reception at Lv2");
+  });
+
+  it("renders the office zones unlocked state without a next-unlock clause once every zone is unlocked", () => {
+    const rows = createCompanyDashboardPanelRows({
+      ...createEmptyCompanyDashboardSnapshot(
+        INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
+        "2026-01-01T00:00:00.000Z",
+      ),
+      officeZoneProgress: {
+        unlockedZoneCount: 9,
+        nextUnlock: undefined,
+      },
+    });
+
+    expect(rows.officeZonesText).toBe("Zones: 9 unlocked");
   });
 
   it("renders compact project source signals from provider-neutral snapshot data", () => {

@@ -3,6 +3,7 @@ import type {
   CompanyProgressionMilestone,
   CompanyProgressionSnapshot,
   CompanyStage,
+  OfficeZoneUnlockPreview,
 } from "./CompanyProgressionTypes";
 import type { OfficeZoneType } from "../layout/OfficeLayoutTypes";
 
@@ -99,6 +100,18 @@ const ASCENDING_LEVELS_ABOVE_ONE = Object.keys(PROGRESSION_BY_LEVEL)
   .filter((level) => level > 1)
   .sort((left, right) => left - right);
 
+const OFFICE_ZONE_LABELS: Record<OfficeZoneType, string> = {
+  entrance: "Entrance",
+  workspace: "Shared Workspace",
+  workstationArea: "Desk Area",
+  meetingArea: "Meeting Area",
+  breakArea: "Break Area",
+  reception: "Reception",
+  serverArea: "Server Room",
+  storage: "Storage",
+  executiveArea: "Executive Suite",
+};
+
 export class CompanyProgressionService {
   resolveCurrentCompanyLevel(input: CompanyProgressionInput = {}): number {
     const normalized = normalizeInput(input);
@@ -142,6 +155,22 @@ export class CompanyProgressionService {
     return Object.values(PROGRESSION_BY_LEVEL)
       .filter((snapshot) => snapshot.companyLevel > currentLevel)
       .map((snapshot) => cloneProgressionSnapshot(snapshot, evaluateMilestones(snapshot.requiredMilestones, normalized)));
+  }
+
+  getNextOfficeZoneUnlock(input: CompanyProgressionInput = {}): OfficeZoneUnlockPreview | undefined {
+    const currentLevel = this.resolveCurrentCompanyLevel(input);
+    const unlockedZones = new Set(this.getProgressionSnapshot(input).unlockedOfficeZones);
+
+    for (const level of ASCENDING_LEVELS_ABOVE_ONE) {
+      if (level <= currentLevel) continue;
+
+      const zoneType = PROGRESSION_BY_LEVEL[level].unlockedOfficeZones.find((candidate) => !unlockedZones.has(candidate));
+      if (zoneType) {
+        return { zoneType, label: OFFICE_ZONE_LABELS[zoneType], requiredLevel: level };
+      }
+    }
+
+    return undefined;
   }
 }
 
