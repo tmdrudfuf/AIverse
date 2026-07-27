@@ -27,17 +27,17 @@
 
 ### Tests for User Story 1
 
-- [ ] T003 [P] [US1] In new `src/features/city-view/scene/office/progression/CompanyProgressionService.test.ts`: test `getProgressionSnapshot({})` (and no-arg call) resolves `companyLevel: 1` with the existing garage-startup zones/layout/maxEmployees.
-- [ ] T004 [P] [US1] Same file: test `{ activeEmployees: 5, completedProjects: 1 }` resolves `companyLevel: 2`, `maxEmployees: 10`, `layoutId: "small-office-level-2"`, and includes `"reception"`/`"storage"` in `unlockedOfficeZones`.
-- [ ] T005 [P] [US1] Same file: test `{ activeEmployees: 6, completedProjects: 0 }` (only one of two level-2 milestones met) stays at `companyLevel: 1`.
-- [ ] T006 [P] [US1] Same file: test `{ activeEmployees: 20, completedProjects: 10 }` resolves the highest defined level (`companyLevel: 4`), not beyond it.
-- [ ] T007 [P] [US1] Same file: test that inputs exactly equal to a milestone's `targetValue` count as met (boundary, not "almost met").
+- [X] T003 [P] [US1] In new `src/features/city-view/scene/office/progression/CompanyProgressionService.test.ts`: test `getProgressionSnapshot({})` (and no-arg call) resolves `companyLevel: 1` with the existing garage-startup zones/layout/maxEmployees.
+- [X] T004 [P] [US1] Same file: test `{ activeEmployees: 5, completedProjects: 1 }` resolves `companyLevel: 2`, `maxEmployees: 10`, `layoutId: "small-office-level-2"`, and includes `"reception"`/`"storage"` in `unlockedOfficeZones`.
+- [X] T005 [P] [US1] Same file: test `{ activeEmployees: 6, completedProjects: 0 }` (only one of two level-2 milestones met) stays at `companyLevel: 1`.
+- [X] T006 [P] [US1] Same file: test `{ activeEmployees: 20, completedProjects: 10 }` resolves the highest defined level (`companyLevel: 4`), not beyond it.
+- [X] T007 [P] [US1] Same file: test that inputs exactly equal to a milestone's `targetValue` count as met (boundary, not "almost met").
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Rewrite `CompanyProgressionService.ts`: add a private milestone-metric table (see plan.md "Milestone metric mapping") and an `evaluateMilestones(milestones, input)` helper computing real `currentValue`/`isMet` per milestone.
-- [ ] T009 [US1] Same file: rewrite `resolveCurrentCompanyLevel(input)` to walk levels 2→4 ascending, advancing only while all of a level's milestones evaluate as met (sequential, no skipping — depends on T008).
-- [ ] T010 [US1] Same file: update `getProgressionSnapshot(input)` to use the new `resolveCurrentCompanyLevel(input)` result for the base snapshot (depends on T009).
+- [X] T008 [US1] Rewrite `CompanyProgressionService.ts`: add a private milestone-metric table (see plan.md "Milestone metric mapping") and an `evaluateMilestones(milestones, input)` helper computing real `currentValue`/`isMet` per milestone.
+- [X] T009 [US1] Same file: rewrite `resolveCurrentCompanyLevel(input)` to walk levels 2→4 ascending, advancing only while all of a level's milestones evaluate as met (sequential, no skipping — depends on T008).
+- [X] T010 [US1] Same file: update `getProgressionSnapshot(input)` to use the new `resolveCurrentCompanyLevel(input)` result for the base snapshot (depends on T009).
 
 **Checkpoint**: `getProgressionSnapshot` reports real levels; T003-T007 pass.
 
@@ -51,13 +51,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Same test file: test `{ activeEmployees: 0, completedProjects: 0 }` returns `requiredMilestones: []` at level 1 (unchanged from today's static data — level 1 has no unlock requirements).
-- [ ] T012 [P] [US2] Same test file: test `{ activeEmployees: 5, completedProjects: 1 }` (resolves to level 2) returns `requiredMilestones` containing `hire-five-employees` (`currentValue: 5, isMet: true`) and `complete-first-client-project` (`currentValue: 1, isMet: true`) — level 2's own milestones, evaluated, both met.
-- [ ] T013 [P] [US2] Same test file: test that at the highest defined level (level 4, reached), `requiredMilestones` reports level 4's own milestones (`hire-eighteen-employees`, `complete-headquarters-plan`) as met with real values — not an empty array.
+- [X] T011 [P] [US2] Same test file: test `{ activeEmployees: 0, completedProjects: 0 }` returns `requiredMilestones: []` at level 1 (unchanged from today's static data — level 1 has no unlock requirements).
+- [X] T012 [P] [US2] Same test file: test `{ activeEmployees: 5, completedProjects: 1 }` (resolves to level 2) returns `requiredMilestones` containing `hire-five-employees` (`currentValue: 5, isMet: true`) and `complete-first-client-project` (`currentValue: 1, isMet: true`) — level 2's own milestones, evaluated, both met.
+- [X] T013 [P] [US2] Same test file: test that at the highest defined level (level 4, reached), `requiredMilestones` reports level 4's own milestones (`hire-eighteen-employees`, `complete-headquarters-plan`) as met with real values — not an empty array.
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] In `getProgressionSnapshot(input)`, evaluate the resolved level's own static `requiredMilestones` against `input` (reusing the T008 helper) and use that as the returned snapshot's `requiredMilestones` (depends on T008-T010).
+- [X] T014 [US2] In `getProgressionSnapshot(input)`, evaluate the resolved level's own static `requiredMilestones` against `input` (reusing the T008 helper) and use that as the returned snapshot's `requiredMilestones` (depends on T008-T010).
 
 **Checkpoint**: T011-T013 pass.
 
@@ -71,12 +71,12 @@
 
 ### Tests for User Story 3
 
-- [ ] T015 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 3, completedProjects: 0 })` (stays level 1) returns snapshots for levels 2, 3, 4; the level-2 snapshot's `hire-five-employees` milestone reports `currentValue: 3, targetValue: 5, isMet: false`.
-- [ ] T016 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 5, completedProjects: 1 })` (now level 2) returns only levels 3 and 4.
+- [X] T015 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 3, completedProjects: 0 })` (stays level 1) returns snapshots for levels 2, 3, 4; the level-2 snapshot's `hire-five-employees` milestone reports `currentValue: 3, targetValue: 5, isMet: false`.
+- [X] T016 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 5, completedProjects: 1 })` (now level 2) returns only levels 3 and 4.
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Update `getFutureProgressionMetadata(input)` signature to accept `input: CompanyProgressionInput = {}`, resolve the current level via T009's logic, and evaluate each returned level's own `requiredMilestones` against `input` (depends on T008-T009).
+- [X] T017 [US3] Update `getFutureProgressionMetadata(input)` signature to accept `input: CompanyProgressionInput = {}`, resolve the current level via T009's logic, and evaluate each returned level's own `requiredMilestones` against `input` (depends on T008-T009).
 
 **Checkpoint**: T015-T016 pass. All public methods on the service now consume real input.
 
@@ -84,9 +84,9 @@
 
 ## Phase 6: Polish & Regression Safety
 
-- [ ] T018 [P] Re-run the pre-existing suites identified in T001 (`OfficeProjectPortalController.employee-ai.test.ts`, `OfficeProjectPortalController.employee-insight.test.ts`, `OfficeProjectPortalController.company-influence.test.ts`, `OfficeProjectPortalController.work-simulation.test.ts`, `OfficeProjectPortalController.project-dashboard.test.ts`, `OfficeProjectPortalController.employee-knowledge.test.ts`) to confirm zero regressions from the rewrite.
-- [ ] T019 Run `npm test` (focused: `vitest run src/features/city-view/scene/office/progression`, then full `npm test` before final review) to confirm the full suite is green.
-- [ ] T020 Run `npx tsc --noEmit` to confirm no type regressions (return shapes unchanged; `getFutureProgressionMetadata` signature change has zero existing callers, verified in plan.md).
+- [X] T018 [P] Re-run the pre-existing suites identified in T001 (`OfficeProjectPortalController.employee-ai.test.ts`, `OfficeProjectPortalController.employee-insight.test.ts`, `OfficeProjectPortalController.company-influence.test.ts`, `OfficeProjectPortalController.work-simulation.test.ts`, `OfficeProjectPortalController.project-dashboard.test.ts`, `OfficeProjectPortalController.employee-knowledge.test.ts`) to confirm zero regressions from the rewrite. (Ran the full `office/OfficeProjectPortalController`, `office/dashboard`, `office/project-dashboard`, `office/knowledge` directories: 15 files, 97 tests, all passed.)
+- [X] T019 Run `npm test` (focused: `vitest run src/features/city-view/scene/office/progression`, then full `npm test` before final review) to confirm the full suite is green. (Focused: 14/14 passed. Full suite: see final validation gate results.)
+- [X] T020 Run `npx tsc --noEmit` to confirm no type regressions (return shapes unchanged; `getFutureProgressionMetadata` signature change has zero existing callers, verified in plan.md). (Zero errors.)
 - [ ] T021 Manually walk `quickstart.md` once implementation is complete.
 
 ## Dependencies & Execution Order
