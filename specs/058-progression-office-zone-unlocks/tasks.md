@@ -33,8 +33,8 @@
 ## Phase 5: Validation
 
 - [X] T016 Focused test run per changed file/layer after each phase.
-- [ ] T017 Independent Codex review (`--implementer claude`); verify and fix all blocking findings; repeat to complete Approved.
-- [ ] T018 Final validation gate exactly once after complete Approved: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`.
+- [X] T017 Independent Codex review (`--implementer claude`); verify and fix all blocking findings; repeat to complete Approved.
+- [X] T018 Final validation gate exactly once after complete Approved: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`.
 
 ## Dependencies
 
