@@ -16,6 +16,7 @@ const { isFullPhaseRecord, isFocusedPhaseRecord } = require("./validationPhase.j
 const { isFinalValidationSatisfied } = require("./validationPlan.js");
 const { computeConvergenceStatus } = require("./reviewConvergence.js");
 const { buildPerformanceSummary } = require("./performanceMetrics.js");
+const { REVIEW_CONVERGENCE_FAILED_STOP_REASON } = require("./reviewBudget.js");
 
 function getOrchestration(state) {
   return state && state.orchestration && typeof state.orchestration === "object" ? state.orchestration : {};
@@ -515,9 +516,17 @@ function buildReviewConvergenceSummary(state, review, validation, findings, huma
       status: "not-started",
     };
   }
-  const budgetExhausted = orchestration.reason
-    ? /Review convergence budget exhausted|Incomplete review retry budget exhausted/.test(orchestration.reason)
-    : false;
+  // Spec 056 Codex review round 3 fix (P2-001): derive budgetExhausted from
+  // the authoritative orchestration.stopReason (normalized), not from
+  // regex-matching orchestration.reason's free text. The prior two-string
+  // regex missed the reviewer-question-cycle exhaustion path entirely
+  // (different message, same stopReason) -- exactly the kind of "two
+  // signals that can disagree" bug already fixed once for run.stopReason
+  // (see computeStatusAndStopReason); every exhaustion path sets
+  // orchestration.stopReason via buildExhaustionReport, so this single
+  // check now covers all of them, including any future one, without
+  // depending on message text at all.
+  const budgetExhausted = normalizeStopReason(orchestration.stopReason) === REVIEW_CONVERGENCE_FAILED_STOP_REASON;
   const status = humanGateReady
     ? "converged"
     : computeConvergenceStatus({

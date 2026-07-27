@@ -1376,7 +1376,14 @@ async function runOrchestration(state, options = {}) {
       // (and persisted onto the reviewRuns[] record) rather than
       // recomputing it a second time from the same gitContext.
       const completeness = review.completeness;
-      const reviewAttempts = Number(getOrchestration(currentState).reviewAttempts || 0) + 1;
+      const isIncompleteReview = completeness.status === "incomplete";
+      // Spec 056 Codex review round 3 fix (P1-001): an incomplete review
+      // must consume only incompleteReviewRetries -- never reviewAttempts,
+      // which it is meant to be exempt from (spec.md §10/§20). reviewAttempts
+      // is therefore only advanced when this attempt is NOT incomplete;
+      // an incomplete attempt persists the counter unchanged.
+      const priorReviewAttempts = Number(getOrchestration(currentState).reviewAttempts || 0);
+      const reviewAttempts = isIncompleteReview ? priorReviewAttempts : priorReviewAttempts + 1;
       const inventorySummary = summarizeInventory(review.changedFileInventory || []);
       currentState = setOrchestration(currentState, {
         reviewAttempts,
@@ -1393,7 +1400,7 @@ async function runOrchestration(state, options = {}) {
       // stage -- preserving any findings already recorded above -- up to a
       // dedicated ceiling separate from maxReviewAttempts/maxFixCycles
       // (spec.md §10/§20).
-      if (completeness.status === "incomplete") {
+      if (isIncompleteReview) {
         const incompleteReviewRetries = Number(getOrchestration(currentState).incompleteReviewRetries || 0);
         const exhaustion = isBudgetExhausted({ incompleteReviewRetries }, reviewBudget);
         if (exhaustion.exhausted) {

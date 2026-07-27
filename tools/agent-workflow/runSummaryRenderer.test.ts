@@ -191,4 +191,25 @@ describe("renderRunSummaryMarkdown: performance and review convergence (Spec 056
     const markdown = renderRunSummaryMarkdown(buildRunSummary({ featureId: "x", baseBranch: "main", results: [] }));
     expect(markdown).toContain("- Status: Not started");
   });
+
+  it("renders 'Budget exhausted' for the reviewer-question-cycle exhaustion path (regression for Codex Spec 056 review round 3, P2-001)", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "Reviewer question-cycle budget exhausted (maxReviewerQuestionCycles)",
+        stopReason: "review-convergence-failed",
+        terminalState: "blocked",
+        activeBlockingFindings: [],
+      },
+      reviewRuns: [
+        { stage: "review", outcome: "Questions", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 3000 },
+      ],
+    };
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(state));
+    expect(markdown).toContain("- Status: Budget exhausted");
+  });
 });

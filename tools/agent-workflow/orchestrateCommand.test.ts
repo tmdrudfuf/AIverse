@@ -2173,9 +2173,59 @@ describe("review convergence and budgets (Spec 056)", () => {
     expect(run.summary!.humanGate.ready).toBe(false);
     // No fix cycle was ever started from the incomplete review alone.
     expect(run.state.fixCycleCount || 0).toBe(0);
+    // Regression for Codex Spec 056 review round 3, P1-001: two incomplete
+    // review attempts must not advance the budget-relevant
+    // orchestration.reviewAttempts counter at all -- only
+    // incompleteReviewRetries. (run.summary.review.reviewAttempts is a
+    // separate, purely descriptive count of total Reviewer executions --
+    // reviewRuns.length -- and legitimately stays 2; it is not the budget
+    // counter this fix targets.)
+    expect(run.state.orchestration.reviewAttempts || 0).toBe(0);
+    expect(run.summary!.review.reviewAttempts).toBe(2);
     // The raw state field and the run-summary's derived field must never
     // disagree (Spec 055's "two signals that can never disagree" invariant).
     expect(run.summary!.run.stopReason).toBe(run.state.orchestration.stopReason);
+    // Regression for Codex Spec 056 review round 3, P2-001: incomplete-review
+    // budget exhaustion must also report as budget-exhausted convergence.
+    expect(run.summary!.reviewConvergence.status).toBe("budget-exhausted");
+  }, 30000);
+
+  it("preserves reviewAttempts and incompleteReviewRetries independently across a resume, and a subsequent complete review advances only reviewAttempts (regression for Codex Spec 056 review round 3, P1-001)", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const approved = structuredReviewText({
+      decision: "approved",
+      summary: "All clear.",
+      reviewCoverage: emptyCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: approved },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    // Simulates a paused run with two prior complete review attempts and one
+    // prior incomplete-review retry already recorded, resuming directly at
+    // "review".
+    const pausedState = createState({
+      reviewSequence: 2,
+      fixCycleCount: 0,
+      orchestration: {
+        currentStage: "review",
+        maxFixCycles: 2,
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reviewAttempts: 2,
+        incompleteReviewRetries: 1,
+      },
+    });
+
+    const run = await runOrchestration(pausedState, { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    // The resumed counters are preserved (not reset), and the new complete
+    // review attempt advances only reviewAttempts -- incompleteReviewRetries
+    // is untouched since this attempt was not incomplete.
+    expect(run.state.orchestration.reviewAttempts).toBe(3);
+    expect(run.state.orchestration.incompleteReviewRetries).toBe(1);
   }, 30000);
 
   it("Smoke D: review-attempt budget exhaustion stops safely -- never ready, findings preserved, stable stop reason", async () => {
@@ -2269,6 +2319,11 @@ describe("review convergence and budgets (Spec 056)", () => {
     expect(run.summary!.reviewConvergence.newBlockingFindingsAfterFirstReview).toBe(1);
     expect(run.summary!.reviewConvergence.automaticFixCycles).toBe(2);
     expect(run.summary!.reviewConvergence.status).toBe("converged");
+    // Normal-accounting counterpart to the Smoke B incomplete-review
+    // regression above: three complete (non-incomplete) review attempts
+    // must still advance the budget-relevant orchestration.reviewAttempts
+    // counter normally, one per attempt.
+    expect(run.state.orchestration.reviewAttempts).toBe(3);
   }, 30000);
 
   it("Smoke E: Approved with one P3 non-blocking note and complete coverage converges without an extra cycle", async () => {
@@ -2412,5 +2467,12 @@ describe("review convergence and budgets (Spec 056)", () => {
     expect(run.state.questionCycle || 0).toBe(0);
     expect(run.summary!.humanGate.ready).toBe(false);
     expect(run.summary!.run.stopReason).toBe(run.state.orchestration.stopReason);
+    // Regression for Codex Spec 056 review round 3's P2-001 (a distinct
+    // finding from round 1's P2-001 above, despite the reused ID): the
+    // reviewer-question-cycle exhaustion path's message wasn't recognized
+    // by buildReviewConvergenceSummary's budget-exhausted detection, so
+    // this exact scenario reported "in-progress" instead of
+    // "budget-exhausted".
+    expect(run.summary!.reviewConvergence.status).toBe("budget-exhausted");
   }, 30000);
 });

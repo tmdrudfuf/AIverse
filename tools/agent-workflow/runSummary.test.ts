@@ -718,7 +718,56 @@ describe("buildRunSummary: performance and review convergence (Spec 056)", () =>
     expect(summary.reviewConvergence.newBlockingFindingsAfterFirstReview).toBe(1);
     expect(summary.reviewConvergence.reopenedFindings).toBe(1);
     expect(summary.reviewConvergence.status).not.toBe("converged");
+    // Backward-compatible stop-reason parsing (regression for Codex Spec 056
+    // review round 3, P2-001): an unrelated blocked reason with no
+    // orchestration.stopReason field at all must not be misclassified as
+    // budget-exhausted.
+    expect(summary.reviewConvergence.status).not.toBe("budget-exhausted");
     expect(summary.performance.reviewDurationMs).toBe(11000);
+  });
+
+  it("reports budget-exhausted convergence for the reviewer-question-cycle exhaustion path, whose message the old two-string reason regex did not recognize (regression for Codex Spec 056 review round 3, P2-001)", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "Reviewer question-cycle budget exhausted (maxReviewerQuestionCycles)",
+        stopReason: "review-convergence-failed",
+        terminalState: "blocked",
+        activeBlockingFindings: [],
+      },
+      reviewRuns: [
+        { stage: "review", outcome: "Questions", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 3000 },
+      ],
+    };
+    const summary = buildRunSummary(state);
+    expect(summary.reviewConvergence.status).toBe("budget-exhausted");
+  });
+
+  it("still classifies the two pre-existing budget-exhaustion messages as budget-exhausted convergence (backward compatibility)", () => {
+    for (const reason of ["Review convergence budget exhausted (maxAutomaticFixCycles)", "Incomplete review retry budget exhausted (some-reason)"]) {
+      const state = {
+        featureId: "x",
+        baseBranch: "main",
+        results: [],
+        orchestration: {
+          currentStage: "blocked",
+          startedAt: "2026-07-26T00:00:00.000Z",
+          reason,
+          stopReason: "review-convergence-failed",
+          terminalState: "blocked",
+          activeBlockingFindings: [],
+        },
+        reviewRuns: [
+          { stage: "review", outcome: "Changes Requested", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 3000 },
+        ],
+      };
+      const summary = buildRunSummary(state);
+      expect(summary.reviewConvergence.status).toBe("budget-exhausted");
+    }
   });
 
   it("reports converged only when the human gate itself is ready", () => {

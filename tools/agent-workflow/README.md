@@ -872,7 +872,7 @@ The independent-review prompt (`templates/independent-review.md`, `templates/orc
 
 ### Changed-File Inventory
 
-Before every review, `reviewCoverage.js#buildChangedFileInventory` computes a deterministic `{ path, status, additions, deletions, highRisk }[]` from the same `git diff --stat`/`status --porcelain` data `collectGitContext` already gathers (line counts are approximate, per the bar in `git diff --stat`, since `--numstat` is not computed). A file is classified high-risk when it is one of this workflow's own state-machine/safety modules under `tools/agent-workflow/`, or its net line-change meets a configurable threshold (default 40). This inventory is included in both review prompts and is the deterministic basis the workflow cross-checks a Reviewer's self-reported coverage counts against.
+Before every review, `reviewCoverage.js#buildChangedFileInventory` computes a deterministic `{ path, status, additions, deletions, highRisk }[]` from the `git diff --stat`/`--numstat`/`status --porcelain` data `collectGitContext` already gathers. Line counts are exact, from `git diff --numstat`, which unlike `--stat`'s human-readable bar graph never truncates a long path or scales its counts for a large diff; a `gitContext` that only supplies `--stat` data (every pre-Spec-056-round-2 test fixture) falls back to the approximate bar-derived counts unchanged. A file is classified high-risk when it is one of this workflow's own state-machine/safety modules under `tools/agent-workflow/`, or its net line-change meets a configurable threshold (default 40). This inventory is included in both review prompts and is the deterministic basis the workflow cross-checks a Reviewer's self-reported coverage counts against.
 
 ### Review Completeness
 
