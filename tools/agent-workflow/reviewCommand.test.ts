@@ -348,6 +348,35 @@ describe("git context collection", () => {
     // characters) would have missed.
     expect(entry!.highRisk).toBe(true);
   });
+
+  it("resolves the base branch to origin/main rather than a stale local main (regression: Spec 057 review round 2 timed out and produced 10 structured-review JSON blocks because a worktree's stale local main dragged an unrelated merged PR's ~40 files into the reviewed diff)", () => {
+    const originDir = createTempDir();
+    initRepo(originDir);
+    fs.writeFileSync(path.join(originDir, "base.txt"), "base\n");
+    commitAll(originDir, "init");
+
+    const cwd = createTempDir();
+    git(cwd, ["clone", "-q", originDir, cwd]);
+    git(cwd, ["config", "user.email", "test@example.com"]);
+    git(cwd, ["config", "user.name", "Test"]);
+
+    // Simulate a PR merging into origin/main after this worktree's local
+    // `main` ref was created (e.g. EnterWorktree fetched origin to branch
+    // from it but never moved the local `main` branch).
+    fs.writeFileSync(path.join(originDir, "unrelated.txt"), "unrelated merged work\n");
+    commitAll(originDir, "unrelated PR merged into origin main");
+    git(cwd, ["fetch", "-q", "origin"]);
+
+    git(cwd, ["checkout", "-q", "-b", "feature", "origin/main"]);
+    fs.writeFileSync(path.join(cwd, "feature.txt"), "feature work\n");
+    commitAll(cwd, "feature commit");
+
+    const ctx = collectGitContext({ cwd, baseBranch: "main" });
+
+    expect(ctx.baseBranchRef).toBe("origin/main");
+    expect(ctx.committedLog).toContain("feature commit");
+    expect(ctx.committedLog).not.toContain("unrelated PR merged into origin main");
+  });
 });
 
 describe("decision classification", () => {
