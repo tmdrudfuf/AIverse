@@ -162,3 +162,33 @@ describe("renderRunSummaryMarkdown: focused validation review loop (Spec 055)", 
     expect(markdown).toContain("- Full validation target:");
   });
 });
+
+describe("renderRunSummaryMarkdown: performance and review convergence (Spec 056)", () => {
+  it("renders the Review Convergence and Performance sections with matching numbers", () => {
+    const cwd = createTempDir();
+    const state = approvedState(cwd);
+    (state.orchestration as Record<string, unknown>).reviewConvergenceMetrics = {
+      firstReviewBlockingFindings: 4,
+      newBlockingFindingsAfterFirstReview: 0,
+      reopenedFindings: 0,
+      resolvedFindingsVerified: 4,
+    };
+    (state.reviewRuns as Record<string, unknown>[])[0] = { ...state.reviewRuns[0], durationMs: 1320000 };
+    (state.validationRuns as Record<string, unknown>[])[0] = { ...state.validationRuns[0], durationMs: 42000, phase: "focused" };
+    (state.validationRuns as Record<string, unknown>[])[1] = { ...state.validationRuns[1], durationMs: 118000, phase: "full" };
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(state, { cwd }));
+    expect(markdown).toContain("## Review Convergence");
+    expect(markdown).toContain("- First-review blocking findings: 4");
+    expect(markdown).toContain("- New blocking findings after first review: 0");
+    expect(markdown).toContain("- Reopened findings: 0");
+    expect(markdown).toContain("## Performance");
+    expect(markdown).toContain("- Reviewer time: 22m 0s");
+    expect(markdown).toContain("- Focused validation time: 42s");
+    expect(markdown).toContain("- Final full validation time: 1m 58s");
+  });
+
+  it("reports not-started convergence status when no review has run yet", () => {
+    const markdown = renderRunSummaryMarkdown(buildRunSummary({ featureId: "x", baseBranch: "main", results: [] }));
+    expect(markdown).toContain("- Status: Not started");
+  });
+});

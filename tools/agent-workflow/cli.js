@@ -85,7 +85,7 @@ function printUsage() {
     "  node tools/agent-workflow/cli.js run-agent --state <state.json> [--stage <stage>] [--agent <implementer|reviewer|agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run --state <state.json> [--dry-run] [--until-blocked] [--max-steps <n>] [--agent <implementer|reviewer|agent-id>] [--implementer <agent-id>] [--timeout-ms <ms>]",
     "  node tools/agent-workflow/cli.js run-review --state <state.json> [--dry-run] [--agent <reviewer|agent-id>] [--implementer <agent-id>] [--base <branch>] [--timeout-ms <ms>]",
-    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--implementer <agent-id>] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>] [--validation-strategy full-every-cycle|focused-final-full] [--focused-validation-command <command>] [--full-validation-command <command>] [--force-full-validation]",
+    "  node tools/agent-workflow/cli.js orchestrate --state <state.json> [--dry-run] [--implementer <agent-id>] [--timeout-ms <ms>] [--max-fix-cycles <n>] [--skip-validation] [--validation-command <command>] [--validation-strategy full-every-cycle|focused-final-full] [--focused-validation-command <command>] [--full-validation-command <command>] [--force-full-validation] [--max-review-attempts <n>] [--max-automatic-fix-cycles <n>] [--max-incomplete-review-retries <n>] [--max-reviewer-question-cycles <n>]",
     "  node tools/agent-workflow/cli.js summary --state <state.json> [--format markdown|json]",
     "",
     "Run summaries:",
@@ -103,6 +103,16 @@ function printUsage() {
     "  readiness -- focused validation passing alone can never make a run ready. --force-full-validation runs",
     "  the full list at the very next validation occurrence without skipping any stage or marking anything",
     "  ready by itself. See tools/agent-workflow/README.md#focused-validation-review-loop.",
+    "",
+    "Review budgets:",
+    "  --max-review-attempts <n> (default 3) caps total independent Reviewer attempts across this run.",
+    "  --max-automatic-fix-cycles <n> is a reviewBudget-level ceiling on Reviewer-requested fix cycles; when",
+    "  not supplied it mirrors --max-fix-cycles so the two never silently diverge. --max-fix-cycles itself",
+    "  keeps its original meaning unchanged. --max-incomplete-review-retries <n> (default 1) bounds retries of",
+    "  a review the workflow classified as incomplete (see reviewCoverage.js) before hard-blocking.",
+    "  --max-reviewer-question-cycles <n> (default 1) mirrors the existing state.maxQuestionCycles ceiling on",
+    "  Reviewer clarification-question rounds. Exhausting any of the four ceilings stops with stopReason",
+    "  review-convergence-failed, never humanGate.ready. See tools/agent-workflow/README.md#review-budgets.",
     "",
     "Role selection:",
     "  --implementer <agent-id> picks the Implementer for this execution only and resolves the other",
@@ -377,6 +387,20 @@ function main(argv) {
     const validationCommands = readAllFlags(args, "--validation-command");
     const focusedValidationCommands = readAllFlags(args, "--focused-validation-command");
     const fullValidationCommands = readAllFlags(args, "--full-validation-command");
+    // Spec 056 Part C: reviewBudget CLI overrides. Only flags actually
+    // supplied are set on the override object -- resolveReviewBudget's own
+    // precedence (CLI > state.reviewBudget > --max-fix-cycles-mirrored
+    // default) already handles "not supplied", so no flag defaults are
+    // hardcoded here (see README.md#review-budgets for precedence details).
+    const maxReviewAttemptsText = readFlag(args, "--max-review-attempts");
+    const maxAutomaticFixCyclesText = readFlag(args, "--max-automatic-fix-cycles");
+    const maxIncompleteReviewRetriesText = readFlag(args, "--max-incomplete-review-retries");
+    const maxReviewerQuestionCyclesText = readFlag(args, "--max-reviewer-question-cycles");
+    const reviewBudget = {};
+    if (maxReviewAttemptsText) reviewBudget.maxReviewAttempts = Number(maxReviewAttemptsText);
+    if (maxAutomaticFixCyclesText) reviewBudget.maxAutomaticFixCycles = Number(maxAutomaticFixCyclesText);
+    if (maxIncompleteReviewRetriesText) reviewBudget.maxIncompleteReviewRetries = Number(maxIncompleteReviewRetriesText);
+    if (maxReviewerQuestionCyclesText) reviewBudget.maxReviewerQuestionCycles = Number(maxReviewerQuestionCyclesText);
     const options = {
       cwd: process.cwd(),
       implementerAgentId: implementerFlag,
@@ -388,6 +412,7 @@ function main(argv) {
       focusedValidationCommands: focusedValidationCommands.length ? focusedValidationCommands : undefined,
       fullValidationCommands: fullValidationCommands.length ? fullValidationCommands : undefined,
       forceFullValidation: hasFlag(args, "--force-full-validation"),
+      reviewBudget: Object.keys(reviewBudget).length ? reviewBudget : undefined,
     };
     if (hasFlag(args, "--dry-run")) {
       try {

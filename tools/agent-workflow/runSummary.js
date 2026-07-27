@@ -9,10 +9,13 @@ const {
   VALIDATION_STATUSES,
   HUMAN_GATE_STATES,
   normalizeValidationStatus,
+  normalizeStopReason,
 } = require("./runSummarySchema.js");
 const { DEFAULT_VALIDATION_STRATEGY, targetsMatch } = require("./validationPolicy.js");
 const { isFullPhaseRecord, isFocusedPhaseRecord } = require("./validationPhase.js");
 const { isFinalValidationSatisfied } = require("./validationPlan.js");
+const { computeConvergenceStatus } = require("./reviewConvergence.js");
+const { buildPerformanceSummary } = require("./performanceMetrics.js");
 
 function getOrchestration(state) {
   return state && state.orchestration && typeof state.orchestration === "object" ? state.orchestration : {};
@@ -480,6 +483,59 @@ function buildReviewSummary(state, exactReviewedCommitMatch) {
     // reviewed/full-validation targets) rather than a second, independently
     // maintained "unknown" placeholder -- the two must never disagree.
     exactReviewedCommitMatch: exactReviewedCommitMatch,
+    // Spec 056 Part B: additive. A record predating this feature has no
+    // completenessStatus at all -- defaulting to "complete" preserves every
+    // pre-Spec-056 run's readiness exactly as before (see
+    // reviewCoverage.js#computeReviewCompleteness for the same
+    // absence-is-not-incompleteness rule applied at the source).
+    completenessStatus: last && last.completenessStatus ? last.completenessStatus : "complete",
+    completenessReason: last ? (last.completenessReason || null) : null,
+  };
+}
+
+// --- Review convergence (Spec 056 Part C/D) --------------------------------
+
+// The single shared computation for "has review/fix converged", consulted
+// here for reporting and by nothing else that could compute it differently
+// (Spec 055 isFinalValidationSatisfied precedent). A state file predating
+// this feature has no reviewConvergenceMetrics at all -- reported as
+// `not-started` rather than a fabricated value (Spec 056 §26/FR-019).
+function buildReviewConvergenceSummary(state, review, validation, findings, humanGateReady) {
+  const orchestration = getOrchestration(state);
+  const metrics = orchestration.reviewConvergenceMetrics;
+  const hasAnyReviewAttempt = review.reviewAttempts > 0;
+  if (!hasAnyReviewAttempt) {
+    return {
+      reviewAttempts: 0,
+      firstReviewBlockingFindings: 0,
+      newBlockingFindingsAfterFirstReview: 0,
+      reopenedFindings: 0,
+      resolvedFindingsVerified: 0,
+      automaticFixCycles: review.fixCycles,
+      status: "not-started",
+    };
+  }
+  const budgetExhausted = orchestration.reason
+    ? /Review convergence budget exhausted|Incomplete review retry budget exhausted/.test(orchestration.reason)
+    : false;
+  const status = humanGateReady
+    ? "converged"
+    : computeConvergenceStatus({
+      latestReviewOutcome: review.finalDecision,
+      latestCompletenessStatus: review.completenessStatus,
+      activeBlockingFindingsCount: findings.remainingBlocking,
+      exactTargetMatch: validation.finalReadinessSatisfied,
+      budgetExhausted,
+      hasAnyReviewAttempt,
+    });
+  return {
+    reviewAttempts: review.reviewAttempts,
+    firstReviewBlockingFindings: metrics ? metrics.firstReviewBlockingFindings : 0,
+    newBlockingFindingsAfterFirstReview: metrics ? metrics.newBlockingFindingsAfterFirstReview : 0,
+    reopenedFindings: metrics ? metrics.reopenedFindings : 0,
+    resolvedFindingsVerified: metrics ? metrics.resolvedFindingsVerified : 0,
+    automaticFixCycles: review.fixCycles,
+    status,
   };
 }
 
@@ -557,6 +613,18 @@ function computeStatusAndStopReason(state, cwd, warnings) {
   const lastValidation = validationRuns.length ? validationRuns[validationRuns.length - 1] : undefined;
   const latestReviewDecision = state.latestReviewDecision;
   const reason = orchestration.reason || "";
+
+  // Spec 056: when the orchestration loop wrote an explicit stopReason
+  // directly onto state (currently only the review-convergence budget
+  // exhaustion paths), it is authoritative -- consulting it here, rather
+  // than relying solely on regex-matching `reason`'s free text, guarantees
+  // `run.stopReason` can never disagree with `orchestration.stopReason`.
+  const explicitStopReason = normalizeStopReason(orchestration.stopReason);
+  if (explicitStopReason && currentStage === "blocked"
+    && (!lastValidation || lastValidation.status === "passed")
+    && latestReviewDecision !== "Timed Out" && latestReviewDecision !== "Unknown" && latestReviewDecision !== "Execution Failed") {
+    return { status: RUN_STATUSES.BLOCKED, stopReason: explicitStopReason };
+  }
 
   if (lastValidation && lastValidation.status !== "passed") {
     if (lastValidation.status === "timed-out") return { status: RUN_STATUSES.TIMED_OUT, stopReason: STOP_REASONS.TIMEOUT };
@@ -659,8 +727,13 @@ function buildHumanGate(status, review, validation, findings, evidenceVerified) 
   // Approved review's target (Spec 055 FR-005/FR-010) -- a focused-only pass,
   // or a full pass against a target that no longer matches what was
   // reviewed, can never make a run ready.
+  // Spec 056 FR-017: a complete Approved review is required for readiness --
+  // an Approved decision that self-reported incomplete coverage (or that
+  // this workflow independently classified as invalid) must not satisfy the
+  // human gate, even if every other condition holds.
   const ready = review.finalDecision === "Approved"
     && review.structuredReviewStatus !== "invalid"
+    && review.completenessStatus === "complete"
     && validation.status === VALIDATION_STATUSES.PASSED
     && validation.finalReadinessSatisfied
     && findings.remainingBlocking === 0
@@ -752,6 +825,12 @@ function buildRunSummary(state, options = {}) {
     evidenceVerified = reviewEvidenceOk && validationEvidenceOk;
   }
   const humanGate = buildHumanGate(status, review, validation, findings, evidenceVerified);
+  const reviewConvergence = buildReviewConvergenceSummary(state, review, validation, findings, humanGate.ready);
+  const performance = buildPerformanceSummary({
+    reviewRuns: asArray(state.reviewRuns),
+    validationRuns: asArray(state.validationRuns),
+    reviewAttempts: review.reviewAttempts,
+  });
 
   const startedAt = orchestration.startedAt || null;
   const completedAt = (status === RUN_STATUSES.AWAITING_HUMAN_DECISION || status === RUN_STATUSES.BLOCKED || status === RUN_STATUSES.FAILED || status === RUN_STATUSES.TIMED_OUT || status === RUN_STATUSES.INTERRUPTED)
@@ -782,6 +861,8 @@ function buildRunSummary(state, options = {}) {
     findings,
     commits,
     humanGate,
+    performance,
+    reviewConvergence,
     artifacts: buildArtifactIndex(stageTimeline, state, cwd, options, warnings),
     warnings,
   };

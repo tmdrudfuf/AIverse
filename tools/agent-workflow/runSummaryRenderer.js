@@ -51,6 +51,27 @@ function formatYesNo(value) {
   return value ? "Yes" : "No";
 }
 
+const CONVERGENCE_STATUS_LABELS = {
+  "not-started": "Not started",
+  "in-progress": "In progress",
+  converged: "Converged",
+  "budget-exhausted": "Budget exhausted",
+  "incomplete-review": "Incomplete review",
+  blocked: "Blocked",
+};
+
+function convergenceStatusLabel(status) {
+  return CONVERGENCE_STATUS_LABELS[status] || status || "unknown";
+}
+
+function formatDurationMs(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "unknown";
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+}
+
 function renderTable(headers, rows) {
   if (!rows.length) return undefined;
   const headerLine = `| ${headers.join(" | ")} |`;
@@ -137,6 +158,23 @@ function renderRunSummaryMarkdown(summary) {
   lines.push(`- Review attempts: ${summary.review.reviewAttempts}`);
   lines.push(`- Question cycles: ${summary.review.questionCycles}`);
   lines.push(`- Fix cycles: ${summary.review.fixCycles}`);
+  lines.push("");
+
+  lines.push("## Review Convergence");
+  lines.push("");
+  lines.push(`- Review attempts: ${summary.reviewConvergence.reviewAttempts}`);
+  lines.push(`- First-review blocking findings: ${summary.reviewConvergence.firstReviewBlockingFindings}`);
+  lines.push(`- New blocking findings after first review: ${summary.reviewConvergence.newBlockingFindingsAfterFirstReview}`);
+  lines.push(`- Reopened findings: ${summary.reviewConvergence.reopenedFindings}`);
+  lines.push(`- Automatic fix cycles: ${summary.reviewConvergence.automaticFixCycles}`);
+  lines.push(`- Status: ${convergenceStatusLabel(summary.reviewConvergence.status)}`);
+  lines.push("");
+
+  lines.push("## Performance");
+  lines.push("");
+  lines.push(`- Reviewer time: ${formatDurationMs(summary.performance.reviewDurationMs)}`);
+  lines.push(`- Focused validation time: ${formatDurationMs(summary.performance.focusedValidationDurationMs)}`);
+  lines.push(`- Final full validation time: ${formatDurationMs(summary.performance.fullValidationDurationMs)}`);
   lines.push("");
 
   lines.push("## Findings");

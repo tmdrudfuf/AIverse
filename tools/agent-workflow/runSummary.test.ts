@@ -670,6 +670,149 @@ describe("buildRunSummary: backward compatibility with legacy state", () => {
   });
 });
 
+describe("buildRunSummary: performance and review convergence (Spec 056)", () => {
+  it("reports not-started convergence and zeroed performance for a run with no review attempts", () => {
+    const summary = buildRunSummary({ featureId: "x", baseBranch: "main", results: [] });
+    expect(summary.reviewConvergence).toEqual({
+      reviewAttempts: 0,
+      firstReviewBlockingFindings: 0,
+      newBlockingFindingsAfterFirstReview: 0,
+      reopenedFindings: 0,
+      resolvedFindingsVerified: 0,
+      automaticFixCycles: 0,
+      status: "not-started",
+    });
+    expect(summary.performance).toEqual({
+      reviewDurationMs: 0,
+      focusedValidationDurationMs: 0,
+      fullValidationDurationMs: 0,
+      reviewAttempts: 0,
+    });
+  });
+
+  it("includes convergence metrics recorded by the orchestration loop", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "Maximum fix cycles reached",
+        terminalState: "blocked",
+        reviewConvergenceMetrics: {
+          firstReviewBlockingFindings: 3,
+          newBlockingFindingsAfterFirstReview: 1,
+          reopenedFindings: 1,
+          resolvedFindingsVerified: 2,
+        },
+        activeBlockingFindings: [{ id: "P1-001" }],
+      },
+      reviewRuns: [
+        { stage: "review", outcome: "Changes Requested", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 5000 },
+        { stage: "re-review", outcome: "Changes Requested", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 6000 },
+      ],
+    };
+    const summary = buildRunSummary(state);
+    expect(summary.reviewConvergence.firstReviewBlockingFindings).toBe(3);
+    expect(summary.reviewConvergence.newBlockingFindingsAfterFirstReview).toBe(1);
+    expect(summary.reviewConvergence.reopenedFindings).toBe(1);
+    expect(summary.reviewConvergence.status).not.toBe("converged");
+    expect(summary.performance.reviewDurationMs).toBe(11000);
+  });
+
+  it("reports converged only when the human gate itself is ready", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "run-summary-convergence-"));
+    const runDir = path.join(cwd, ".agent-workflow/runs/x");
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of ["review.md", "final.md"]) fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        updatedAt: "2026-07-26T00:05:00.000Z",
+        reviewConvergenceMetrics: { firstReviewBlockingFindings: 0, newBlockingFindingsAfterFirstReview: 0, reopenedFindings: 0, resolvedFindingsVerified: 0 },
+      },
+      validationRuns: [{ stage: "final-verification", status: "passed", exitCode: 0, path: ".agent-workflow/runs/x/final.md", target: { commit: "a", dirty: false, dirtyHash: null } }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", structuredReviewStatus: "valid", resultPath: ".agent-workflow/runs/x/review.md", target: { commit: "a", dirty: false, dirtyHash: null } }],
+      latestReviewDecision: "Approved",
+    };
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.humanGate.ready).toBe(true);
+    expect(summary.reviewConvergence.status).toBe("converged");
+  });
+
+  it("does not converge when the review is Approved but completeness is incomplete", () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "run-summary-incomplete-"));
+    const runDir = path.join(cwd, ".agent-workflow/runs/x");
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of ["review.md", "final.md"]) fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        updatedAt: "2026-07-26T00:05:00.000Z",
+      },
+      validationRuns: [{ stage: "final-verification", status: "passed", exitCode: 0, path: ".agent-workflow/runs/x/final.md", target: { commit: "a", dirty: false, dirtyHash: null } }],
+      reviewRuns: [{
+        stage: "review",
+        outcome: "Approved",
+        reviewerId: "codex",
+        structuredReviewStatus: "valid",
+        resultPath: ".agent-workflow/runs/x/review.md",
+        target: { commit: "a", dirty: false, dirtyHash: null },
+        completenessStatus: "incomplete",
+        completenessReason: "reviewer-reported-stopping-early",
+      }],
+      latestReviewDecision: "Approved",
+    };
+    const summary = buildRunSummary(state, { cwd });
+    expect(summary.humanGate.ready).toBe(false);
+    expect(summary.review.completenessStatus).toBe("incomplete");
+  });
+
+  it("keeps old run-summary readable: a pre-Spec-056 state with no reviewConvergenceMetrics remains valid", () => {
+    const legacyState = {
+      featureId: "010-legacy",
+      baseBranch: "main",
+      results: [],
+      orchestration: { currentStage: "blocked", startedAt: "2026-01-01T00:00:00.000Z", reason: "Reviewer returned Approved", terminalState: "blocked" },
+      reviewRuns: [{ outcome: "Approved", reviewerId: "codex" }],
+    };
+    expect(() => buildRunSummary(legacyState)).not.toThrow();
+    const summary = buildRunSummary(legacyState);
+    expect(summary.schemaVersion).toBe(1);
+    expect(summary.review.completenessStatus).toBe("complete");
+    expect(summary.reviewConvergence.reviewAttempts).toBe(1);
+    expect(summary.reviewConvergence.status).not.toBe("converged");
+  });
+
+  it("does not duplicate metrics on a repeated resume of the same completed run", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "Maximum fix cycles reached",
+        terminalState: "blocked",
+        reviewConvergenceMetrics: { firstReviewBlockingFindings: 2, newBlockingFindingsAfterFirstReview: 0, reopenedFindings: 0, resolvedFindingsVerified: 2 },
+      },
+      reviewRuns: [{ stage: "review", outcome: "Changes Requested", reviewerId: "codex", structuredReviewStatus: "valid" }],
+    };
+    const first = buildRunSummary(state);
+    const second = buildRunSummary(state);
+    expect(second.reviewConvergence).toEqual(first.reviewConvergence);
+  });
+});
+
 describe("buildRunSummary: consistent artifact evidence verification", () => {
   it("warns when a stage-timeline artifact (not just review/validation evidence) is missing", () => {
     const cwd = createTempDir();

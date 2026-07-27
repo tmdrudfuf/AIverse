@@ -40,6 +40,15 @@ const {
 } = require("./validationPolicy.js");
 const { buildValidationRecordFields } = require("./validationPhase.js");
 const { buildValidationPlanPreview, isFinalValidationSatisfied } = require("./validationPlan.js");
+const { buildChangedFileInventory, computeReviewCompleteness, formatInventoryForPrompt, summarizeInventory } = require("./reviewCoverage.js");
+const {
+  buildFindingLedger,
+  classifyFindingsForAttempt,
+  computeConvergenceStatus,
+  updateConvergenceMetrics,
+} = require("./reviewConvergence.js");
+const { buildExhaustionReport, isBudgetExhausted, resolveReviewBudget } = require("./reviewBudget.js");
+const { measurePromptSize } = require("./performanceMetrics.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -188,7 +197,7 @@ function getActiveBlockingFindings(state) {
 
 function buildImplementerPrompt(state, stage, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch, gitAdapter: options.gitAdapter });
   const repoRoot = gitContext.repositoryPath || cwd;
   const templatePath = options.templatePath || path.join(__dirname, "templates", "orchestrate-implement.md");
   const template = fs.readFileSync(templatePath, "utf8");
@@ -225,7 +234,7 @@ function formatJson(value) {
 
 function buildAnswerPrompt(state, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch, gitAdapter: options.gitAdapter });
   const repoRoot = gitContext.repositoryPath || cwd;
   const templatePath = options.templatePath || path.join(__dirname, "templates", "orchestrate-answer-questions.md");
   const template = fs.readFileSync(templatePath, "utf8");
@@ -250,7 +259,7 @@ function buildAnswerPrompt(state, options = {}) {
 
 function buildFinalReviewPrompt(state, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch, gitAdapter: options.gitAdapter });
   const repoRoot = gitContext.repositoryPath || cwd;
   const templatePath = options.templatePath || path.join(__dirname, "templates", "orchestrate-final-review.md");
   const template = fs.readFileSync(templatePath, "utf8");
@@ -273,6 +282,7 @@ function buildFinalReviewPrompt(state, options = {}) {
     answersJson: formatJson(orchestration.latestImplementerAnswers || state.latestImplementerAnswers || {}),
     findingHistory: formatFindingHistoryForPrompt(getFindingHistory(state)),
     validationCommands: formatList(getValidationCommands(state, options)),
+    changedFileInventory: formatInventoryForPrompt(buildChangedFileInventory(gitContext)),
     safetyRules: formatList(DEFAULT_SAFETY_RULES),
     humanOnlyCommands: formatList(HUMAN_ONLY_COMMANDS),
   };
@@ -464,7 +474,7 @@ async function runValidationCommands(state, stage, options = {}) {
     return { commandText, invocation };
   });
   const triggerReason = options.skipValidation ? null : determineValidationTriggerReason(state, stage, phase, options);
-  const gitContextForTarget = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const gitContextForTarget = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch, gitAdapter: options.gitAdapter });
   const target = options.skipValidation ? null : computeValidationTarget(gitContextForTarget);
   const records = [];
   // Always set explicitly (never conditionally left stale): this must
@@ -786,7 +796,7 @@ function extractFindingsForHandoff(outputText, structuredAnalysis) {
 
 async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch });
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch, gitAdapter: options.gitAdapter });
   const implementerConfig = resolveRoleRunner(state, "implementer", options.implementerAgentId);
   const reviewerConfig = resolveRoleRunner(state, "reviewer", options.reviewerAgentId);
   assertSafeCommand(reviewerConfig);
@@ -868,6 +878,27 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     target: computeValidationTarget(gitContext),
   };
   if (structuredReviewPath) reviewRunRecord.structuredReviewPath = relativePath(cwd, structuredReviewPath);
+  // Spec 056 Part B/D: completeness and performance telemetry are computed
+  // once here (the single point that has the gitContext, the structured
+  // analysis, and the raw execution result together) and persisted onto the
+  // review-run record itself, so the orchestration loop and the run summary
+  // both read the same evidence instead of recomputing it independently.
+  const changedFileInventory = buildChangedFileInventory(gitContext);
+  const completeness = computeReviewCompleteness({
+    structuredAnalysis: structuredReviewAnalysis,
+    inventory: changedFileInventory,
+    timedOut: Boolean(result.timedOut),
+    executionFailed: outcome === "Execution Failed",
+    interrupted: Boolean(result.interrupted),
+  });
+  reviewRunRecord.completenessStatus = completeness.status;
+  reviewRunRecord.completenessReason = completeness.reason;
+  reviewRunRecord.durationMs = result.durationMs || 0;
+  reviewRunRecord.startedAt = startedAt;
+  reviewRunRecord.completedAt = completedAt;
+  const promptSize = measurePromptSize(prompt);
+  reviewRunRecord.promptCharacterCount = promptSize.characters;
+  reviewRunRecord.promptByteCount = promptSize.bytes;
   return {
     state: {
       ...state,
@@ -884,12 +915,14 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     structuredReviewPath,
     structuredReviewAnalysis,
     executionRecord,
+    completeness,
+    changedFileInventory,
   };
 }
 
 async function executeAnswerQuestionsStage(state, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const gitContext = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch, gitAdapter: options.gitAdapter });
   const beforeSignature = getAnswerStageEditSignature(gitContext);
   const implementer = resolveRoleRunner(state, "implementer", options.implementerAgentId);
   const prompt = buildAnswerPrompt(state, { ...options, cwd, gitContext });
@@ -907,7 +940,7 @@ async function executeAnswerQuestionsStage(state, options = {}) {
       answerAnalysis: { status: "invalid", diagnostics: ["answer-questions execution failed"] },
     };
   }
-  const afterSignature = getAnswerStageEditSignature(collectGitContext({ cwd, baseBranch: state.baseBranch }));
+  const afterSignature = getAnswerStageEditSignature(collectGitContext({ cwd, baseBranch: state.baseBranch, gitAdapter: options.gitAdapter }));
   if (beforeSignature !== afterSignature) {
     return {
       state: markBlocked(nextState, "Answer stage modified repository files"),
@@ -973,7 +1006,7 @@ function inferNextValidationStage(currentStage) {
 
 function previewOrchestration(state, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch });
+  const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch, gitAdapter: options.gitAdapter });
   const roleResolution = resolveOrchestrationRoles(state, options);
   const implementer = resolveAgentConfig(state, roleResolution.roles.implementer);
   const reviewer = resolveAgentConfig(state, roleResolution.roles.reviewer);
@@ -982,6 +1015,18 @@ function previewOrchestration(state, options = {}) {
   const maxFixCycles = normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles);
   const currentStage = getCurrentStage(state);
   const validationPlan = buildValidationPlanPreview(state, inferNextValidationStage(currentStage), options);
+  // Spec 056 Part C/dry-run (Smoke H): preview review-budget usage, the
+  // deterministic changed-file inventory, open blocking findings, and the
+  // next review action -- read-only, no spawn/validation/state/artifact
+  // write, matching every other dry-run guarantee in this workflow.
+  const reviewBudgetPreview = resolveReviewBudget({
+    cliOverrides: options.reviewBudget || {},
+    state,
+    maxFixCyclesFallback: maxFixCycles,
+  });
+  const changedFileInventory = buildChangedFileInventory(gitContext);
+  const openBlockingFindingsCount = getActiveBlockingFindings(state).length;
+  const reviewAttemptsUsed = Number(getOrchestration(state).reviewAttempts || 0);
   return {
     dryRun: true,
     featureId: state.featureId || "unknown-feature",
@@ -1035,6 +1080,17 @@ function previewOrchestration(state, options = {}) {
       willWrite: false,
     },
     nextExpectedStage: currentStage,
+    reviewBudget: reviewBudgetPreview,
+    reviewBudgetUsage: {
+      reviewAttempts: reviewAttemptsUsed,
+      automaticFixCycles: Number(state.fixCycleCount || getOrchestration(state).fixCycleCount || 0),
+      incompleteReviewRetries: Number(getOrchestration(state).incompleteReviewRetries || 0),
+    },
+    changedFileInventory,
+    openBlockingFindingsCount,
+    nextReviewAction: currentStage === "review" || currentStage === "re-review" || currentStage === "final-review"
+      ? `Run the ${currentStage} stage against ${changedFileInventory.length} changed file(s) (${changedFileInventory.filter((entry) => entry.highRisk).length} high-risk).`
+      : `Not at a review stage yet (current stage: ${currentStage}).`,
     willSpawn: false,
   };
 }
@@ -1052,10 +1108,23 @@ async function runOrchestration(state, options = {}) {
   const reviewerConfig = resolveAgentConfig(state, roleResolution.roles.reviewer);
   assertSafeCommand(implementerConfig);
   assertSafeCommand(reviewerConfig);
+  const resolvedMaxFixCycles = normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles);
+  const resolvedMaxQuestionCycles = normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles);
+  // Spec 056 Part C: reviewBudget is resolved once per invocation, the same
+  // way maxFixCycles/maxQuestionCycles already are -- maxAutomaticFixCycles
+  // mirrors the resolved maxFixCycles by default so the two never silently
+  // diverge unless a state/CLI reviewBudget override is explicit (see
+  // clarifications.md Q16).
+  const reviewBudget = resolveReviewBudget({
+    cliOverrides: options.reviewBudget || {},
+    state,
+    maxFixCyclesFallback: resolvedMaxFixCycles,
+  });
   let currentState = setOrchestration(state, {
     currentStage: getCurrentStage(state),
-    maxFixCycles: normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles),
-    maxQuestionCycles: normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles),
+    maxFixCycles: resolvedMaxFixCycles,
+    maxQuestionCycles: resolvedMaxQuestionCycles,
+    reviewBudget,
     implementerId: implementerConfig.agentId,
     implementerIdentity: implementerConfig.identity,
     reviewerId: reviewerConfig.agentId,
@@ -1074,10 +1143,10 @@ async function runOrchestration(state, options = {}) {
   const maxFixCycles = currentState.orchestration.maxFixCycles;
   const maxQuestionCycles = currentState.orchestration.maxQuestionCycles;
   const steps = [];
-  const initialBranch = collectGitContext({ cwd, baseBranch: currentState.baseBranch }).currentBranch;
+  const initialBranch = collectGitContext({ cwd, baseBranch: currentState.baseBranch, gitAdapter: options.gitAdapter }).currentBranch;
 
   while (!TERMINAL_STAGES.has(getCurrentStage(currentState))) {
-    const gitContext = collectGitContext({ cwd, baseBranch: currentState.baseBranch });
+    const gitContext = collectGitContext({ cwd, baseBranch: currentState.baseBranch, gitAdapter: options.gitAdapter });
     if (gitContext.currentBranch !== initialBranch) {
       currentState = markBlocked(currentState, `Branch changed from ${initialBranch} to ${gitContext.currentBranch}`);
       if (statePath) writeState(statePath, currentState);
@@ -1100,7 +1169,7 @@ async function runOrchestration(state, options = {}) {
         break;
       }
       if (stage === "fix") {
-        const afterSignature = getDiffSignature(collectGitContext({ cwd, baseBranch: currentState.baseBranch }));
+        const afterSignature = getDiffSignature(collectGitContext({ cwd, baseBranch: currentState.baseBranch, gitAdapter: options.gitAdapter }));
         if (beforeSignature === afterSignature) {
           currentState = markBlocked(currentState, "Fix cycle produced no repository diff");
           if (statePath) writeState(statePath, currentState);
@@ -1126,11 +1195,14 @@ async function runOrchestration(state, options = {}) {
       // before running the full command list, compared against the same
       // signature immediately after, to detect the full-validation-modified-
       // the-tree case (spec.md FR-007) using the exact same helper already
-      // used to detect "fix produced no diff".
-      const preValidationGitContext = stage === FULL_STAGE_NAME
-        ? collectGitContext({ cwd, baseBranch: currentState.baseBranch })
-        : null;
-      const validationOptions = preValidationGitContext ? { ...options, gitContext: preValidationGitContext } : options;
+      // used to detect "fix produced no diff". Reuses this iteration's
+      // already-collected top-of-loop gitContext rather than shelling out to
+      // git again: nothing mutates the tree between the top of this
+      // iteration and this validation dispatch (Spec 056 Part A -- see
+      // spec.md's Baseline section for why redundant collectGitContext calls
+      // were the dominant measured cost, not process/repo setup).
+      const preValidationGitContext = stage === FULL_STAGE_NAME ? gitContext : null;
+      const validationOptions = { ...options, gitContext };
       const validation = await runValidationCommands(currentState, stage, validationOptions);
       currentState = validation.state;
       steps.push({ stage, status: validation.passed ? "passed" : "failed", artifactPath: validation.records.at(-1)?.path });
@@ -1152,7 +1224,7 @@ async function runOrchestration(state, options = {}) {
 
       const treeModifiedByFullValidation = stage === FULL_STAGE_NAME
         && validation.passed
-        && getDiffSignature(preValidationGitContext) !== getDiffSignature(collectGitContext({ cwd, baseBranch: currentState.baseBranch }));
+        && getDiffSignature(preValidationGitContext) !== getDiffSignature(collectGitContext({ cwd, baseBranch: currentState.baseBranch, gitAdapter: options.gitAdapter }));
 
       // Consults the exact same isFinalValidationSatisfied function the run
       // summary uses for humanGate.ready/finalReadinessSatisfied, so the
@@ -1213,9 +1285,12 @@ async function runOrchestration(state, options = {}) {
     }
 
     if (stage === "review" || stage === "re-review" || stage === "final-review") {
+      // Reuse this iteration's already-collected gitContext rather than
+      // re-shelling out to git: nothing mutates the tree between the top of
+      // this iteration and the review call below for these three stages.
       const reviewOptions = stage === "final-review"
-        ? { ...pinnedOptions, reviewPrompt: buildFinalReviewPrompt(currentState, pinnedOptions) }
-        : pinnedOptions;
+        ? { ...pinnedOptions, gitContext, reviewPrompt: buildFinalReviewPrompt(currentState, { ...pinnedOptions, gitContext }) }
+        : { ...pinnedOptions, gitContext };
       const review = await executeReviewStage(currentState, stage, reviewOptions);
       currentState = review.state;
       steps.push({ stage, status: review.outcome, artifactPath: relativePath(cwd, review.resultPath) });
@@ -1261,6 +1336,89 @@ async function runOrchestration(state, options = {}) {
         if (statePath) writeState(statePath, currentState);
         break;
       }
+
+      // Spec 056 Part B/C: independent review completeness/convergence
+      // tracking, computed for every non-Questions review outcome so the
+      // orchestration decision and the run summary can never disagree about
+      // completeness/convergence (Spec 055 isFinalValidationSatisfied
+      // precedent). Additive bookkeeping only, except for the new
+      // incomplete-review interception immediately below it. Reuses the
+      // completeness/inventory runReviewWithoutStateWrite already computed
+      // (and persisted onto the reviewRuns[] record) rather than
+      // recomputing it a second time from the same gitContext.
+      const completeness = review.completeness;
+      const reviewAttempts = Number(getOrchestration(currentState).reviewAttempts || 0) + 1;
+      const inventorySummary = summarizeInventory(review.changedFileInventory || []);
+      currentState = setOrchestration(currentState, {
+        reviewAttempts,
+        latestReviewCompletenessStatus: completeness.status,
+        latestReviewCompletenessReason: completeness.reason,
+        latestReviewCoverage: completeness.coverage,
+        latestChangedFilesTotal: inventorySummary.changedFilesTotal,
+        latestHighRiskFilesTotal: inventorySummary.highRiskFilesTotal,
+      });
+
+      // An incomplete review (structurally valid but insufficient coverage
+      // evidence, or a self-reported early stop) MUST NOT count as Approved
+      // regardless of its decision heading (FR-010). Retry the same review
+      // stage -- preserving any findings already recorded above -- up to a
+      // dedicated ceiling separate from maxReviewAttempts/maxFixCycles
+      // (spec.md §10/§20).
+      if (completeness.status === "incomplete") {
+        const incompleteReviewRetries = Number(getOrchestration(currentState).incompleteReviewRetries || 0);
+        const exhaustion = isBudgetExhausted({ incompleteReviewRetries }, reviewBudget);
+        if (exhaustion.exhausted) {
+          const report = buildExhaustionReport({ reviewAttempts, incompleteReviewRetries }, reviewBudget, {
+            openBlockingFindingsCount: (getOrchestration(currentState).activeBlockingFindings || []).length,
+          });
+          currentState = markBlocked(currentState, `Incomplete review retry budget exhausted (${completeness.reason})`, {
+            stopReason: report.stopReason,
+            reviewConvergenceReport: report,
+          });
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        currentState = persistStage(statePath, currentState, stage, {
+          incompleteReviewRetries: incompleteReviewRetries + 1,
+        });
+        continue;
+      }
+
+      const activeBlockingFindingsCount = (getOrchestration(currentState).activeBlockingFindings || []).length;
+      let convergenceMetrics = getOrchestration(currentState).reviewConvergenceMetrics;
+      if (completeness.status === "complete") {
+        const findingsForClassification = getOrchestration(currentState).latestFindings || lifecycle.findings || review.findings || [];
+        const classifiedFindings = classifyFindingsForAttempt(findingsForClassification, getFindingHistory(currentState), reviewAttempts);
+        const reopenedCounts = { ...(getOrchestration(currentState).reviewConvergenceReopenedCounts || {}) };
+        for (const entry of classifiedFindings) {
+          if (entry.classification === "reopened" && entry.reopenedFromFindingId) {
+            reopenedCounts[entry.reopenedFromFindingId] = (reopenedCounts[entry.reopenedFromFindingId] || 0) + 1;
+          }
+        }
+        const resolvedLifecycleEntries = review.structuredReviewAnalysis.status === "valid"
+          ? (review.structuredReviewAnalysis.review.findingLifecycle || [])
+          : [];
+        const resolvedCountThisAttempt = resolvedLifecycleEntries.filter((entry) => entry.status === "resolved").length;
+        convergenceMetrics = updateConvergenceMetrics(convergenceMetrics, {
+          attemptNumber: reviewAttempts,
+          classifiedFindings,
+          resolvedCountThisAttempt,
+        });
+        const reviewConvergenceStatus = computeConvergenceStatus({
+          latestReviewOutcome: review.outcome,
+          latestCompletenessStatus: completeness.status,
+          activeBlockingFindingsCount,
+          exactTargetMatch: true,
+          budgetExhausted: false,
+          hasAnyReviewAttempt: true,
+        });
+        currentState = setOrchestration(currentState, {
+          reviewConvergenceMetrics: convergenceMetrics,
+          reviewConvergenceReopenedCounts: reopenedCounts,
+          reviewConvergenceStatus,
+        });
+      }
+
       if (review.outcome === "Approved") {
         currentState = persistStage(statePath, currentState, "final-verification");
         continue;
@@ -1279,6 +1437,27 @@ async function runOrchestration(state, options = {}) {
       const fixCycleCount = Number(currentState.fixCycleCount || 0);
       if (fixCycleCount >= maxFixCycles) {
         currentState = markBlocked(currentState, "Maximum fix cycles reached");
+        if (statePath) writeState(statePath, currentState);
+        break;
+      }
+      // Spec 056 Part C: an additional, separately-tracked budget gate,
+      // checked only after the existing maxFixCycles gate above -- so a
+      // default-configuration run's stop reason/message is completely
+      // unchanged, and this new ceiling only ever fires for a genuinely new
+      // scenario: an explicit reviewBudget override stricter than
+      // --max-fix-cycles, or maxReviewAttempts itself being reached (no
+      // pre-existing equivalent check for total review attempts existed
+      // before this feature).
+      const fixCycleBudgetExhaustion = isBudgetExhausted({ reviewAttempts, automaticFixCycles: fixCycleCount }, reviewBudget);
+      if (fixCycleBudgetExhaustion.exhausted) {
+        const report = buildExhaustionReport({ reviewAttempts, automaticFixCycles: fixCycleCount }, reviewBudget, {
+          openBlockingFindingsCount: activeFindings.length,
+          reopenedFindingsCount: convergenceMetrics ? convergenceMetrics.reopenedFindings : 0,
+        });
+        currentState = markBlocked(currentState, `Review convergence budget exhausted (${fixCycleBudgetExhaustion.ceiling})`, {
+          stopReason: report.stopReason,
+          reviewConvergenceReport: report,
+        });
         if (statePath) writeState(statePath, currentState);
         break;
       }
@@ -1301,7 +1480,7 @@ async function runOrchestration(state, options = {}) {
     if (statePath) writeState(statePath, currentState);
   }
 
-  const finalGitContext = collectGitContext({ cwd, baseBranch: currentState.baseBranch });
+  const finalGitContext = collectGitContext({ cwd, baseBranch: currentState.baseBranch, gitAdapter: options.gitAdapter });
   const summaryRefresh = refreshRunSummary({
     state: currentState,
     cwd,

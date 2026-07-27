@@ -22,6 +22,7 @@ const {
 const { analyzeStructuredReview } = require("./structuredReview.js");
 const { formatFindingHistoryForPrompt } = require("./findingLifecycle.js");
 const { resolveEffectiveRoles, validateAgentForRole } = require("./roleResolver.js");
+const { buildChangedFileInventory, formatInventoryForPrompt } = require("./reviewCoverage.js");
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DIFF_LIMITS = { maxChars: 6000, maxLines: 200 };
@@ -210,6 +211,10 @@ function buildIndependentReviewPrompt(state, gitContext, options = {}) {
   const changedFilesSummary = gitContext.statusPorcelain
     ? truncate(gitContext.statusPorcelain, { maxChars: 3000, maxLines: 150 })
     : "(no changes)";
+  const changedFileInventory = truncate(
+    formatInventoryForPrompt(buildChangedFileInventory(gitContext)),
+    { maxChars: 4000, maxLines: 200 },
+  );
 
   const validationEvidence = Array.isArray(state.validationEvidence) && state.validationEvidence.length
     ? formatList(state.validationEvidence)
@@ -240,6 +245,7 @@ function buildIndependentReviewPrompt(state, gitContext, options = {}) {
     findingHistory: formatFindingHistoryForPrompt(state.findingHistory || (state.orchestration && state.orchestration.findingHistory) || []),
     validationEvidence,
     changedFilesSummary,
+    changedFileInventory,
     stagedDiff: `${truncate(gitContext.stagedDiffStat, DEFAULT_STAT_LIMITS)}\n\n${truncate(gitContext.stagedDiff)}`,
     unstagedDiff: `${truncate(gitContext.unstagedDiffStat, DEFAULT_STAT_LIMITS)}\n\n${truncate(gitContext.unstagedDiff)}`,
     committedLog: gitContext.committedLog
