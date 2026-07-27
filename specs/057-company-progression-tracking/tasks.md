@@ -87,7 +87,7 @@
 - [X] T018 [P] Re-run the pre-existing suites identified in T001 (`OfficeProjectPortalController.employee-ai.test.ts`, `OfficeProjectPortalController.employee-insight.test.ts`, `OfficeProjectPortalController.company-influence.test.ts`, `OfficeProjectPortalController.work-simulation.test.ts`, `OfficeProjectPortalController.project-dashboard.test.ts`, `OfficeProjectPortalController.employee-knowledge.test.ts`) to confirm zero regressions from the rewrite. (Ran the full `office/OfficeProjectPortalController`, `office/dashboard`, `office/project-dashboard`, `office/knowledge` directories: 15 files, 97 tests, all passed.)
 - [X] T019 Run `npm test` (focused: `vitest run src/features/city-view/scene/office/progression`, then full `npm test` before final review) to confirm the full suite is green. (Focused: 14/14 passed. Full suite: see final validation gate results.)
 - [X] T020 Run `npx tsc --noEmit` to confirm no type regressions (return shapes unchanged; `getFutureProgressionMetadata` signature change has zero existing callers, verified in plan.md). (Zero errors.)
-- [ ] T021 Manually walk `quickstart.md` once implementation is complete.
+- [X] T021 Manually walk `quickstart.md` once implementation is complete. (Automated-verification commands re-run and confirmed; corrected the doc's requiredMilestones description and dropped the incorrect dashboard-risk-reactivation claim per Codex review round 1, finding P2-001. Manual in-browser dev-server walkthrough not performed in this environment — no display available; automated coverage substitutes.)
 
 ## Dependencies & Execution Order
 

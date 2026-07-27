@@ -11,8 +11,8 @@ Expect the new `CompanyProgressionService.test.ts` suite to pass, covering:
 - Level advances to 2 once `activeEmployees >= 5` **and** `completedProjects >= 1`.
 - Level does not advance if only one of a level's milestones is met.
 - Level caps at the highest defined level (4) and never goes beyond it.
-- `requiredMilestones` on the current snapshot reflects live progress toward the *next* level, and is empty at the max level.
-- `getFutureProgressionMetadata(input)` returns only levels above the resolved current level, evaluated for real.
+- `requiredMilestones` on the current snapshot is the resolved level's own milestones (`[]` at level 1, matching today's static data), evaluated with real `currentValue`/`isMet` — met once that level is reached, not hardcoded `false`.
+- `getFutureProgressionMetadata(input)` returns only levels above the resolved current level, each with real (not hardcoded-zero) evaluated milestone progress — this is the "what's needed next" view.
 
 Then confirm no regressions in the consumers that already read this service's output:
 
@@ -40,9 +40,7 @@ npm run dev
 
 1. Open the app, enter the company office scene.
 2. Hire employees (via whatever existing in-office flow adds employees to `state.employees`) until the office has 5 employees, and complete at least 1 task (status `Done`) via the existing task/work-session flow.
-3. Open the Company Dashboard (Office Project Portal → dashboard view). Confirm:
-   - The health/summary panel no longer describes the company as perpetually at its starting stage.
-   - The "Progression milestones remain" risk (if it was showing) clears once the level-2 milestones are satisfied, and any newly-relevant milestone (toward level 3) appears in its place.
-4. Open a Project Dashboard for an active project and confirm its health status is no longer permanently gated by an unmeetable progression signal.
+3. Open the Company Dashboard (Office Project Portal → dashboard view). Confirm the health/summary text (`[ACTIVE] Health: ...`) changes from describing `garageStartup` toward describing `smallOffice` once both thresholds are crossed — this is the primary directly observable change.
+4. Note: the "Progression milestones remain" risk (Company Dashboard) and the progression health signal (Project Dashboard) are **not** expected to change behavior from this feature — both key off a level's own `requiredMilestones`, which are trivially satisfied once that level is reached (see spec.md "Explicitly not changed by this feature"). Do not treat their continued silence as a regression.
 
 No new UI, no new assets — this is a data-correctness fix to an already-built display path, so the *shape* of what's on screen doesn't change, only the numbers/labels being fed into it.
