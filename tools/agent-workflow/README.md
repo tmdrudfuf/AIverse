@@ -813,3 +813,151 @@ Attempt counts, the configured strategy, and per-occurrence targets persist in `
 ### Backward Compatibility
 
 A state file with no `validationPolicy` resolves to `strategy: "full-every-cycle"` with commands resolved exactly as before this feature existed. A `validationRuns`/`reviewRuns` record with no `phase`/`target` field is interpreted as `phase: "full"` with target evidence absent (never fabricated) — old run directories remain fully *readable*, but since this feature introduces exact-match target evidence as a new readiness requirement, a run lacking that evidence reports `finalReadinessSatisfied: false` rather than a confident `true`; it is not silently granted the new, stricter guarantee retroactively. `run-summary.json`'s `validation.strategy` reflects the actually-resolved strategy for the invocation (persisted via `orchestration.effectiveValidationStrategy` once validation runs), not just whatever happens to be configured in `state.validationPolicy` — so a CLI-only `--validation-strategy` override is never misreported as `full-every-cycle`.
+
+## Agent Workflow Performance and Review Convergence
+
+Spec 056 addresses two measured bottlenecks from the Spec 055 merge: `tools/agent-workflow`'s own test suite was the slowest thing in this repository (`orchestrateCommand.test.ts` alone accounted for ~99% of `npm test`'s wall time), and independent review took five rounds to converge for Spec 055 (seventeen for Spec 054) even though the underlying defects could plausibly have been found together in one comprehensive pass.
+
+### Measured Baseline and Bottleneck
+
+A corrected baseline (after discovering and excluding a stray, gitignored harness worktree that Vitest's default file discovery was silently double-counting — see `vitest.config.ts`) measured on `main` before this feature: `orchestrateCommand.test.ts` **417.73s / 81 tests / 1 file**; full `npm test` **406.47s / 654 tests / 42 files**. Source-level analysis found the dominant cost was not the well-known per-test `git init` sequence but **repeated real `collectGitContext()` calls** — up to ~13 real `git` subprocesses per call, invoked several times per end-to-end orchestration test.
+
+### Test Dependency Seams
+
+`collectGitContext` (in `reviewCommand.js`) already accepted an injectable `gitAdapter` (`{ run(args, cwd), verify(ref, cwd) }`); this feature threads that same option through every remaining call site in `orchestrateCommand.js` (~14 sites, including the `runOrchestration` stage loop), and adds `tools/agent-workflow/testDependencies.js`:
+
+- `createFakeGitAdapter(config)` — implements every distinct `git` invocation pattern `collectGitContext` issues, deterministically, with no real subprocess. Supports `setState(...)` mid-test to simulate a tree mutation between two `collectGitContext` calls (e.g. after a fix cycle).
+- `createFakeCommandRunner(sequence)` — the promoted, shared form of the test-local scripted process adapter already used throughout `orchestrateCommand.test.ts`, with deterministic success/failure/timeout/interruption and spawn/kill tracking.
+- `createFakeClock(startIso)` — monotonically increasing ISO timestamps for deterministic snapshots.
+
+None of these are reachable from `cli.js` or any production entry point — they are wired in only via the `gitAdapter`/`processAdapter` options `orchestrateCommand.js`/`reviewCommand.js` already accept for dependency injection.
+
+### Fake vs. Real Coverage Split
+
+Tests whose assertions do not depend on real diff/status content (role selection and swapping, question-loop progression, structured-review-outcome parsing, run-summary shape, budget arithmetic, the new Part B/C/D modules) use `createFakeGitAdapter()` with a plain `mkdtempSync` directory — no `git init` at all. The following remain on a **real** Git repository and the real process adapter, because their assertions genuinely depend on it:
+
+- Unsafe-command rejection before spawn
+- Exact Git target/`dirtyHash` computation
+- Fix-cycle / final-validation tree-diff detection (anything asserting on `getDiffSignature`/`getAnswerStageEditSignature` actually changing after a real filesystem mutation)
+- Real timeout SIGTERM→SIGKILL cleanup
+- Interruption cleanup
+- State persistence and resume
+- BOM-tolerant state loading
+- Dry-run no-write guarantees
+- Real command exit-status handling (e.g. a real `npm --version` invocation)
+- Human-gate enforcement
+
+### Shared Fixture Strategy
+
+Tests that still need a real repository no longer each run `git init`/`symbolic-ref`/`config` ×2/`add`/`commit` (6 subprocesses). Instead, one base fixture (one commit, one tracked file) is created lazily, once per test-process run, and cached; every test that needs a real repository gets an `fs.cpSync` recursive copy of it into its own fresh `mkdtemp` directory. Per-test isolation is identical to before — each test mutates only its own copy — but the repeated `git init` subprocess cost is paid once per file, not once per test. Tests remain single-file-sequential (no `test.concurrent` introduced); the base fixture is read-only after creation, so concurrent copies of it are safe by construction.
+
+### Performance Results
+
+| | Before (corrected baseline) | After | Change |
+|---|---|---|---|
+| `orchestrateCommand.test.ts` | 417.73s / 81 tests | 155.03s / 88 tests | **-62.9%** (target <120s not fully reached) |
+| `npm test` (full suite) | 406.47s / 654 tests / 42 files | ~162s / 758 tests / 47 files | **~-60%** (target <180s met) |
+
+No test was removed to reach these numbers; the standalone file gained 7 net-new smoke tests and the full suite gained 5 new module test files, all counted above. The remaining gap on the standalone file is the retained real-Git integration subset itself: those tests still pay for several real `collectGitContext` calls as the orchestration loop progresses through multiple stages, which is inherent to proving real diff-detection behavior — not incidental setup cost that can be optimized away without weakening that coverage. Closing it further would mean reducing `collectGitContext`'s own internal `git`-plumbing call count (e.g. consolidating `rev-parse`/`status` invocations), a wider-blast-radius production change (affecting every consumer of `gitContext`, including Reviewer-facing prompt content) explicitly deferred by this feature — see `specs/056-agent-workflow-performance-convergence/clarifications.md` Q6/Q28.
+
+```powershell
+npx vitest run tools/agent-workflow/orchestrateCommand.test.ts --reporter=verbose
+```
+
+Vitest's own `--reporter=verbose` per-test timing is the supported way to find slow tests going forward; no new dependency or production-code instrumentation was added for this.
+
+### Comprehensive First-Pass Review
+
+The independent-review prompt (`templates/independent-review.md`, `templates/orchestrate-final-review.md`) now explicitly instructs the Reviewer to continue past the first valid finding, search for related occurrences of the same defect pattern, and return every material blocking finding found in that single pass — while still permitting a genuine zero-finding `Approved` decision. A concise workflow checklist (correctness, state transitions, resume behavior, target provenance, validation readiness, structured review parsing, finding lifecycle, timeout/interruption handling, unsafe-command rejection, dry-run no-write behavior, backward compatibility, run-summary accuracy, the human remote-mutation boundary, tests for failure paths) is included rather than re-embedding full historical spec text.
+
+### Changed-File Inventory
+
+Before every review, `reviewCoverage.js#buildChangedFileInventory` computes a deterministic `{ path, status, additions, deletions, highRisk }[]` from the `git diff --stat`/`--numstat`/`status --porcelain` data `collectGitContext` already gathers. Line counts are exact, from `git diff --numstat`, which unlike `--stat`'s human-readable bar graph never truncates a long path or scales its counts for a large diff; a `gitContext` that only supplies `--stat` data (every pre-Spec-056-round-2 test fixture) falls back to the approximate bar-derived counts unchanged. A file is classified high-risk when it is one of this workflow's own state-machine/safety modules under `tools/agent-workflow/`, or its net line-change meets a configurable threshold (default 40). This inventory is included in both review prompts and is the deterministic basis the workflow cross-checks a Reviewer's self-reported coverage counts against.
+
+### Review Completeness
+
+`reviewCoverage.js#computeReviewCompleteness` computes `complete` / `incomplete` / `invalid` independent of the Markdown/structured `decision`:
+
+- `invalid` — the Reviewer process timed out, failed to execute, or was interrupted, or returned a malformed/unsupported structured review.
+- `incomplete` — the Reviewer engaged with the `reviewCoverage` schema and reported an *explicit* negative signal: `stoppedEarly: true`, `checklistCompleted: false`, or inspected counts that fall short of the deterministic inventory's totals (capped, never trusted beyond the deterministic total).
+- `complete` — everything else, **including** a legacy plain-Markdown review with no structured JSON at all, and a structured review that never adopted the `reviewCoverage` extension.
+
+This last point matters: an early implementation attempt treated *absence* of `reviewCoverage` itself as `incomplete`, which broke 44 of the 81 pre-existing `orchestrateCommand.test.ts` tests (none of which could report a field this feature had not yet introduced) — see `clarifications.md` Q7. Absence of new evidence is not evidence of an incomplete review; only an explicit negative signal gates completeness. An `incomplete` review is never treated as `Approved` regardless of its decision heading, and retries the same review stage (preserving any findings already recorded) up to `reviewBudget.maxIncompleteReviewRetries`.
+
+### Consolidated Fix Cycles and the Finding Ledger
+
+When a review returns multiple blocking findings, the Implementer prompt for the following fix cycle already includes the complete unresolved blocking set (Spec 052's existing finding-lifecycle machinery, `findingLifecycle.js`); this feature adds `reviewConvergence.js` as a read layer on top of that history, without duplicating finding-ID assignment or resume persistence:
+
+- `classifyFindingsForAttempt` labels every reported blocking finding as `new` (never seen before), `previously-known` (an already-open carryover), or `reopened` (a fresh ID that content-matches — by file/location or summary — a previously *resolved* entry; Spec 052 deliberately rejects literal ID reuse for a resolved finding, so a genuine reopening necessarily arrives under a new ID).
+- `updateConvergenceMetrics` accumulates `firstReviewBlockingFindings` (captured once, from round 1), `newBlockingFindingsAfterFirstReview` (the central convergence metric — new + reopened findings discovered in any later round), `reopenedFindings`, and `resolvedFindingsVerified`.
+- `buildFindingLedger` merges `findingHistory` with tracked reopened counts into the `{ id, severity, blocking, summary, location, firstDetectedReviewAttempt, status, resolutionTarget, resolutionNote, reopenedCount }` shape.
+
+### Review Budgets
+
+```json
+{
+  "reviewBudget": {
+    "maxReviewAttempts": 3,
+    "maxAutomaticFixCycles": 2,
+    "maxIncompleteReviewRetries": 1,
+    "maxReviewerQuestionCycles": 1
+  }
+}
+```
+
+`--max-fix-cycles` keeps its original meaning (maximum automatic Implementer fix cycles). `reviewBudget.maxAutomaticFixCycles` mirrors it by default so the two never silently diverge; an explicit `state.reviewBudget.maxAutomaticFixCycles` or `--max-automatic-fix-cycles` CLI override takes precedence over the mirrored default. `reviewBudget.maxReviewAttempts` (total independent Reviewer attempts) and `reviewBudget.maxIncompleteReviewRetries` are purely additive — no pre-Spec-056 equivalent existed. `reviewBudget.maxReviewerQuestionCycles` mirrors the existing `state.maxQuestionCycles` ceiling.
+
+```powershell
+node tools/agent-workflow/cli.js orchestrate `
+  --state .agent-workflow/spec-056-state.json `
+  --implementer claude `
+  --max-fix-cycles 2 `
+  --max-review-attempts 3 `
+  --max-incomplete-review-retries 1 `
+  --max-reviewer-question-cycles 1
+```
+
+Exhausting any ceiling stops the run with `stopReason: "review-convergence-failed"` — never `humanGate.ready: true`, never a silently-raised limit, never a discarded finding. The new checks are ordered strictly **after** every pre-existing budget check in the orchestration loop, so a default-configuration run's stop reason and message are byte-for-byte unchanged from before this feature; the new ceilings only ever fire for a genuinely new scenario (an explicit `reviewBudget` override stricter than `--max-fix-cycles`, or `maxReviewAttempts`/`maxIncompleteReviewRetries` themselves, which had no prior equivalent).
+
+### P3 / Non-Blocking Findings
+
+P0/P1/P2 findings are blocking by default; P3 is non-blocking by default and never by itself starts another fix/re-review cycle (this was already true before this feature — `blockingFindings`/`nonBlockingFindings` are separate arrays the Reviewer itself populates). Any finding in a high-risk category (false readiness, remote mutation, unsafe command execution, credential exposure, state/resume corruption, incorrect exact-head provenance, validation bypass, review-parser approval bugs, data loss, human-gate weakening) remains blocking regardless of its reported severity — `reviewConvergence.js#isEffectivelyBlocking` overrides a P3 label for these categories when computing convergence telemetry.
+
+### Resume
+
+`orchestration.reviewAttempts`, `orchestration.reviewConvergenceMetrics`, `orchestration.reviewConvergenceReopenedCounts`, and `orchestration.incompleteReviewRetries` persist across invocations exactly like every other orchestration counter; resuming a paused run continues accumulating them rather than resetting or recomputing history. A human raising a `reviewBudget` ceiling and resuming continues from the persisted ledger and attempt counts — the workflow itself never raises its own budget.
+
+### Dry-Run
+
+`orchestrate --dry-run` additionally previews the resolved `reviewBudget`, current budget usage (`reviewAttempts`, `automaticFixCycles`, `incompleteReviewRetries`), the deterministic changed-file inventory, the open blocking-finding count, and the next review action — with the same zero-spawn/zero-validation/zero-state-write/zero-artifact-write guarantee as every other dry-run in this workflow.
+
+### Run Summary Integration
+
+```json
+{
+  "performance": {
+    "reviewDurationMs": 1320000,
+    "focusedValidationDurationMs": 42000,
+    "fullValidationDurationMs": 118000,
+    "reviewAttempts": 2
+  },
+  "reviewConvergence": {
+    "firstReviewBlockingFindings": 4,
+    "newBlockingFindingsAfterFirstReview": 0,
+    "reopenedFindings": 0,
+    "resolvedFindingsVerified": 4,
+    "automaticFixCycles": 1,
+    "status": "converged"
+  }
+}
+```
+
+`run-summary.md` renders matching "Review Convergence" and "Performance" sections. `schemaVersion` stays `1` — both objects are additive, mirroring Spec 055's precedent. An old run-summary/state predating this feature has no `reviewConvergenceMetrics` at all and reports `reviewConvergence.status: "not-started"` rather than a fabricated value.
+
+### Human Gate
+
+`humanGate.ready` now additionally requires `review.completenessStatus === "complete"` — a complete Approved review with zero open blocking findings, alongside the existing full-validation-passed and exact-target-match requirements from Spec 055. `reviewConvergence.status` only reports `"converged"` when `humanGate.ready` is itself `true`; every other case (`in-progress`, `budget-exhausted`, `incomplete-review`, `blocked`, `not-started`) is computed by the same shared `reviewConvergence.js#computeConvergenceStatus` function the orchestration loop's own stop decision uses, so the two can never disagree (mirroring Spec 055's `isFinalValidationSatisfied` "single shared computation" precedent).
+
+### Deferred Scope
+
+Incremental (diff-only) review, provider-specific token counting, distributed test execution, remote CI orchestration, automatic test selection from changed files, automatic (self-)modification of review budgets, any remote PR/merge operation, and consolidating `collectGitContext`'s internal `git`-plumbing calls are explicitly out of scope for this feature — see `specs/056-agent-workflow-performance-convergence/clarifications.md` Q28.

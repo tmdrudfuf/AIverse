@@ -24,6 +24,7 @@ const STOP_REASONS = {
   COMMAND_FAILED: "command-failed",
   STATE_INVALID: "state-invalid",
   MANUAL_STOP: "manual-stop",
+  REVIEW_CONVERGENCE_FAILED: "review-convergence-failed",
 };
 
 const VALIDATION_STATUSES = {

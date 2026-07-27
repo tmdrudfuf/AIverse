@@ -162,3 +162,68 @@ describe("renderRunSummaryMarkdown: focused validation review loop (Spec 055)", 
     expect(markdown).toContain("- Full validation target:");
   });
 });
+
+describe("renderRunSummaryMarkdown: performance and review convergence (Spec 056)", () => {
+  it("renders the Review Convergence and Performance sections with matching numbers", () => {
+    const cwd = createTempDir();
+    const state = approvedState(cwd);
+    (state.orchestration as Record<string, unknown>).reviewConvergenceMetrics = {
+      firstReviewBlockingFindings: 4,
+      newBlockingFindingsAfterFirstReview: 0,
+      reopenedFindings: 0,
+      resolvedFindingsVerified: 4,
+    };
+    (state.reviewRuns as Record<string, unknown>[])[0] = { ...state.reviewRuns[0], durationMs: 1320000 };
+    (state.validationRuns as Record<string, unknown>[])[0] = { ...state.validationRuns[0], durationMs: 42000, phase: "focused" };
+    (state.validationRuns as Record<string, unknown>[])[1] = { ...state.validationRuns[1], durationMs: 118000, phase: "full" };
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(state, { cwd }));
+    expect(markdown).toContain("## Review Convergence");
+    expect(markdown).toContain("- First-review blocking findings: 4");
+    expect(markdown).toContain("- New blocking findings after first review: 0");
+    expect(markdown).toContain("- Reopened findings: 0");
+    expect(markdown).toContain("## Performance");
+    expect(markdown).toContain("- Reviewer time: 22m 0s");
+    expect(markdown).toContain("- Focused validation time: 42s");
+    expect(markdown).toContain("- Final full validation time: 1m 58s");
+  });
+
+  it("reports not-started convergence status when no review has run yet", () => {
+    const markdown = renderRunSummaryMarkdown(buildRunSummary({ featureId: "x", baseBranch: "main", results: [] }));
+    expect(markdown).toContain("- Status: Not started");
+  });
+
+  it("reports not-started (not an active status) for a legacy pre-Spec-056 state with reviewRuns but no convergence evidence -- JSON/Markdown agree (regression for Codex Spec 056 review round 4, P2-002)", () => {
+    const legacyState = {
+      featureId: "010-legacy",
+      baseBranch: "main",
+      results: [],
+      orchestration: { currentStage: "blocked", startedAt: "2026-01-01T00:00:00.000Z", reason: "Reviewer returned Approved", terminalState: "blocked" },
+      reviewRuns: [{ outcome: "Approved", reviewerId: "codex" }],
+    };
+    const summary = buildRunSummary(legacyState);
+    const markdown = renderRunSummaryMarkdown(summary);
+    expect(summary.reviewConvergence.status).toBe("not-started");
+    expect(markdown).toContain("- Status: Not started");
+  });
+
+  it("renders 'Budget exhausted' for the reviewer-question-cycle exhaustion path (regression for Codex Spec 056 review round 3, P2-001)", () => {
+    const state = {
+      featureId: "x",
+      baseBranch: "main",
+      results: [],
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "Reviewer question-cycle budget exhausted (maxReviewerQuestionCycles)",
+        stopReason: "review-convergence-failed",
+        terminalState: "blocked",
+        activeBlockingFindings: [],
+      },
+      reviewRuns: [
+        { stage: "review", outcome: "Questions", reviewerId: "codex", structuredReviewStatus: "valid", durationMs: 3000 },
+      ],
+    };
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(state));
+    expect(markdown).toContain("- Status: Budget exhausted");
+  });
+});

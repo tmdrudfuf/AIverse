@@ -169,6 +169,74 @@ describe("orchestrate dry-run output: focused validation review loop (Spec 055)"
   });
 });
 
+describe("orchestrate dry-run output: review convergence and budgets (Spec 056 Codex review round 4, P2-001)", () => {
+  function basePreview(overrides: Record<string, unknown> = {}) {
+    return {
+      featureId: "x",
+      branch: "b",
+      currentStage: "review",
+      roleSource: "cli-override",
+      implementer: { id: "claude", identity: "Claude Code CLI", commandPreview: "claude ..." },
+      reviewer: { id: "codex", identity: "OpenAI Codex CLI", commandPreview: "codex ..." },
+      sameRunner: false,
+      validationCommands: ["npm test"],
+      maxFixCycles: 2,
+      questionCycle: 0,
+      maxQuestionCycles: 1,
+      findingLifecycle: { previousFindingsMayBeSupplied: false, currentFindingCount: 0 },
+      nextExpectedStage: "review",
+      runDirectory: "dir",
+      promptPaths: { implement: "a", fix: "b", review: "c", answerQuestions: "d", finalReview: "e", findingLifecycle: "f" },
+      summaryPaths: { json: "run-summary.json", markdown: "run-summary.md", willWrite: false },
+      plannedStages: ["review"],
+      willSpawn: false,
+      ...overrides,
+    };
+  }
+
+  it("prints the changed-file inventory, high-risk file list, review budget usage, open blocking count, and next review action for a populated state", () => {
+    const output = formatOrchestrationDryRun(basePreview({
+      changedFileInventory: [
+        { path: "tools/agent-workflow/orchestrateCommand.js", status: "modified", additions: 10, deletions: 2, highRisk: true },
+        { path: "docs/notes.md", status: "modified", additions: 3, deletions: 0, highRisk: false },
+      ],
+      reviewBudget: { maxReviewAttempts: 3, maxAutomaticFixCycles: 2, maxIncompleteReviewRetries: 1, maxReviewerQuestionCycles: 1 },
+      reviewBudgetUsage: { reviewAttempts: 1, automaticFixCycles: 0, incompleteReviewRetries: 0 },
+      openBlockingFindingsCount: 2,
+      nextReviewAction: "await Reviewer response",
+    }) as never);
+    expect(output).toContain("Changed files: 2 (1 high-risk)");
+    expect(output).toContain("High-risk files: tools/agent-workflow/orchestrateCommand.js");
+    expect(output).toContain("Review budget: attempts 1/3; automatic fix cycles 0/2; incomplete-review retries 0/1");
+    expect(output).toContain("Open blocking findings: 2");
+    expect(output).toContain("Next review action: await Reviewer response");
+  });
+
+  it("does not crash and prints safe defaults for a legacy/minimal preview shape with no Spec 056 fields at all", () => {
+    const output = formatOrchestrationDryRun(basePreview() as never);
+    expect(output).toContain("Changed files: 0 (0 high-risk)");
+    expect(output).toContain("High-risk files: (none)");
+    expect(output).toContain("Review budget: attempts 0/unknown; automatic fix cycles 0/unknown; incomplete-review retries 0/unknown");
+    expect(output).toContain("Open blocking findings: 0");
+    expect(output).toContain("Next review action: unknown");
+  });
+
+  it("dry-run remains read-only: no spawn/state-write/artifact-write/validation/remote-mutation claims regardless of Spec 056 fields", () => {
+    const output = formatOrchestrationDryRun(basePreview({
+      changedFileInventory: [{ path: "a.js", status: "modified", additions: 1, deletions: 1, highRisk: false }],
+      reviewBudget: { maxReviewAttempts: 3, maxAutomaticFixCycles: 2, maxIncompleteReviewRetries: 1, maxReviewerQuestionCycles: 1 },
+      reviewBudgetUsage: { reviewAttempts: 1, automaticFixCycles: 0, incompleteReviewRetries: 0 },
+      openBlockingFindingsCount: 1,
+      nextReviewAction: "await Reviewer response",
+    }) as never);
+    expect(output).toContain("Will spawn agents: no");
+    expect(output).toContain("Will mutate state: no");
+    expect(output).toContain("Will run validation: no");
+    expect(output).toContain("Will perform remote mutation: no");
+    expect(output).toContain("Actual writes: no");
+  });
+});
+
 describe("CLI process: orchestrate --validation-strategy dry-run (Spec 055)", () => {
   function writeState(cwd: string, extra: Record<string, unknown> = {}) {
     const statePath = path.join(cwd, ".agent-workflow", "state.json");

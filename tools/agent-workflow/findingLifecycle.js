@@ -1,3 +1,5 @@
+const { isHighRiskCategory } = require("./reviewConvergence.js");
+
 const LIFECYCLE_STATUSES = {
   VALID: "valid",
   ABSENT: "absent",
@@ -27,11 +29,25 @@ function normalizeFinding(finding, kind, reviewSequence, paths = {}) {
   };
 }
 
+// Spec 056 Codex review round 4 fix (P1-001): a finding in a critical
+// safety category (isHighRiskCategory -- false readiness, remote mutation,
+// unsafe command execution, credential exposure, state/resume corruption,
+// exact-head provenance, validation bypass, review-parser/approval bugs,
+// data loss, human-gate weakening) must always be treated as blocking for
+// the actual readiness gate, regardless of which array the Reviewer put it
+// in or what severity it assigned -- mirroring the override
+// reviewConvergence.js's convergence telemetry already applies (FR-016/
+// S23), now also enforced here: this is the single choke point every
+// lifecycle function (applyInitialLifecycle/preserveResolvedHistoryLifecycle/
+// normalizeFindingLifecycle) derives `kind`/`activeBlockingFindings` from,
+// so fixing it here closes the gap everywhere at once. A normal
+// non-high-risk P3 finding remains non-blocking, unchanged.
 function getCurrentFindings(review) {
-  return [
-    ...(Array.isArray(review.blockingFindings) ? review.blockingFindings.map((finding) => ({ ...finding, kind: "blocking" })) : []),
-    ...(Array.isArray(review.nonBlockingFindings) ? review.nonBlockingFindings.map((finding) => ({ ...finding, kind: "non_blocking" })) : []),
-  ];
+  const blocking = (Array.isArray(review.blockingFindings) ? review.blockingFindings : [])
+    .map((finding) => ({ ...finding, kind: "blocking" }));
+  const nonBlocking = (Array.isArray(review.nonBlockingFindings) ? review.nonBlockingFindings : [])
+    .map((finding) => ({ ...finding, kind: isHighRiskCategory(finding) ? "blocking" : "non_blocking" }));
+  return [...blocking, ...nonBlocking];
 }
 
 function getOpenHistory(history) {
@@ -121,13 +137,25 @@ function applyInitialLifecycle(review, options = {}) {
   const activeBlockingFindings = history
     .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
     .map((entry) => entry.finding);
+  // Spec 056 Codex review round 4 fix (P1-001, adjacent occurrence):
+  // preserveResolvedHistoryLifecycle and normalizeFindingLifecycle already
+  // reject an "approved" review whose activeBlockingFindings is non-empty
+  // -- this very-first-review path was missing the same consistency check,
+  // so a first-round review that (after getCurrentFindings' reclassification
+  // above) has a high-risk finding but decided "approved" would otherwise
+  // pass through as valid and reach readiness uncaught.
+  const diagnostics = [];
+  if (review.decision === "approved" && activeBlockingFindings.length) {
+    diagnostics.push(`approved review has active blocking findings: ${activeBlockingFindings.map((finding) => finding.id).join(", ")}.`);
+  }
+  const status = diagnostics.length ? LIFECYCLE_STATUSES.INVALID : LIFECYCLE_STATUSES.VALID;
   return {
-    status: LIFECYCLE_STATUSES.VALID,
+    status,
     reviewSequence,
     history,
     activeBlockingFindings,
     lifecycle: buildArtifact({
-      status: LIFECYCLE_STATUSES.VALID,
+      status,
       reviewSequence,
       previousFindings: [],
       classifications: currentFindings.map((finding) => ({
@@ -139,9 +167,9 @@ function applyInitialLifecycle(review, options = {}) {
       stillOpenFindings: [],
       resolvedFindings: [],
       activeBlockingFindings,
-      diagnostics: [],
+      diagnostics,
     }),
-    diagnostics: [],
+    diagnostics,
   };
 }
 
@@ -331,6 +359,11 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
     }
   }
 
+  const activeBlockingFindings = Array.from(nextHistoryById.values())
+    .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
+    .map((entry) => entry.finding)
+    .filter(Boolean);
+
   if (review.decision === "approved") {
     const stillOpenBlocking = stillOpenFindings.filter((findingId) => {
       const entry = previousById.get(findingId);
@@ -340,12 +373,19 @@ function normalizeFindingLifecycle(review, previousHistory = [], options = {}) {
     if ((Array.isArray(review.blockingFindings) ? review.blockingFindings : []).length) {
       diagnostics.push("approved review must not include current blocking findings.");
     }
+    // Spec 056 Codex review round 5 fix (P1-001): the two checks above only
+    // catch a still-open PREVIOUS blocking finding or a raw current
+    // blockingFindings entry -- neither catches a brand-new finding that
+    // getCurrentFindings reclassified from nonBlockingFindings to kind
+    // "blocking" via the high-risk-category override (round 4's P1-001
+    // fix). This comprehensive check on the final activeBlockingFindings
+    // list -- already used by the other two lifecycle functions
+    // (applyInitialLifecycle/preserveResolvedHistoryLifecycle) -- closes
+    // that gap here too, so all three lifecycle paths are now consistent.
+    if (activeBlockingFindings.length) {
+      diagnostics.push(`approved review has active blocking findings: ${activeBlockingFindings.map((finding) => finding.id).join(", ")}.`);
+    }
   }
-
-  const activeBlockingFindings = Array.from(nextHistoryById.values())
-    .filter((entry) => entry.kind === "blocking" && OPEN_STATUSES.has(entry.currentStatus))
-    .map((entry) => entry.finding)
-    .filter(Boolean);
 
   if (review.decision === "changes_requested" && activeBlockingFindings.length === 0) {
     diagnostics.push("changes_requested lifecycle review must leave at least one active blocking finding.");

@@ -11,6 +11,7 @@ import {
   runOrchestrationAndPersist,
   runValidationCommands,
 } from "./orchestrateCommand.js";
+import { createFakeGitAdapter } from "./testDependencies.js";
 
 type MockResult = {
   stdout?: string;
@@ -31,14 +32,33 @@ function git(cwd: string, args: string[]) {
   execFileSync("git", args, { cwd, stdio: "pipe" });
 }
 
+// Spec 056 Part A: the base fixture (one commit, one tracked file) is
+// created exactly once per test-process run via a real `git init`/config/
+// commit sequence, then never mutated again. Every test that still needs a
+// real Git repository gets it via a cheap `fs.cpSync` copy into its own
+// fresh `mkdtemp` directory instead of repeating that six-subprocess
+// sequence itself -- full per-test isolation is preserved (each test copies
+// into its own directory and mutates only its own copy) while the repeated
+// git-init subprocess cost is paid once per test file, not once per test.
+let cachedBaseFixture: string | undefined;
+
+function getBaseFixture(): string {
+  if (!cachedBaseFixture) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "orchestrate-base-"));
+    git(dir, ["init", "-q"]);
+    git(dir, ["symbolic-ref", "HEAD", "refs/heads/main"]);
+    git(dir, ["config", "user.email", "test@example.com"]);
+    git(dir, ["config", "user.name", "Test"]);
+    fs.writeFileSync(path.join(dir, "tracked.txt"), "base\n");
+    git(dir, ["add", "-A"]);
+    git(dir, ["commit", "-q", "-m", "init"]);
+    cachedBaseFixture = dir;
+  }
+  return cachedBaseFixture;
+}
+
 function initRepo(cwd: string) {
-  git(cwd, ["init", "-q"]);
-  git(cwd, ["symbolic-ref", "HEAD", "refs/heads/main"]);
-  git(cwd, ["config", "user.email", "test@example.com"]);
-  git(cwd, ["config", "user.name", "Test"]);
-  fs.writeFileSync(path.join(cwd, "tracked.txt"), "base\n");
-  git(cwd, ["add", "-A"]);
-  git(cwd, ["commit", "-q", "-m", "init"]);
+  fs.cpSync(getBaseFixture(), cwd, { recursive: true });
 }
 
 function createState(overrides: Record<string, unknown> = {}) {
@@ -258,9 +278,9 @@ const structuredAnswers = [
 describe("orchestrate dry-run", () => {
   it("does not spawn, validate, mutate state, or write result artifacts", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const state = createState();
-    const preview = previewOrchestration(state, { cwd, maxFixCycles: 3 });
+    const preview = previewOrchestration(state, { cwd, gitAdapter, maxFixCycles: 3 });
 
     expect(preview.dryRun).toBe(true);
     expect(preview.willSpawn).toBe(false);
@@ -280,11 +300,11 @@ describe("orchestrate dry-run", () => {
 
   it("reports the resumed fix cycle count", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const preview = previewOrchestration(createState({
       fixCycleCount: 1,
       orchestration: { currentStage: "re-review", maxFixCycles: 3 },
-    }), { cwd, maxFixCycles: 3 });
+    }), { cwd, gitAdapter, maxFixCycles: 3 });
 
     expect(preview.currentStage).toBe("re-review");
     expect(preview.fixCycleCount).toBe(1);
@@ -294,7 +314,7 @@ describe("orchestrate dry-run", () => {
 describe("orchestrate workflow", () => {
   it("runs direct approval flow to human merge decision", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -302,7 +322,7 @@ describe("orchestrate workflow", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.orchestration.currentStage).toBe("human-merge-decision");
@@ -336,7 +356,7 @@ describe("orchestrate workflow", () => {
 
   it("runs one question loop and reaches approval without a fix cycle", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -346,7 +366,7 @@ describe("orchestrate workflow", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
     const answerPrompt = adapter.calls.find((call) => call.command === "mock-implementer" && call.input?.includes("Workflow stage: `answer-questions`"))?.input || "";
     const finalReviewPrompt = adapter.calls.find((call) => call.command === "mock-reviewer" && call.input?.includes("Workflow stage: `final-review`"))?.input || "";
 
@@ -393,7 +413,7 @@ describe("orchestrate workflow", () => {
 
   it("blocks when final Reviewer asks questions again", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -402,7 +422,7 @@ describe("orchestrate workflow", () => {
       { stdout: structuredQuestionsReview },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer asked questions after the allowed clarification round");
@@ -411,7 +431,7 @@ describe("orchestrate workflow", () => {
 
   it("does not spawn answer stage for invalid questions", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const invalidQuestions = structuredQuestionsReview.replace('"questions": [', '"blockingFindings": [{ "id": "P1", "severity": "P1", "summary": "Issue", "recommendation": "Fix" }],\n  "questions": [');
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
@@ -419,7 +439,7 @@ describe("orchestrate workflow", () => {
       { stdout: invalidQuestions },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Unknown");
@@ -428,7 +448,7 @@ describe("orchestrate workflow", () => {
 
   it("does not spawn final review for invalid answers", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const invalidAnswers = structuredAnswers.replace('"questionId": "Q1"', '"questionId": "Q2"');
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
@@ -437,7 +457,7 @@ describe("orchestrate workflow", () => {
       { stdout: invalidAnswers },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Implementer answers were invalid");
@@ -486,7 +506,7 @@ describe("orchestrate workflow", () => {
 
   it("stops conservatively on answer timeout", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -494,7 +514,7 @@ describe("orchestrate workflow", () => {
       { stdout: "partial", timedOut: true, signal: "SIGTERM", exitCode: null },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("answer-questions execution failed");
@@ -502,7 +522,7 @@ describe("orchestrate workflow", () => {
 
   it("stops conservatively on final-review timeout", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -511,7 +531,7 @@ describe("orchestrate workflow", () => {
       { stdout: "partial", timedOut: true, signal: "SIGTERM", exitCode: null },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Timed Out");
@@ -519,7 +539,7 @@ describe("orchestrate workflow", () => {
 
   it("resumes from answer-questions without repeating implementation or review", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: structuredAnswers },
       { stdout: structuredResolvedApproval },
@@ -551,7 +571,7 @@ describe("orchestrate workflow", () => {
       ],
     });
 
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer", "mock-reviewer", expect.any(String)]);
@@ -559,7 +579,7 @@ describe("orchestrate workflow", () => {
 
   it("resumes from final-review without duplicating completed answer stage", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
@@ -590,7 +610,7 @@ describe("orchestrate workflow", () => {
       },
     });
 
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-reviewer", expect.any(String)]);
@@ -598,7 +618,7 @@ describe("orchestrate workflow", () => {
 
   it("supports role-swapped Implementer and Reviewer through a question loop", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -615,7 +635,7 @@ describe("orchestrate workflow", () => {
       },
     });
 
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(adapter.calls.map((call) => call.command)).toEqual([
@@ -885,13 +905,13 @@ describe("orchestrate workflow", () => {
 
   it("does not run Reviewer when validation fails", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stderr: "validation failed", exitCode: 1 },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toContain("validate failed");
@@ -900,14 +920,14 @@ describe("orchestrate workflow", () => {
 
   it("does not start a fix cycle for Reviewer Unknown", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: "looks okay maybe" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Unknown");
@@ -916,14 +936,14 @@ describe("orchestrate workflow", () => {
 
   it("stops conservatively on Reviewer timeout", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: approvedReview, timedOut: true, signal: "SIGTERM", exitCode: null },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Timed Out");
@@ -931,12 +951,12 @@ describe("orchestrate workflow", () => {
 
   it("stops conservatively on Implementer timeout and never reviews", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "partial", timedOut: true, signal: "SIGTERM", exitCode: null },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("implement execution failed");
@@ -945,14 +965,14 @@ describe("orchestrate workflow", () => {
 
   it("does not start a blind fix for non-actionable Changes Requested", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: "# Review Decision: Changes Requested\n\n## Blocking Findings\nPlease improve it." },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer requested changes without actionable findings");
@@ -961,7 +981,7 @@ describe("orchestrate workflow", () => {
 
   it("does not start a blind fix when structured Changes Requested has no blocking findings", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const structuredNoBlockingChanges = [
       "# Review Decision: Changes Requested",
       "",
@@ -989,7 +1009,7 @@ describe("orchestrate workflow", () => {
       { stdout: structuredNoBlockingChanges },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Unknown");
@@ -998,14 +1018,14 @@ describe("orchestrate workflow", () => {
 
   it("blocks invalid structured review data instead of reaching final verification", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: "# Review Decision: Approved\n\n## Structured Review\n\n```json\n{ nope\n```" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Unknown");
@@ -1015,14 +1035,14 @@ describe("orchestrate workflow", () => {
 
   it("blocks conflicting Markdown and structured decisions", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: structuredActionableChanges.replace("# Review Decision: Changes Requested", "# Review Decision: Approved") },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Unknown");
@@ -1031,7 +1051,7 @@ describe("orchestrate workflow", () => {
 
   it("classifies a clean single structured review in stdout as valid even when stderr echoes duplicate example JSON blocks", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const noisyTranscriptEcho = [
       "Reading prompt from stdin...",
       "OpenAI Codex v0.145.0",
@@ -1054,7 +1074,7 @@ describe("orchestrate workflow", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.latestStructuredReviewStatus).toBe("valid");
@@ -1062,7 +1082,7 @@ describe("orchestrate workflow", () => {
 
   it("blocks no-change fix cycles", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -1070,7 +1090,7 @@ describe("orchestrate workflow", () => {
       { stdout: "claimed fixed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Fix cycle produced no repository diff");
@@ -1078,7 +1098,7 @@ describe("orchestrate workflow", () => {
 
   it("rejects unsafe runner configs before spawn", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([{ stdout: "should not run" }], cwd);
     const state = createState({
       agentRunners: {
@@ -1087,52 +1107,53 @@ describe("orchestrate workflow", () => {
       },
     });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter })).rejects.toThrow("Remote-mutating");
     expect(adapter.run).not.toHaveBeenCalled();
   }, 30000);
 
   it("rejects unsafe validation commands before validation spawn", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
     ], cwd);
     const state = createState({ validationCommands: ["git push origin main"] });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
   }, 30000);
 
   it("rejects quote-split unsafe validation commands before validation spawn", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
     ], cwd);
     const state = createState({ validationCommands: ["g''it push origin main"] });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
   }, 30000);
 
   it("rejects shell-wrapped unsafe validation commands before validation spawn", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
     ], cwd);
     const state = createState({ validationCommands: ["sh -c \"git push origin main\""] });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
   }, 30000);
 
   it("runs npm validation commands through the real adapter on Windows-compatible argv", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
 
     const validation = await runValidationCommands(createState({ validationCommands: ["npm --version"] }), "validate", {
       cwd,
+      gitAdapter,
       timeoutMs: 30000,
     });
 
@@ -1143,7 +1164,7 @@ describe("orchestrate workflow", () => {
 
   it("resumes from review without repeating implementation or validation", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: approvedReview },
       { stdout: "final validation passed" },
@@ -1153,7 +1174,7 @@ describe("orchestrate workflow", () => {
       validationRuns: [{ stage: "validate", status: "passed", path: ".agent-workflow/runs/x/validation.md" }],
     });
 
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-reviewer", expect.any(String)]);
@@ -1161,7 +1182,7 @@ describe("orchestrate workflow", () => {
 
   it("supports role-swapped Implementer and Reviewer", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -1176,7 +1197,7 @@ describe("orchestrate workflow", () => {
       },
     });
 
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.orchestration.implementerIdentity).toBe("Implementer (Claude CLI)");
@@ -1187,7 +1208,7 @@ describe("orchestrate workflow", () => {
 
   it("loads BOM state and persists orchestration state", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const statePath = path.join(cwd, ".agent-workflow", "state.json");
     fs.mkdirSync(path.dirname(statePath), { recursive: true });
     fs.writeFileSync(statePath, `\uFEFF${JSON.stringify(createState())}`, "utf8");
@@ -1198,7 +1219,7 @@ describe("orchestrate workflow", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestrationAndPersist(statePath, { cwd, processAdapter: adapter });
+    const run = await runOrchestrationAndPersist(statePath, { cwd, gitAdapter, processAdapter: adapter });
     const persisted = readState(statePath);
 
     expect(run.decision).toBe("Ready for human merge decision");
@@ -1219,9 +1240,8 @@ function createRoleSelectionState(overrides: Record<string, unknown> = {}) {
 describe("runtime role selection (Spec 053)", () => {
   it("dry-run resolves --implementer claude to Claude Implementer / Codex Reviewer and spawns nothing", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const state = createRoleSelectionState();
-    const preview = previewOrchestration(state, { cwd, implementerAgentId: "claude" });
+    const preview = previewOrchestration(state, { cwd, implementerAgentId: "claude", gitAdapter: createFakeGitAdapter() });
 
     expect(preview.willSpawn).toBe(false);
     expect(preview.roleSource).toBe("cli-override");
@@ -1233,9 +1253,8 @@ describe("runtime role selection (Spec 053)", () => {
 
   it("dry-run resolves --implementer codex to Codex Implementer / Claude Reviewer and spawns nothing", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const state = createRoleSelectionState();
-    const preview = previewOrchestration(state, { cwd, implementerAgentId: "codex" });
+    const preview = previewOrchestration(state, { cwd, implementerAgentId: "codex", gitAdapter: createFakeGitAdapter() });
 
     expect(preview.willSpawn).toBe(false);
     expect(preview.roleSource).toBe("cli-override");
@@ -1245,14 +1264,12 @@ describe("runtime role selection (Spec 053)", () => {
 
   it("dry-run rejects an unknown --implementer before any spawn", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
-    expect(() => previewOrchestration(createRoleSelectionState(), { cwd, implementerAgentId: "unknown-agent" }))
+    expect(() => previewOrchestration(createRoleSelectionState(), { cwd, implementerAgentId: "unknown-agent", gitAdapter: createFakeGitAdapter() }))
       .toThrow("Requested implementer 'unknown-agent' is not configured.");
   });
 
   it("real orchestration sends the implementation prompt to the resolved Implementer and the review prompt to the resolved Reviewer", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -1260,7 +1277,7 @@ describe("runtime role selection (Spec 053)", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "claude" });
+    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "claude", gitAdapter: createFakeGitAdapter() });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.orchestration.implementerId).toBe("claude");
@@ -1275,7 +1292,6 @@ describe("runtime role selection (Spec 053)", () => {
 
   it("routes Reviewer questions to the resolved Implementer and the answers back to the resolved Reviewer", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -1285,7 +1301,7 @@ describe("runtime role selection (Spec 053)", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "claude", maxFixCycles: 2 });
+    const run = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: adapter, implementerAgentId: "claude", maxFixCycles: 2, gitAdapter: createFakeGitAdapter() });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(adapter.calls.map((call) => call.command)).toEqual([
@@ -1316,7 +1332,6 @@ describe("runtime role selection (Spec 053)", () => {
 
   it("resumes a pinned in-progress run with the originally resolved roles when no --implementer is supplied", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const pinnedState = createRoleSelectionState({
       orchestration: {
         currentStage: "review",
@@ -1333,7 +1348,7 @@ describe("runtime role selection (Spec 053)", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(pinnedState, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(pinnedState, { cwd, processAdapter: adapter, gitAdapter: createFakeGitAdapter() });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(adapter.calls[0].command).toBe("mock-codex");
@@ -1343,7 +1358,6 @@ describe("runtime role selection (Spec 053)", () => {
 
   it("accepts a matching --implementer on resume", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const pinnedState = createRoleSelectionState({
       orchestration: {
         currentStage: "review",
@@ -1359,14 +1373,13 @@ describe("runtime role selection (Spec 053)", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(pinnedState, { cwd, processAdapter: adapter, implementerAgentId: "claude" });
+    const run = await runOrchestration(pinnedState, { cwd, processAdapter: adapter, implementerAgentId: "claude", gitAdapter: createFakeGitAdapter() });
 
     expect(run.decision).toBe("Ready for human merge decision");
   }, 30000);
 
   it("rejects a conflicting --implementer on resume before any spawn and leaves persisted roles unchanged", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
     const statePath = path.join(cwd, ".agent-workflow", "state.json");
     const pinnedState = createRoleSelectionState({
       orchestration: {
@@ -1393,14 +1406,14 @@ describe("runtime role selection (Spec 053)", () => {
 
   it("does not leak a completed run's resolved roles into a new run on a fresh state file", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const firstAdapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: approvedReview },
       { stdout: "final validation passed" },
     ], cwd);
-    const firstRun = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: firstAdapter, implementerAgentId: "claude" });
+    const firstRun = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: firstAdapter, implementerAgentId: "claude", gitAdapter });
     expect(firstRun.decision).toBe("Ready for human merge decision");
 
     const secondAdapter = createSequenceAdapter([
@@ -1409,7 +1422,7 @@ describe("runtime role selection (Spec 053)", () => {
       { stdout: approvedReview },
       { stdout: "final validation passed" },
     ], cwd);
-    const secondRun = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: secondAdapter, implementerAgentId: "codex" });
+    const secondRun = await runOrchestration(createRoleSelectionState(), { cwd, processAdapter: secondAdapter, implementerAgentId: "codex", gitAdapter });
 
     expect(secondRun.state.orchestration.resolvedImplementerId).toBe("codex");
     expect(secondRun.state.orchestration.resolvedReviewerId).toBe("claude");
@@ -1465,7 +1478,7 @@ describe("orchestrate run summaries", () => {
 
   it("writes agreeing run-summary.json/run-summary.md for a clean approved run", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -1473,7 +1486,7 @@ describe("orchestrate run summaries", () => {
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.summaryPaths).not.toBeNull();
     expect(run.summaryWarning).toBeNull();
@@ -1501,13 +1514,13 @@ describe("orchestrate run summaries", () => {
 
   it("writes a summary reporting readiness=false when validation fails", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation failed", exitCode: 1 },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     const persistedSummary = JSON.parse(fs.readFileSync(path.join(cwd, run.summaryPaths!.json!), "utf8"));
@@ -1519,14 +1532,14 @@ describe("orchestrate run summaries", () => {
 
   it("writes a partial timed-out summary with no approval claim when the Reviewer times out", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: approvedReview, timedOut: true, signal: "SIGTERM", exitCode: null },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Reviewer returned Timed Out");
@@ -1542,8 +1555,8 @@ describe("orchestrate run summaries", () => {
 
   it("does not write any summary artifact during dry-run, and previews the paths it would write", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
-    const preview = previewOrchestration(createState(), { cwd });
+    const gitAdapter = createFakeGitAdapter();
+    const preview = previewOrchestration(createState(), { cwd, gitAdapter });
 
     expect(preview.summaryPaths.willWrite).toBe(false);
     expect(preview.summaryPaths.json).toContain("run-summary.json");
@@ -1553,7 +1566,7 @@ describe("orchestrate run summaries", () => {
 
   it("does not duplicate stage-timeline entries when resuming from review", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: approvedReview },
       { stdout: "final validation passed" },
@@ -1564,7 +1577,7 @@ describe("orchestrate run summaries", () => {
       validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
     });
 
-    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(resumedState, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.orchestrationRuns.filter((r: { stage: string }) => r.stage === "implement")).toHaveLength(1);
@@ -1576,7 +1589,7 @@ describe("orchestrate run summaries", () => {
 
   it("reports unchanged roles and source after a resumed --implementer run", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: approvedReview },
       { stdout: "final validation passed" },
@@ -1594,7 +1607,7 @@ describe("orchestrate run summaries", () => {
       validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
     });
 
-    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(resumedState, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(run.summary!.roles).toEqual({
       implementer: { agentId: "claude", displayName: expect.any(String) },
@@ -1764,7 +1777,7 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("Smoke D: full-every-cycle (explicit) reproduces the same stage/command behavior as the default", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
@@ -1773,7 +1786,7 @@ describe("focused validation review loop (Spec 055)", () => {
     ], cwd);
 
     const state = createState({ validationPolicy: { strategy: "full-every-cycle" } });
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.summary!.validation.focused.attempts).toBe(0);
@@ -1783,7 +1796,7 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("persists the effective validation strategy so a CLI-only override is never misreported by the run summary", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "focused validation passed" },
@@ -1796,6 +1809,7 @@ describe("focused validation review loop (Spec 055)", () => {
     const state = createState({ validationPolicy: { focusedCommands: ["mock focused"], fullCommands: ["mock full"] } });
     const run = await runOrchestration(state, {
       cwd,
+      gitAdapter,
       processAdapter: adapter,
       maxFixCycles: 2,
       validationStrategy: "focused-final-full",
@@ -1808,10 +1822,10 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("Smoke E: dry-run previews the strategy, both command lists, and the next phase without executing anything", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([{ stdout: "should not run" }], cwd);
 
-    const preview = previewOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter });
+    const preview = previewOrchestration(focusedFinalFullState(), { cwd, gitAdapter, processAdapter: adapter });
 
     expect(preview.validationPolicy).toEqual({
       strategy: "focused-final-full",
@@ -1826,10 +1840,10 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("Smoke E: dry-run previews the full phase at final-verification regardless of strategy", () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const preview = previewOrchestration(focusedFinalFullState({
       orchestration: { currentStage: "final-verification", startedAt: "2026-07-26T00:00:00.000Z" },
-    }), { cwd });
+    }), { cwd, gitAdapter });
     expect(preview.nextValidationPhase.phase).toBe("full");
   });
 
@@ -1870,7 +1884,7 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("does not re-run validation when resuming a state already at a terminal stage", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([], cwd);
     const terminalState = focusedFinalFullState({
       orchestration: {
@@ -1882,7 +1896,7 @@ describe("focused validation review loop (Spec 055)", () => {
       reviewRuns: [{ stage: "review", outcome: "Approved", resultPath: "review.md" }],
     });
 
-    const run = await runOrchestration(terminalState, { cwd, processAdapter: adapter });
+    const run = await runOrchestration(terminalState, { cwd, gitAdapter, processAdapter: adapter });
 
     expect(adapter.run).not.toHaveBeenCalled();
     expect(run.state.orchestration.currentStage).toBe("human-merge-decision");
@@ -1890,13 +1904,13 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("--skip-validation still makes readiness unreachable under focused-final-full, at both the summary and the top-level orchestration-decision/CLI-exit-code signal", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: structuredApprovedReview },
     ], cwd);
 
-    const run = await runOrchestration(focusedFinalFullState(), { cwd, processAdapter: adapter, skipValidation: true, maxFixCycles: 2 });
+    const run = await runOrchestration(focusedFinalFullState(), { cwd, gitAdapter, processAdapter: adapter, skipValidation: true, maxFixCycles: 2 });
 
     expect(run.summary!.validation.status).toBe("skipped");
     expect(run.summary!.humanGate.ready).toBe(false);
@@ -1912,11 +1926,11 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("--force-full-validation elevates a validate/revalidate occurrence to full, tagged manual-request, without touching fixCycleCount", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([{ stdout: "full validation forced" }], cwd);
     const state = focusedFinalFullState();
 
-    const result = await runValidationCommands(state, "validate", { cwd, processAdapter: adapter, forceFullValidation: true });
+    const result = await runValidationCommands(state, "validate", { cwd, gitAdapter, processAdapter: adapter, forceFullValidation: true });
 
     expect(result.passed).toBe(true);
     expect(result.phase).toBe("full");
@@ -1928,7 +1942,7 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("rejects an unsafe focused validation command before spawn", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([{ stdout: "implemented" }], cwd);
     const state = focusedFinalFullState({
       validationPolicy: {
@@ -1938,13 +1952,13 @@ describe("focused validation review loop (Spec 055)", () => {
       },
     });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer"]);
   }, 30000);
 
   it("rejects a later unsafe command in a multi-command list before ANY command in that list spawns, even a safe earlier one", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([{ stdout: "implemented" }], cwd);
     const state = focusedFinalFullState({
       validationPolicy: {
@@ -1954,7 +1968,7 @@ describe("focused validation review loop (Spec 055)", () => {
       },
     });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter, forceFullValidation: true })).rejects.toThrow("Remote-mutating validation commands");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter, forceFullValidation: true })).rejects.toThrow("Remote-mutating validation commands");
     // Only the implement stage spawned; neither "mock full" (the safe first
     // command) nor the unsafe second command ever reached adapter.run --
     // both are safety-checked before either spawns (Codex review round 4,
@@ -1964,7 +1978,7 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("rejects an unsafe full validation command before spawn", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "focused validation passed" },
@@ -1978,13 +1992,13 @@ describe("focused validation review loop (Spec 055)", () => {
       },
     });
 
-    await expect(runOrchestration(state, { cwd, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
+    await expect(runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter })).rejects.toThrow("Remote-mutating validation commands");
     expect(adapter.calls.map((call) => call.command)).toEqual(["mock-implementer", "mock", "mock-reviewer"]);
   }, 30000);
 
   it("falls back to full validation at validate/revalidate when focused-final-full is selected with no focused commands configured", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "full validation ran as fallback" },
@@ -1993,7 +2007,7 @@ describe("focused validation review loop (Spec 055)", () => {
     ], cwd);
 
     const state = createState({ validationPolicy: { strategy: "focused-final-full" } });
-    const run = await runOrchestration(state, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(state, { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.validationRuns[0].phase).toBe("full");
@@ -2003,7 +2017,7 @@ describe("focused validation review loop (Spec 055)", () => {
 
   it("legacy validationRuns records without a phase field remain valid and are treated as full", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: structuredApprovedReview },
       { stdout: "final validation passed" },
@@ -2020,11 +2034,445 @@ describe("focused validation review loop (Spec 055)", () => {
       validationRuns: [{ stage: "validate", status: "passed", path: "validate.md" }],
     });
 
-    const run = await runOrchestration(resumedState, { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(resumedState, { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.summary!.validation.full.attempts).toBe(2);
     expect(run.summary!.validation.focused.attempts).toBe(0);
     expect(run.summary!.humanGate.ready).toBe(true);
+  }, 30000);
+});
+
+// --- Spec 056: review convergence, budgets, and performance smoke tests ------
+
+function structuredReviewText({ decision, summary, blockingFindings = [], nonBlockingFindings = [], findingLifecycle, reviewCoverage }: {
+  decision: "approved" | "changes_requested";
+  summary: string;
+  blockingFindings?: unknown[];
+  nonBlockingFindings?: unknown[];
+  findingLifecycle?: unknown[];
+  reviewCoverage?: Record<string, unknown>;
+}) {
+  const heading = decision === "approved" ? "Approved" : "Changes Requested";
+  const payload: Record<string, unknown> = {
+    schemaVersion: 1,
+    decision,
+    summary,
+    blockingFindings,
+    nonBlockingFindings,
+    questions: [],
+  };
+  if (findingLifecycle) payload.findingLifecycle = findingLifecycle;
+  if (reviewCoverage) payload.reviewCoverage = reviewCoverage;
+  return [
+    `# Review Decision: ${heading}`,
+    "",
+    "## Blocking Findings",
+    blockingFindings.length ? "- structured blockers supplied" : "(none)",
+    "",
+    "## Non-Blocking Improvements",
+    nonBlockingFindings.length ? "- structured non-blocking notes supplied" : "(none)",
+    "",
+    "## Validation Performed",
+    "mock",
+    "",
+    "## Final Recommendation",
+    heading,
+    "",
+    "## Structured Review",
+    "",
+    "```json",
+    JSON.stringify(payload, null, 2),
+    "```",
+  ].join("\n");
+}
+
+describe("review convergence and budgets (Spec 056)", () => {
+  const emptyCompleteCoverage = { changedFilesTotal: 0, changedFilesInspected: 0, highRiskFilesTotal: 0, highRiskFilesInspected: 0, checklistCompleted: true };
+  const oneFileCompleteCoverage = { changedFilesTotal: 1, changedFilesInspected: 1, highRiskFilesTotal: 0, highRiskFilesInspected: 0, checklistCompleted: true };
+
+  it("Smoke A: two-review convergence -- three blockers found comprehensively in round 1, one consolidated fix cycle, Approved with complete coverage in round 2", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const round1 = structuredReviewText({
+      decision: "changes_requested",
+      summary: "Three blocking issues found in one comprehensive pass.",
+      blockingFindings: [
+        { id: "P1-001", severity: "P1", filePath: "a.js", location: "1", summary: "issue A", reason: "r", recommendation: "fix A" },
+        { id: "P1-002", severity: "P1", filePath: "b.js", location: "2", summary: "issue B", reason: "r", recommendation: "fix B" },
+        { id: "P1-003", severity: "P1", filePath: "c.js", location: "3", summary: "issue C", reason: "r", recommendation: "fix C" },
+      ],
+      reviewCoverage: emptyCompleteCoverage,
+    });
+    const round2 = structuredReviewText({
+      decision: "approved",
+      summary: "All three findings resolved; no new issues found in this comprehensive pass.",
+      findingLifecycle: [
+        { findingId: "P1-001", status: "resolved", explanation: "fixed" },
+        { findingId: "P1-002", status: "resolved", explanation: "fixed" },
+        { findingId: "P1-003", status: "resolved", explanation: "fixed" },
+      ],
+      reviewCoverage: oneFileCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: round1 },
+      { stdout: "fixed all three", mutate: () => gitAdapter.setState({ statusPorcelain: "M a.js" }) },
+      { stdout: "revalidation passed" },
+      { stdout: round2 },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.summary!.review.reviewAttempts).toBe(2);
+    expect(run.summary!.reviewConvergence.automaticFixCycles).toBe(1);
+    expect(run.summary!.reviewConvergence.firstReviewBlockingFindings).toBe(3);
+    expect(run.summary!.reviewConvergence.newBlockingFindingsAfterFirstReview).toBe(0);
+    expect(run.summary!.reviewConvergence.status).toBe("converged");
+    expect(run.summary!.humanGate.ready).toBe(true);
+  }, 30000);
+
+  it("Smoke B: Reviewer reports incomplete coverage; the incomplete-review retry budget is consumed, not the full review-attempt budget, and findings are preserved for the retry", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const incompleteReview = structuredReviewText({
+      decision: "changes_requested",
+      summary: "One issue found, but coverage was not completed.",
+      blockingFindings: [
+        { id: "P1-001", severity: "P1", filePath: "a.js", location: "1", summary: "issue A", reason: "r", recommendation: "fix A" },
+      ],
+      reviewCoverage: { changedFilesTotal: 5, changedFilesInspected: 1, highRiskFilesTotal: 1, highRiskFilesInspected: 0, checklistCompleted: false, stoppedEarly: true },
+    });
+    const retryStillIncomplete = structuredReviewText({
+      decision: "changes_requested",
+      summary: "Same finding reported again; still incomplete.",
+      blockingFindings: [
+        { id: "P1-001", severity: "P1", filePath: "a.js", location: "1", summary: "issue A", reason: "r", recommendation: "fix A" },
+      ],
+      findingLifecycle: [{ findingId: "P1-001", status: "still_open", explanation: "still present" }],
+      reviewCoverage: { changedFilesTotal: 5, changedFilesInspected: 2, highRiskFilesTotal: 1, highRiskFilesInspected: 0, checklistCompleted: false, stoppedEarly: true },
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: incompleteReview },
+      { stdout: retryStillIncomplete },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), {
+      cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2, reviewBudget: { maxIncompleteReviewRetries: 1 },
+    });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.reason).toMatch(/Incomplete review retry budget exhausted/);
+    expect(run.state.orchestration.incompleteReviewRetries).toBe(1);
+    expect(run.state.orchestration.stopReason).toBe("review-convergence-failed");
+    expect(run.summary!.humanGate.ready).toBe(false);
+    // No fix cycle was ever started from the incomplete review alone.
+    expect(run.state.fixCycleCount || 0).toBe(0);
+    // Regression for Codex Spec 056 review round 3, P1-001: two incomplete
+    // review attempts must not advance the budget-relevant
+    // orchestration.reviewAttempts counter at all -- only
+    // incompleteReviewRetries. (run.summary.review.reviewAttempts is a
+    // separate, purely descriptive count of total Reviewer executions --
+    // reviewRuns.length -- and legitimately stays 2; it is not the budget
+    // counter this fix targets.)
+    expect(run.state.orchestration.reviewAttempts || 0).toBe(0);
+    expect(run.summary!.review.reviewAttempts).toBe(2);
+    // The raw state field and the run-summary's derived field must never
+    // disagree (Spec 055's "two signals that can never disagree" invariant).
+    expect(run.summary!.run.stopReason).toBe(run.state.orchestration.stopReason);
+    // Regression for Codex Spec 056 review round 3, P2-001: incomplete-review
+    // budget exhaustion must also report as budget-exhausted convergence.
+    expect(run.summary!.reviewConvergence.status).toBe("budget-exhausted");
+  }, 30000);
+
+  it("preserves reviewAttempts and incompleteReviewRetries independently across a resume, and a subsequent complete review advances only reviewAttempts (regression for Codex Spec 056 review round 3, P1-001)", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const approved = structuredReviewText({
+      decision: "approved",
+      summary: "All clear.",
+      reviewCoverage: emptyCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: approved },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    // Simulates a paused run with two prior complete review attempts and one
+    // prior incomplete-review retry already recorded, resuming directly at
+    // "review".
+    const pausedState = createState({
+      reviewSequence: 2,
+      fixCycleCount: 0,
+      orchestration: {
+        currentStage: "review",
+        maxFixCycles: 2,
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reviewAttempts: 2,
+        incompleteReviewRetries: 1,
+      },
+    });
+
+    const run = await runOrchestration(pausedState, { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    // The resumed counters are preserved (not reset), and the new complete
+    // review attempt advances only reviewAttempts -- incompleteReviewRetries
+    // is untouched since this attempt was not incomplete.
+    expect(run.state.orchestration.reviewAttempts).toBe(3);
+    expect(run.state.orchestration.incompleteReviewRetries).toBe(1);
+  }, 30000);
+
+  it("Smoke D: review-attempt budget exhaustion stops safely -- never ready, findings preserved, stable stop reason", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const round1 = structuredReviewText({
+      decision: "changes_requested",
+      summary: "One blocking issue.",
+      blockingFindings: [{ id: "P1-001", severity: "P1", filePath: "a.js", location: "1", summary: "issue", reason: "r", recommendation: "fix" }],
+      reviewCoverage: emptyCompleteCoverage,
+    });
+    const round2 = structuredReviewText({
+      decision: "changes_requested",
+      summary: "Still not fixed.",
+      blockingFindings: [{ id: "P1-001", severity: "P1", filePath: "a.js", location: "1", summary: "issue", reason: "r", recommendation: "fix" }],
+      findingLifecycle: [{ findingId: "P1-001", status: "still_open", explanation: "not fixed" }],
+      reviewCoverage: oneFileCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: round1 },
+      { stdout: "fix attempt 1", mutate: () => gitAdapter.setState({ statusPorcelain: "M a.js" }) },
+      { stdout: "revalidation passed" },
+      { stdout: round2 },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), {
+      cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 5, reviewBudget: { maxReviewAttempts: 2 },
+    });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.reason).toMatch(/Review convergence budget exhausted/);
+    expect(run.state.orchestration.stopReason).toBe("review-convergence-failed");
+    expect(run.summary!.humanGate.ready).toBe(false);
+    expect((run.state.orchestration.activeBlockingFindings || []).length).toBeGreaterThan(0);
+    // The raw state field and the run-summary's derived field must never
+    // disagree (Spec 055's "two signals that can never disagree" invariant).
+    expect(run.summary!.run.stopReason).toBe(run.state.orchestration.stopReason);
+  }, 30000);
+
+  it("Smoke C: a genuinely new blocker discovered in round 2 (after round 1's two blockers were fixed) is not converged, and a third review is required", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const round1 = structuredReviewText({
+      decision: "changes_requested",
+      summary: "Two blocking issues found.",
+      blockingFindings: [
+        { id: "P1-001", severity: "P1", filePath: "a.js", location: "1", summary: "issue A", reason: "r", recommendation: "fix A" },
+        { id: "P1-002", severity: "P1", filePath: "b.js", location: "2", summary: "issue B", reason: "r", recommendation: "fix B" },
+      ],
+      reviewCoverage: emptyCompleteCoverage,
+    });
+    const round2 = structuredReviewText({
+      decision: "changes_requested",
+      summary: "Both original issues resolved, but a new issue was found during this comprehensive pass.",
+      blockingFindings: [
+        { id: "P2-005", severity: "P1", filePath: "c.js", location: "3", summary: "issue C (newly discovered)", reason: "r", recommendation: "fix C" },
+      ],
+      findingLifecycle: [
+        { findingId: "P1-001", status: "resolved", explanation: "fixed" },
+        { findingId: "P1-002", status: "resolved", explanation: "fixed" },
+        { findingId: "P2-005", status: "new", explanation: "discovered after the first two were fixed" },
+      ],
+      reviewCoverage: oneFileCompleteCoverage,
+    });
+    const round3 = structuredReviewText({
+      decision: "approved",
+      summary: "The newly discovered issue is now resolved; no further issues found.",
+      findingLifecycle: [{ findingId: "P2-005", status: "resolved", explanation: "fixed" }],
+      reviewCoverage: oneFileCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: round1 },
+      { stdout: "fixed both", mutate: () => gitAdapter.setState({ statusPorcelain: "M a.js" }) },
+      { stdout: "revalidation 1 passed" },
+      { stdout: round2 },
+      { stdout: "fixed the new one", mutate: () => gitAdapter.setState({ statusPorcelain: "M a.js\nM c.js" }) },
+      { stdout: "revalidation 2 passed" },
+      { stdout: round3 },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 3 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.summary!.review.reviewAttempts).toBe(3);
+    expect(run.summary!.reviewConvergence.firstReviewBlockingFindings).toBe(2);
+    expect(run.summary!.reviewConvergence.newBlockingFindingsAfterFirstReview).toBe(1);
+    expect(run.summary!.reviewConvergence.automaticFixCycles).toBe(2);
+    expect(run.summary!.reviewConvergence.status).toBe("converged");
+    // Normal-accounting counterpart to the Smoke B incomplete-review
+    // regression above: three complete (non-incomplete) review attempts
+    // must still advance the budget-relevant orchestration.reviewAttempts
+    // counter normally, one per attempt.
+    expect(run.state.orchestration.reviewAttempts).toBe(3);
+  }, 30000);
+
+  it("Smoke E: Approved with one P3 non-blocking note and complete coverage converges without an extra cycle", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const approvedWithP3 = structuredReviewText({
+      decision: "approved",
+      summary: "Approved with a minor documentation note.",
+      nonBlockingFindings: [{ id: "P3-001", severity: "P3", summary: "Consider clarifying a comment.", recommendation: "Clarify the comment." }],
+      reviewCoverage: emptyCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: approvedWithP3 },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.summary!.reviewConvergence.status).toBe("converged");
+    expect(run.summary!.review.reviewAttempts).toBe(1);
+    expect(run.summary!.reviewConvergence.automaticFixCycles).toBe(0);
+  }, 30000);
+
+  it("Smoke G: resume after Review 1 + consolidated fix preparation preserves ledger, convergence metrics, and review-attempt count", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const reReviewApproved = structuredReviewText({
+      decision: "approved",
+      summary: "Both carried-over findings resolved; no new issues.",
+      findingLifecycle: [
+        { findingId: "F1", status: "resolved", explanation: "fixed" },
+        { findingId: "F2", status: "resolved", explanation: "fixed" },
+      ],
+      reviewCoverage: oneFileCompleteCoverage,
+    });
+    const adapter = createSequenceAdapter([
+      { stdout: "fixed both", mutate: () => gitAdapter.setState({ statusPorcelain: "M a.js" }) },
+      { stdout: "revalidation passed" },
+      { stdout: reReviewApproved },
+      { stdout: "final validation passed" },
+    ], cwd);
+
+    const pausedState = createState({
+      reviewSequence: 1,
+      fixCycleCount: 0,
+      reviewRuns: [
+        { stage: "review", outcome: "Changes Requested", reviewerId: "reviewer", structuredReviewStatus: "valid", durationMs: 1000, completenessStatus: "complete" },
+      ],
+      findingHistory: [
+        { findingId: "F1", kind: "blocking", severity: "P1", summary: "old issue 1", recommendation: "fix 1", firstSeenReviewSequence: 1, lastSeenReviewSequence: 1, currentStatus: "new", finding: { id: "F1", severity: "P1", summary: "old issue 1", recommendation: "fix 1" } },
+        { findingId: "F2", kind: "blocking", severity: "P1", summary: "old issue 2", recommendation: "fix 2", firstSeenReviewSequence: 1, lastSeenReviewSequence: 1, currentStatus: "new", finding: { id: "F2", severity: "P1", summary: "old issue 2", recommendation: "fix 2" } },
+      ],
+      orchestration: {
+        currentStage: "fix",
+        maxFixCycles: 2,
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reviewAttempts: 1,
+        pendingFixTriggerReason: "reviewer-fix",
+        activeBlockingFindings: [
+          { id: "F1", severity: "P1", summary: "old issue 1", recommendation: "fix 1" },
+          { id: "F2", severity: "P1", summary: "old issue 2", recommendation: "fix 2" },
+        ],
+        latestFindings: [
+          { id: "F1", severity: "P1", summary: "old issue 1", recommendation: "fix 1" },
+          { id: "F2", severity: "P1", summary: "old issue 2", recommendation: "fix 2" },
+        ],
+        reviewConvergenceMetrics: {
+          reviewAttempts: 1,
+          firstReviewBlockingFindings: 2,
+          newBlockingFindingsAfterFirstReview: 0,
+          reopenedFindings: 0,
+          resolvedFindingsVerified: 0,
+        },
+      },
+    });
+
+    const run = await runOrchestration(pausedState, { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
+
+    expect(run.decision).toBe("Ready for human merge decision");
+    expect(run.summary!.reviewConvergence.reviewAttempts).toBe(2);
+    expect(run.summary!.reviewConvergence.firstReviewBlockingFindings).toBe(2);
+    expect(run.summary!.reviewConvergence.newBlockingFindingsAfterFirstReview).toBe(0);
+    expect(run.summary!.reviewConvergence.status).toBe("converged");
+  }, 30000);
+
+  it("Smoke H: dry-run previews changed-file inventory, review-budget usage, open finding count, and the next review action -- with zero spawn/write", () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter({ state: { statusPorcelain: "M a.js" } });
+    const state = createState({
+      orchestration: {
+        currentStage: "review",
+        maxFixCycles: 2,
+        reviewAttempts: 1,
+        activeBlockingFindings: [{ id: "F1", severity: "P1", summary: "x" }],
+      },
+    });
+
+    const preview = previewOrchestration(state, { cwd, gitAdapter, reviewBudget: { maxReviewAttempts: 3 } });
+
+    expect(preview.reviewBudget.maxReviewAttempts).toBe(3);
+    expect(preview.reviewBudgetUsage.reviewAttempts).toBe(1);
+    expect(preview.openBlockingFindingsCount).toBe(1);
+    expect(Array.isArray(preview.changedFileInventory)).toBe(true);
+    expect(preview.nextReviewAction).toMatch(/review/i);
+    expect(preview.willSpawn).toBe(false);
+    expect(fs.existsSync(path.join(cwd, ".agent-workflow"))).toBe(false);
+  });
+
+  it("reviewBudget.maxReviewerQuestionCycles mirrors the resolved maxQuestionCycles by default", () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    // normalizeMaxQuestionCycles caps at DEFAULT_MAX_QUESTION_CYCLES (1), so
+    // 0 is the only value distinguishable from the default (1) here.
+    const preview = previewOrchestration(createState(), { cwd, gitAdapter, maxQuestionCycles: 0 });
+
+    expect(preview.maxQuestionCycles).toBe(0);
+    expect(preview.reviewBudget.maxReviewerQuestionCycles).toBe(0);
+  });
+
+  it("an explicit reviewBudget.maxReviewerQuestionCycles override stricter than maxQuestionCycles stops the Questions outcome safely with stopReason review-convergence-failed (regression for Codex Spec 056 review P2-001: this ceiling was resolved but never enforced)", async () => {
+    const cwd = createTempDir();
+    const gitAdapter = createFakeGitAdapter();
+    const adapter = createSequenceAdapter([
+      { stdout: "implemented" },
+      { stdout: "validation passed" },
+      { stdout: structuredQuestionsReview },
+    ], cwd);
+
+    const run = await runOrchestration(createState(), {
+      cwd, gitAdapter, processAdapter: adapter, reviewBudget: { maxReviewerQuestionCycles: 0 },
+    });
+
+    expect(run.decision).toBe("Blocked");
+    expect(run.state.orchestration.reason).toMatch(/Reviewer question-cycle budget exhausted/);
+    expect(run.state.orchestration.stopReason).toBe("review-convergence-failed");
+    // The legacy maxQuestionCycles ceiling (default 1) was not itself
+    // reached -- only the stricter reviewBudget override was.
+    expect(run.state.questionCycle || 0).toBe(0);
+    expect(run.summary!.humanGate.ready).toBe(false);
+    expect(run.summary!.run.stopReason).toBe(run.state.orchestration.stopReason);
+    // Regression for Codex Spec 056 review round 3's P2-001 (a distinct
+    // finding from round 1's P2-001 above, despite the reused ID): the
+    // reviewer-question-cycle exhaustion path's message wasn't recognized
+    // by buildReviewConvergenceSummary's budget-exhausted detection, so
+    // this exact scenario reported "in-progress" instead of
+    // "budget-exhausted".
+    expect(run.summary!.reviewConvergence.status).toBe("budget-exhausted");
   }, 30000);
 });

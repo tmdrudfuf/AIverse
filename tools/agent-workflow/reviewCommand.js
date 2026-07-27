@@ -22,6 +22,7 @@ const {
 const { analyzeStructuredReview } = require("./structuredReview.js");
 const { formatFindingHistoryForPrompt } = require("./findingLifecycle.js");
 const { resolveEffectiveRoles, validateAgentForRole } = require("./roleResolver.js");
+const { buildChangedFileInventory, formatInventoryForPrompt } = require("./reviewCoverage.js");
 
 const DEFAULT_REVIEW_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_DIFF_LIMITS = { maxChars: 6000, maxLines: 200 };
@@ -63,12 +64,22 @@ function createDefaultGitAdapter() {
   return {
     run(args, cwd) {
       try {
+        // Trailing-only trim (Spec 056 Codex review round 2 fix cycle,
+        // found via "search similar parser branches" while fixing P1-001):
+        // `git status --porcelain`'s XY status code is a fixed two-column
+        // prefix, so a leading space (any unstaged-only status, e.g. " M",
+        // " D") is semantically significant. A blanket `.trim()` here
+        // strips that leading space only when it is the very first
+        // character of the whole command output -- i.e. exactly when the
+        // first status line is unstaged-only -- which silently shifts
+        // parseStatusCodes'/reviewCoverage.js's fixed-column slice one
+        // character into the path, truncating it by one leading character.
         return execFileSync("git", args, {
           cwd,
           encoding: "utf8",
           maxBuffer: 20 * 1024 * 1024,
           windowsHide: true,
-        }).trim();
+        }).replace(/\s+$/, "");
       } catch (error) {
         return "";
       }
@@ -127,6 +138,16 @@ function collectGitContext(options = {}) {
   const committedDiffStat = mergeBase ? gitAdapter.run(["diff", `${mergeBase}..HEAD`, "--stat"], cwd) : "";
   const committedDiff = mergeBase ? gitAdapter.run(["diff", `${mergeBase}..HEAD`], cwd) : "";
   const statusPorcelain = gitAdapter.run(["status", "--porcelain"], cwd);
+  // Spec 056 Part B fix (Codex review round 2, P1-001): --stat's
+  // human-readable bar graph abbreviates long paths with a leading "..." and
+  // scales the +/- counts to fit a fixed display width once a diff is large
+  // enough, silently corrupting reviewCoverage.js's changed-file inventory
+  // and its line-count-based high-risk classification. --numstat reports
+  // exact, untruncated per-file additions/deletions and is used there
+  // instead whenever present (see reviewCoverage.js#hasNumstatSupport).
+  const stagedDiffNumstat = gitAdapter.run(["diff", "--cached", "--numstat"], cwd);
+  const unstagedDiffNumstat = gitAdapter.run(["diff", "--numstat"], cwd);
+  const committedDiffNumstat = mergeBase ? gitAdapter.run(["diff", `${mergeBase}..HEAD`, "--numstat"], cwd) : "";
 
   return {
     repositoryPath,
@@ -137,11 +158,14 @@ function collectGitContext(options = {}) {
     mergeBase,
     stagedDiffStat,
     stagedDiff,
+    stagedDiffNumstat,
     unstagedDiffStat,
     unstagedDiff,
+    unstagedDiffNumstat,
     committedLog,
     committedDiffStat,
     committedDiff,
+    committedDiffNumstat,
     statusPorcelain,
     hasStagedChanges: Boolean(stagedDiffStat),
     hasUnstagedChanges: Boolean(unstagedDiffStat),
@@ -210,6 +234,10 @@ function buildIndependentReviewPrompt(state, gitContext, options = {}) {
   const changedFilesSummary = gitContext.statusPorcelain
     ? truncate(gitContext.statusPorcelain, { maxChars: 3000, maxLines: 150 })
     : "(no changes)";
+  const changedFileInventory = truncate(
+    formatInventoryForPrompt(buildChangedFileInventory(gitContext)),
+    { maxChars: 4000, maxLines: 200 },
+  );
 
   const validationEvidence = Array.isArray(state.validationEvidence) && state.validationEvidence.length
     ? formatList(state.validationEvidence)
@@ -240,6 +268,7 @@ function buildIndependentReviewPrompt(state, gitContext, options = {}) {
     findingHistory: formatFindingHistoryForPrompt(state.findingHistory || (state.orchestration && state.orchestration.findingHistory) || []),
     validationEvidence,
     changedFilesSummary,
+    changedFileInventory,
     stagedDiff: `${truncate(gitContext.stagedDiffStat, DEFAULT_STAT_LIMITS)}\n\n${truncate(gitContext.stagedDiff)}`,
     unstagedDiff: `${truncate(gitContext.unstagedDiffStat, DEFAULT_STAT_LIMITS)}\n\n${truncate(gitContext.unstagedDiff)}`,
     committedLog: gitContext.committedLog

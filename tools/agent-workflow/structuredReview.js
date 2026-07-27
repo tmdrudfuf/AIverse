@@ -253,6 +253,52 @@ function validateFindingLifecycle(value) {
   return { diagnostics, normalized };
 }
 
+const REVIEW_COVERAGE_NUMERIC_FIELDS = [
+  "changedFilesTotal",
+  "changedFilesInspected",
+  "highRiskFilesTotal",
+  "highRiskFilesInspected",
+];
+
+// Spec 056 Part B (FR-009): reviewCoverage is additive and optional. A
+// legacy Reviewer that never emits this field remains fully valid --
+// reviewCoverage.js's computeReviewCompleteness treats an absent
+// reviewCoverage as coverage-unverified, not as an automatic pass or fail.
+// When present, its shape is validated here (participating in the same
+// all-or-nothing diagnostics gate as every other structured review field);
+// deeper verification against the deterministic changed-file inventory
+// happens in reviewCoverage.js, not here, since this module has no
+// knowledge of git state.
+function validateReviewCoverage(value) {
+  if (value === undefined) return { diagnostics: [], normalized: undefined };
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { diagnostics: ["reviewCoverage must be an object when present."], normalized: undefined };
+  }
+  const diagnostics = [];
+  const normalized = {};
+  for (const field of REVIEW_COVERAGE_NUMERIC_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(value, field)) {
+      const num = Number(value[field]);
+      if (!Number.isFinite(num) || num < 0) {
+        diagnostics.push(`reviewCoverage.${field} must be a non-negative number when present.`);
+      } else {
+        normalized[field] = num;
+      }
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "checklistCompleted")) {
+    if (typeof value.checklistCompleted !== "boolean") {
+      diagnostics.push("reviewCoverage.checklistCompleted must be a boolean when present.");
+    } else {
+      normalized.checklistCompleted = value.checklistCompleted;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(value, "stoppedEarly")) {
+    normalized.stoppedEarly = Boolean(value.stoppedEarly);
+  }
+  return { diagnostics, normalized };
+}
+
 function validateStructuredReviewObject(value) {
   const diagnostics = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -285,6 +331,8 @@ function validateStructuredReviewObject(value) {
   diagnostics.push(...questions.diagnostics);
   const lifecycle = validateFindingLifecycle(value.findingLifecycle);
   diagnostics.push(...lifecycle.diagnostics);
+  const reviewCoverage = validateReviewCoverage(value.reviewCoverage);
+  diagnostics.push(...reviewCoverage.diagnostics);
 
   const seenIds = new Set();
   for (const finding of [...blocking.normalized, ...nonBlocking.normalized]) {
@@ -319,6 +367,7 @@ function validateStructuredReviewObject(value) {
     questions: questions.normalized,
   };
   if (lifecycle.normalized !== undefined) review.findingLifecycle = lifecycle.normalized;
+  if (reviewCoverage.normalized !== undefined) review.reviewCoverage = reviewCoverage.normalized;
   if (typeof value.summary === "string" && value.summary.trim()) review.summary = value.summary.trim();
 
   return {
