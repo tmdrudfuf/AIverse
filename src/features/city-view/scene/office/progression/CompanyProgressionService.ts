@@ -6,7 +6,9 @@ import type {
 } from "./CompanyProgressionTypes";
 import type { OfficeZoneType } from "../layout/OfficeLayoutTypes";
 
-const CURRENT_COMPANY_LEVEL = 1;
+type MilestoneMetric = "activeEmployees" | "completedProjects";
+
+type NormalizedProgressionInput = Record<MilestoneMetric, number>;
 
 const PROGRESSION_BY_LEVEL: Record<number, CompanyProgressionSnapshot> = {
   1: {
@@ -32,8 +34,8 @@ const PROGRESSION_BY_LEVEL: Record<number, CompanyProgressionSnapshot> = {
     ],
     maxEmployees: 10,
     requiredMilestones: [
-      createMilestone("complete-first-client-project", "Complete first client project", 1, 0),
-      createMilestone("hire-five-employees", "Hire five employees", 5, 0),
+      createMilestone("complete-first-client-project", "Complete first client project", 1),
+      createMilestone("hire-five-employees", "Hire five employees", 5),
     ],
     layoutId: "small-office-level-2",
     floorCount: 1,
@@ -53,8 +55,8 @@ const PROGRESSION_BY_LEVEL: Record<number, CompanyProgressionSnapshot> = {
     ],
     maxEmployees: 18,
     requiredMilestones: [
-      createMilestone("complete-department-launch", "Complete department launch", 3, 0),
-      createMilestone("hire-ten-employees", "Hire ten employees", 10, 0),
+      createMilestone("complete-department-launch", "Complete department launch", 3),
+      createMilestone("hire-ten-employees", "Hire ten employees", 10),
     ],
     layoutId: "growing-company-level-3",
     floorCount: 1,
@@ -75,22 +77,49 @@ const PROGRESSION_BY_LEVEL: Record<number, CompanyProgressionSnapshot> = {
     ],
     maxEmployees: 32,
     requiredMilestones: [
-      createMilestone("complete-headquarters-plan", "Complete headquarters expansion plan", 1, 0),
-      createMilestone("hire-eighteen-employees", "Hire eighteen employees", 18, 0),
+      createMilestone("complete-headquarters-plan", "Complete headquarters expansion plan", 1),
+      createMilestone("hire-eighteen-employees", "Hire eighteen employees", 18),
     ],
     layoutId: "headquarters-level-4",
     floorCount: 3,
   },
 };
 
+const MILESTONE_METRICS: Record<string, MilestoneMetric> = {
+  "hire-five-employees": "activeEmployees",
+  "complete-first-client-project": "completedProjects",
+  "hire-ten-employees": "activeEmployees",
+  "complete-department-launch": "completedProjects",
+  "hire-eighteen-employees": "activeEmployees",
+  "complete-headquarters-plan": "completedProjects",
+};
+
+const ASCENDING_LEVELS_ABOVE_ONE = Object.keys(PROGRESSION_BY_LEVEL)
+  .map(Number)
+  .filter((level) => level > 1)
+  .sort((left, right) => left - right);
+
 export class CompanyProgressionService {
-  resolveCurrentCompanyLevel(_input: CompanyProgressionInput = {}): number {
-    return CURRENT_COMPANY_LEVEL;
+  resolveCurrentCompanyLevel(input: CompanyProgressionInput = {}): number {
+    const normalized = normalizeInput(input);
+    let resolvedLevel = 1;
+
+    for (const candidateLevel of ASCENDING_LEVELS_ABOVE_ONE) {
+      const milestones = evaluateMilestones(PROGRESSION_BY_LEVEL[candidateLevel].requiredMilestones, normalized);
+      if (milestones.length === 0 || !milestones.every((milestone) => milestone.isMet)) break;
+
+      resolvedLevel = candidateLevel;
+    }
+
+    return resolvedLevel;
   }
 
   getProgressionSnapshot(input: CompanyProgressionInput = {}): CompanyProgressionSnapshot {
+    const normalized = normalizeInput(input);
     const companyLevel = this.resolveCurrentCompanyLevel(input);
-    return cloneProgressionSnapshot(PROGRESSION_BY_LEVEL[companyLevel] ?? PROGRESSION_BY_LEVEL[1]);
+    const base = PROGRESSION_BY_LEVEL[companyLevel] ?? PROGRESSION_BY_LEVEL[1];
+
+    return cloneProgressionSnapshot(base, evaluateMilestones(base.requiredMilestones, normalized));
   }
 
   getUnlockedOfficeZones(input: CompanyProgressionInput = {}): OfficeZoneType[] {
@@ -106,34 +135,64 @@ export class CompanyProgressionService {
     };
   }
 
-  getFutureProgressionMetadata(): ReadonlyArray<CompanyProgressionSnapshot> {
+  getFutureProgressionMetadata(input: CompanyProgressionInput = {}): ReadonlyArray<CompanyProgressionSnapshot> {
+    const normalized = normalizeInput(input);
+    const currentLevel = this.resolveCurrentCompanyLevel(input);
+
     return Object.values(PROGRESSION_BY_LEVEL)
-      .filter((snapshot) => snapshot.companyLevel > CURRENT_COMPANY_LEVEL)
-      .map(cloneProgressionSnapshot);
+      .filter((snapshot) => snapshot.companyLevel > currentLevel)
+      .map((snapshot) => cloneProgressionSnapshot(snapshot, evaluateMilestones(snapshot.requiredMilestones, normalized)));
   }
 }
 
-function createMilestone(
-  milestoneId: string,
-  label: string,
-  targetValue: number,
-  currentValue: number,
+function normalizeInput(input: CompanyProgressionInput): NormalizedProgressionInput {
+  return {
+    activeEmployees: input.activeEmployees ?? 0,
+    completedProjects: input.completedProjects ?? 0,
+  };
+}
+
+function evaluateMilestones(
+  milestones: ReadonlyArray<CompanyProgressionMilestone>,
+  normalizedInput: NormalizedProgressionInput,
+): CompanyProgressionMilestone[] {
+  return milestones.map((milestone) => evaluateMilestone(milestone, normalizedInput));
+}
+
+function evaluateMilestone(
+  milestone: CompanyProgressionMilestone,
+  normalizedInput: NormalizedProgressionInput,
 ): CompanyProgressionMilestone {
+  const metric = MILESTONE_METRICS[milestone.milestoneId];
+  const targetValue = milestone.targetValue ?? 0;
+  const currentValue = metric ? normalizedInput[metric] : milestone.currentValue ?? 0;
+
+  return {
+    ...milestone,
+    currentValue,
+    isMet: currentValue >= targetValue,
+  };
+}
+
+function createMilestone(milestoneId: string, label: string, targetValue: number): CompanyProgressionMilestone {
   return {
     milestoneId,
     label,
     description: `${label} to unlock the next office stage.`,
-    isMet: currentValue >= targetValue,
+    isMet: false,
     targetValue,
-    currentValue,
+    currentValue: 0,
   };
 }
 
-function cloneProgressionSnapshot(snapshot: CompanyProgressionSnapshot): CompanyProgressionSnapshot {
+function cloneProgressionSnapshot(
+  snapshot: CompanyProgressionSnapshot,
+  requiredMilestones: ReadonlyArray<CompanyProgressionMilestone> = snapshot.requiredMilestones,
+): CompanyProgressionSnapshot {
   return {
     ...snapshot,
     companyStage: snapshot.companyStage as CompanyStage,
     unlockedOfficeZones: [...snapshot.unlockedOfficeZones],
-    requiredMilestones: snapshot.requiredMilestones.map((milestone) => ({ ...milestone })),
+    requiredMilestones: requiredMilestones.map((milestone) => ({ ...milestone })),
   };
 }

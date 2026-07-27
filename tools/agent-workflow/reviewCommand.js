@@ -100,9 +100,15 @@ function createDefaultGitAdapter() {
 }
 
 function resolveBaseBranchRef(gitAdapter, cwd, explicitBase) {
+  // Prefer the origin-tracked ref over the identically-named local branch: a
+  // worktree created from a fresh remote checkout can leave stale local
+  // branches (e.g. "main" still pointing at a pre-merge commit) behind while
+  // origin/main is current, so checking the local name first computes the
+  // merge-base against outdated history and drags unrelated commits/files
+  // into the reviewed diff.
   const candidates = [
-    explicitBase,
     explicitBase ? `origin/${explicitBase}` : undefined,
+    explicitBase,
     "origin/main",
     "origin/master",
     "main",
