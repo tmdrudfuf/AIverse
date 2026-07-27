@@ -267,6 +267,11 @@ export class OfficeProjectPortalView {
     const lastActionText = getLastActionText(state, project);
     if (lastActionText) this.addText(this.panelX + 44, this.panelY + 386, lastActionText, mutedStyle());
 
+    const registryDetailText = getProjectRegistryDetailText(project);
+    if (registryDetailText) {
+      this.addText(this.panelX + 44, this.panelY + (lastActionText ? 406 : 386), registryDetailText, mutedStyle());
+    }
+
     const instructionText = project.nextAction.enabled ? "Esc back  Enter/Space action" : "Esc back";
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, instructionText, instructionStyle()).setOrigin(1, 0.5);
   }
@@ -476,6 +481,15 @@ function getNextActionText(project: ProjectPortalProject) {
 function getLastActionText(state: ProjectPortalState, project: ProjectPortalProject) {
   if (state.lastPlaceholderAction?.projectId !== project.id) return undefined;
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;
+}
+
+function getProjectRegistryDetailText(project: ProjectPortalProject): string | undefined {
+  if (!project.localRepositoryLabel && !project.ownerCompany) return undefined;
+
+  const parts: string[] = [];
+  if (project.localRepositoryLabel) parts.push(`Repository: ${project.localRepositoryLabel}`);
+  if (project.ownerCompany) parts.push(`Company: ${project.ownerCompany}`);
+  return parts.join("  |  ");
 }
 
 function getSelectedTask(state: ProjectPortalState) {

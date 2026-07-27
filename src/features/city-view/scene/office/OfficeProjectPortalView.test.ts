@@ -127,6 +127,71 @@ describe("OfficeProjectPortalView", () => {
     });
   });
 
+  it("renders registry-derived Repository and Company info on the project detail screen", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "detail" });
+    state.projects = [{
+      id: "daily-proof",
+      name: "Daily Proof",
+      status: "Active",
+      type: "Company",
+      enabled: true,
+      description: "Daily Proof is the active company workspace for validating AIverse office workflows.",
+      linkedServices: [],
+      nextAction: { label: "Review project workspace", enabled: true, placeholder: true },
+      ownerCompany: "Daily Proof Inc.",
+      localRepositoryLabel: "Connected (local)",
+    }];
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("Repository: Connected (local)  |  Company: Daily Proof Inc.");
+  });
+
+  it("renders a not-connected repository and internal owner for a placeholder project", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "detail" });
+    state.projects = [{
+      id: "portfolio",
+      name: "Portfolio",
+      status: "Planned",
+      type: "Portfolio",
+      enabled: false,
+      description: "Portfolio will become the public-facing project showcase.",
+      linkedServices: [],
+      nextAction: { label: "Coming soon", enabled: false, placeholder: true },
+      ownerCompany: "AIverse Internal",
+      localRepositoryLabel: "Not connected",
+    }];
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("Repository: Not connected  |  Company: AIverse Internal");
+  });
+
+  it("omits the registry detail line for a project with no owner or repository metadata", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "detail" });
+    state.projects = [{
+      id: "portfolio",
+      name: "Portfolio",
+      status: "Planned",
+      type: "Portfolio",
+      enabled: false,
+      description: "Portfolio will become the public-facing project showcase.",
+      linkedServices: [],
+      nextAction: { label: "Coming soon", enabled: false, placeholder: true },
+    }];
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.some((item) => item.text.startsWith("Repository:"))).toBe(false);
+    expect(renderedText.some((item) => item.text.startsWith("Company:"))).toBe(false);
+  });
+
   it("renders Project Dashboard empty advisory state without overlapping following rows", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
@@ -319,6 +384,7 @@ function createPortalState(options: {
         placeholder: true,
       },
     }],
+    projectRegistryEntries: [],
     services: [],
     workspaces: {},
     repositoryMappings: [],
