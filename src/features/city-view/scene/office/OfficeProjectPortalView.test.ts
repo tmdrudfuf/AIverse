@@ -146,7 +146,8 @@ describe("OfficeProjectPortalView", () => {
 
     new OfficeProjectPortalView(scene, state);
 
-    expect(renderedText.map((item) => item.text)).toContain("Repository: Connected (local)  |  Company: Daily Proof Inc.");
+    expect(renderedText.map((item) => item.text)).toContain("Repository: Connected (local)");
+    expect(renderedText.map((item) => item.text)).toContain("Company: Daily Proof Inc.");
   });
 
   it("renders a not-connected repository and internal owner for a placeholder project", () => {
@@ -168,7 +169,8 @@ describe("OfficeProjectPortalView", () => {
 
     new OfficeProjectPortalView(scene, state);
 
-    expect(renderedText.map((item) => item.text)).toContain("Repository: Not connected  |  Company: AIverse Internal");
+    expect(renderedText.map((item) => item.text)).toContain("Repository: Not connected");
+    expect(renderedText.map((item) => item.text)).toContain("Company: AIverse Internal");
   });
 
   it("omits the registry detail line for a project with no owner or repository metadata", () => {

@@ -267,9 +267,13 @@ export class OfficeProjectPortalView {
     const lastActionText = getLastActionText(state, project);
     if (lastActionText) this.addText(this.panelX + 44, this.panelY + 386, lastActionText, mutedStyle());
 
-    const registryDetailText = getProjectRegistryDetailText(project);
-    if (registryDetailText) {
-      this.addText(this.panelX + 44, this.panelY + (lastActionText ? 406 : 386), registryDetailText, mutedStyle());
+    let registryLineY = this.panelY + (lastActionText ? 406 : 386);
+    if (project.localRepositoryLabel) {
+      this.addText(this.panelX + 44, registryLineY, `Repository: ${project.localRepositoryLabel}`, mutedStyle());
+      registryLineY += 18;
+    }
+    if (project.ownerCompany) {
+      this.addText(this.panelX + 44, registryLineY, `Company: ${project.ownerCompany}`, mutedStyle());
     }
 
     const instructionText = project.nextAction.enabled ? "Esc back  Enter/Space action" : "Esc back";
@@ -483,14 +487,6 @@ function getLastActionText(state: ProjectPortalState, project: ProjectPortalProj
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;
 }
 
-function getProjectRegistryDetailText(project: ProjectPortalProject): string | undefined {
-  if (!project.localRepositoryLabel && !project.ownerCompany) return undefined;
-
-  const parts: string[] = [];
-  if (project.localRepositoryLabel) parts.push(`Repository: ${project.localRepositoryLabel}`);
-  if (project.ownerCompany) parts.push(`Company: ${project.ownerCompany}`);
-  return parts.join("  |  ");
-}
 
 function getSelectedTask(state: ProjectPortalState) {
   const project = state.projects[state.selectedProjectIndex];

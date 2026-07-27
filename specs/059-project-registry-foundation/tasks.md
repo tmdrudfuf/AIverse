@@ -14,11 +14,11 @@ description: "Task list for Spec 059 — Project Registry Foundation"
 
 **Purpose**: The registry model and service must exist before any adapter, wiring, or UI task can proceed.
 
-- [ ] T001 Create `src/features/city-view/scene/office/project-registry/ProjectRegistryTypes.ts`: `ProjectRegistryLocalRepositoryIdentity`, `ProjectRegistryOwner`, `ProjectRegistryEntry` (per plan.md's Key Entities / field mapping table). Widen `ProjectPortalProjectType` in `OfficeProjectPortalTypes.ts` to `"Company" | "Portfolio" | "Lab" | (string & {})`.
-- [ ] T002 Add optional `ownerCompany?: string` and `localRepositoryLabel?: string` to `ProjectPortalProject`, and add `projectRegistryEntries: ProjectRegistryEntry[]` to `ProjectPortalState`, in `src/features/city-view/scene/office/OfficeProjectPortalTypes.ts`.
-- [ ] T003 Create `src/features/city-view/scene/office/project-registry/ProjectRegistrySeedData.ts` exporting `createDefaultProjectRegistryEntries(): ProjectRegistryEntry[]` with the `daily-proof`/`portfolio`/`ai-lab` entries from plan.md's seed data table (fixed ISO timestamps, verbatim descriptions from today's `OfficeProjectPortalRegistry.ts`).
-- [ ] T004 [P] Create `src/features/city-view/scene/office/project-registry/ProjectRegistryService.ts`: class with a constructor accepting optional seed entries (default `createDefaultProjectRegistryEntries()`), `getAllProjects()`, `getProject(id)`, `registerProject(entry)` (throws on duplicate id), all returning/storing deep clones (no shared mutable references), per FR-001–FR-003.
-- [ ] T005 [P] `src/features/city-view/scene/office/project-registry/ProjectRegistryService.test.ts`: seeded state contains exactly the three default projects in order; `registerProject` adds a fourth entry and appears in `getAllProjects()`; `registerProject` with a duplicate id throws and leaves the registry unchanged; `getAllProjects()`/`getProject()` results are independent copies (mutating a returned entry does not affect the registry).
+- [X] T001 Create `src/features/city-view/scene/office/project-registry/ProjectRegistryTypes.ts`: `ProjectRegistryLocalRepositoryIdentity`, `ProjectRegistryOwner`, `ProjectRegistryEntry` (per plan.md's Key Entities / field mapping table). Widen `ProjectPortalProjectType` in `OfficeProjectPortalTypes.ts` to `"Company" | "Portfolio" | "Lab" | (string & {})`.
+- [X] T002 Add optional `ownerCompany?: string` and `localRepositoryLabel?: string` to `ProjectPortalProject`, and add `projectRegistryEntries: ProjectRegistryEntry[]` to `ProjectPortalState`, in `src/features/city-view/scene/office/OfficeProjectPortalTypes.ts`.
+- [X] T003 Create `src/features/city-view/scene/office/project-registry/ProjectRegistrySeedData.ts` exporting `createDefaultProjectRegistryEntries(): ProjectRegistryEntry[]` with the `daily-proof`/`portfolio`/`ai-lab` entries from plan.md's seed data table (fixed ISO timestamps, verbatim descriptions from today's `OfficeProjectPortalRegistry.ts`).
+- [X] T004 [P] Create `src/features/city-view/scene/office/project-registry/ProjectRegistryService.ts`: class with a constructor accepting optional seed entries (default `createDefaultProjectRegistryEntries()`), `getAllProjects()`, `getProject(id)`, `registerProject(entry)` (throws on duplicate id), all returning/storing deep clones (no shared mutable references), per FR-001–FR-003.
+- [X] T005 [P] `src/features/city-view/scene/office/project-registry/ProjectRegistryService.test.ts`: seeded state contains exactly the three default projects in order; `registerProject` adds a fourth entry and appears in `getAllProjects()`; `registerProject` with a duplicate id throws and leaves the registry unchanged; `getAllProjects()`/`getProject()` results are independent copies (mutating a returned entry does not affect the registry).
 
 **Checkpoint**: Registry model + service exist and are independently tested. No other file has been touched yet.
 
@@ -32,11 +32,11 @@ description: "Task list for Spec 059 — Project Registry Foundation"
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Create `src/features/city-view/scene/office/project-registry/ProjectRegistryAdapters.ts`: `toProjectPortalProject(entry)` and `toRepositoryMapping(entry)` per plan.md's field-mapping table (nextAction derived from `lifecycleStatus`, not per-project id).
-- [ ] T007 [P] [US1] `src/features/city-view/scene/office/project-registry/ProjectRegistryAdapters.test.ts`: `toProjectPortalProject` maps every field correctly for an Active entry and a Planned/no-remote entry (including the `nextAction`/`enabled` lifecycle-status rule); `toRepositoryMapping` returns the exact expected mapping for `daily-proof`'s seed entry and returns `undefined` when `remoteRepository` is absent.
-- [ ] T008 [US1] Rewrite `src/features/city-view/scene/office/OfficeProjectPortalRegistry.ts`: remove the `PROJECTS` and `REPOSITORY_MAPPINGS` consts and `createRepositoryMappings()`; construct a `ProjectRegistryService` in `createProjectPortalState()`, and derive `projects`, `repositoryMappings`, and the new `projectRegistryEntries` state field from `service.getAllProjects()` via the T006 adapters. Leave `PLACEHOLDER_SERVICES`/`createLinkedServices()`/`WORKSPACES`/`createWorkspaces()` untouched (depends on T001–T006).
-- [ ] T009 [US1] Add a `Repository:`/`Company:` line to `OfficeProjectPortalView.renderDetail()` (`src/features/city-view/scene/office/OfficeProjectPortalView.ts`), rendered only when `ownerCompany`/`localRepositoryLabel` are present on the selected project, placed after the existing `lastActionText` line without colliding with the bottom instruction row (depends on T002).
-- [ ] T010 [US1] Update/extend the existing registry-adjacent test file(s) — `OfficeProjectPortalController.repository-provider.test.ts` and any `OfficeProjectPortalRegistry.test.ts` — only if they assert against the removed `PROJECTS`/`REPOSITORY_MAPPINGS` consts directly rather than through `createProjectPortalState()`'s output; otherwise confirm they pass unmodified (SC-003).
+- [X] T006 [US1] Create `src/features/city-view/scene/office/project-registry/ProjectRegistryAdapters.ts`: `toProjectPortalProject(entry)` and `toRepositoryMapping(entry)` per plan.md's field-mapping table (nextAction derived from `lifecycleStatus`, not per-project id).
+- [X] T007 [P] [US1] `src/features/city-view/scene/office/project-registry/ProjectRegistryAdapters.test.ts`: `toProjectPortalProject` maps every field correctly for an Active entry and a Planned/no-remote entry (including the `nextAction`/`enabled` lifecycle-status rule); `toRepositoryMapping` returns the exact expected mapping for `daily-proof`'s seed entry and returns `undefined` when `remoteRepository` is absent.
+- [X] T008 [US1] Rewrite `src/features/city-view/scene/office/OfficeProjectPortalRegistry.ts`: remove the `PROJECTS` and `REPOSITORY_MAPPINGS` consts and `createRepositoryMappings()`; construct a `ProjectRegistryService` in `createProjectPortalState()`, and derive `projects`, `repositoryMappings`, and the new `projectRegistryEntries` state field from `service.getAllProjects()` via the T006 adapters. Leave `PLACEHOLDER_SERVICES`/`createLinkedServices()`/`WORKSPACES`/`createWorkspaces()` untouched (depends on T001–T006).
+- [X] T009 [US1] Add a `Repository:`/`Company:` line to `OfficeProjectPortalView.renderDetail()` (`src/features/city-view/scene/office/OfficeProjectPortalView.ts`), rendered only when `ownerCompany`/`localRepositoryLabel` are present on the selected project, placed after the existing `lastActionText` line without colliding with the bottom instruction row (depends on T002).
+- [X] T010 [US1] Update/extend the existing registry-adjacent test file(s) — `OfficeProjectPortalController.repository-provider.test.ts` and any `OfficeProjectPortalRegistry.test.ts` — only if they assert against the removed `PROJECTS`/`REPOSITORY_MAPPINGS` consts directly rather than through `createProjectPortalState()`'s output; otherwise confirm they pass unmodified (SC-003).
 
 **Checkpoint**: User Story 1 fully functional — Daily Proof's detail screen shows real company/repository metadata, and no existing GitHub-mapping-dependent test regresses.
 
@@ -50,7 +50,7 @@ description: "Task list for Spec 059 — Project Registry Foundation"
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Add a test case (in `ProjectRegistryAdapters.test.ts` or a small new integration test) that seeds a `ProjectRegistryService` with the defaults, calls `registerProject` with a new entry with no `remoteRepository` (e.g. a "Restaurant Ordering System" project), and confirms `getAllProjects().map(toProjectPortalProject)` produces a valid fourth `ProjectPortalProject` with `enabled` derived correctly from its `lifecycleStatus`, proving SC-004 without any file outside `project-registry/` needing a change.
+- [X] T011 [US2] Add a test case (in `ProjectRegistryAdapters.test.ts` or a small new integration test) that seeds a `ProjectRegistryService` with the defaults, calls `registerProject` with a new entry with no `remoteRepository` (e.g. a "Restaurant Ordering System" project), and confirms `getAllProjects().map(toProjectPortalProject)` produces a valid fourth `ProjectPortalProject` with `enabled` derived correctly from its `lifecycleStatus`, proving SC-004 without any file outside `project-registry/` needing a change.
 
 **Checkpoint**: SC-004 (extensibility without architectural change) is demonstrated by a passing test, not just asserted in prose.
 
@@ -62,7 +62,7 @@ description: "Task list for Spec 059 — Project Registry Foundation"
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] Extend `OfficeProjectPortalRegistry`/view-level test coverage (wherever T010 lands) with a case rendering `portfolio`'s detail screen and asserting `Repository: Not connected` / `Company: AIverse Internal` — confirms the seed data and adapter degrade correctly for a project with no remote repository (depends on T003, T006, T009).
+- [X] T012 [US3] Extend `OfficeProjectPortalRegistry`/view-level test coverage (wherever T010 lands) with a case rendering `portfolio`'s detail screen and asserting `Repository: Not connected` / `Company: AIverse Internal` — confirms the seed data and adapter degrade correctly for a project with no remote repository (depends on T003, T006, T009).
 
 **Checkpoint**: All three user stories independently verified.
 
@@ -70,8 +70,9 @@ description: "Task list for Spec 059 — Project Registry Foundation"
 
 ## Phase 5: Polish & Spec Kit Housekeeping
 
-- [ ] T013 [P] Update `.specify/feature.json` to point at `specs/059-project-registry-foundation` and update the `<!-- SPECKIT START/END -->` pointer block in `AGENTS.md` to reference this Spec's `plan.md`, per the pattern set by prior Specs (056/057/058).
-- [ ] T014 Run `npx vitest run` for every file touched or added in this Spec (see quickstart.md's test list) as focused validation during implementation; run the full validation gate (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`) exactly once, after Codex review reaches Approved with 0 open blocking findings.
+- [X] T013 [P] Update `.specify/feature.json` to point at `specs/059-project-registry-foundation` and update the `<!-- SPECKIT START/END -->` pointer block in `AGENTS.md` to reference this Spec's `plan.md`, per the pattern set by prior Specs (056/057/058).
+- [X] T014a Run `npx vitest run` (full suite) and `npx tsc --noEmit` as focused validation during implementation and after each review fix cycle.
+- [ ] T014b Run the full validation gate (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`) exactly once, after Codex review reaches Approved with 0 open blocking findings.
 
 ---
 
