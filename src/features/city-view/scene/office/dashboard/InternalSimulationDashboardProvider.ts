@@ -11,7 +11,7 @@ import {
 } from "../github/GitHubRepositoryTypes";
 import type { EmployeeInsightSource } from "../insight/EmployeeInsightTypes";
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
-import type { CompanyProgressionSnapshot } from "../progression/CompanyProgressionTypes";
+import type { CompanyProgressionSnapshot, OfficeZoneUnlockPreview } from "../progression/CompanyProgressionTypes";
 import type { ProjectTask, TaskActivity } from "../tasks/ProjectTaskTypes";
 import type { WorkSession } from "../work-sessions/WorkSessionTypes";
 import type { WorkstationSnapshot } from "../workstations/WorkstationTypes";
@@ -48,6 +48,7 @@ export type InternalSimulationDashboardProviderContext = CompanyDashboardProvide
   workstations?: ReadonlyArray<WorkstationSnapshot>;
   conversations?: ReadonlyArray<EmployeeConversation>;
   companyProgression?: CompanyProgressionSnapshot;
+  nextOfficeZoneUnlock?: OfficeZoneUnlockPreview;
   repositoryMappings?: ReadonlyArray<AIverseProjectRepositoryMapping>;
   repositorySummaries?: Record<string, GitHubRepositorySummary>;
 };
@@ -124,6 +125,10 @@ export class InternalSimulationDashboardProvider implements CompanyDashboardProv
       projects: projectSummary,
       workload,
       occupancy,
+      officeZoneProgress: {
+        unlockedZoneCount: context.companyProgression?.unlockedOfficeZones.length ?? 0,
+        nextUnlock: context.nextOfficeZoneUnlock,
+      },
       bottlenecks,
       activity,
       conversations: {
@@ -495,6 +500,7 @@ function createSectionAvailability(input: {
     createCompanyDashboardSectionAvailability("project_progress", "Project Progress", ["projects", "task_activity"], getCollectionStatus(input.tasks)),
     createCompanyDashboardSectionAvailability("current_workload", "Current Workload", ["projects", "work_session"], getCollectionStatus(input.tasks)),
     createCompanyDashboardSectionAvailability("office_occupancy", "Office Occupancy", ["office_layout"], getCollectionStatus(input.workstations)),
+    createCompanyDashboardSectionAvailability("office_zones", "Office Zones", ["company_progression"], input.companyProgression ? "available" : "unavailable"),
     createCompanyDashboardSectionAvailability("current_bottlenecks", "Current Bottlenecks", ["employee_ai", "projects"], input.bottlenecks.length > 0 ? "available" : "empty"),
     createCompanyDashboardSectionAvailability("recent_company_activity", "Recent Company Activity", ["task_activity", "work_session"], getCollectionStatus(input.activity)),
     createCompanyDashboardSectionAvailability("recent_conversations", "Recent Conversations", ["conversation"], getCollectionStatus(input.conversations)),

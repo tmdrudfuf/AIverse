@@ -71,6 +71,62 @@ describe("InternalSimulationDashboardProvider", () => {
     expect(snapshot.risks.map((risk) => risk.id)).toEqual(["no-employees", "no-projects"]);
     expect(snapshot.sections.find((section) => section.id === "employee_summary")?.status).toBe("empty");
     expect(snapshot.sections.find((section) => section.id === "company_health")?.status).toBe("unavailable");
+    expect(snapshot.sections.find((section) => section.id === "office_zones")?.status).toBe("unavailable");
+    expect(snapshot.officeZoneProgress).toEqual({ unlockedZoneCount: 0, nextUnlock: undefined });
+  });
+
+  it("reports the office zone progress locked state (count plus the next required level) when company progression is supplied without an unlock preview", () => {
+    const provider = new InternalSimulationDashboardProvider();
+
+    const snapshot = provider.getSnapshot({
+      companyProgression: {
+        companyLevel: 1,
+        companyStage: "garageStartup",
+        floorCount: 1,
+        layoutId: "garage-startup-level-1",
+        maxEmployees: 5,
+        requiredMilestones: [],
+        unlockedOfficeZones: ["entrance", "workspace", "workstationArea", "meetingArea", "breakArea"],
+      },
+      nextOfficeZoneUnlock: { zoneType: "reception", label: "Reception", requiredLevel: 2 },
+      generatedAt: "2026-01-01T10:00:00.000Z",
+    });
+
+    expect(snapshot.officeZoneProgress).toEqual({
+      unlockedZoneCount: 5,
+      nextUnlock: { zoneType: "reception", label: "Reception", requiredLevel: 2 },
+    });
+    expect(snapshot.sections.find((section) => section.id === "office_zones")?.status).toBe("available");
+  });
+
+  it("reports the office zone progress unlocked state (no next unlock) once every zone is unlocked", () => {
+    const provider = new InternalSimulationDashboardProvider();
+
+    const snapshot = provider.getSnapshot({
+      companyProgression: {
+        companyLevel: 4,
+        companyStage: "headquarters",
+        floorCount: 3,
+        layoutId: "headquarters-level-4",
+        maxEmployees: 32,
+        requiredMilestones: [],
+        unlockedOfficeZones: [
+          "entrance",
+          "workspace",
+          "workstationArea",
+          "meetingArea",
+          "breakArea",
+          "reception",
+          "serverArea",
+          "storage",
+          "executiveArea",
+        ],
+      },
+      nextOfficeZoneUnlock: undefined,
+      generatedAt: "2026-01-01T10:00:00.000Z",
+    });
+
+    expect(snapshot.officeZoneProgress).toEqual({ unlockedZoneCount: 9, nextUnlock: undefined });
   });
 
   it("derives bottlenecks, risks, and recent activity without fabricating missing data", () => {

@@ -1,4 +1,4 @@
-import type { CompanyDashboardSnapshot } from "./CompanyDashboardTypes";
+import type { CompanyDashboardSnapshot, OfficeZoneProgressSummary } from "./CompanyDashboardTypes";
 
 export type CompanyDashboardPanelRows = {
   title: string;
@@ -11,6 +11,7 @@ export type CompanyDashboardPanelRows = {
   projectSourceText: string;
   workloadText: string;
   occupancyText: string;
+  officeZonesText: string;
   bottleneckText: string;
   conversationText: string;
   productivityText: string;
@@ -33,6 +34,7 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
       projectSourceText: "Sources: Unavailable",
       workloadText: "Workload: Unavailable",
       occupancyText: "Office: Unavailable",
+      officeZonesText: "Zones: Unavailable",
       bottleneckText: "Bottlenecks: None visible",
       conversationText: "Conversations: None recent",
       productivityText: "Productivity: Unavailable",
@@ -54,6 +56,7 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
     projectSourceText: createProjectSourceText(snapshot),
     workloadText: `Workload: ${snapshot.workload.unassignedTaskCount} unassigned, ${snapshot.workload.activeWorkSessionCount} running`,
     occupancyText: `Office: ${snapshot.occupancy.occupiedWorkstations} occupied, ${snapshot.occupancy.availableWorkstations} open`,
+    officeZonesText: createOfficeZonesText(snapshot.officeZoneProgress),
     bottleneckText: snapshot.bottlenecks[0]?.label
       ? `Bottleneck: ${snapshot.bottlenecks[0].label}`
       : "Bottlenecks: None visible",
@@ -66,6 +69,13 @@ export function createCompanyDashboardPanelRows(snapshot: CompanyDashboardSnapsh
     summaryText: snapshot.companySummary,
     activityText: snapshot.activity[0]?.label ?? "Activity: No recent company activity",
   };
+}
+
+function createOfficeZonesText(officeZoneProgress: OfficeZoneProgressSummary): string {
+  const unlockedText = `Zones: ${officeZoneProgress.unlockedZoneCount} unlocked`;
+  if (!officeZoneProgress.nextUnlock) return unlockedText;
+
+  return `${unlockedText}, next: ${officeZoneProgress.nextUnlock.label} at Lv${officeZoneProgress.nextUnlock.requiredLevel}`;
 }
 
 function createProjectSourceText(snapshot: CompanyDashboardSnapshot) {

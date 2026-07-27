@@ -22,6 +22,34 @@ describe("OfficeProjectPortalView", () => {
     expect(renderedText.map((item) => item.text)).toContain("[SOURCE] Daily Proof: Internal; AIverse: GitHub linked [Fresh]");
   });
 
+  it("renders the office zone unlock progress row in its locked state (next zone plus required level)", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+
+    new OfficeProjectPortalView(scene, createPortalState({
+      officeZoneProgress: {
+        unlockedZoneCount: 5,
+        nextUnlock: { zoneType: "reception", label: "Reception", requiredLevel: 2 },
+      },
+    }));
+
+    expect(renderedText.map((item) => item.text)).toContain("Zones: 5 unlocked, next: Reception at Lv2");
+  });
+
+  it("renders the office zone unlock progress row in its unlocked state once every zone is unlocked", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+
+    new OfficeProjectPortalView(scene, createPortalState({
+      officeZoneProgress: {
+        unlockedZoneCount: 9,
+        nextUnlock: undefined,
+      },
+    }));
+
+    expect(renderedText.map((item) => item.text)).toContain("Zones: 9 unlocked");
+  });
+
   it("keeps wrapped Company Dashboard source signals above the project list panel", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
@@ -156,7 +184,7 @@ function findRenderedRow(renderedText: RenderedText[], prefix: string) {
 }
 
 function findDialogPanel(renderedPanels: RenderedPanel[]) {
-  const dialogPanel = renderedPanels.find((panel) => panel.height === 430);
+  const dialogPanel = renderedPanels.find((panel) => panel.height === 454);
   expect(dialogPanel).toBeDefined();
   return dialogPanel;
 }
@@ -242,6 +270,7 @@ function createPortalState(options: {
   sourceProjects?: NonNullable<ProjectPortalState["companyDashboardSnapshot"]>["projects"]["projects"];
   viewMode?: ProjectPortalState["viewMode"];
   projectDashboardSnapshot?: ProjectDashboardSnapshot;
+  officeZoneProgress?: NonNullable<ProjectPortalState["companyDashboardSnapshot"]>["officeZoneProgress"];
 } = {}): ProjectPortalState {
   const sourceProjects = options.sourceProjects ?? [
     createDashboardProject("daily-proof", "Daily Proof", "Internal", "internal", "Internal"),
@@ -260,6 +289,10 @@ function createPortalState(options: {
       projects: sourceProjects,
     },
     companySummary: options.companySummary ?? "Company simulation is stable.",
+    officeZoneProgress: options.officeZoneProgress ?? {
+      unlockedZoneCount: 0,
+      nextUnlock: undefined,
+    },
   };
 
   return {
