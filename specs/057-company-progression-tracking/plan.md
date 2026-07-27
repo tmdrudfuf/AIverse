@@ -104,17 +104,27 @@ Sequential `break` on the first unmet level enforces FR-002 (no skipping).
 
 ### `requiredMilestones` on the returned snapshot
 
+`requiredMilestones` keeps its existing static-data meaning — "the milestones required to reach *this* level" — and is simply evaluated for real instead of hardcoded:
+
 ```
 getProgressionSnapshot(input):
   level = resolveCurrentCompanyLevel(input)
-  nextLevel = PROGRESSION_BY_LEVEL[level + 1]
-  requiredMilestones = nextLevel ? evaluate(nextLevel.requiredMilestones, employees, completed) : []
-  return { ...clone(PROGRESSION_BY_LEVEL[level]), requiredMilestones }
+  base = PROGRESSION_BY_LEVEL[level]
+  requiredMilestones = evaluate(base.requiredMilestones, employees, completed)
+  return { ...clone(base), requiredMilestones }
 ```
+
+At level 1 this is `[]` (unchanged from today, since level 1's static data has no milestones — nothing is required to start). At level 2+, once resolved, these evaluate as met (that's how the level was reached), with real `currentValue`.
+
+Rejected alternative: rebinding this field to describe the *next* level's requirements while at the current level. Discarded per advisor review — it would return a snapshot whose `companyLevel` and `requiredMilestones` describe two different levels, and give the same field name a different meaning depending on which method returned it (see spec.md Assumptions). The "what's next" view lives in `getFutureProgressionMetadata` instead, which already exists for that purpose.
 
 ### `getFutureProgressionMetadata(input)`
 
-Returns `evaluate`d snapshots (each with its own evaluated `requiredMilestones`, i.e. that level's own milestones — the ones that unlock it) for every level strictly greater than the resolved current level. This preserves the existing method's purpose ("what's coming up") while fixing its hardcoded-zero data.
+Returns `evaluate`d snapshots (each with its own evaluated `requiredMilestones`, i.e. that level's own milestones — the ones that unlock it) for every level strictly greater than the resolved current level. This preserves the existing method's purpose ("what's coming up") while fixing its hardcoded-zero data, and is the sole "what's needed for the next level" surface (single consistent meaning for `requiredMilestones` across both methods).
+
+### Verified non-risk: office layout/zone rendering
+
+`OfficeSpawnManager.ts`, `EmployeeNpcPositionResolver.ts`, `OfficeCollisionMap.ts`, `OfficeTilemapLayer.ts`, and `OfficeVisualLayer.ts` were grepped for `layoutId`/zone identifiers/`getActiveLayout`/`getOfficeZoneSnapshots`/`getOfficeLayoutPositionHints`/`unlockedOfficeZones` — zero matches in any of them. `EmployeeAIService` reads only `context.officeLayout?.layoutId` (a display string); the `officeZones` array it also receives is unused inside that service. `WorkstationOccupancyService` never receives `companyProgression` at all (its 4-workstation cap is a pre-existing, unrelated constant, already smaller than level 1's `maxEmployees: 5` today — not something this feature introduces or worsens). Conclusion: advancing the resolved company level has no rendering, spawn, or collision blast radius to account for today.
 
 ## Complexity Tracking
 

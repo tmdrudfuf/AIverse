@@ -43,36 +43,36 @@
 
 ---
 
-## Phase 4: User Story 2 - Real milestone progress is visible (Priority: P2)
+## Phase 4: User Story 2 - A reached level's milestones correctly show as met (Priority: P2)
 
-**Goal**: The snapshot's `requiredMilestones` show live progress toward the *next* level, empty at the max level.
+**Goal**: The resolved snapshot's `requiredMilestones` (that level's own static milestones) are evaluated with real `currentValue`/`isMet`, instead of hardcoded `0`/`false`.
 
-**Independent Test**: Unit tests asserting `requiredMilestones` contents at partial progress and at the max level.
+**Independent Test**: Unit tests asserting `requiredMilestones` contents at level 1, level 2, and the max level.
 
 ### Tests for User Story 2
 
-- [ ] T011 [P] [US2] Same test file: test `{ activeEmployees: 3, completedProjects: 0 }` at level 1 returns `requiredMilestones` containing `hire-five-employees` with `currentValue: 3, targetValue: 5, isMet: false`.
-- [ ] T012 [P] [US2] Same test file: test that once all of level 2's milestones are met (company is level 2), `requiredMilestones` describes level 3's milestones (real values), not the already-met level-2 ones.
-- [ ] T013 [P] [US2] Same test file: test that at the highest defined level (level 4, all its milestones met), `requiredMilestones` is `[]`.
+- [ ] T011 [P] [US2] Same test file: test `{ activeEmployees: 0, completedProjects: 0 }` returns `requiredMilestones: []` at level 1 (unchanged from today's static data — level 1 has no unlock requirements).
+- [ ] T012 [P] [US2] Same test file: test `{ activeEmployees: 5, completedProjects: 1 }` (resolves to level 2) returns `requiredMilestones` containing `hire-five-employees` (`currentValue: 5, isMet: true`) and `complete-first-client-project` (`currentValue: 1, isMet: true`) — level 2's own milestones, evaluated, both met.
+- [ ] T013 [P] [US2] Same test file: test that at the highest defined level (level 4, reached), `requiredMilestones` reports level 4's own milestones (`hire-eighteen-employees`, `complete-headquarters-plan`) as met with real values — not an empty array.
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] In `getProgressionSnapshot(input)`, after resolving the current level, evaluate the *next* level's static `requiredMilestones` (if any) against `input` and use that as the returned snapshot's `requiredMilestones`; return `[]` when no next level is defined (depends on T008-T010).
+- [ ] T014 [US2] In `getProgressionSnapshot(input)`, evaluate the resolved level's own static `requiredMilestones` against `input` (reusing the T008 helper) and use that as the returned snapshot's `requiredMilestones` (depends on T008-T010).
 
-**Checkpoint**: T011-T013 pass; dashboard/project-dashboard consumers (unmodified) now receive live milestone data through this field.
+**Checkpoint**: T011-T013 pass.
 
 ---
 
-## Phase 5: User Story 3 - Future levels stay visible ahead of time (Priority: P3)
+## Phase 5: User Story 3 - Future levels show real, evaluated progress ahead of time (Priority: P3)
 
-**Goal**: `getFutureProgressionMetadata(input)` returns real, evaluated data for levels beyond current.
+**Goal**: `getFutureProgressionMetadata(input)` returns real, evaluated data (each level's own milestones) for levels beyond current — the "what's needed next" surface.
 
-**Independent Test**: Unit test calling `getFutureProgressionMetadata` at level 1 and confirming all returned levels are `> 1` with real (non-hardcoded-zero) milestone evaluation.
+**Independent Test**: Unit test calling `getFutureProgressionMetadata` at level 1 with partial progress and confirming all returned levels are `> 1` with real (non-hardcoded-zero) milestone evaluation.
 
 ### Tests for User Story 3
 
-- [ ] T015 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 0, completedProjects: 0 })` returns snapshots for levels 2, 3, 4 only, each with milestones evaluated (all `isMet: false`, real `currentValue: 0`).
-- [ ] T016 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 5, completedProjects: 1 })` (now effectively level 2) returns only levels 3 and 4.
+- [ ] T015 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 3, completedProjects: 0 })` (stays level 1) returns snapshots for levels 2, 3, 4; the level-2 snapshot's `hire-five-employees` milestone reports `currentValue: 3, targetValue: 5, isMet: false`.
+- [ ] T016 [P] [US3] Same test file: test `getFutureProgressionMetadata({ activeEmployees: 5, completedProjects: 1 })` (now level 2) returns only levels 3 and 4.
 
 ### Implementation for User Story 3
 
