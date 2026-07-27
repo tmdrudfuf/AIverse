@@ -75,13 +75,14 @@ describe("buildRunSummary: clean approved run", () => {
       ],
       validationRuns: [
         { stage: "validate", command: "npm test", status: "passed", exitCode: 0, durationMs: 1000, path: p("validate-validation.md") },
-        { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final-verification-validation.md") },
+        { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final-verification-validation.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } },
       ],
       reviewRuns: [
         {
           stage: "review",
           outcome: "Approved",
           reviewerId: "codex",
+          target: { commit: "abc123", dirty: false, dirtyHash: null },
           structuredReviewStatus: "valid",
           structuredReviewDecision: "Approved",
           executionPath: p("review-independent-review-execution.md"),
@@ -845,9 +846,9 @@ describe("buildRunSummary: validation evidence readiness", () => {
       orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement.md"), resultPath: p("implement.md") }],
       validationRuns: [
         { stage: "validate", status: "passed", path: p("validate.md") },
-        { stage: "final-verification", status: "passed", path: p("final.md") },
+        { stage: "final-verification", status: "passed", path: p("final.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } },
       ],
-      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md") }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } }],
       latestReviewDecision: "Approved",
     });
 
@@ -865,5 +866,218 @@ describe("buildRunSummary: validation status normalization", () => {
     const summary = buildRunSummary(state);
     expect(summary.validation.status).toBe("not-run");
     expect(summary.validation.commands[0].status).toBe("not-run");
+  });
+});
+
+describe("buildRunSummary: focused/full validation phases (Spec 055)", () => {
+  it("reports focused and full attempts/status separately, tagging each command with its phase", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationPolicy: { strategy: "focused-final-full" },
+      validationRuns: [
+        { stage: "validate", command: "focused 1", status: "passed", phase: "focused", batchId: 1 },
+        { stage: "revalidate", command: "focused 2", status: "passed", phase: "focused", batchId: 2 },
+        { stage: "final-verification", command: "full 1", status: "passed", phase: "full", batchId: 3 },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.strategy).toBe("focused-final-full");
+    expect(summary.validation.focused).toEqual({ status: "passed", attempts: 2 });
+    expect(summary.validation.full).toEqual({ status: "passed", attempts: 1 });
+    // Aggregate mirrors the full phase, never the focused phase.
+    expect(summary.validation.status).toBe("passed");
+    expect(summary.validation.commands.map((c: { phase: string }) => c.phase)).toEqual(["focused", "focused", "full"]);
+  });
+
+  it("never reports aggregate passed when only focused validation has run (false-success prevention)", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationPolicy: { strategy: "focused-final-full" },
+      validationRuns: [
+        { stage: "validate", command: "focused 1", status: "passed", phase: "focused", batchId: 1 },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.focused.status).toBe("passed");
+    expect(summary.validation.full).toEqual({ status: "not-run", attempts: 0 });
+    expect(summary.validation.status).toBe("not-run");
+  });
+
+  it("reports full validation failure as the aggregate status even when focused passed", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "final-verification failed: mock full", terminalState: "blocked" },
+      validationPolicy: { strategy: "focused-final-full" },
+      validationRuns: [
+        { stage: "validate", command: "focused 1", status: "passed", phase: "focused", batchId: 1 },
+        { stage: "final-verification", command: "full 1", status: "failed", phase: "full", batchId: 2 },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.focused.status).toBe("passed");
+    expect(summary.validation.full.status).toBe("failed");
+    expect(summary.validation.status).toBe("failed");
+  });
+
+  it("counts distinct batchId occurrences, not raw command records, as attempts", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationPolicy: { strategy: "focused-final-full" },
+      validationRuns: [
+        { stage: "final-verification", command: "npm test", status: "passed", phase: "full", batchId: 5 },
+        { stage: "final-verification", command: "npx tsc --noEmit", status: "passed", phase: "full", batchId: 5 },
+        { stage: "final-verification", command: "npm run build", status: "passed", phase: "full", batchId: 5 },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.full.attempts).toBe(1);
+  });
+
+  it("reports the effective resolved strategy from orchestration.effectiveValidationStrategy, not just state.validationPolicy.strategy", () => {
+    const state = baseState({
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "state-invalid",
+        terminalState: "blocked",
+        effectiveValidationStrategy: "focused-final-full",
+      },
+      // state.validationPolicy.strategy is absent/different -- the CLI-only
+      // resolved strategy actually used for this run must win.
+      validationPolicy: { strategy: "full-every-cycle" },
+      validationRuns: [{ stage: "validate", command: "focused 1", status: "passed", phase: "focused", batchId: 1 }],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.strategy).toBe("focused-final-full");
+  });
+
+  it("falls back to state.validationPolicy.strategy when validation has never run (no effectiveValidationStrategy persisted yet)", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationPolicy: { strategy: "focused-final-full" },
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.strategy).toBe("focused-final-full");
+  });
+
+  it("legacy validationRuns records with no phase field bucket entirely as full (backward compatible)", () => {
+    const state = baseState({
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationRuns: [
+        { stage: "validate", command: "npm test", status: "passed" },
+        { stage: "final-verification", command: "npm test", status: "passed" },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.focused).toEqual({ status: "not-run", attempts: 0 });
+    expect(summary.validation.full.attempts).toBe(2);
+    expect(summary.validation.commands.every((c: { phase: string }) => c.phase === "full")).toBe(true);
+  });
+
+  it("reports both focused and full as skipped when validationSkipped is true, even with earlier passing records", () => {
+    const state = baseState({
+      orchestration: {
+        currentStage: "blocked",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        reason: "state-invalid",
+        terminalState: "blocked",
+        validationSkipped: true,
+      },
+      validationRuns: [
+        { stage: "validate", command: "focused 1", status: "passed", phase: "focused", batchId: 1 },
+      ],
+    });
+    const summary = buildRunSummary(state);
+    expect(summary.validation.focused.status).toBe("skipped");
+    expect(summary.validation.full.status).toBe("skipped");
+    expect(summary.validation.status).toBe("skipped");
+  });
+});
+
+describe("buildRunSummary: commit provenance and exact-match readiness (Spec 055)", () => {
+  const runDirRelative = ".agent-workflow/runs/spec055-target-test";
+  const cleanTarget = { commit: "abc123", dirty: false, dirtyHash: null };
+  const otherTarget = { commit: "def456", dirty: false, dirtyHash: null };
+
+  function readyLikeState(cwd: string, overrides: Record<string, unknown> = {}) {
+    const runDir = path.join(cwd, runDirRelative);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "final-verification-validation.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "review-result.md"), "fixture", "utf8");
+    const p = (name: string) => `${runDirRelative}/${name}`;
+    return baseState({
+      featureId: "spec055-target-test",
+      orchestration: {
+        currentStage: "human-merge-decision",
+        startedAt: "2026-07-26T00:00:00.000Z",
+        terminalState: "human-merge-decision",
+        resolvedImplementerId: "claude",
+        resolvedReviewerId: "codex",
+        roleResolutionSource: "cli-override",
+      },
+      validationRuns: [
+        { stage: "final-verification", command: "npm test", status: "passed", phase: "full", batchId: 1, path: p("final-verification-validation.md"), target: cleanTarget },
+      ],
+      reviewRuns: [
+        { stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md"), target: cleanTarget },
+      ],
+      latestReviewDecision: "Approved",
+      ...overrides,
+    });
+  }
+
+  it("computes exactCommitMatch: true and humanGate.ready: true when the reviewed and full-validation targets match", () => {
+    const cwd = createTempDir();
+    const summary = buildRunSummary(readyLikeState(cwd), { cwd });
+    expect(summary.commits.reviewedTarget).toEqual(cleanTarget);
+    expect(summary.commits.fullValidationTarget).toEqual(cleanTarget);
+    expect(summary.commits.exactCommitMatch).toBe(true);
+    expect(summary.review.exactReviewedCommitMatch).toBe(true);
+    expect(summary.validation.finalReadinessSatisfied).toBe(true);
+    expect(summary.humanGate.ready).toBe(true);
+  });
+
+  it("computes exactCommitMatch: false and humanGate.ready: false when the reviewed and full-validation targets differ", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, runDirRelative);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "final-verification-validation.md"), "fixture", "utf8");
+    const p = (name: string) => `${runDirRelative}/${name}`;
+    const summary = buildRunSummary(readyLikeState(cwd, {
+      validationRuns: [
+        { stage: "final-verification", command: "npm test", status: "passed", phase: "full", batchId: 1, path: p("final-verification-validation.md"), target: otherTarget },
+      ],
+    }), { cwd });
+    expect(summary.commits.exactCommitMatch).toBe(false);
+    expect(summary.review.exactReviewedCommitMatch).toBe(false);
+    expect(summary.validation.finalReadinessSatisfied).toBe(false);
+    expect(summary.humanGate.ready).toBe(false);
+  });
+
+  it("reports exactCommitMatch: unknown (not false) when target evidence is absent, and withholds readiness since exact-match evidence is required, never fabricated", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, runDirRelative);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "final-verification-validation.md"), "fixture", "utf8");
+    fs.writeFileSync(path.join(runDir, "review-result.md"), "fixture", "utf8");
+    const p = (name: string) => `${runDirRelative}/${name}`;
+    const summary = buildRunSummary(readyLikeState(cwd, {
+      validationRuns: [{ stage: "final-verification", command: "npm test", status: "passed", path: p("final-verification-validation.md") }],
+      reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", resultPath: p("review-result.md") }],
+    }), { cwd });
+    expect(summary.commits.exactCommitMatch).toBe("unknown");
+    expect(summary.review.exactReviewedCommitMatch).toBe("unknown");
+    // Missing target evidence on either side is inconclusive, not a free
+    // pass: Spec 055 FR-010 requires exact-match evidence for readiness, so
+    // "unknown" must withhold readiness the same way a positive mismatch
+    // does (Codex review round 2, finding P1-001).
+    expect(summary.validation.finalReadinessSatisfied).toBe(false);
+    expect(summary.humanGate.ready).toBe(false);
+  });
+
+  it("preserves the always-null reviewedCommit placeholder for strict backward compatibility", () => {
+    const cwd = createTempDir();
+    const summary = buildRunSummary(readyLikeState(cwd), { cwd });
+    expect(summary.commits.reviewedCommit).toBeNull();
+    expect(summary.commits.implementationCommit).toBeNull();
   });
 });

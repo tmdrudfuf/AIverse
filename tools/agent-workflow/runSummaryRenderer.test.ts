@@ -35,9 +35,9 @@ function approvedState(cwd: string) {
     orchestrationRuns: [{ stage: "implement", status: "completed", path: p("implement-claude-execution.md"), resultPath: p("implement-claude-result.md") }],
     validationRuns: [
       { stage: "validate", command: "npm test", status: "passed", exitCode: 0, durationMs: 1000, path: p("validate.md") },
-      { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final.md") },
+      { stage: "final-verification", command: "npm test", status: "passed", exitCode: 0, durationMs: 900, path: p("final.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } },
     ],
-    reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", structuredReviewStatus: "valid", structuredReviewDecision: "Approved", resultPath: p("review-result.md") }],
+    reviewRuns: [{ stage: "review", outcome: "Approved", reviewerId: "codex", structuredReviewStatus: "valid", structuredReviewDecision: "Approved", resultPath: p("review-result.md"), target: { commit: "abc123", dirty: false, dirtyHash: null } }],
     latestReviewDecision: "Approved",
   };
 }
@@ -95,5 +95,70 @@ describe("renderRunSummaryMarkdown", () => {
     const cwd = createTempDir();
     const markdown = renderRunSummaryMarkdown(buildRunSummary(approvedState(cwd), { cwd }));
     expect(markdown).toContain("No push, PR creation, PR approval, or merge was performed automatically.");
+  });
+});
+
+describe("renderRunSummaryMarkdown: focused validation review loop (Spec 055)", () => {
+  it("shows the strategy, focused attempts/result, and final full attempts/result as distinct lines", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, runDirRelative);
+    fs.mkdirSync(runDir, { recursive: true });
+    for (const name of ["validate.md", "revalidate.md", "final.md"]) {
+      fs.writeFileSync(path.join(runDir, name), "fixture", "utf8");
+    }
+    const p = (name: string) => `${runDirRelative}/${name}`;
+    const state = {
+      featureId: "054-review-run-summary-audit-trail",
+      baseBranch: "main",
+      results: [],
+      validationPolicy: { strategy: "focused-final-full" },
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationRuns: [
+        { stage: "validate", command: "node --test a.test.ts", status: "passed", phase: "focused", batchId: 1, path: p("validate.md") },
+        { stage: "revalidate", command: "node --test a.test.ts", status: "passed", phase: "focused", batchId: 2, path: p("revalidate.md") },
+        { stage: "final-verification", command: "npm test", status: "passed", phase: "full", batchId: 3, path: p("final.md") },
+      ],
+    };
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(state, { cwd }));
+    expect(markdown).toContain("- Strategy: Focused, then final full");
+    expect(markdown).toContain("- Focused validation attempts: 2");
+    expect(markdown).toContain("- Focused result: Passed");
+    expect(markdown).toContain("- Final full validation attempts: 1");
+    expect(markdown).toContain("- Final full result: Passed");
+  });
+
+  it("never shows a bare 'Validation: Passed' outcome line unless the full phase specifically passed", () => {
+    const cwd = createTempDir();
+    const runDir = path.join(cwd, runDirRelative);
+    fs.mkdirSync(runDir, { recursive: true });
+    fs.writeFileSync(path.join(runDir, "validate.md"), "fixture", "utf8");
+    const p = (name: string) => `${runDirRelative}/${name}`;
+    const state = {
+      featureId: "054-review-run-summary-audit-trail",
+      baseBranch: "main",
+      results: [],
+      validationPolicy: { strategy: "focused-final-full" },
+      orchestration: { currentStage: "blocked", startedAt: "2026-07-26T00:00:00.000Z", reason: "state-invalid", terminalState: "blocked" },
+      validationRuns: [
+        { stage: "validate", command: "node --test a.test.ts", status: "passed", phase: "focused", batchId: 1, path: p("validate.md") },
+      ],
+    };
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(state, { cwd }));
+    expect(markdown).not.toContain("- Validation: Passed");
+    expect(markdown).toContain("- Focused result: Passed");
+    expect(markdown).toContain("- Final full result: Not run");
+  });
+
+  it("labels full-every-cycle distinctly from focused-final-full", () => {
+    const cwd = createTempDir();
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(approvedState(cwd), { cwd }));
+    expect(markdown).toContain("- Strategy: Full validation every cycle");
+  });
+
+  it("shows the reviewed target and full validation target lines under commit provenance", () => {
+    const cwd = createTempDir();
+    const markdown = renderRunSummaryMarkdown(buildRunSummary(approvedState(cwd), { cwd }));
+    expect(markdown).toContain("- Reviewed target:");
+    expect(markdown).toContain("- Full validation target:");
   });
 });

@@ -3,7 +3,6 @@ const path = require("path");
 
 const {
   DEFAULT_SAFETY_RULES,
-  DEFAULT_VALIDATION_COMMANDS,
   HUMAN_ONLY_COMMANDS,
   createRunFilePath,
   formatList,
@@ -31,6 +30,16 @@ const { parseStructuredAnswers } = require("./structuredAnswers.js");
 const { formatFindingHistoryForPrompt, normalizeFindingLifecycle } = require("./findingLifecycle.js");
 const { resolveEffectiveRoles } = require("./roleResolver.js");
 const { refreshRunSummary } = require("./runSummary.js");
+const {
+  FULL_STAGE_NAME,
+  VALIDATION_TRIGGER_REASONS,
+  commandsForPhase,
+  computeValidationTarget,
+  resolvePhaseForStage,
+  resolveValidationPolicy,
+} = require("./validationPolicy.js");
+const { buildValidationRecordFields } = require("./validationPhase.js");
+const { buildValidationPlanPreview, isFinalValidationSatisfied } = require("./validationPlan.js");
 
 const ORCHESTRATION_STAGES = [
   "implement",
@@ -104,15 +113,15 @@ function resolveOrchestrationRoles(state, options = {}) {
   return resolution;
 }
 
+// Retained for prompt display (the full command list is the ultimate bar an
+// Implementer's change must clear) and dry-run/back-compat consumers; the
+// real phase-aware command selection for a specific stage occurrence lives in
+// resolveValidationPolicy/resolvePhaseForStage/commandsForPhase below, which
+// this function now delegates to rather than duplicating the resolution
+// precedence.
 function getValidationCommands(state, options = {}) {
   if (options.skipValidation) return [];
-  if (Array.isArray(options.validationCommands) && options.validationCommands.length) {
-    return options.validationCommands.map((command) => String(command));
-  }
-  if (Array.isArray(state.validationCommands) && state.validationCommands.length) {
-    return state.validationCommands.map((command) => String(command));
-  }
-  return DEFAULT_VALIDATION_COMMANDS;
+  return resolveValidationPolicy(state, options).fullCommands;
 }
 
 function createCommandPreview(agent) {
@@ -195,7 +204,9 @@ function buildImplementerPrompt(state, stage, options = {}) {
     specSummary: buildSpecSummary(state, repoRoot),
     taskScope: state.taskScope || `Complete the active Spec Kit tasks for ${state.featureId || "this feature"}.`,
     reviewFindings: stage === "fix"
-      ? formatFindings(getActiveBlockingFindings(state).length ? getActiveBlockingFindings(state) : orchestration.latestFindings, orchestration.latestReviewOutput || "")
+      ? (orchestration.pendingFixTriggerReason === VALIDATION_TRIGGER_REASONS.FULL_VALIDATION_RETRY
+        ? `Final full validation must pass before this feature can be ready; no Reviewer findings are pending. Full validation reported:\n\n${orchestration.latestFullValidationFailureSummary || "(no summary recorded)"}`
+        : formatFindings(getActiveBlockingFindings(state).length ? getActiveBlockingFindings(state) : orchestration.latestFindings, orchestration.latestReviewOutput || ""))
       : "- none for initial implementation",
     previousReviewPath: orchestration.latestReviewPath || "none",
     validationCommands: formatList(getValidationCommands(state, options)),
@@ -418,16 +429,59 @@ function statusFromResult(result) {
   return "passed";
 }
 
+// final-verification's own trigger reason never depends on how it got here
+// (it is always because a valid Approval candidate exists); validate is
+// always the first occurrence after implement; revalidate's reason depends on
+// which kind of fix preceded it, tracked via the pendingFixTriggerReason
+// marker set immediately before entering "fix" (see the review-stage and
+// full-validation-failure handling below) -- never inferred, always read from
+// what was explicitly set.
+function determineValidationTriggerReason(state, stage, phase, options) {
+  if (stage === FULL_STAGE_NAME) return VALIDATION_TRIGGER_REASONS.FULL_VALIDATION_CANDIDATE;
+  if (phase === "full" && options.forceFullValidation) return VALIDATION_TRIGGER_REASONS.MANUAL_REQUEST;
+  if (stage === "validate") return VALIDATION_TRIGGER_REASONS.INITIAL_IMPLEMENTATION;
+  const pending = getOrchestration(state).pendingFixTriggerReason;
+  return pending === VALIDATION_TRIGGER_REASONS.FULL_VALIDATION_RETRY
+    ? VALIDATION_TRIGGER_REASONS.FULL_VALIDATION_RETRY
+    : VALIDATION_TRIGGER_REASONS.REVIEWER_FIX;
+}
+
 async function runValidationCommands(state, stage, options = {}) {
   const cwd = options.cwd || process.cwd();
   const adapter = options.processAdapter || createDefaultProcessAdapter();
-  const commands = getValidationCommands(state, options);
+  const policy = resolveValidationPolicy(state, options);
+  const phase = options.skipValidation ? null : resolvePhaseForStage(policy, stage, options);
+  const commands = options.skipValidation ? [] : commandsForPhase(policy, phase);
+  // Pre-parse and safety-check every command before spawning any of them.
+  // Checking inside the execution loop (parse -> check -> spawn -> repeat)
+  // would let an earlier safe command actually run before a later unsafe
+  // command in the same list is ever discovered (Codex review round 4,
+  // finding P1-001) -- this violates the "rejected before any subprocess
+  // execution" guarantee (spec.md FR-013) for every command but the first.
+  const validationInvocations = commands.map((commandText) => {
+    const invocation = parseValidationCommand(commandText);
+    assertSafeValidationCommand(invocation);
+    return { commandText, invocation };
+  });
+  const triggerReason = options.skipValidation ? null : determineValidationTriggerReason(state, stage, phase, options);
+  const gitContextForTarget = options.gitContext || collectGitContext({ cwd, baseBranch: state.baseBranch });
+  const target = options.skipValidation ? null : computeValidationTarget(gitContextForTarget);
   const records = [];
   // Always set explicitly (never conditionally left stale): this must
   // reflect whether *this* occurrence was skipped, not "was any occurrence
   // ever skipped" -- otherwise a later invocation that runs real validation
   // commands would still be masked behind an earlier skip.
-  let nextState = setOrchestration(state, { validationSkipped: Boolean(options.skipValidation) });
+  // effectiveValidationStrategy persists the *actually resolved* strategy
+  // (CLI --validation-strategy takes precedence over state.validationPolicy
+  // per resolveValidationPolicy's own precedence) so the run summary reports
+  // what really ran, not just what happens to be configured in state --
+  // otherwise a CLI-only strategy override could be misreported as
+  // full-every-cycle by any consumer reading state.validationPolicy directly
+  // (Codex review round 2, finding P2-001).
+  let nextState = setOrchestration(state, {
+    validationSkipped: Boolean(options.skipValidation),
+    effectiveValidationStrategy: policy.strategy,
+  });
   // A monotonically increasing marker shared by every command in this one
   // call, so consumers (the run-summary stage-timeline reconstruction) can
   // reliably group records into the occurrence they actually belong to,
@@ -437,9 +491,7 @@ async function runValidationCommands(state, stage, options = {}) {
   const validationBatchId = Number(getOrchestration(nextState).nextValidationBatchId || 0) + 1;
   nextState = setOrchestration(nextState, { nextValidationBatchId: validationBatchId });
 
-  for (const commandText of commands) {
-    const validationInvocation = parseValidationCommand(commandText);
-    assertSafeValidationCommand(validationInvocation);
+  for (const { commandText, invocation: validationInvocation } of validationInvocations) {
     const spawnInvocation = resolveValidationInvocation(validationInvocation);
     const startedAt = new Date().toISOString();
     const result = await adapter.run(spawnInvocation.command, spawnInvocation.args, {
@@ -473,6 +525,7 @@ async function runValidationCommands(state, stage, options = {}) {
       stdout: result.stdout || "",
       stderr: result.stderr || "",
       status: statusFromResult(result),
+      ...buildValidationRecordFields({ phase, triggerReason, target }),
     };
     const artifactPath = createRunFilePath(state, `${stage}-validation`, { cwd });
     fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
@@ -481,11 +534,11 @@ async function runValidationCommands(state, stage, options = {}) {
     records.push(record);
     nextState = appendRecord(nextState, "validationRuns", record);
     if (record.status !== "passed") {
-      return { state: nextState, records, passed: false, failedRecord: record };
+      return { state: nextState, records, passed: false, failedRecord: record, phase, target };
     }
   }
 
-  return { state: nextState, records, passed: true };
+  return { state: nextState, records, passed: true, phase, target };
 }
 
 async function runAgentPrompt(state, stage, agent, prompt, options = {}) {
@@ -812,6 +865,7 @@ async function runReviewWithoutStateWrite(state, reviewStage, options = {}) {
     structuredReviewStatus: structuredReviewAnalysis.status,
     structuredReviewDecision: structuredReviewAnalysis.decision || "Unknown",
     structuredReviewDiagnostics: structuredReviewAnalysis.diagnostics || [],
+    target: computeValidationTarget(gitContext),
   };
   if (structuredReviewPath) reviewRunRecord.structuredReviewPath = relativePath(cwd, structuredReviewPath);
   return {
@@ -903,6 +957,20 @@ async function executeAnswerQuestionsStage(state, options = {}) {
   };
 }
 
+// Best-effort projection for the dry-run preview: when currentStage is
+// already a validation stage, preview it directly; otherwise infer the
+// validation stage that would naturally follow on the Approved/success path.
+// A Changes-Requested outcome from review/re-review/final-review actually
+// leads to revalidate, not final-verification -- this preview cannot know
+// the Reviewer's future decision, so it shows the Approved-path projection
+// and is documented as such rather than claiming certainty it cannot have.
+function inferNextValidationStage(currentStage) {
+  if (currentStage === "validate" || currentStage === "revalidate" || currentStage === FULL_STAGE_NAME) return currentStage;
+  if (currentStage === "fix") return "revalidate";
+  if (currentStage === "review" || currentStage === "re-review" || currentStage === "final-review" || currentStage === "answer-questions") return FULL_STAGE_NAME;
+  return "validate";
+}
+
 function previewOrchestration(state, options = {}) {
   const cwd = options.cwd || process.cwd();
   const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch });
@@ -913,6 +981,7 @@ function previewOrchestration(state, options = {}) {
   assertSafeCommand(reviewer);
   const maxFixCycles = normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles);
   const currentStage = getCurrentStage(state);
+  const validationPlan = buildValidationPlanPreview(state, inferNextValidationStage(currentStage), options);
   return {
     dryRun: true,
     featureId: state.featureId || "unknown-feature",
@@ -933,6 +1002,15 @@ function previewOrchestration(state, options = {}) {
     reviewer: { id: reviewer.agentId, identity: reviewer.identity, commandPreview: createCommandPreview(reviewer) },
     sameRunner: runnersMatch(implementer, reviewer),
     validationCommands: getValidationCommands(state, options),
+    validationPolicy: {
+      strategy: validationPlan.strategy,
+      focusedCommands: validationPlan.focusedCommands,
+      fullCommands: validationPlan.fullCommands,
+    },
+    nextValidationPhase: {
+      phase: validationPlan.phase,
+      reason: validationPlan.reason,
+    },
     maxFixCycles,
     maxQuestionCycles: normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles),
     fixCycleCount: Number(state.fixCycleCount || getOrchestration(state).fixCycleCount || 0),
@@ -1044,14 +1122,87 @@ async function runOrchestration(state, options = {}) {
     }
 
     if (stage === "validate" || stage === "revalidate" || stage === "final-verification") {
-      const validation = await runValidationCommands(currentState, stage, options);
+      // Captured only for final-verification: the tree signature immediately
+      // before running the full command list, compared against the same
+      // signature immediately after, to detect the full-validation-modified-
+      // the-tree case (spec.md FR-007) using the exact same helper already
+      // used to detect "fix produced no diff".
+      const preValidationGitContext = stage === FULL_STAGE_NAME
+        ? collectGitContext({ cwd, baseBranch: currentState.baseBranch })
+        : null;
+      const validationOptions = preValidationGitContext ? { ...options, gitContext: preValidationGitContext } : options;
+      const validation = await runValidationCommands(currentState, stage, validationOptions);
       currentState = validation.state;
       steps.push({ stage, status: validation.passed ? "passed" : "failed", artifactPath: validation.records.at(-1)?.path });
-      if (!validation.passed) {
-        currentState = markBlocked(currentState, `${stage} failed: ${validation.failedRecord.command}`, { failedValidationPath: validation.failedRecord.path });
+
+      // A skipped final-verification (--skip-validation) trivially "passes"
+      // with zero commands executed and no target evidence; check this
+      // first and hard-block immediately, before any of the readiness/
+      // retry-routing logic below, which is for genuine validation activity
+      // that ran and did not establish readiness -- not for an explicit,
+      // one-shot user choice not to validate at all (spec.md FR-012, Codex
+      // review round 1 finding P1-001). This must never reach the human
+      // merge gate at the orchestration-decision/CLI-exit-code level,
+      // matching the run-summary's own humanGate.ready: false for this case.
+      if (stage === FULL_STAGE_NAME && getOrchestration(currentState).validationSkipped) {
+        currentState = markBlocked(currentState, "final-verification skipped via --skip-validation; human merge decision requires actual validation evidence");
         if (statePath) writeState(statePath, currentState);
         break;
       }
+
+      const treeModifiedByFullValidation = stage === FULL_STAGE_NAME
+        && validation.passed
+        && getDiffSignature(preValidationGitContext) !== getDiffSignature(collectGitContext({ cwd, baseBranch: currentState.baseBranch }));
+
+      // Consults the exact same isFinalValidationSatisfied function the run
+      // summary uses for humanGate.ready/finalReadinessSatisfied, so the
+      // orchestration-level decision can never disagree with it (Codex
+      // review round 3, finding P1-001: the tree-diff check above only
+      // detects validation modifying the tree during its own execution -- it
+      // has no visibility into whether the Approved review's target actually
+      // matches what was validated, e.g. after a resumed run supplies a
+      // review record predating target tracking).
+      const finalReadiness = (stage === FULL_STAGE_NAME && validation.passed && !treeModifiedByFullValidation)
+        ? isFinalValidationSatisfied(currentState)
+        : { satisfied: true, reason: null };
+
+      if (!validation.passed || treeModifiedByFullValidation || !finalReadiness.satisfied) {
+        if (stage !== FULL_STAGE_NAME) {
+          // Focused validation (or full-every-cycle at validate/revalidate)
+          // failing keeps today's hard-block behavior unchanged -- only a
+          // final-verification failure/tree-modification/readiness-mismatch
+          // is routed to a fix-capable stage (see below).
+          currentState = markBlocked(currentState, `${stage} failed: ${validation.failedRecord.command}`, { failedValidationPath: validation.failedRecord.path });
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        // final-verification failed, passed but modified the tracked working
+        // tree, or passed but its exact-match readiness check failed: do not
+        // treat the prior Approved decision as final. Route back to fix
+        // (reusing the existing fix -> revalidate -> re-review loop) up to a
+        // dedicated, separately-tracked ceiling, so a defect the full suite
+        // found cannot silently consume the Reviewer's own fix-cycle budget
+        // (spec.md FR-006/FR-007, Architecture Decision 3).
+        const fullValidationFixCycleCount = Number(getOrchestration(currentState).fullValidationFixCycleCount || 0);
+        const failureSummary = treeModifiedByFullValidation
+          ? "final-verification passed, but its commands modified the tracked working tree (e.g. a formatter, generated snapshot, or build artifact under version control changed). Reconcile and commit this change so a fresh review can be obtained."
+          : (!validation.passed
+            ? `final-verification failed: ${validation.failedRecord.command} (exit code ${validation.failedRecord.exitCode}).${validation.failedRecord.errorMessage ? ` ${validation.failedRecord.errorMessage}` : ""}`
+            : `final-verification passed, but its exact-match readiness check failed (${finalReadiness.reason}): the Approved review's target does not verifiably match what final-verification validated. Obtain a fresh review against the current exact commit before this can be trusted.`);
+        if (fullValidationFixCycleCount >= maxFixCycles) {
+          const extra = validation.passed ? {} : { failedValidationPath: validation.failedRecord.path };
+          currentState = markBlocked(currentState, `Maximum full-validation fix cycles reached (${failureSummary})`, extra);
+          if (statePath) writeState(statePath, currentState);
+          break;
+        }
+        currentState = persistStage(statePath, currentState, "fix", {
+          fullValidationFixCycleCount: fullValidationFixCycleCount + 1,
+          pendingFixTriggerReason: VALIDATION_TRIGGER_REASONS.FULL_VALIDATION_RETRY,
+          latestFullValidationFailureSummary: failureSummary,
+        });
+        continue;
+      }
+
       if (stage === "final-verification") {
         currentState = markHumanGate(currentState);
         if (statePath) writeState(statePath, currentState);
@@ -1135,8 +1286,13 @@ async function runOrchestration(state, options = {}) {
         ...currentState,
         fixCycleCount: fixCycleCount + 1,
       };
+      // Always explicitly set (never left stale from a prior occurrence):
+      // the next revalidate's triggerReason reads this marker, so a
+      // Reviewer-requested fix must never be misattributed as a
+      // full-validation retry, or vice versa.
       currentState = persistStage(statePath, currentState, "fix", {
         fixCycleCount: currentState.fixCycleCount,
+        pendingFixTriggerReason: VALIDATION_TRIGGER_REASONS.REVIEWER_FIX,
       });
       continue;
     }
