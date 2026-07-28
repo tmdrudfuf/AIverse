@@ -612,13 +612,6 @@ function createProjectDashboardLowerRows(
 
   if (issueSyncRows) {
     lowerRows.push({ text: `[ISSUES] ${issueSyncRows.statusText}`, maxLines: 1 });
-  }
-
-  if (candidateTaskRows) {
-    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1 });
-  }
-
-  if (issueSyncRows) {
     if (issueSyncRows.issueListText) {
       lowerRows.push({ text: `[ISSUE LIST] ${issueSyncRows.issueListText}`, maxLines: 1 });
     }
@@ -627,8 +620,11 @@ function createProjectDashboardLowerRows(
     }
   }
 
-  if (candidateTaskRows?.topTaskText) {
-    lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1 });
+  if (candidateTaskRows) {
+    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1 });
+    if (candidateTaskRows.topTaskText) {
+      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1 });
+    }
   }
 
   return lowerRows;

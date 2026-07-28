@@ -504,6 +504,94 @@ describe("OfficeProjectPortalView", () => {
     });
   });
 
+  it("keeps Spec 062 issue detail rows ahead of candidate task rows when both are present", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof",
+        syncStatus: "Succeeded",
+        openCount: 2,
+        closedCount: 0,
+        isTruncated: false,
+        issues: [
+          {
+            id: "ai-verse/daily-proof#12",
+            number: 12,
+            title: "Fix crash on launch",
+            state: "Open",
+            assignees: ["octocat"],
+            labels: ["bug"],
+            provider: "github",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-02T00:00:00.000Z",
+            syncedAt: "2026-01-02T00:00:00.000Z",
+          },
+          {
+            id: "ai-verse/daily-proof#8",
+            number: 8,
+            title: "Second issue",
+            state: "Open",
+            assignees: [],
+            labels: [],
+            provider: "github",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            syncedAt: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        taskCount: 2,
+        sourceIssueCount: 2,
+        sourceIssueSyncStatus: "Succeeded",
+        sourceIssueSyncedAt: "2026-01-02T00:00:00.000Z",
+        tasks: [
+          createCandidateTask(12, "Fix crash on launch", "High", "Bug"),
+          createCandidateTask(8, "Second issue", "Normal", "Unknown"),
+        ],
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const issueDetailRow = findRenderedRow(renderedText, "[ISSUE DETAIL]");
+
+    expect(findRenderedRow(renderedText, "[ISSUE LIST]")?.text).toBe("[ISSUE LIST] #12 Fix crash on launch (Open); +1 more");
+    expect(issueDetailRow?.text).toBe("[ISSUE DETAIL] Labels: bug · Assignees: octocat");
+    assertRowInsidePanel(issueDetailRow, lowerPanel);
+  });
+
   it("drops lowest-priority issue rows (list and detail) rather than overlapping the panel when space is limited", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
@@ -943,6 +1031,32 @@ function createProjectDashboardSnapshot(
     externalSources: options.externalSources ?? [createExternalSource("ai-verse/daily-proof")],
     sections: [],
     ...options,
+  };
+}
+
+function createCandidateTask(
+  issueNumber: number,
+  title: string,
+  estimatedPriority: "High" | "Medium" | "Low" | "Normal",
+  estimatedTaskType: "Bug" | "Feature" | "Documentation" | "Maintenance" | "Research" | "Unknown",
+) {
+  return {
+    id: `daily-proof:candidate-task:ai-verse/daily-proof#${issueNumber}`,
+    originatingIssueId: `ai-verse/daily-proof#${issueNumber}`,
+    issueNumber,
+    projectId: "daily-proof",
+    title,
+    summary: title,
+    labels: [],
+    assignees: [],
+    state: "Open" as const,
+    estimatedPriority,
+    estimatedTaskType,
+    sourceProvider: "github",
+    issueCreatedAt: "2026-01-01T00:00:00.000Z",
+    issueUpdatedAt: "2026-01-02T00:00:00.000Z",
+    mappedAt: "2026-01-02T00:00:00.000Z",
+    syncedAt: "2026-01-02T00:00:00.000Z",
   };
 }
 

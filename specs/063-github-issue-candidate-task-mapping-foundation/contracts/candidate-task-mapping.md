@@ -26,7 +26,7 @@ Priority:
 
 - `bug`: `High`
 - `enhancement`: `Medium`
-- `documentation`: `Low`
+- `documentation` or `docs`: `Low`
 - otherwise: `Normal`
 
 Task type:
@@ -34,7 +34,7 @@ Task type:
 - `bug`: `Bug`
 - `enhancement` or `feature`: `Feature`
 - `documentation` or `docs`: `Documentation`
-- `maintenance`, `chore`, `refactor`, or `tech debt`: `Maintenance`
+- `maintenance`, `chore`, `refactor`, `tech debt`, or `technical debt`: `Maintenance`
 - `research`, `investigation`, or `spike`: `Research`
 - otherwise: `Unknown`
 

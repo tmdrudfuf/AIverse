@@ -13,7 +13,7 @@ Rules:
 
 - `bug` label -> `High`
 - `enhancement` label -> `Medium`
-- `documentation` label -> `Low`
+- `documentation` or `docs` label -> `Low`
 - no known label -> `Normal`
 
 ## CandidateTaskType
@@ -32,7 +32,7 @@ Representative labels:
 - `bug` -> `Bug`
 - `enhancement`, `feature` -> `Feature`
 - `documentation`, `docs` -> `Documentation`
-- `maintenance`, `chore`, `refactor`, `tech debt` -> `Maintenance`
+- `maintenance`, `chore`, `refactor`, `tech debt`, `technical debt` -> `Maintenance`
 - `research`, `investigation`, `spike` -> `Research`
 - no known label -> `Unknown`
 
