@@ -12,6 +12,7 @@ import {
   createCompanyDashboardProviderRegistry,
   getEnabledCompanyDashboardProvider,
 } from "./dashboard/CompanyDashboardProviderRegistry";
+import { CandidateTaskService } from "./candidate-tasks/CandidateTaskService";
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
@@ -95,6 +96,7 @@ export class OfficeProjectPortalController {
   private readonly repositoryService: GitHubRepositoryService;
   private readonly repositorySyncService: RepositorySyncService;
   private readonly issueSyncService: IssueSyncService;
+  private candidateTaskService: CandidateTaskService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -138,6 +140,7 @@ export class OfficeProjectPortalController {
       github: new GitHubIssueSyncProvider(),
       local: new LocalIssueSyncProvider(),
     });
+    this.candidateTaskService = new CandidateTaskService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -897,14 +900,26 @@ export class OfficeProjectPortalController {
     this.issueSyncRequestVersion = requestVersion;
 
     const previous = this.state.issueSyncCollections[projectId];
-    this.state.issueSyncCollections[projectId] = createSyncingIssueSnapshotCollection(identity, previous);
+    const syncingCollection = createSyncingIssueSnapshotCollection(identity, previous);
+    this.state.issueSyncCollections[projectId] = syncingCollection;
+    this.mapCandidateTasksFromIssueCollection(projectId, syncingCollection);
     this.view.render(this.state);
 
     const collection = await this.issueSyncService.readIssueSnapshots(identity, previous);
     if (!this.shouldApplyIssueSyncCollection(projectId, requestVersion)) return;
 
     this.state.issueSyncCollections[projectId] = collection;
+    this.mapCandidateTasksFromIssueCollection(projectId, collection);
     this.view.render(this.state);
+  }
+
+  private mapCandidateTasksFromIssueCollection(
+    projectId: string,
+    collection: ProjectPortalState["issueSyncCollections"][string],
+  ) {
+    this.candidateTaskService ??= new CandidateTaskService();
+    this.state.candidateTaskCollections ??= {};
+    this.state.candidateTaskCollections[projectId] = this.candidateTaskService.mapIssueCollection(projectId, collection);
   }
 
   private async openTaskList(projectId: string) {

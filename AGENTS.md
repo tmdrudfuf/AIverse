@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/062-github-issue-read-synchronization-foundation/plan.md
+shell commands, and other important information, read specs/063-github-issue-candidate-task-mapping-foundation/plan.md
 <!-- SPECKIT END -->

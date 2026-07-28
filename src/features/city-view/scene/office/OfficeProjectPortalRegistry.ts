@@ -108,6 +108,7 @@ export function createProjectPortalState(): ProjectPortalState {
     repositorySummaries: {},
     repositorySyncSnapshots: {},
     issueSyncCollections: {},
+    candidateTaskCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

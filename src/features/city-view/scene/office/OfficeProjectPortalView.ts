@@ -1,4 +1,5 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -243,10 +244,14 @@ export class OfficeProjectPortalView {
       dashboardProject?.repositoryIdentity,
       dashboardProjectId ? state.issueSyncCollections[dashboardProjectId] : undefined,
     );
+    const candidateTaskCollection = dashboardProjectId ? state.candidateTaskCollections[dashboardProjectId] : undefined;
+    const candidateTaskRows = candidateTaskCollection
+      ? createCandidateTaskDisplayRows(candidateTaskCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
-      createProjectDashboardLowerRows(rows, repositorySyncRows, issueSyncRows),
+      createProjectDashboardLowerRows(rows, repositorySyncRows, issueSyncRows, candidateTaskRows),
     );
     const lowerRows = fitProjectDashboardLowerRows(preparedLowerRows, maxLowerPanelHeight);
     const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(lowerRows, maxLowerPanelHeight);
@@ -577,6 +582,7 @@ function createProjectDashboardLowerRows(
   rows: ReturnType<typeof createProjectDashboardPanelRows>,
   repositorySyncRows: string[] = [],
   issueSyncRows?: IssueSyncDisplayRows,
+  candidateTaskRows?: CandidateTaskDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
@@ -611,6 +617,13 @@ function createProjectDashboardLowerRows(
     }
     if (issueSyncRows.issueDetailText) {
       lowerRows.push({ text: `[ISSUE DETAIL] ${issueSyncRows.issueDetailText}`, maxLines: 1 });
+    }
+  }
+
+  if (candidateTaskRows) {
+    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1 });
+    if (candidateTaskRows.topTaskText) {
+      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1 });
     }
   }
 
