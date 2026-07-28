@@ -1,4 +1,5 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { createCandidateAssignmentDisplayRows, type CandidateAssignmentDisplayRows } from "./candidate-assignments/CandidateAssignmentView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
@@ -248,10 +249,14 @@ export class OfficeProjectPortalView {
     const candidateTaskRows = candidateTaskCollection
       ? createCandidateTaskDisplayRows(candidateTaskCollection)
       : undefined;
+    const candidateAssignmentCollection = dashboardProjectId ? state.candidateAssignmentCollections[dashboardProjectId] : undefined;
+    const candidateAssignmentRows = candidateAssignmentCollection
+      ? createCandidateAssignmentDisplayRows(candidateAssignmentCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
-      createProjectDashboardLowerRows(rows, repositorySyncRows, issueSyncRows, candidateTaskRows),
+      createProjectDashboardLowerRows(rows, repositorySyncRows, issueSyncRows, candidateTaskRows, candidateAssignmentRows),
     );
     const lowerRows = fitProjectDashboardLowerRows(preparedLowerRows, maxLowerPanelHeight);
     const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(lowerRows, maxLowerPanelHeight);
@@ -583,6 +588,7 @@ function createProjectDashboardLowerRows(
   repositorySyncRows: string[] = [],
   issueSyncRows?: IssueSyncDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
+  candidateAssignmentRows?: CandidateAssignmentDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
@@ -625,6 +631,13 @@ function createProjectDashboardLowerRows(
     if (candidateTaskRows.topTaskText) {
       lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1 });
     }
+  }
+
+  if (candidateAssignmentRows) {
+    const topText = candidateAssignmentRows.topRecommendationText
+      ? `; ${candidateAssignmentRows.topRecommendationText}`
+      : "";
+    lowerRows.push({ text: `[ASSIGNMENT RECOMMENDATIONS] ${candidateAssignmentRows.statusText}${topText}`, maxLines: 1 });
   }
 
   return lowerRows;

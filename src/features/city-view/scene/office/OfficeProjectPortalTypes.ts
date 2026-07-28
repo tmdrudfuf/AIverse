@@ -6,6 +6,7 @@ import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationT
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
+import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
@@ -105,6 +106,7 @@ export type ProjectPortalState = {
   repositorySyncSnapshots: Record<string, RepositorySyncSnapshot>;
   issueSyncCollections: Record<string, IssueSnapshotCollection>;
   candidateTaskCollections: Record<string, CandidateTaskCollection>;
+  candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

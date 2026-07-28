@@ -5,6 +5,7 @@ import {
   createEmptyCompanyDashboardSnapshot,
   INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
 } from "./dashboard/CompanyDashboardTypes";
+import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import {
@@ -759,6 +760,130 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")?.text).toBe("[CANDIDATE TOP] High/Bug #12 Fix crash on launch (Open)");
   });
 
+  it("renders assignment recommendation rows separately below candidate task rows", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        taskCount: 0,
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        sourceIssueSyncedAt: "2026-01-02T00:00:00.000Z",
+        tasks: [],
+      },
+    };
+    state.candidateAssignmentCollections = {
+      "daily-proof": createCandidateAssignmentCollection("Recommended", "Strong"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const candidateRow = findRenderedRow(renderedText, "[CANDIDATE TASKS]");
+    const assignmentRow = findRenderedRow(renderedText, "[ASSIGNMENT RECOMMENDATIONS]");
+
+    expect(assignmentRow?.text).toBe(
+      "[ASSIGNMENT RECOMMENDATIONS] Succeeded - 1 assignment recommendation; Recom...",
+    );
+    expect(assignmentRow?.text).not.toMatch(/Assigned and working|In progress|Started|Executing/i);
+    assertRowClears(candidateRow, assignmentRow);
+    [candidateRow, assignmentRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
+  });
+
+  it("drops assignment rows before candidate task rows when the lower panel is crowded", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.repositorySyncSnapshots = {
+      "daily-proof": {
+        provider: "github",
+        availability: "available",
+        syncStatus: "Succeeded",
+        defaultBranch: "main",
+        latestCommit: { sha: "a1b2c3d4e5f6", message: "Fix bug", committedAt: "2026-01-01T00:00:00.000Z" },
+      },
+    };
+    state.issueSyncCollections = {
+      "daily-proof": {
+        provider: "github",
+        syncStatus: "Succeeded",
+        openCount: 0,
+        closedCount: 0,
+        isTruncated: false,
+        issues: [],
+      },
+    };
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        taskCount: 1,
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        sourceIssueSyncedAt: "2026-01-02T00:00:00.000Z",
+        tasks: [createCandidateTask(12, "Fix crash on launch", "High", "Bug")],
+      },
+    };
+    state.candidateAssignmentCollections = {
+      "daily-proof": createCandidateAssignmentCollection("Recommended", "Strong"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[ISSUES]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[CANDIDATE TASKS]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[ASSIGNMENT RECOMMENDATIONS]")).toBeUndefined();
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -939,6 +1064,7 @@ function createPortalState(options: {
     repositorySyncSnapshots: {},
     issueSyncCollections: {},
     candidateTaskCollections: {},
+    candidateAssignmentCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1057,6 +1183,46 @@ function createCandidateTask(
     issueUpdatedAt: "2026-01-02T00:00:00.000Z",
     mappedAt: "2026-01-02T00:00:00.000Z",
     syncedAt: "2026-01-02T00:00:00.000Z",
+  };
+}
+
+function createCandidateAssignmentCollection(
+  assignmentStatus: "Recommended" | "NeedsReview" | "Unassigned" | "Unavailable",
+  matchTier: "Strong" | "Moderate" | "Weak" | "None",
+): CandidateAssignmentRecommendationCollection {
+  return {
+    projectId: "daily-proof",
+    sourceCandidateTaskStatus: "Succeeded" as const,
+    recommendationStatus: "Succeeded" as const,
+    recommendationCount: 1,
+    generatedAt: "2026-01-02T00:00:00.000Z",
+    rulesetVersion: "candidate-assignment-v1",
+    sourceCandidateTaskCount: 1,
+    recommendations: [{
+      id: "daily-proof:assignment:candidate-12:gpt-engineer:candidate-assignment-v1",
+      candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+      candidateTaskTitle: "Fix crash on launch",
+      projectId: "daily-proof",
+      recommendedEmployeeId: assignmentStatus === "Recommended" || assignmentStatus === "NeedsReview" ? "gpt-engineer" : undefined,
+      recommendedEmployeeName: assignmentStatus === "Recommended" || assignmentStatus === "NeedsReview" ? "GPT Engineer" : undefined,
+      employeeRole: assignmentStatus === "Recommended" || assignmentStatus === "NeedsReview" ? "Engineer" : undefined,
+      assignmentStatus,
+      matchTier,
+      matchedCapabilities: matchTier === "None" ? [] : ["BugFixing" as const],
+      unmatchedRequirements: [],
+      warnings: [],
+      taskType: "Bug" as const,
+      proposedPriority: "High" as const,
+      reasonCodes: ["CAPABILITY_MATCH" as const],
+      generatedAt: "2026-01-02T00:00:00.000Z",
+      rulesetVersion: "candidate-assignment-v1",
+      provenance: {
+        candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+        originatingIssueId: "ai-verse/daily-proof#12",
+        issueNumber: 12,
+      },
+      alternatives: [],
+    }],
   };
 }
 
