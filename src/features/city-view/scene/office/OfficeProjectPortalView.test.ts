@@ -608,6 +608,69 @@ describe("OfficeProjectPortalView", () => {
     );
   });
 
+  it("renders AIverse Candidate Task rows separately from raw GitHub Issue rows", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        taskCount: 1,
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        sourceIssueSyncedAt: "2026-01-02T00:00:00.000Z",
+        tasks: [{
+          id: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+          originatingIssueId: "ai-verse/daily-proof#12",
+          issueNumber: 12,
+          projectId: "daily-proof",
+          title: "Fix crash on launch",
+          summary: "Fix crash on launch",
+          labels: ["bug"],
+          assignees: [],
+          state: "Open",
+          estimatedPriority: "High",
+          estimatedTaskType: "Bug",
+          sourceProvider: "github",
+          issueCreatedAt: "2026-01-01T00:00:00.000Z",
+          issueUpdatedAt: "2026-01-02T00:00:00.000Z",
+          mappedAt: "2026-01-02T00:00:00.000Z",
+          syncedAt: "2026-01-02T00:00:00.000Z",
+        }],
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[ISSUES]")?.text).toBe("[ISSUES] Succeeded · 0 open, 0 closed");
+    expect(findRenderedRow(renderedText, "[CANDIDATE TASKS]")?.text).toBe("[CANDIDATE TASKS] Succeeded - 1 candidate task");
+    expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")?.text).toBe("[CANDIDATE TOP] High/Bug #12 Fix crash on launch (Open)");
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -787,6 +850,7 @@ function createPortalState(options: {
     repositorySummaries: {},
     repositorySyncSnapshots: {},
     issueSyncCollections: {},
+    candidateTaskCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

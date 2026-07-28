@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { PhaserScene } from "../shared/phaserTypes";
+import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 
@@ -33,6 +34,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     await firstCall;
 
     expect(internals.state.issueSyncCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
   });
 
   it("keeps a newer Failed result even when an older request resolves Succeeded afterward", async () => {
@@ -63,6 +65,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     await firstCall;
 
     expect(internals.state.issueSyncCollections["daily-proof"]?.syncStatus).toBe("Failed");
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.syncStatus).toBe("Failed");
   });
 
   it("does not apply an in-flight issue sync result after the player navigates away from the project dashboard", async () => {
@@ -121,7 +124,9 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     await syncCallB;
 
     expect(internals.state.issueSyncCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
     expect(internals.state.issueSyncCollections["portfolio"]?.syncStatus).toBe("Failed");
+    expect(internals.state.candidateTaskCollections["portfolio"]?.syncStatus).toBe("Failed");
   });
 
   it("resolves the repository summary refresh, repository sync, and issue sync together from openProjectDashboard, without one invalidating another", async () => {
@@ -140,37 +145,34 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       expect(internals.state.repositorySummaries["daily-proof"]?.connectionStatus).toBe("connected");
       expect(internals.state.repositorySyncSnapshots["daily-proof"]?.syncStatus).toBe("Succeeded");
       expect(internals.state.issueSyncCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
+      expect(internals.state.candidateTaskCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it("does not create any task from an issue sync", async () => {
+  it("maps candidate tasks from issue sync without creating executable project tasks", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     setDailyProofIdentity(internals);
+    let issueSyncReadCount = 0;
     internals.issueSyncService = {
-      readIssueSnapshots: async () => ({
-        provider: "github",
-        syncStatus: "Succeeded",
-        issues: [
-          {
-            id: "ai-verse/daily-proof#1",
-            number: 1,
-            title: "An issue that must not become a task",
-            state: "Open",
-            assignees: [],
-            labels: [],
-            provider: "github",
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: "2026-01-01T00:00:00.000Z",
-            syncedAt: "2026-01-01T00:00:00.000Z",
-          },
-        ],
-        openCount: 1,
-        closedCount: 0,
-        isTruncated: false,
-      }),
+      readIssueSnapshots: async () => {
+        issueSyncReadCount += 1;
+        return {
+          provider: "github",
+          owner: "ai-verse",
+          name: "daily-proof",
+          syncStatus: "Succeeded",
+          issues: [
+            createIssue("ai-verse/daily-proof#1", 1, "An issue that must not become a task", ["bug"]),
+          ],
+          openCount: 1,
+          closedCount: 0,
+          isTruncated: false,
+          lastSuccessfulSyncAt: "2026-01-01T00:00:00.000Z",
+        };
+      },
     };
     const before = structuredClone(internals.state.taskCollections);
 
@@ -182,7 +184,44 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
 
     expect(internals.state.issueSyncCollections["daily-proof"]?.syncStatus).toBe("Succeeded");
     expect(internals.state.issueSyncCollections["daily-proof"]?.issues).toHaveLength(1);
+    expect(issueSyncReadCount).toBe(1);
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.tasks).toHaveLength(1);
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.tasks[0]).toMatchObject({
+      originatingIssueId: "ai-verse/daily-proof#1",
+      issueNumber: 1,
+      estimatedPriority: "High",
+      estimatedTaskType: "Bug",
+    });
     expect(internals.state.taskCollections).toEqual(before);
+  });
+
+  it("does not create duplicate candidate tasks for duplicate issue snapshots", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => ({
+        provider: "github",
+        syncStatus: "Succeeded",
+        issues: [
+          createIssue("ai-verse/daily-proof#9", 9, "First copy", ["enhancement"]),
+          createIssue("ai-verse/daily-proof#9", 9, "Duplicate copy", ["bug"]),
+        ],
+        openCount: 2,
+        closedCount: 0,
+        isTruncated: false,
+        lastSuccessfulSyncAt: "2026-01-01T00:00:00.000Z",
+      }),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.taskCount).toBe(1);
+    expect(internals.state.candidateTaskCollections["daily-proof"]?.tasks[0]?.title).toBe("First copy");
   });
 
   it("reaches Portfolio's project dashboard from the list and reports an honest Unavailable issue sync, never a fabricated Succeeded, using the real wired providers", async () => {
@@ -200,6 +239,8 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
 
       expect(internals.state.selectedProjectDashboardProjectId).toBe("portfolio");
       expect(internals.state.issueSyncCollections["portfolio"]?.syncStatus).toBe("Unavailable");
+      expect(internals.state.candidateTaskCollections["portfolio"]?.syncStatus).toBe("Unavailable");
+      expect(internals.state.candidateTaskCollections["portfolio"]?.tasks).toEqual([]);
       expect(internals.state.issueSyncCollections["portfolio"]?.errorSummary).toBeTruthy();
       expect(internals.state.issueSyncCollections["portfolio"]?.issues).toEqual([]);
       expect(fetchStub).not.toHaveBeenCalled();
@@ -217,6 +258,21 @@ function failedCollection(errorSummary: string): IssueSnapshotCollection {
   return { provider: "github", syncStatus: "Failed", issues: [], openCount: 0, closedCount: 0, isTruncated: false, errorSummary };
 }
 
+function createIssue(id: string, number: number, title: string, labels: string[] = []) {
+  return {
+    id,
+    number,
+    title,
+    state: "Open" as const,
+    assignees: [],
+    labels,
+    provider: "github",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    syncedAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
 type ProjectPortalProjectLike = {
   id: string;
   repositoryIdentity?: unknown;
@@ -230,6 +286,7 @@ type ControllerInternals = {
     repositorySummaries: Record<string, { connectionStatus: string }>;
     repositorySyncSnapshots: Record<string, { syncStatus: string }>;
     issueSyncCollections: Record<string, IssueSnapshotCollection>;
+    candidateTaskCollections: Record<string, CandidateTaskCollection>;
     taskCollections: Record<string, unknown>;
   };
   issueSyncService: {
