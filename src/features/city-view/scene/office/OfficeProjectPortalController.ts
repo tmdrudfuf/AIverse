@@ -47,6 +47,10 @@ import type {
 } from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import type { CompanyProgressionSnapshot, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
+import { GitHubRepositorySyncProvider } from "./repository-sync/GitHubRepositorySyncProvider";
+import { LocalRepositorySyncProvider } from "./repository-sync/LocalRepositorySyncProvider";
+import { RepositorySyncService } from "./repository-sync/RepositorySyncService";
+import { createSyncingRepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type {
   EmployeeDailyScheduleSnapshot,
@@ -85,6 +89,7 @@ export class OfficeProjectPortalController {
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
   private readonly repositoryService: GitHubRepositoryService;
+  private readonly repositorySyncService: RepositorySyncService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -103,6 +108,7 @@ export class OfficeProjectPortalController {
   private readonly aiService: AIService;
   private readonly aiProjectManagerService: AIProjectManagerService;
   private repositoryRequestVersion = 0;
+  private repositorySyncRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
   private employeeNpcBootstrapRequestVersion = 0;
@@ -118,6 +124,10 @@ export class OfficeProjectPortalController {
         new GitHubPublicRepositoryProvider(createRepositoryReferenceResolver(() => this.state.repositoryMappings)),
       ),
     );
+    this.repositorySyncService = new RepositorySyncService({
+      github: new GitHubRepositorySyncProvider(this.repositoryService),
+      local: new LocalRepositorySyncProvider(),
+    });
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -591,13 +601,20 @@ export class OfficeProjectPortalController {
   }
 
   private updateProjectDashboardInput(input: OfficeProjectPortalInput) {
-    if (!input.escapePressed) return;
+    if (input.escapePressed) {
+      this.state.viewMode = "list";
+      this.state.selectedProjectDashboardProjectId = undefined;
+      this.state.projectDashboardSnapshot = undefined;
+      this.repositorySyncRequestVersion += 1;
+      this.refreshCompanyDashboardSnapshot();
+      this.view.render(this.state);
+      return;
+    }
 
-    this.state.viewMode = "list";
-    this.state.selectedProjectDashboardProjectId = undefined;
-    this.state.projectDashboardSnapshot = undefined;
-    this.refreshCompanyDashboardSnapshot();
-    this.view.render(this.state);
+    if (input.actionPressed || input.enterPressed) {
+      const projectId = this.state.selectedProjectDashboardProjectId;
+      if (projectId) void this.syncRepositorySnapshot(projectId);
+    }
   }
 
   private updateDetailInput(input: OfficeProjectPortalInput) {
@@ -780,6 +797,7 @@ export class OfficeProjectPortalController {
     this.state.viewMode = "project-dashboard";
     this.view.render(this.state);
     void this.refreshProjectDashboardRepositorySummary(projectId);
+    void this.syncRepositorySnapshot(projectId);
 
     if (this.state.taskCollections[projectId]) return;
 
@@ -833,6 +851,25 @@ export class OfficeProjectPortalController {
 
     this.state.repositorySummaries[projectId] = summary;
     this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
+    this.view.render(this.state);
+  }
+
+  private async syncRepositorySnapshot(projectId: string) {
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const identity = project?.repositoryIdentity;
+    if (!identity) return;
+
+    const requestVersion = this.repositorySyncRequestVersion + 1;
+    this.repositorySyncRequestVersion = requestVersion;
+
+    const previous = this.state.repositorySyncSnapshots[projectId];
+    this.state.repositorySyncSnapshots[projectId] = createSyncingRepositorySyncSnapshot(identity, previous);
+    this.view.render(this.state);
+
+    const snapshot = await this.repositorySyncService.readRepositorySnapshot(identity, { projectId }, previous);
+    if (!this.shouldApplyRepositorySyncSnapshot(projectId, requestVersion)) return;
+
+    this.state.repositorySyncSnapshots[projectId] = snapshot;
     this.view.render(this.state);
   }
 
@@ -929,6 +966,15 @@ export class OfficeProjectPortalController {
       this.state.viewMode === "project-dashboard" &&
       this.state.selectedProjectDashboardProjectId === projectId &&
       this.repositoryRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplyRepositorySyncSnapshot(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "project-dashboard" &&
+      this.state.selectedProjectDashboardProjectId === projectId &&
+      this.repositorySyncRequestVersion === requestVersion
     );
   }
 

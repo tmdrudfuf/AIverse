@@ -8,6 +8,7 @@ import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryT
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
 import type { ProjectRegistryEntry, ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
+import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
@@ -99,6 +100,7 @@ export type ProjectPortalState = {
   workspaces: Record<string, ProjectWorkspace>;
   repositoryMappings: AIverseProjectRepositoryMapping[];
   repositorySummaries: Record<string, GitHubRepositorySummary>;
+  repositorySyncSnapshots: Record<string, RepositorySyncSnapshot>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
