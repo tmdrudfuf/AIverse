@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PhaserScene } from "../shared/phaserTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
+import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -204,6 +205,11 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       assignmentStatus: "Recommended",
       taskType: "Bug",
     });
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews[0]).toMatchObject({
+      promotionStatus: "PendingReview",
+      candidateTaskId: internals.state.candidateTaskCollections["daily-proof"]?.tasks[0]?.id,
+      recommendedEmployeeId: "gpt-engineer",
+    });
     expect(internals.state.employees).toEqual(employeesBefore);
     expect(internals.state.workSessions).toEqual(workSessionsBefore);
     expect(internals.state.taskCollections).toEqual(before);
@@ -237,6 +243,8 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     expect(internals.state.candidateTaskCollections["daily-proof"]?.syncStatus).toBe("Failed");
     expect(internals.state.candidateAssignmentCollections["daily-proof"]?.recommendationStatus).toBe("Failed");
     expect(internals.state.candidateAssignmentCollections["daily-proof"]?.recommendations).toEqual([]);
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviewStatus).toBe("Failed");
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews).toEqual([]);
   });
 
   it("reports no employee pool without mutating candidate tasks or creating work", async () => {
@@ -259,8 +267,80 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       assignmentStatus: "Unavailable",
       unavailableReason: "No employees are available for assignment recommendations.",
     });
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews[0]).toMatchObject({
+      promotionStatus: "Unavailable",
+    });
     expect(internals.state.taskCollections).toEqual({});
     expect(internals.state.workSessions).toEqual(workSessionsBefore);
+  });
+
+  it("approval records a local promotion decision without creating active work", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    let issueSyncReadCount = 0;
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => {
+        issueSyncReadCount += 1;
+        return succeededIssueCollectionWithBug();
+      },
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+    const tasksBefore = structuredClone(internals.state.taskCollections);
+    const employeesBefore = structuredClone(internals.state.employees);
+    const workSessionsBefore = structuredClone(internals.state.workSessions);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    const decision = Object.values(internals.state.candidatePromotionDecisionRecords)[0];
+    expect(decision).toMatchObject({
+      promotionStatus: "Approved",
+      decisionSource: "Human",
+      activeTaskCreated: false,
+      executionStarted: false,
+    });
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews[0]?.promotionStatus).toBe("Approved");
+    expect(internals.state.taskCollections).toEqual(tasksBefore);
+    expect(internals.state.employees).toEqual(employeesBefore);
+    expect(internals.state.workSessions).toEqual(workSessionsBefore);
+    expect(issueSyncReadCount).toBe(1);
+  });
+
+  it("does not approve ineligible promotion reviews", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    let issueSyncReadCount = 0;
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => {
+        issueSyncReadCount += 1;
+        return {
+          ...succeededIssueCollectionWithBug(),
+          issues: [createIssue("ai-verse/daily-proof#1", 1, "Closed bug", ["bug"], "Closed")],
+          openCount: 0,
+          closedCount: 1,
+        };
+      },
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+    controller.updateInput(createInput({ enterPressed: true }));
+    await flushPromises();
+
+    expect(Object.values(internals.state.candidatePromotionDecisionRecords)).toEqual([]);
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews[0]?.eligibility.isApprovable).toBe(false);
+    expect(issueSyncReadCount).toBe(2);
   });
 
   it("does not create duplicate candidate tasks for duplicate issue snapshots", async () => {
@@ -340,12 +420,12 @@ function failedCollection(errorSummary: string): IssueSnapshotCollection {
   return { provider: "github", syncStatus: "Failed", issues: [], openCount: 0, closedCount: 0, isTruncated: false, errorSummary };
 }
 
-function createIssue(id: string, number: number, title: string, labels: string[] = []) {
+function createIssue(id: string, number: number, title: string, labels: string[] = [], state: "Open" | "Closed" = "Open") {
   return {
     id,
     number,
     title,
-    state: "Open" as const,
+    state,
     assignees: [],
     labels,
     provider: "github",
@@ -370,6 +450,8 @@ type ControllerInternals = {
     issueSyncCollections: Record<string, IssueSnapshotCollection>;
     candidateTaskCollections: Record<string, CandidateTaskCollection>;
     candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
+    candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
+    candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
     taskCollections: Record<string, unknown>;
     employees: Employee[];
     workSessions: Record<string, unknown[]>;
