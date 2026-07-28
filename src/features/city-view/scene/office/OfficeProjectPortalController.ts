@@ -12,6 +12,7 @@ import {
   createCompanyDashboardProviderRegistry,
   getEnabledCompanyDashboardProvider,
 } from "./dashboard/CompanyDashboardProviderRegistry";
+import { CandidateAssignmentService } from "./candidate-assignments/CandidateAssignmentService";
 import { CandidateTaskService } from "./candidate-tasks/CandidateTaskService";
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
@@ -97,6 +98,7 @@ export class OfficeProjectPortalController {
   private readonly repositorySyncService: RepositorySyncService;
   private readonly issueSyncService: IssueSyncService;
   private candidateTaskService: CandidateTaskService;
+  private candidateAssignmentService: CandidateAssignmentService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -141,6 +143,7 @@ export class OfficeProjectPortalController {
       local: new LocalIssueSyncProvider(),
     });
     this.candidateTaskService = new CandidateTaskService();
+    this.candidateAssignmentService = new CandidateAssignmentService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -243,6 +246,7 @@ export class OfficeProjectPortalController {
     if (this.employeeNpcBootstrapRequestVersion !== requestVersion) return;
 
     this.state.employees = employees;
+    this.refreshCandidateAssignmentsForSelectedProject();
     this.refreshEmployeeSimulationSnapshots();
   }
 
@@ -920,6 +924,25 @@ export class OfficeProjectPortalController {
     this.candidateTaskService ??= new CandidateTaskService();
     this.state.candidateTaskCollections ??= {};
     this.state.candidateTaskCollections[projectId] = this.candidateTaskService.mapIssueCollection(projectId, collection);
+    this.refreshCandidateAssignmentsForProject(projectId);
+  }
+
+  private refreshCandidateAssignmentsForSelectedProject() {
+    const projectId = this.state.selectedProjectDashboardProjectId;
+    if (!projectId) return;
+    this.refreshCandidateAssignmentsForProject(projectId);
+  }
+
+  private refreshCandidateAssignmentsForProject(projectId: string) {
+    const collection = this.state.candidateTaskCollections[projectId];
+    if (!collection) return;
+
+    this.candidateAssignmentService ??= new CandidateAssignmentService();
+    this.state.candidateAssignmentCollections ??= {};
+    this.state.candidateAssignmentCollections[projectId] = this.candidateAssignmentService.recommendAssignments(
+      collection,
+      this.state.employees,
+    );
   }
 
   private async openTaskList(projectId: string) {
