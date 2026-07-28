@@ -107,6 +107,7 @@ export function createProjectPortalState(): ProjectPortalState {
     repositoryMappings: createRepositoryMappings(registryEntries),
     repositorySummaries: {},
     repositorySyncSnapshots: {},
+    issueSyncCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

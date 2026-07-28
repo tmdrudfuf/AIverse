@@ -2,6 +2,7 @@ import type { PhaserScene } from "../shared/phaserTypes";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
+import { createIssueSyncDisplayRows, type IssueSyncDisplayRows } from "./issue-sync/IssueSyncView";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
@@ -18,8 +19,9 @@ const DASHBOARD_SOURCE_HEIGHT = 14;
 const DASHBOARD_SOURCE_TO_PROJECTS_GAP = 12;
 const DASHBOARD_MIN_PROJECTS_PANEL_Y = 340;
 const DASHBOARD_PROJECTS_HEADING_OFFSET = 12;
-const PROJECT_DASHBOARD_LOWER_PANEL_Y = 282;
-const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 294;
+const PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT = 136;
+const PROJECT_DASHBOARD_LOWER_PANEL_Y = 270;
+const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 282;
 const PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT = 14;
 const PROJECT_DASHBOARD_LOWER_ROW_GAP = 4;
 const PROJECT_DASHBOARD_LOWER_PANEL_PADDING = 10;
@@ -217,8 +219,8 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 34, this.panelY + 94, `[PROGRESS] ${rows.progressText.replace("Progress: ", "")}`, projectBodyStyle());
     this.addText(this.panelX + 364, this.panelY + 70, wrapText(`[HEALTH] ${rows.healthText}`, 34), projectBodyStyle());
 
-    this.addTerminalPanel(leftPanelX - 6, sectionPanelY, 292, 148);
-    this.addTerminalPanel(rightPanelX - 6, sectionPanelY, 292, 148);
+    this.addTerminalPanel(leftPanelX - 6, sectionPanelY, 292, PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT);
+    this.addTerminalPanel(rightPanelX - 6, sectionPanelY, 292, PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT);
     this.addText(leftPanelX, this.panelY + 140, rows.activeWorkHeading, projectHeadingStyle());
     rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
@@ -237,12 +239,17 @@ export class OfficeProjectPortalView {
       dashboardProject?.repositoryIdentity,
       dashboardProjectId ? state.repositorySyncSnapshots[dashboardProjectId] : undefined,
     );
-
-    const lowerRows = prepareProjectDashboardLowerRows(createProjectDashboardLowerRows(rows, repositorySyncRows));
-    const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(
-      lowerRows,
-      this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y,
+    const issueSyncRows = createIssueSyncDisplayRows(
+      dashboardProject?.repositoryIdentity,
+      dashboardProjectId ? state.issueSyncCollections[dashboardProjectId] : undefined,
     );
+
+    const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
+    const preparedLowerRows = prepareProjectDashboardLowerRows(
+      createProjectDashboardLowerRows(rows, repositorySyncRows, issueSyncRows),
+    );
+    const lowerRows = fitProjectDashboardLowerRows(preparedLowerRows, maxLowerPanelHeight);
+    const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(lowerRows, maxLowerPanelHeight);
     this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, lowerPanelHeight);
     this.renderProjectDashboardLowerRows(lowerRows);
   }
@@ -569,6 +576,7 @@ type ProjectDashboardRenderedLowerRow = {
 function createProjectDashboardLowerRows(
   rows: ReturnType<typeof createProjectDashboardPanelRows>,
   repositorySyncRows: string[] = [],
+  issueSyncRows?: IssueSyncDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
@@ -596,6 +604,16 @@ function createProjectDashboardLowerRows(
     lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1 });
   }
 
+  if (issueSyncRows) {
+    lowerRows.push({ text: `[ISSUES] ${issueSyncRows.statusText}`, maxLines: 1 });
+    if (issueSyncRows.issueListText) {
+      lowerRows.push({ text: `[ISSUE LIST] ${issueSyncRows.issueListText}`, maxLines: 1 });
+    }
+    if (issueSyncRows.issueDetailText) {
+      lowerRows.push({ text: `[ISSUE DETAIL] ${issueSyncRows.issueDetailText}`, maxLines: 1 });
+    }
+  }
+
   return lowerRows;
 }
 
@@ -606,17 +624,36 @@ function prepareProjectDashboardLowerRows(rows: ProjectDashboardLowerRow[]): Pro
 }
 
 function calculateProjectDashboardLowerPanelHeight(rows: ProjectDashboardRenderedLowerRow[], maxHeight: number) {
+  return Math.min(calculateProjectDashboardLowerRowsDesiredHeight(rows), maxHeight);
+}
+
+function calculateProjectDashboardLowerRowsDesiredHeight(rows: ProjectDashboardRenderedLowerRow[]) {
   const contentHeight = rows.reduce((height, row, index) => {
     const gap = index === rows.length - 1 ? 0 : PROJECT_DASHBOARD_LOWER_ROW_GAP;
     return height + countTextLines(row.text) * PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT + gap;
   }, 0);
 
-  const desiredHeight = contentHeight
+  return contentHeight
     + PROJECT_DASHBOARD_LOWER_ROW_START_Y
     - PROJECT_DASHBOARD_LOWER_PANEL_Y
     + PROJECT_DASHBOARD_LOWER_PANEL_PADDING;
+}
 
-  return Math.min(desiredHeight, maxHeight);
+/**
+ * Drops the lowest-priority rows from the end (repository-sync and issue-sync
+ * rows are always appended last, in ascending priority order) until the
+ * remaining rows fit within maxHeight -- so newly-stacked rows can never
+ * silently render past the drawn panel's bottom edge.
+ */
+function fitProjectDashboardLowerRows(
+  rows: ProjectDashboardRenderedLowerRow[],
+  maxHeight: number,
+): ProjectDashboardRenderedLowerRow[] {
+  let fitted = rows;
+  while (fitted.length > 0 && calculateProjectDashboardLowerRowsDesiredHeight(fitted) > maxHeight) {
+    fitted = fitted.slice(0, -1);
+  }
+  return fitted;
 }
 
 function wrapText(text: string, maxLength: number) {
