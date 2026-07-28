@@ -25,6 +25,28 @@ describe("ProjectRegistryService", () => {
     });
   });
 
+  it("returns Daily Proof's provider-neutral repository identity", () => {
+    const registry = new ProjectRegistryService();
+
+    const dailyProof = registry.getProject("daily-proof");
+
+    expect(dailyProof?.repositoryIdentity).toEqual({
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      url: "https://github.com/ai-verse/daily-proof",
+      defaultBranch: "main",
+      connectionState: "Configured",
+    });
+  });
+
+  it("returns a sparse, honest repository identity for projects with no known repository", () => {
+    const registry = new ProjectRegistryService();
+
+    expect(registry.getProject("portfolio")?.repositoryIdentity).toEqual({ provider: "local", connectionState: "Unknown" });
+    expect(registry.getProject("ai-lab")?.repositoryIdentity).toEqual({ provider: "local", connectionState: "Unknown" });
+  });
+
   it("returns undefined for an unknown project id", () => {
     const registry = new ProjectRegistryService();
 
@@ -58,10 +80,14 @@ describe("ProjectRegistryService", () => {
     entry.displayName = "Mutated";
     entry.owner.companyName = "Mutated Inc.";
     entry.localRepository.connected = false;
+    entry.repositoryIdentity.connectionState = "Available";
+    entry.repositoryIdentity.owner = "mutated-owner";
 
     expect(registry.getProject("daily-proof")?.displayName).toBe("Daily Proof");
     expect(registry.getProject("daily-proof")?.owner.companyName).toBe("Daily Proof Inc.");
     expect(registry.getProject("daily-proof")?.localRepository.connected).toBe(true);
+    expect(registry.getProject("daily-proof")?.repositoryIdentity.connectionState).toBe("Configured");
+    expect(registry.getProject("daily-proof")?.repositoryIdentity.owner).toBe("ai-verse");
   });
 
   it("seeds from a custom set of entries when provided", () => {
@@ -80,6 +106,7 @@ function createEntry(overrides: Partial<ProjectRegistryEntry> & { id: string; di
     projectType: overrides.projectType ?? "Restaurant",
     localRepository: overrides.localRepository ?? { connected: false, label: "Not connected" },
     remoteRepository: overrides.remoteRepository,
+    repositoryIdentity: overrides.repositoryIdentity ?? { provider: "local", connectionState: "Unknown" },
     owner: overrides.owner ?? { companyName: "AIverse Internal" },
     createdAt: overrides.createdAt ?? "2026-07-27T00:00:00.000Z",
     lastActivityAt: overrides.lastActivityAt ?? "2026-07-27T00:00:00.000Z",

@@ -4,6 +4,7 @@ import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
+import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
@@ -268,6 +269,12 @@ export class OfficeProjectPortalView {
     }
     if (project.ownerCompany) {
       this.addText(this.panelX + 390, projectInfoY, `Company: ${project.ownerCompany}`, mutedStyle());
+      projectInfoY += 26;
+    }
+    if (project.repositoryIdentity) {
+      this.addText(this.panelX + 390, projectInfoY, getRepositoryIdentityRepoText(project.repositoryIdentity), mutedStyle());
+      projectInfoY += 26;
+      this.addText(this.panelX + 390, projectInfoY, getRepositoryIdentityStatusText(project.repositoryIdentity), mutedStyle());
     }
 
     this.addText(this.panelX + 28, this.panelY + 326, "Next Action", headingStyle());
@@ -485,6 +492,23 @@ function getNextActionText(project: ProjectPortalProject) {
 function getLastActionText(state: ProjectPortalState, project: ProjectPortalProject) {
   if (state.lastPlaceholderAction?.projectId !== project.id) return undefined;
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;
+}
+
+function getRepositoryIdentityProviderLabel(provider: ProjectRegistryRepositoryIdentity["provider"]) {
+  if (provider === "github") return "GitHub";
+  if (provider === "local") return "Local";
+  return provider;
+}
+
+function getRepositoryIdentityRepoText(identity: ProjectRegistryRepositoryIdentity) {
+  const providerLabel = getRepositoryIdentityProviderLabel(identity.provider);
+  const nameLabel = identity.owner && identity.name ? `${identity.owner}/${identity.name}` : "Not yet known";
+  return `Repo: ${nameLabel} (${providerLabel})`;
+}
+
+function getRepositoryIdentityStatusText(identity: ProjectRegistryRepositoryIdentity) {
+  if (!identity.defaultBranch) return `Status: ${identity.connectionState}`;
+  return `Default Branch: ${identity.defaultBranch}  ·  Status: ${identity.connectionState}`;
 }
 
 

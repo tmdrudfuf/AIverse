@@ -31,6 +31,7 @@ function cloneEntry(entry: ProjectRegistryEntry): ProjectRegistryEntry {
     ...entry,
     localRepository: { ...entry.localRepository },
     remoteRepository: entry.remoteRepository ? { ...entry.remoteRepository } : undefined,
+    repositoryIdentity: { ...entry.repositoryIdentity },
     owner: { ...entry.owner },
   };
 }

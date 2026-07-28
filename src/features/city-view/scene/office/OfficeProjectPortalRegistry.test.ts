@@ -20,6 +20,14 @@ describe("createProjectPortalState", () => {
       enabled: true,
       ownerCompany: "Daily Proof Inc.",
       localRepositoryLabel: "Connected (local)",
+      repositoryIdentity: {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof",
+        url: "https://github.com/ai-verse/daily-proof",
+        defaultBranch: "main",
+        connectionState: "Configured",
+      },
     });
   });
 
@@ -28,8 +36,18 @@ describe("createProjectPortalState", () => {
     const portfolio = state.projects.find((project) => project.id === "portfolio");
     const aiLab = state.projects.find((project) => project.id === "ai-lab");
 
-    expect(portfolio).toMatchObject({ enabled: false, ownerCompany: "AIverse Internal", localRepositoryLabel: "Not connected" });
-    expect(aiLab).toMatchObject({ enabled: false, ownerCompany: "AIverse Internal", localRepositoryLabel: "Not connected" });
+    expect(portfolio).toMatchObject({
+      enabled: false,
+      ownerCompany: "AIverse Internal",
+      localRepositoryLabel: "Not connected",
+      repositoryIdentity: { provider: "local", connectionState: "Unknown" },
+    });
+    expect(aiLab).toMatchObject({
+      enabled: false,
+      ownerCompany: "AIverse Internal",
+      localRepositoryLabel: "Not connected",
+      repositoryIdentity: { provider: "local", connectionState: "Unknown" },
+    });
   });
 
   it("produces exactly one repository mapping, for daily-proof, matching today's known GitHub identity", () => {
@@ -57,8 +75,10 @@ describe("createProjectPortalState", () => {
 
     first.projects[0].name = "Mutated";
     first.repositoryMappings[0].repository.owner = "mutated";
+    if (first.projects[0].repositoryIdentity) first.projects[0].repositoryIdentity.connectionState = "Available";
 
     expect(second.projects[0].name).toBe("Daily Proof");
     expect(second.repositoryMappings[0].repository.owner).toBe("ai-verse");
+    expect(second.projects[0].repositoryIdentity?.connectionState).toBe("Configured");
   });
 });
