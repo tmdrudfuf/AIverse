@@ -148,7 +148,7 @@ function getCurrentPromotionStatus(
   eligibilityStatus: CandidatePromotionStatus,
   decision: CandidatePromotionDecision | undefined,
 ) {
-  if (!decision) return eligibilityStatus === "PendingReview" ? "PendingReview" : eligibilityStatus;
+  if (!decision) return eligibilityStatus;
   return decision.promotionStatus;
 }
 
@@ -177,12 +177,10 @@ export function getAvailableActions(
   currentStatus: CandidatePromotionStatus,
   isApprovable: boolean,
 ): CandidatePromotionStatus[] {
-  const actions: CandidatePromotionStatus[] = [];
-  if (isApprovable) actions.push("Approved");
-  if (currentStatus !== "Rejected") actions.push("Rejected");
-  if (currentStatus !== "Deferred") actions.push("Deferred");
-  if (currentStatus !== "PendingReview") actions.push("PendingReview");
-  return actions;
+  return (["Approved", "Rejected", "Deferred", "PendingReview"] satisfies CandidatePromotionStatus[])
+    .filter((targetStatus) =>
+      targetStatus !== currentStatus && isTransitionAllowed(currentStatus, targetStatus, isApprovable)
+    );
 }
 
 function getDecisionReasonCode(status: CandidatePromotionStatus): CandidatePromotionDecisionReasonCode {

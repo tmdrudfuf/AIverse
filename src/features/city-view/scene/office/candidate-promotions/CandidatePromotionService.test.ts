@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { assignment, assignments, collection, task } from "./CandidatePromotionEligibility.test";
-import { CandidatePromotionService } from "./CandidatePromotionService";
+import { CandidatePromotionService, isTransitionAllowed } from "./CandidatePromotionService";
 
 describe("CandidatePromotionService", () => {
   it("creates one promotion review per Candidate Task in collection order", () => {
@@ -82,6 +82,25 @@ describe("CandidatePromotionService", () => {
 
     expect(applied.accepted).toBe(false);
     expect(Object.keys(applied.decisions)).toEqual([]);
+  });
+
+  it("advertises only transition targets that can be applied", () => {
+    const svc = service();
+    const initial = svc.createReviewCollection(collection([task()]), assignments([assignment()]), {}, 0);
+    const rejected = svc.applyDecision(initial, {}, {
+      projectId: "daily-proof",
+      candidateTaskId: "candidate-1",
+      targetStatus: "Rejected",
+      decidedAt: "2026-07-28T01:00:00.000Z",
+    });
+    const refreshed = svc.createReviewCollection(collection([task()]), assignments([assignment()]), rejected.decisions, 0);
+    const review = refreshed.reviews[0]!;
+
+    expect(review.promotionStatus).toBe("Rejected");
+    expect(review.availableActions).toEqual(["Deferred", "PendingReview"]);
+    expect(review.availableActions.every((targetStatus) =>
+      isTransitionAllowed(review.promotionStatus, targetStatus, review.eligibility.isApprovable)
+    )).toBe(true);
   });
 
   it("preserves project isolation for identical Candidate Task IDs", () => {

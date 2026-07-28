@@ -14,7 +14,7 @@ import {
 } from "./dashboard/CompanyDashboardProviderRegistry";
 import { CandidateAssignmentService } from "./candidate-assignments/CandidateAssignmentService";
 import { CandidatePromotionService } from "./candidate-promotions/CandidatePromotionService";
-import type { CandidatePromotionStatus } from "./candidate-promotions/CandidatePromotionTypes";
+import type { CandidatePromotionReview, CandidatePromotionStatus } from "./candidate-promotions/CandidatePromotionTypes";
 import { CandidateTaskService } from "./candidate-tasks/CandidateTaskService";
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
@@ -643,24 +643,31 @@ export class OfficeProjectPortalController {
       }
     }
 
-    if (input.enterPressed && selectedPromotion) {
-      this.recordCandidatePromotionDecision(
+    if (input.enterPressed && canRecordPromotionDecision(selectedPromotion, "Approved")) {
+      const recorded = this.recordCandidatePromotionDecision(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
         "Approved",
       );
-      this.view.render(this.state);
-      return;
+      if (recorded) {
+        this.view.render(this.state);
+        return;
+      }
     }
 
     if (input.actionPressed && selectedPromotion) {
-      this.recordCandidatePromotionDecision(
-        selectedPromotion.projectId,
-        selectedPromotion.candidateTaskId,
-        getNextPromotionCycleStatus(selectedPromotion.promotionStatus),
-      );
-      this.view.render(this.state);
-      return;
+      const targetStatus = getNextPromotionCycleStatus(selectedPromotion);
+      if (targetStatus) {
+        const recorded = this.recordCandidatePromotionDecision(
+          selectedPromotion.projectId,
+          selectedPromotion.candidateTaskId,
+          targetStatus,
+        );
+        if (recorded) {
+          this.view.render(this.state);
+          return;
+        }
+      }
     }
 
     if (input.actionPressed || input.enterPressed) {
@@ -1922,11 +1929,29 @@ function getTaskStatusProgressPercent(status: TaskStatus) {
   return 0;
 }
 
-function getNextPromotionCycleStatus(status: CandidatePromotionStatus): CandidatePromotionStatus {
-  if (status === "Deferred") return "Rejected";
-  if (status === "Rejected") return "PendingReview";
-  if (status === "Approved") return "Deferred";
-  return "Deferred";
+function canRecordPromotionDecision(
+  review: CandidatePromotionReview | undefined,
+  targetStatus: CandidatePromotionStatus,
+): review is CandidatePromotionReview {
+  return Boolean(
+    review
+    && review.promotionStatus !== targetStatus
+    && review.availableActions.includes(targetStatus),
+  );
+}
+
+function getNextPromotionCycleStatus(
+  review: CandidatePromotionReview | undefined,
+): CandidatePromotionStatus | undefined {
+  if (!review) return undefined;
+  const targetStatus = review.promotionStatus === "Deferred"
+    ? "Rejected"
+    : review.promotionStatus === "Rejected"
+      ? "PendingReview"
+      : review.promotionStatus === "Approved"
+        ? "Deferred"
+        : "Deferred";
+  return canRecordPromotionDecision(review, targetStatus) ? targetStatus : undefined;
 }
 
 function isResolvedConversationPlayerPosition(

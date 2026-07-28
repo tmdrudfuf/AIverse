@@ -317,13 +317,17 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     const internals = getControllerInternals(controller);
     setDailyProofIdentity(internals);
     internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    let issueSyncReadCount = 0;
     internals.issueSyncService = {
-      readIssueSnapshots: async () => ({
-        ...succeededIssueCollectionWithBug(),
-        issues: [createIssue("ai-verse/daily-proof#1", 1, "Closed bug", ["bug"], "Closed")],
-        openCount: 0,
-        closedCount: 1,
-      }),
+      readIssueSnapshots: async () => {
+        issueSyncReadCount += 1;
+        return {
+          ...succeededIssueCollectionWithBug(),
+          issues: [createIssue("ai-verse/daily-proof#1", 1, "Closed bug", ["bug"], "Closed")],
+          openCount: 0,
+          closedCount: 1,
+        };
+      },
     };
 
     controller.open();
@@ -332,9 +336,11 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     internals.state.selectedProjectDashboardProjectId = "daily-proof";
     await internals.syncIssueSnapshots("daily-proof");
     controller.updateInput(createInput({ enterPressed: true }));
+    await flushPromises();
 
     expect(Object.values(internals.state.candidatePromotionDecisionRecords)).toEqual([]);
     expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews[0]?.eligibility.isApprovable).toBe(false);
+    expect(issueSyncReadCount).toBe(2);
   });
 
   it("does not create duplicate candidate tasks for duplicate issue snapshots", async () => {
