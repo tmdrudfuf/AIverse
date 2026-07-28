@@ -302,6 +302,87 @@ describe("OfficeProjectPortalView", () => {
       assertRowInsidePanel(row, lowerPanel);
     });
   });
+
+  it("renders a Succeeded [REPO-SYNC] row with branch and short commit sha for a verified GitHub read", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      connectionState: "Configured",
+    };
+    state.repositorySyncSnapshots = {
+      "daily-proof": {
+        provider: "github",
+        availability: "available",
+        defaultBranch: "main",
+        latestCommit: { sha: "a1b2c3d4e5f6", message: "Fix bug", committedAt: "2026-01-01T00:00:00.000Z" },
+        syncStatus: "Succeeded",
+        lastSuccessfulSyncAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const repoSyncRow = findRenderedRow(renderedText, "[REPO-SYNC]");
+
+    expect(repoSyncRow?.text).toBe("[REPO-SYNC] Succeeded · main · a1b2c3d");
+    assertRowInsidePanel(repoSyncRow, lowerPanel);
+  });
+
+  it("renders an Unavailable [REPO-SYNC] row for a project this runtime cannot verify, never a fabricated Succeeded row", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "local", connectionState: "Unknown" };
+    state.repositorySyncSnapshots = {
+      "daily-proof": {
+        provider: "local",
+        availability: "unavailable",
+        syncStatus: "Unavailable",
+        errorSummary: "Local repository reads need server-side support.",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const repoSyncRow = findRenderedRow(renderedText, "[REPO-SYNC]");
+
+    expect(repoSyncRow?.text).toBe("[REPO-SYNC] Unavailable: Local repository reads need server-side support.");
+    expect(repoSyncRow?.text).not.toContain("Succeeded");
+  });
+
+  it("renders no [REPO-SYNC] row when the selected project has no repository identity", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[REPO-SYNC]")).toBeUndefined();
+  });
 });
 
 type RenderedText = {
@@ -462,6 +543,7 @@ function createPortalState(options: {
     workspaces: {},
     repositoryMappings: [],
     repositorySummaries: {},
+    repositorySyncSnapshots: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

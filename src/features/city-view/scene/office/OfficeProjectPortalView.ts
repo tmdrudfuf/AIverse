@@ -5,6 +5,7 @@ import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
+import { createRepositorySyncDisplayRows } from "./repository-sync/RepositorySyncView";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 
 const OVERLAY_DEPTH = 3000;
@@ -230,7 +231,14 @@ export class OfficeProjectPortalView {
       this.addText(rightPanelX + 12, rowY, wrapText(`> ${row}`, 32), projectBodyStyle());
     });
 
-    const lowerRows = prepareProjectDashboardLowerRows(createProjectDashboardLowerRows(rows));
+    const dashboardProjectId = state.selectedProjectDashboardProjectId;
+    const dashboardProject = state.projects.find((item) => item.id === dashboardProjectId);
+    const repositorySyncRows = createRepositorySyncDisplayRows(
+      dashboardProject?.repositoryIdentity,
+      dashboardProjectId ? state.repositorySyncSnapshots[dashboardProjectId] : undefined,
+    );
+
+    const lowerRows = prepareProjectDashboardLowerRows(createProjectDashboardLowerRows(rows, repositorySyncRows));
     const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(
       lowerRows,
       this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y,
@@ -558,7 +566,10 @@ type ProjectDashboardRenderedLowerRow = {
   text: string;
 };
 
-function createProjectDashboardLowerRows(rows: ReturnType<typeof createProjectDashboardPanelRows>): ProjectDashboardLowerRow[] {
+function createProjectDashboardLowerRows(
+  rows: ReturnType<typeof createProjectDashboardPanelRows>,
+  repositorySyncRows: string[] = [],
+): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
     { text: `[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, maxLines: 1 },
@@ -579,6 +590,10 @@ function createProjectDashboardLowerRows(rows: ReturnType<typeof createProjectDa
       { text: `[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, maxLines: 1 },
       { text: `[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, maxLines: 1 },
     );
+  }
+
+  if (repositorySyncRows.length > 0) {
+    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1 });
   }
 
   return lowerRows;

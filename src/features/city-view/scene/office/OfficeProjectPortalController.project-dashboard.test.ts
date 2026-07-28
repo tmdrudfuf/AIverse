@@ -18,6 +18,7 @@ import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjec
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import { WorkstationOccupancyService } from "./workstations/WorkstationOccupancyService";
@@ -241,6 +242,9 @@ type ControllerInternals = {
   repositoryService: {
     getRepositorySummary: ReturnType<typeof vi.fn>;
   };
+  repositorySyncService: {
+    readRepositorySnapshot: ReturnType<typeof vi.fn>;
+  };
   employeeAIService: EmployeeAIService;
   employeeSimulationService: EmployeeSimulationService;
   employeeNpcMovementService: EmployeeNpcMovementService;
@@ -255,6 +259,7 @@ type ControllerInternals = {
   aiService: ReturnType<typeof createMockAIService>;
   aiProjectManagerService: AIProjectManagerService;
   repositoryRequestVersion: number;
+  repositorySyncRequestVersion: number;
   taskRequestVersion: number;
   employeeRequestVersion: number;
   employeeNpcBootstrapRequestVersion: number;
@@ -279,6 +284,9 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.repositoryService = {
     getRepositorySummary: vi.fn(async () => createRepositorySummary()),
   };
+  harness.repositorySyncService = {
+    readRepositorySnapshot: vi.fn(async () => createRepositorySyncSnapshot()),
+  };
   harness.employeeAIService = new EmployeeAIService();
   harness.employeeSimulationService = new EmployeeSimulationService();
   harness.employeeNpcMovementService = new EmployeeNpcMovementService();
@@ -293,6 +301,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.aiService = createMockAIService();
   harness.aiProjectManagerService = new AIProjectManagerService(harness.aiService);
   harness.repositoryRequestVersion = 0;
+  harness.repositorySyncRequestVersion = 0;
   harness.taskRequestVersion = 0;
   harness.employeeRequestVersion = 0;
   harness.employeeNpcBootstrapRequestVersion = 0;
@@ -301,6 +310,23 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.projectManagerRequestVersion = 0;
 
   return controller;
+}
+
+function createRepositorySyncSnapshot(): RepositorySyncSnapshot {
+  return {
+    provider: "github",
+    availability: "available",
+    owner: "ai-verse",
+    name: "daily-proof",
+    defaultBranch: "main",
+    latestCommit: {
+      sha: "abc1234",
+      message: "Prepare Daily Proof workspace mock data",
+      committedAt: "2026-06-26T18:00:00.000Z",
+    },
+    syncStatus: "Succeeded",
+    lastSuccessfulSyncAt: "2026-06-26T18:30:00.000Z",
+  };
 }
 
 function createRepositorySummary(): GitHubRepositorySummary {
