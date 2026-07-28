@@ -86,7 +86,7 @@ description: "Task list for Spec 062 — GitHub Issue Read Synchronization Found
 
 - [X] T022 [P] Update `.specify/feature.json` to point at `specs/062-github-issue-read-synchronization-foundation` and update the `<!-- SPECKIT START/END -->` pointer block in `AGENTS.md` to reference this Spec's `plan.md`.
 - [X] T023a Run `npx vitest run` (full suite) and `npx tsc --noEmit` as focused validation during implementation and after each review fix cycle.
-- [ ] T023b Run the full validation gate (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`, plus `git diff --check` against the merge base) exactly once, after Codex review reaches Approved with 0 open blocking findings on the exact commit intended as the final HEAD.
+- [X] T023b Run the full validation gate (`npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`, plus `git diff --check` against the merge base) exactly once, after Codex review reaches Approved with 0 open blocking findings on the exact commit intended as the final HEAD.
 
 ---
 
