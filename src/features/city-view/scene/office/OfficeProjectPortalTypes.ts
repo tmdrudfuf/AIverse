@@ -7,12 +7,13 @@ import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
+import type { ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
 export type ProjectPortalProjectStatus = "Active" | "Planned" | "Coming Soon";
 
-export type ProjectPortalProjectType = "Company" | "Portfolio" | "Lab";
+export type ProjectPortalProjectType = "Company" | "Portfolio" | "Lab" | (string & {});
 
 export type ProjectPortalViewMode =
   | "list"
@@ -48,6 +49,8 @@ export type ProjectPortalProject = {
   description: string;
   linkedServices: ProjectPortalServiceStatus[];
   nextAction: ProjectPortalNextAction;
+  ownerCompany?: string;
+  localRepositoryLabel?: string;
 };
 
 export type ProjectWorkspaceSectionId = "repository" | "firebase" | "analytics" | "tasks" | "ai-agents";
@@ -90,6 +93,7 @@ export type ProjectPortalState = {
   selectedWorkSessionId?: string;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
   projects: ProjectPortalProject[];
+  projectRegistryEntries: ProjectRegistryEntry[];
   services: ProjectPortalServiceStatus[];
   workspaces: Record<string, ProjectWorkspace>;
   repositoryMappings: AIverseProjectRepositoryMapping[];

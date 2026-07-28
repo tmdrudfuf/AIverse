@@ -1,11 +1,13 @@
 import type {
-  ProjectPortalProject,
   ProjectPortalServiceStatus,
   ProjectPortalState,
   ProjectWorkspace,
 } from "./OfficeProjectPortalTypes";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
+import { toProjectPortalProject, toRepositoryMapping } from "./project-registry/ProjectRegistryAdapters";
+import { ProjectRegistryService } from "./project-registry/ProjectRegistryService";
+import type { ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
 
 const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
   {
@@ -35,51 +37,6 @@ const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
     status: "Placeholder",
     enabled: false,
     placeholder: true,
-  },
-];
-
-const PROJECTS: ProjectPortalProject[] = [
-  {
-    id: "daily-proof",
-    name: "Daily Proof",
-    status: "Active",
-    type: "Company",
-    enabled: true,
-    description: "Daily Proof is the active company workspace for validating AIverse office workflows.",
-    linkedServices: createLinkedServices(),
-    nextAction: {
-      label: "Review project workspace",
-      enabled: true,
-      placeholder: true,
-    },
-  },
-  {
-    id: "portfolio",
-    name: "Portfolio",
-    status: "Planned",
-    type: "Portfolio",
-    enabled: false,
-    description: "Portfolio will become the public-facing project showcase.",
-    linkedServices: createLinkedServices(),
-    nextAction: {
-      label: "Coming soon",
-      enabled: false,
-      placeholder: true,
-    },
-  },
-  {
-    id: "ai-lab",
-    name: "AI Lab",
-    status: "Coming Soon",
-    type: "Lab",
-    enabled: false,
-    description: "AI Lab will house experimental agents and automation workflows.",
-    linkedServices: createLinkedServices(),
-    nextAction: {
-      label: "Coming soon",
-      enabled: false,
-      placeholder: true,
-    },
   },
 ];
 
@@ -127,42 +84,27 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
   },
 };
 
-const REPOSITORY_MAPPINGS: AIverseProjectRepositoryMapping[] = [
-  {
-    projectId: "daily-proof",
-    sourceId: "github:ai-verse/daily-proof",
-    repository: {
-      owner: "ai-verse",
-      name: "daily-proof",
-      url: "https://github.com/ai-verse/daily-proof",
-      visibility: "public",
-    },
-    enabled: true,
-  },
-];
-
 export function createProjectPortalState(): ProjectPortalState {
   const influencePlanningService = new CompanyInfluencePlanningService();
+  const projectRegistryService = new ProjectRegistryService();
+  const registryEntries = projectRegistryService.getAllProjects();
 
   return {
     isOpen: false,
     justOpened: false,
     viewMode: "list",
     selectedProjectIndex: 0,
-    selectedProjectId: PROJECTS[0].id,
+    selectedProjectId: registryEntries[0].id,
     selectedWorkspaceSectionIndex: 0,
     selectedTaskIndex: 0,
     selectedEmployeeIndex: 0,
     selectedProjectDashboardProjectId: undefined,
     selectedInfluenceFocusIndex: 0,
-    projects: PROJECTS.map((project) => ({
-      ...project,
-      linkedServices: project.linkedServices.map((service) => ({ ...service })),
-      nextAction: { ...project.nextAction },
-    })),
+    projects: registryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices())),
+    projectRegistryEntries: registryEntries,
     services: createLinkedServices(),
     workspaces: createWorkspaces(),
-    repositoryMappings: createRepositoryMappings(),
+    repositoryMappings: createRepositoryMappings(registryEntries),
     repositorySummaries: {},
     taskCollections: {},
     taskAnalyses: {},
@@ -178,11 +120,10 @@ export function createProjectPortalState(): ProjectPortalState {
   };
 }
 
-function createRepositoryMappings() {
-  return REPOSITORY_MAPPINGS.map((mapping) => ({
-    ...mapping,
-    repository: { ...mapping.repository },
-  }));
+function createRepositoryMappings(registryEntries: ReadonlyArray<ProjectRegistryEntry>): AIverseProjectRepositoryMapping[] {
+  return registryEntries
+    .map((entry) => toRepositoryMapping(entry))
+    .filter((mapping): mapping is AIverseProjectRepositoryMapping => Boolean(mapping));
 }
 
 function createLinkedServices() {

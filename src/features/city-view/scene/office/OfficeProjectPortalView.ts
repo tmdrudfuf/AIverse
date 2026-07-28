@@ -261,6 +261,15 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 44, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
 
+    let projectInfoY = this.panelY + 174;
+    if (project.localRepositoryLabel) {
+      this.addText(this.panelX + 390, projectInfoY, `Repository: ${project.localRepositoryLabel}`, mutedStyle());
+      projectInfoY += 26;
+    }
+    if (project.ownerCompany) {
+      this.addText(this.panelX + 390, projectInfoY, `Company: ${project.ownerCompany}`, mutedStyle());
+    }
+
     this.addText(this.panelX + 28, this.panelY + 326, "Next Action", headingStyle());
     this.addText(this.panelX + 44, this.panelY + 358, getNextActionText(project), rowStyle(project.nextAction.enabled, false));
 
@@ -477,6 +486,7 @@ function getLastActionText(state: ProjectPortalState, project: ProjectPortalProj
   if (state.lastPlaceholderAction?.projectId !== project.id) return undefined;
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;
 }
+
 
 function getSelectedTask(state: ProjectPortalState) {
   const project = state.projects[state.selectedProjectIndex];

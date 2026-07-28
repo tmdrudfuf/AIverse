@@ -1,0 +1,62 @@
+import type { ProjectRegistryEntry } from "./ProjectRegistryTypes";
+
+const SEED_TIMESTAMP = "2026-01-01T00:00:00.000Z";
+
+export function createDefaultProjectRegistryEntries(): ProjectRegistryEntry[] {
+  return [
+    {
+      id: "daily-proof",
+      displayName: "Daily Proof",
+      shortDescription: "Daily Proof is the active company workspace for validating AIverse office workflows.",
+      lifecycleStatus: "Active",
+      projectType: "Company",
+      localRepository: {
+        connected: true,
+        label: "Connected (local)",
+      },
+      remoteRepository: {
+        owner: "ai-verse",
+        name: "daily-proof",
+        url: "https://github.com/ai-verse/daily-proof",
+        visibility: "public",
+      },
+      owner: {
+        companyName: "Daily Proof Inc.",
+      },
+      createdAt: SEED_TIMESTAMP,
+      lastActivityAt: SEED_TIMESTAMP,
+    },
+    {
+      id: "portfolio",
+      displayName: "Portfolio",
+      shortDescription: "Portfolio will become the public-facing project showcase.",
+      lifecycleStatus: "Planned",
+      projectType: "Portfolio",
+      localRepository: {
+        connected: false,
+        label: "Not connected",
+      },
+      owner: {
+        companyName: "AIverse Internal",
+      },
+      createdAt: SEED_TIMESTAMP,
+      lastActivityAt: SEED_TIMESTAMP,
+    },
+    {
+      id: "ai-lab",
+      displayName: "AI Lab",
+      shortDescription: "AI Lab will house experimental agents and automation workflows.",
+      lifecycleStatus: "Coming Soon",
+      projectType: "Lab",
+      localRepository: {
+        connected: false,
+        label: "Not connected",
+      },
+      owner: {
+        companyName: "AIverse Internal",
+      },
+      createdAt: SEED_TIMESTAMP,
+      lastActivityAt: SEED_TIMESTAMP,
+    },
+  ];
+}
