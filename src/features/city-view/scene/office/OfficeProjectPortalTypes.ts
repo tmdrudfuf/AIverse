@@ -7,7 +7,7 @@ import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
-import type { ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
+import type { ProjectRegistryEntry, ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
@@ -51,6 +51,7 @@ export type ProjectPortalProject = {
   nextAction: ProjectPortalNextAction;
   ownerCompany?: string;
   localRepositoryLabel?: string;
+  repositoryIdentity?: ProjectRegistryRepositoryIdentity;
 };
 
 export type ProjectWorkspaceSectionId = "repository" | "firebase" | "analytics" | "tasks" | "ai-agents";

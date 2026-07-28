@@ -26,6 +26,14 @@ describe("ProjectRegistryAdapters", () => {
           enabled: true,
           placeholder: true,
         },
+        repositoryIdentity: {
+          provider: "github",
+          owner: "ai-verse",
+          name: "daily-proof",
+          url: "https://github.com/ai-verse/daily-proof",
+          defaultBranch: "main",
+          connectionState: "Configured",
+        },
       });
     });
 
@@ -45,7 +53,23 @@ describe("ProjectRegistryAdapters", () => {
           enabled: false,
           placeholder: true,
         },
+        repositoryIdentity: {
+          provider: "local",
+          connectionState: "Unknown",
+        },
       });
+      expect(project.repositoryIdentity?.owner).toBeUndefined();
+      expect(project.repositoryIdentity?.name).toBeUndefined();
+      expect(project.repositoryIdentity?.defaultBranch).toBeUndefined();
+    });
+
+    it("maps repositoryIdentity as an independent copy, not a shared reference", () => {
+      const [dailyProof] = createDefaultProjectRegistryEntries();
+
+      const project = toProjectPortalProject(dailyProof, []);
+      if (project.repositoryIdentity) project.repositoryIdentity.connectionState = "Available";
+
+      expect(dailyProof.repositoryIdentity.connectionState).toBe("Configured");
     });
 
     it("passes through the provided linked services unchanged", () => {
@@ -93,6 +117,7 @@ describe("ProjectRegistryAdapters", () => {
       lifecycleStatus: "Planned",
       projectType: "Restaurant",
       localRepository: { connected: false, label: "Not connected" },
+      repositoryIdentity: { provider: "local", connectionState: "Unknown" },
       owner: { companyName: "AIverse Internal" },
       createdAt: "2026-07-27T00:00:00.000Z",
       lastActivityAt: "2026-07-27T00:00:00.000Z",
@@ -112,5 +137,13 @@ describe("ProjectRegistryAdapters", () => {
       localRepositoryLabel: "Not connected",
     });
     expect(toRepositoryMapping(newEntry)).toBeUndefined();
+  });
+
+  it("keeps Daily Proof's remoteRepository and repositoryIdentity from silently diverging (shared seed constants)", () => {
+    const [dailyProof] = createDefaultProjectRegistryEntries();
+
+    expect(dailyProof.remoteRepository?.owner).toBe(dailyProof.repositoryIdentity.owner);
+    expect(dailyProof.remoteRepository?.name).toBe(dailyProof.repositoryIdentity.name);
+    expect(dailyProof.remoteRepository?.url).toBe(dailyProof.repositoryIdentity.url);
   });
 });

@@ -2,6 +2,13 @@ import type { ProjectRegistryEntry } from "./ProjectRegistryTypes";
 
 const SEED_TIMESTAMP = "2026-01-01T00:00:00.000Z";
 
+const DAILY_PROOF_REPOSITORY = {
+  owner: "ai-verse",
+  name: "daily-proof",
+  url: "https://github.com/ai-verse/daily-proof",
+  defaultBranch: "main",
+} as const;
+
 export function createDefaultProjectRegistryEntries(): ProjectRegistryEntry[] {
   return [
     {
@@ -15,10 +22,18 @@ export function createDefaultProjectRegistryEntries(): ProjectRegistryEntry[] {
         label: "Connected (local)",
       },
       remoteRepository: {
-        owner: "ai-verse",
-        name: "daily-proof",
-        url: "https://github.com/ai-verse/daily-proof",
+        owner: DAILY_PROOF_REPOSITORY.owner,
+        name: DAILY_PROOF_REPOSITORY.name,
+        url: DAILY_PROOF_REPOSITORY.url,
         visibility: "public",
+      },
+      repositoryIdentity: {
+        provider: "github",
+        owner: DAILY_PROOF_REPOSITORY.owner,
+        name: DAILY_PROOF_REPOSITORY.name,
+        url: DAILY_PROOF_REPOSITORY.url,
+        defaultBranch: DAILY_PROOF_REPOSITORY.defaultBranch,
+        connectionState: "Configured",
       },
       owner: {
         companyName: "Daily Proof Inc.",
@@ -36,6 +51,10 @@ export function createDefaultProjectRegistryEntries(): ProjectRegistryEntry[] {
         connected: false,
         label: "Not connected",
       },
+      repositoryIdentity: {
+        provider: "local",
+        connectionState: "Unknown",
+      },
       owner: {
         companyName: "AIverse Internal",
       },
@@ -51,6 +70,10 @@ export function createDefaultProjectRegistryEntries(): ProjectRegistryEntry[] {
       localRepository: {
         connected: false,
         label: "Not connected",
+      },
+      repositoryIdentity: {
+        provider: "local",
+        connectionState: "Unknown",
       },
       owner: {
         companyName: "AIverse Internal",

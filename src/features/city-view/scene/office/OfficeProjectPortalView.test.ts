@@ -142,12 +142,22 @@ describe("OfficeProjectPortalView", () => {
       nextAction: { label: "Review project workspace", enabled: true, placeholder: true },
       ownerCompany: "Daily Proof Inc.",
       localRepositoryLabel: "Connected (local)",
+      repositoryIdentity: {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof",
+        url: "https://github.com/ai-verse/daily-proof",
+        defaultBranch: "main",
+        connectionState: "Configured",
+      },
     }];
 
     new OfficeProjectPortalView(scene, state);
 
     expect(renderedText.map((item) => item.text)).toContain("Repository: Connected (local)");
     expect(renderedText.map((item) => item.text)).toContain("Company: Daily Proof Inc.");
+    expect(renderedText.map((item) => item.text)).toContain("Repo: ai-verse/daily-proof (GitHub)");
+    expect(renderedText.map((item) => item.text)).toContain("Default Branch: main  ·  Status: Configured");
   });
 
   it("renders a not-connected repository and internal owner for a placeholder project", () => {
@@ -165,12 +175,16 @@ describe("OfficeProjectPortalView", () => {
       nextAction: { label: "Coming soon", enabled: false, placeholder: true },
       ownerCompany: "AIverse Internal",
       localRepositoryLabel: "Not connected",
+      repositoryIdentity: { provider: "local", connectionState: "Unknown" },
     }];
 
     new OfficeProjectPortalView(scene, state);
 
     expect(renderedText.map((item) => item.text)).toContain("Repository: Not connected");
     expect(renderedText.map((item) => item.text)).toContain("Company: AIverse Internal");
+    expect(renderedText.map((item) => item.text)).toContain("Repo: Not yet known (Local)");
+    expect(renderedText.map((item) => item.text)).toContain("Status: Unknown");
+    expect(renderedText.some((item) => item.text.includes("Default Branch:"))).toBe(false);
   });
 
   it("keeps Repository/Company rows clear of the bottom instruction row when a placeholder action was just recorded", () => {
@@ -194,23 +208,39 @@ describe("OfficeProjectPortalView", () => {
       nextAction: { label: "Review project workspace", enabled: true, placeholder: true },
       ownerCompany: "Daily Proof Inc.",
       localRepositoryLabel: "Connected (local)",
+      repositoryIdentity: {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof",
+        url: "https://github.com/ai-verse/daily-proof",
+        defaultBranch: "main",
+        connectionState: "Configured",
+      },
     }];
 
     new OfficeProjectPortalView(scene, state);
 
     const repositoryRow = renderedText.find((item) => item.text === "Repository: Connected (local)");
     const companyRow = renderedText.find((item) => item.text === "Company: Daily Proof Inc.");
+    const repoIdentityRow = renderedText.find((item) => item.text === "Repo: ai-verse/daily-proof (GitHub)");
+    const branchStatusRow = renderedText.find((item) => item.text === "Default Branch: main  ·  Status: Configured");
     const lastActionRow = renderedText.find((item) => item.text.startsWith("Placeholder action recorded"));
     const instructionRow = renderedText.find((item) => item.text.startsWith("Esc back"));
+    const nextActionHeadingRow = renderedText.find((item) => item.text === "Next Action");
 
     expect(repositoryRow).toBeDefined();
     expect(companyRow).toBeDefined();
+    expect(repoIdentityRow).toBeDefined();
+    expect(branchStatusRow).toBeDefined();
     expect(lastActionRow).toBeDefined();
     expect(instructionRow).toBeDefined();
+    expect(nextActionHeadingRow).toBeDefined();
 
     const ROW_LINE_HEIGHT = 18;
     expect((repositoryRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
     expect((companyRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
+    expect((repoIdentityRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
+    expect((branchStatusRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
     expect((lastActionRow?.y ?? 0) + ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
   });
 
