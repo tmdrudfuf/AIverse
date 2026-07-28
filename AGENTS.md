@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/064-candidate-task-ai-employee-assignment-foundation/plan.md
+shell commands, and other important information, read specs/065-candidate-task-promotion-approval-foundation/plan.md
 <!-- SPECKIT END -->

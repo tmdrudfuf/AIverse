@@ -7,6 +7,7 @@ import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
+import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
@@ -94,6 +95,7 @@ export type ProjectPortalState = {
   selectedTaskId?: string;
   selectedEmployeeIndex: number;
   selectedProjectDashboardProjectId?: string;
+  selectedCandidatePromotionIndex: number;
   selectedInfluenceFocusIndex: number;
   selectedWorkSessionId?: string;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
@@ -107,6 +109,8 @@ export type ProjectPortalState = {
   issueSyncCollections: Record<string, IssueSnapshotCollection>;
   candidateTaskCollections: Record<string, CandidateTaskCollection>;
   candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
+  candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
+  candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

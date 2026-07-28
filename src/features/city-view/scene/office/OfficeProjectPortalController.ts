@@ -13,6 +13,8 @@ import {
   getEnabledCompanyDashboardProvider,
 } from "./dashboard/CompanyDashboardProviderRegistry";
 import { CandidateAssignmentService } from "./candidate-assignments/CandidateAssignmentService";
+import { CandidatePromotionService } from "./candidate-promotions/CandidatePromotionService";
+import type { CandidatePromotionStatus } from "./candidate-promotions/CandidatePromotionTypes";
 import { CandidateTaskService } from "./candidate-tasks/CandidateTaskService";
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
@@ -99,6 +101,7 @@ export class OfficeProjectPortalController {
   private readonly issueSyncService: IssueSyncService;
   private candidateTaskService: CandidateTaskService;
   private candidateAssignmentService: CandidateAssignmentService;
+  private candidatePromotionService: CandidatePromotionService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -144,6 +147,7 @@ export class OfficeProjectPortalController {
     });
     this.candidateTaskService = new CandidateTaskService();
     this.candidateAssignmentService = new CandidateAssignmentService();
+    this.candidatePromotionService = new CandidatePromotionService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -621,10 +625,40 @@ export class OfficeProjectPortalController {
     if (input.escapePressed) {
       this.state.viewMode = "list";
       this.state.selectedProjectDashboardProjectId = undefined;
+      this.state.selectedCandidatePromotionIndex = 0;
       this.state.projectDashboardSnapshot = undefined;
       this.repositorySyncRequestVersion += 1;
       this.issueSyncRequestVersion += 1;
       this.refreshCompanyDashboardSnapshot();
+      this.view.render(this.state);
+      return;
+    }
+
+    const selectedPromotion = this.getSelectedCandidatePromotionReview();
+    if (input.upPressed || input.downPressed) {
+      if (selectedPromotion) {
+        this.moveCandidatePromotionSelection(input.upPressed ? -1 : 1);
+        this.view.render(this.state);
+        return;
+      }
+    }
+
+    if (input.enterPressed && selectedPromotion) {
+      this.recordCandidatePromotionDecision(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+        "Approved",
+      );
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.actionPressed && selectedPromotion) {
+      this.recordCandidatePromotionDecision(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+        getNextPromotionCycleStatus(selectedPromotion.promotionStatus),
+      );
       this.view.render(this.state);
       return;
     }
@@ -811,6 +845,7 @@ export class OfficeProjectPortalController {
 
   private async openProjectDashboard(projectId: string) {
     this.state.selectedProjectDashboardProjectId = projectId;
+    this.state.selectedCandidatePromotionIndex = 0;
     if (this.hasRepositoryMapping(projectId) && !this.state.repositorySummaries[projectId]) {
       this.state.repositorySummaries[projectId] = createLoadingRepositorySummary();
     }
@@ -943,6 +978,74 @@ export class OfficeProjectPortalController {
       collection,
       this.state.employees,
     );
+    this.refreshCandidatePromotionsForProject(projectId);
+  }
+
+  private refreshCandidatePromotionsForProject(projectId: string) {
+    const candidateTasks = this.state.candidateTaskCollections[projectId];
+    if (!candidateTasks) return;
+
+    this.candidatePromotionService ??= new CandidatePromotionService();
+    this.state.candidatePromotionReviewCollections ??= {};
+    this.state.candidatePromotionDecisionRecords ??= {};
+    this.state.candidatePromotionReviewCollections[projectId] = this.candidatePromotionService.createReviewCollection(
+      candidateTasks,
+      this.state.candidateAssignmentCollections[projectId],
+      this.state.candidatePromotionDecisionRecords,
+      this.state.selectedCandidatePromotionIndex,
+    );
+    const collection = this.state.candidatePromotionReviewCollections[projectId];
+    this.state.selectedCandidatePromotionIndex = collection.selectedIndex;
+  }
+
+  private recordCandidatePromotionDecision(
+    projectId: string,
+    candidateTaskId: string,
+    targetStatus: CandidatePromotionStatus,
+  ) {
+    const collection = this.state.candidatePromotionReviewCollections[projectId];
+    if (!collection) return false;
+
+    const beforeTasks = this.state.taskCollections;
+    const beforeEmployees = this.state.employees;
+    const beforeWorkSessions = this.state.workSessions;
+    const result = this.candidatePromotionService.applyDecision(
+      collection,
+      this.state.candidatePromotionDecisionRecords,
+      {
+        projectId,
+        candidateTaskId,
+        targetStatus,
+        decidedAt: new Date().toISOString(),
+      },
+    );
+    if (!result.accepted) return false;
+
+    this.state.candidatePromotionDecisionRecords = result.decisions;
+    this.refreshCandidatePromotionsForProject(projectId);
+    this.state.taskCollections = beforeTasks;
+    this.state.employees = beforeEmployees;
+    this.state.workSessions = beforeWorkSessions;
+    return true;
+  }
+
+  private moveCandidatePromotionSelection(direction: number) {
+    const projectId = this.state.selectedProjectDashboardProjectId;
+    const collection = projectId ? this.state.candidatePromotionReviewCollections[projectId] : undefined;
+    if (!collection || collection.reviews.length === 0) return;
+
+    this.state.selectedCandidatePromotionIndex = clamp(
+      this.state.selectedCandidatePromotionIndex + direction,
+      0,
+      collection.reviews.length - 1,
+    );
+    this.refreshCandidatePromotionsForProject(collection.projectId);
+  }
+
+  private getSelectedCandidatePromotionReview() {
+    const projectId = this.state.selectedProjectDashboardProjectId;
+    const collection = projectId ? this.state.candidatePromotionReviewCollections[projectId] : undefined;
+    return collection?.reviews[this.state.selectedCandidatePromotionIndex];
   }
 
   private async openTaskList(projectId: string) {
@@ -1817,6 +1920,13 @@ function getTaskStatusProgressPercent(status: TaskStatus) {
   if (status === "Review") return 80;
   if (status === "In Progress") return 50;
   return 0;
+}
+
+function getNextPromotionCycleStatus(status: CandidatePromotionStatus): CandidatePromotionStatus {
+  if (status === "Deferred") return "Rejected";
+  if (status === "Rejected") return "PendingReview";
+  if (status === "Approved") return "Deferred";
+  return "Deferred";
 }
 
 function isResolvedConversationPlayerPosition(

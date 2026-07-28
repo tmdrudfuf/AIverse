@@ -6,6 +6,7 @@ import {
   INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
 } from "./dashboard/CompanyDashboardTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
+import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import {
@@ -802,6 +803,9 @@ describe("OfficeProjectPortalView", () => {
     state.candidateAssignmentCollections = {
       "daily-proof": createCandidateAssignmentCollection("Recommended", "Strong"),
     };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("PendingReview"),
+    };
 
     new OfficeProjectPortalView(scene, state);
 
@@ -882,6 +886,57 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[CANDIDATE TASKS]")).toBeDefined();
     expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")).toBeDefined();
     expect(findRenderedRow(renderedText, "[ASSIGNMENT RECOMMENDATIONS]")).toBeUndefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION REVIEW]")).toBeUndefined();
+  });
+
+  it("renders promotion review rows below assignment recommendations when space allows", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidateAssignmentCollections = {
+      "daily-proof": {
+        ...createCandidateAssignmentCollection("Recommended", "Strong"),
+        recommendations: [],
+        recommendationCount: 0,
+      },
+    };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("Approved"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const assignmentRow = findRenderedRow(renderedText, "[ASSIGNMENT RECOMMENDATIONS]");
+    const promotionRow = findRenderedRow(renderedText, "[PROMOTION REVIEW]");
+
+    expect(promotionRow?.text).toContain("[PROMOTION REVIEW] Succeeded - 1 promotion review");
+    expect(promotionRow?.text).not.toMatch(/Working|Started|Running|Assigned and active|Executing|Coding now/i);
+    assertRowClears(assignmentRow, promotionRow);
+    assertRowInsidePanel(promotionRow, lowerPanel);
   });
 
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
@@ -1041,6 +1096,7 @@ function createPortalState(options: {
     selectedWorkspaceSectionIndex: 0,
     selectedTaskIndex: 0,
     selectedEmployeeIndex: 0,
+    selectedCandidatePromotionIndex: 0,
     selectedInfluenceFocusIndex: 0,
     projects: [{
       id: "daily-proof",
@@ -1065,6 +1121,8 @@ function createPortalState(options: {
     issueSyncCollections: {},
     candidateTaskCollections: {},
     candidateAssignmentCollections: {},
+    candidatePromotionReviewCollections: {},
+    candidatePromotionDecisionRecords: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1222,6 +1280,51 @@ function createCandidateAssignmentCollection(
         issueNumber: 12,
       },
       alternatives: [],
+    }],
+  };
+}
+
+function createCandidatePromotionCollection(
+  promotionStatus: "PendingReview" | "Approved" | "Rejected" | "Deferred" | "NeedsReview" | "Ineligible" | "Unavailable",
+): CandidatePromotionReviewCollection {
+  return {
+    projectId: "daily-proof",
+    sourceCandidateTaskStatus: "Succeeded",
+    sourceAssignmentStatus: "Succeeded",
+    reviewStatus: "Succeeded",
+    reviewCount: 1,
+    selectedIndex: 0,
+    generatedAt: "2026-01-02T00:00:00.000Z",
+    rulesetVersion: "candidate-promotion-v1",
+    sourceCandidateTaskCount: 1,
+    sourceAssignmentCount: 1,
+    reviews: [{
+      id: "daily-proof:candidate-promotion:daily-proof:candidate-task:ai-verse/daily-proof#12:candidate-promotion-v1",
+      projectId: "daily-proof",
+      candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+      candidateTaskTitle: "Fix crash on launch",
+      candidateTaskType: "Bug",
+      candidateTaskPriority: "High",
+      candidateTaskState: "Open",
+      candidateTaskProvenance: {
+        candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+        originatingIssueId: "ai-verse/daily-proof#12",
+        issueNumber: 12,
+        sourceProvider: "github",
+      },
+      assignmentRecommendationId: "daily-proof:assignment:candidate-12:gpt-engineer:candidate-assignment-v1",
+      recommendedEmployeeId: "gpt-engineer",
+      recommendedEmployeeName: "GPT Engineer",
+      assignmentStatus: "Recommended",
+      promotionStatus,
+      eligibility: {
+        status: promotionStatus === "Unavailable" ? "Unavailable" : promotionStatus === "Ineligible" ? "Ineligible" : "PendingReview",
+        isApprovable: promotionStatus !== "Unavailable" && promotionStatus !== "Ineligible",
+        reasonCodes: ["ELIGIBLE_RECOMMENDED_ASSIGNMENT"],
+        summary: "Ready for human promotion review.",
+      },
+      availableActions: ["Approved", "Rejected", "Deferred", "PendingReview"],
+      rulesetVersion: "candidate-promotion-v1",
     }],
   };
 }
