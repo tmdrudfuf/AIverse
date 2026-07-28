@@ -47,6 +47,10 @@ import type {
 } from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import type { CompanyProgressionSnapshot, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
+import { GitHubIssueSyncProvider } from "./issue-sync/GitHubIssueSyncProvider";
+import { IssueSyncService } from "./issue-sync/IssueSyncService";
+import { LocalIssueSyncProvider } from "./issue-sync/LocalIssueSyncProvider";
+import { createSyncingIssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { GitHubRepositorySyncProvider } from "./repository-sync/GitHubRepositorySyncProvider";
 import { LocalRepositorySyncProvider } from "./repository-sync/LocalRepositorySyncProvider";
 import { RepositorySyncService } from "./repository-sync/RepositorySyncService";
@@ -90,6 +94,7 @@ export class OfficeProjectPortalController {
   private readonly view: OfficeProjectPortalView;
   private readonly repositoryService: GitHubRepositoryService;
   private readonly repositorySyncService: RepositorySyncService;
+  private readonly issueSyncService: IssueSyncService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -109,6 +114,7 @@ export class OfficeProjectPortalController {
   private readonly aiProjectManagerService: AIProjectManagerService;
   private repositoryRequestVersion = 0;
   private repositorySyncRequestVersion = 0;
+  private issueSyncRequestVersion = 0;
   private taskRequestVersion = 0;
   private employeeRequestVersion = 0;
   private employeeNpcBootstrapRequestVersion = 0;
@@ -127,6 +133,10 @@ export class OfficeProjectPortalController {
     this.repositorySyncService = new RepositorySyncService({
       github: new GitHubRepositorySyncProvider(this.repositoryService),
       local: new LocalRepositorySyncProvider(),
+    });
+    this.issueSyncService = new IssueSyncService({
+      github: new GitHubIssueSyncProvider(),
+      local: new LocalIssueSyncProvider(),
     });
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
@@ -606,6 +616,7 @@ export class OfficeProjectPortalController {
       this.state.selectedProjectDashboardProjectId = undefined;
       this.state.projectDashboardSnapshot = undefined;
       this.repositorySyncRequestVersion += 1;
+      this.issueSyncRequestVersion += 1;
       this.refreshCompanyDashboardSnapshot();
       this.view.render(this.state);
       return;
@@ -613,7 +624,10 @@ export class OfficeProjectPortalController {
 
     if (input.actionPressed || input.enterPressed) {
       const projectId = this.state.selectedProjectDashboardProjectId;
-      if (projectId) void this.syncRepositorySnapshot(projectId);
+      if (projectId) {
+        void this.syncRepositorySnapshot(projectId);
+        void this.syncIssueSnapshots(projectId);
+      }
     }
   }
 
@@ -798,6 +812,7 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
     void this.refreshProjectDashboardRepositorySummary(projectId);
     void this.syncRepositorySnapshot(projectId);
+    void this.syncIssueSnapshots(projectId);
 
     if (this.state.taskCollections[projectId]) return;
 
@@ -870,6 +885,25 @@ export class OfficeProjectPortalController {
     if (!this.shouldApplyRepositorySyncSnapshot(projectId, requestVersion)) return;
 
     this.state.repositorySyncSnapshots[projectId] = snapshot;
+    this.view.render(this.state);
+  }
+
+  private async syncIssueSnapshots(projectId: string) {
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const identity = project?.repositoryIdentity;
+    if (!identity) return;
+
+    const requestVersion = this.issueSyncRequestVersion + 1;
+    this.issueSyncRequestVersion = requestVersion;
+
+    const previous = this.state.issueSyncCollections[projectId];
+    this.state.issueSyncCollections[projectId] = createSyncingIssueSnapshotCollection(identity, previous);
+    this.view.render(this.state);
+
+    const collection = await this.issueSyncService.readIssueSnapshots(identity, previous);
+    if (!this.shouldApplyIssueSyncCollection(projectId, requestVersion)) return;
+
+    this.state.issueSyncCollections[projectId] = collection;
     this.view.render(this.state);
   }
 
@@ -975,6 +1009,15 @@ export class OfficeProjectPortalController {
       this.state.viewMode === "project-dashboard" &&
       this.state.selectedProjectDashboardProjectId === projectId &&
       this.repositorySyncRequestVersion === requestVersion
+    );
+  }
+
+  private shouldApplyIssueSyncCollection(projectId: string, requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "project-dashboard" &&
+      this.state.selectedProjectDashboardProjectId === projectId &&
+      this.issueSyncRequestVersion === requestVersion
     );
   }
 

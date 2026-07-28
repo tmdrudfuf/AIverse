@@ -127,6 +127,38 @@ describe("OfficeProjectPortalView", () => {
     });
   });
 
+  it("keeps wrapped Active Work and Employee rows inside their section panels for realistic multi-item, long-title projects", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    new OfficeProjectPortalView(scene, createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [],
+        activeWork: [
+          { id: "task-1", title: "Rebuild the reporting pipeline", status: "In Progress", priority: "High", progressPercent: 40, updatedAt: "2026-01-01T10:00:00.000Z" },
+          { id: "task-2", title: "Investigate auth failures in staging", status: "Review", priority: "Critical", progressPercent: 10, updatedAt: "2026-01-01T10:00:00.000Z" },
+          { id: "task-3", title: "Migrate legacy billing exports", status: "In Progress", priority: "Medium", progressPercent: 60, updatedAt: "2026-01-01T10:00:00.000Z" },
+        ],
+        employees: [
+          { employeeId: "emp-1", name: "Alexandria Fitzgerald", role: "Engineer", aiState: "working", focusLabel: "Focused" },
+          { employeeId: "emp-2", name: "Christopher Worthington III", role: "QA", aiState: "talking", focusLabel: "Focused" },
+          { employeeId: "emp-3", name: "Bartholomew Okonkwo-Adeyemi", role: "Designer", aiState: "taking_break", focusLabel: "Focused" },
+        ],
+      }),
+    }));
+
+    const sectionPanels = renderedPanels.filter((panel) => panel.height === PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT);
+    expect(sectionPanels).toHaveLength(2);
+    const activeWorkRows = renderedText.filter((item) => item.text.startsWith(">"));
+    expect(activeWorkRows.length).toBeGreaterThanOrEqual(6);
+    activeWorkRows.forEach((row) => {
+      const matchingPanel = sectionPanels.find((panel) => panel.y <= row.y);
+      assertRowInsidePanel(row, matchingPanel);
+    });
+  });
+
   it("renders registry-derived Repository and Company info on the project detail screen", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -383,6 +415,215 @@ describe("OfficeProjectPortalView", () => {
 
     expect(findRenderedRow(renderedText, "[REPO-SYNC]")).toBeUndefined();
   });
+
+  it("renders [ISSUES]/[ISSUE LIST]/[ISSUE DETAIL] rows for a Succeeded issue collection", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    // Uses a single minimal external source (one signal row instead of the
+    // default fixture's [SOURCE]+[SYNC] pair) and a short advisory so all
+    // three issue rows genuinely fit within the lower panel's row-count
+    // budget -- this is a realistic minimal project, not a padded one.
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      connectionState: "Configured",
+    };
+    state.issueSyncCollections = {
+      "daily-proof": {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof",
+        syncStatus: "Succeeded",
+        openCount: 2,
+        closedCount: 1,
+        isTruncated: false,
+        issues: [
+          {
+            id: "ai-verse/daily-proof#12",
+            number: 12,
+            title: "Fix crash on launch",
+            state: "Open",
+            assignees: ["octocat"],
+            labels: ["bug"],
+            provider: "github",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-02T00:00:00.000Z",
+            syncedAt: "2026-01-02T00:00:00.000Z",
+          },
+          {
+            id: "ai-verse/daily-proof#8",
+            number: 8,
+            title: "Second issue",
+            state: "Open",
+            assignees: [],
+            labels: [],
+            provider: "github",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            syncedAt: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const issuesRow = findRenderedRow(renderedText, "[ISSUES]");
+    const issueListRow = findRenderedRow(renderedText, "[ISSUE LIST]");
+    const issueDetailRow = findRenderedRow(renderedText, "[ISSUE DETAIL]");
+
+    expect(issuesRow?.text).toBe("[ISSUES] Succeeded · 2 open, 1 closed");
+    expect(issueListRow?.text).toBe("[ISSUE LIST] #12 Fix crash on launch (Open); +1 more");
+    expect(issueDetailRow?.text).toBe("[ISSUE DETAIL] Labels: bug · Assignees: octocat");
+    [issuesRow, issueListRow, issueDetailRow].forEach((row) => {
+      assertRowInsidePanel(row, lowerPanel);
+    });
+  });
+
+  it("drops lowest-priority issue rows (list and detail) rather than overlapping the panel when space is limited", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+
+    // The default advisory/attention text below is long enough to wrap the
+    // [ADVISORY] row to two lines, and the default external source produces
+    // both [SOURCE] and [SYNC] rows -- which, combined with the always-present
+    // [REPO-SYNC] row, leaves room for only the [ISSUES] row, not
+    // [ISSUE LIST] or [ISSUE DETAIL]. This is the real, realistic worst case
+    // (this is the default createProjectDashboardSnapshot() fixture), not a
+    // synthetic one.
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      connectionState: "Configured",
+    };
+    state.issueSyncCollections = {
+      "daily-proof": {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof",
+        syncStatus: "Succeeded",
+        openCount: 1,
+        closedCount: 0,
+        isTruncated: false,
+        issues: [
+          {
+            id: "ai-verse/daily-proof#1",
+            number: 1,
+            title: "An issue with labels and assignees",
+            state: "Open",
+            assignees: ["octocat"],
+            labels: ["bug"],
+            provider: "github",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-02T00:00:00.000Z",
+            syncedAt: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const issuesRow = findRenderedRow(renderedText, "[ISSUES]");
+    const issueListRow = findRenderedRow(renderedText, "[ISSUE LIST]");
+    const issueDetailRow = findRenderedRow(renderedText, "[ISSUE DETAIL]");
+
+    expect(issuesRow?.text).toBe("[ISSUES] Succeeded · 1 open, 0 closed");
+    expect(issueListRow).toBeUndefined();
+    expect(issueDetailRow).toBeUndefined();
+    assertRowInsidePanel(issuesRow, lowerPanel);
+  });
+
+  it("distinguishes a real zero-issue Succeeded collection from an Unavailable one", () => {
+    const renderedTextSucceeded: RenderedText[] = [];
+    const sceneSucceeded = createSceneStub(renderedTextSucceeded, []);
+    const succeededState = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    succeededState.selectedProjectDashboardProjectId = "daily-proof";
+    succeededState.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    succeededState.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    new OfficeProjectPortalView(sceneSucceeded, succeededState);
+
+    const renderedTextUnavailable: RenderedText[] = [];
+    const sceneUnavailable = createSceneStub(renderedTextUnavailable, []);
+    const unavailableState = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    unavailableState.selectedProjectDashboardProjectId = "daily-proof";
+    unavailableState.projects[0].repositoryIdentity = { provider: "local", connectionState: "Unknown" };
+    unavailableState.issueSyncCollections = {
+      "daily-proof": {
+        provider: "local",
+        syncStatus: "Unavailable",
+        openCount: 0,
+        closedCount: 0,
+        isTruncated: false,
+        issues: [],
+        errorSummary: "Local repository reads need server-side support.",
+      },
+    };
+    new OfficeProjectPortalView(sceneUnavailable, unavailableState);
+
+    expect(findRenderedRow(renderedTextSucceeded, "[ISSUES]")?.text).toBe("[ISSUES] Succeeded · 0 open, 0 closed");
+    expect(findRenderedRow(renderedTextUnavailable, "[ISSUES]")?.text).toBe(
+      "[ISSUES] Unavailable: Local repository reads need server-side support.",
+    );
+  });
+
+  it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[ISSUES]")?.text).toBe("[ISSUES] No repository identity");
+    expect(findRenderedRow(renderedText, "[ISSUE LIST]")).toBeUndefined();
+    expect(findRenderedRow(renderedText, "[ISSUE DETAIL]")).toBeUndefined();
+  });
 });
 
 type RenderedText = {
@@ -397,6 +638,7 @@ type RenderedPanel = {
 
 const PROJECT_ROW_LINE_HEIGHT = 14;
 const PROJECT_ROW_SAFE_GAP = 2;
+const PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT = 136;
 
 function findRenderedRow(renderedText: RenderedText[], prefix: string) {
   return renderedText.find((item) => item.text.startsWith(prefix));
@@ -544,6 +786,7 @@ function createPortalState(options: {
     repositoryMappings: [],
     repositorySummaries: {},
     repositorySyncSnapshots: {},
+    issueSyncCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

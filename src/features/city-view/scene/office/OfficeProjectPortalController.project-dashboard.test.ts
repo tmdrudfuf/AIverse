@@ -9,6 +9,7 @@ import type { Employee } from "./employees/EmployeeTypes";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
+import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
@@ -245,6 +246,9 @@ type ControllerInternals = {
   repositorySyncService: {
     readRepositorySnapshot: ReturnType<typeof vi.fn>;
   };
+  issueSyncService: {
+    readIssueSnapshots: ReturnType<typeof vi.fn>;
+  };
   employeeAIService: EmployeeAIService;
   employeeSimulationService: EmployeeSimulationService;
   employeeNpcMovementService: EmployeeNpcMovementService;
@@ -260,6 +264,7 @@ type ControllerInternals = {
   aiProjectManagerService: AIProjectManagerService;
   repositoryRequestVersion: number;
   repositorySyncRequestVersion: number;
+  issueSyncRequestVersion: number;
   taskRequestVersion: number;
   employeeRequestVersion: number;
   employeeNpcBootstrapRequestVersion: number;
@@ -287,6 +292,9 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.repositorySyncService = {
     readRepositorySnapshot: vi.fn(async () => createRepositorySyncSnapshot()),
   };
+  harness.issueSyncService = {
+    readIssueSnapshots: vi.fn(async () => createIssueSnapshotCollection()),
+  };
   harness.employeeAIService = new EmployeeAIService();
   harness.employeeSimulationService = new EmployeeSimulationService();
   harness.employeeNpcMovementService = new EmployeeNpcMovementService();
@@ -302,6 +310,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.aiProjectManagerService = new AIProjectManagerService(harness.aiService);
   harness.repositoryRequestVersion = 0;
   harness.repositorySyncRequestVersion = 0;
+  harness.issueSyncRequestVersion = 0;
   harness.taskRequestVersion = 0;
   harness.employeeRequestVersion = 0;
   harness.employeeNpcBootstrapRequestVersion = 0;
@@ -325,6 +334,20 @@ function createRepositorySyncSnapshot(): RepositorySyncSnapshot {
       committedAt: "2026-06-26T18:00:00.000Z",
     },
     syncStatus: "Succeeded",
+    lastSuccessfulSyncAt: "2026-06-26T18:30:00.000Z",
+  };
+}
+
+function createIssueSnapshotCollection(): IssueSnapshotCollection {
+  return {
+    provider: "github",
+    owner: "ai-verse",
+    name: "daily-proof",
+    syncStatus: "Succeeded",
+    issues: [],
+    openCount: 0,
+    closedCount: 0,
+    isTruncated: false,
     lastSuccessfulSyncAt: "2026-06-26T18:30:00.000Z",
   };
 }
