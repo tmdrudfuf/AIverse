@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PhaserScene } from "../shared/phaserTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
+import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
+import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 
 describe("OfficeProjectPortalController issue sync concurrency and isolation", () => {
   it("keeps a newer Succeeded result even when an older request resolves Failed afterward", async () => {
@@ -343,6 +345,101 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     expect(issueSyncReadCount).toBe(2);
   });
 
+  it("promotes an approved Candidate Task into one local ProjectTask without starting work", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [],
+    };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+    const employeesBefore = structuredClone(internals.state.employees);
+    const workSessionsBefore = structuredClone(internals.state.workSessions);
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve locally
+    controller.updateInput(createInput({ enterPressed: true })); // explicit promote command
+
+    const tasks = internals.state.taskCollections["daily-proof"].tasks;
+    const result = internals.state.candidateProjectTaskPromotionResultCollections["daily-proof"]?.results[0];
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      id: "daily-proof:promoted-task:daily-proof:candidate-task:ai-verse/daily-proof#1:candidate-promotion-v1",
+      status: "Todo",
+    });
+    expect(tasks[0]!.title).toBe("Fix crash");
+    expect(tasks[0]!.assignee).toBeUndefined();
+    expect(tasks[0]!.assigneeId).toBeUndefined();
+    expect(result).toMatchObject({
+      status: "Promoted",
+      activeTaskCreated: true,
+      workStarted: false,
+      employeeAssigned: false,
+      executionStarted: false,
+    });
+    expect(internals.state.employees).toEqual(employeesBefore);
+    expect(internals.state.workSessions).toEqual(workSessionsBefore);
+  });
+
+  it("repeated promotion keypress returns already promoted without duplicating tasks", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    const tasks = internals.state.taskCollections["daily-proof"].tasks;
+    const result = internals.state.candidateProjectTaskPromotionResultCollections["daily-proof"]?.results[0];
+    expect(tasks).toHaveLength(1);
+    expect(result?.status).toBe("AlreadyPromoted");
+    expect(result?.duplicateExistingTask).toBe(true);
+  });
+
+  it("does not auto-promote merely because a Candidate Task is approved", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+    controller.updateInput(createInput({ enterPressed: true }));
+    await internals.syncIssueSnapshots("daily-proof");
+
+    expect(internals.state.candidatePromotionReviewCollections["daily-proof"]?.reviews[0]?.promotionStatus).toBe("Approved");
+    expect(internals.state.taskCollections["daily-proof"].tasks).toHaveLength(0);
+    expect(internals.state.candidateProjectTaskPromotionResultCollections["daily-proof"]).toBeUndefined();
+  });
+
   it("does not create duplicate candidate tasks for duplicate issue snapshots", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
@@ -452,7 +549,8 @@ type ControllerInternals = {
     candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
     candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
     candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
-    taskCollections: Record<string, unknown>;
+    candidateProjectTaskPromotionResultCollections: Record<string, CandidateProjectTaskPromotionResultCollection>;
+    taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, unknown[]>;
   };

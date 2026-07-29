@@ -6,6 +6,7 @@ import {
   INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
 } from "./dashboard/CompanyDashboardTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
+import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
@@ -939,6 +940,86 @@ describe("OfficeProjectPortalView", () => {
     assertRowInsidePanel(promotionRow, lowerPanel);
   });
 
+  it("renders promotion result rows below promotion review rows with safe non-execution wording", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("Approved"),
+    };
+    state.candidateProjectTaskPromotionResultCollections = {
+      "daily-proof": createProjectTaskPromotionResultCollection("Promoted"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const promotionRow = findRenderedRow(renderedText, "[PROMOTION REVIEW]");
+    const resultRow = findRenderedRow(renderedText, "[PROMOTION RESULT]");
+
+    expect(resultRow?.text).toContain("Promoted to project task");
+    expect(resultRow?.text).toContain("Not started");
+    expect(resultRow?.text).toContain("Unassigned");
+    expect(resultRow?.text).not.toMatch(/Working|Coding|Executing|Assigned and running|Started automatically/i);
+    assertRowClears(promotionRow, resultRow);
+    assertRowInsidePanel(resultRow, lowerPanel);
+  });
+
+  it("drops promotion result rows before promotion review rows when the lower panel is crowded", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("Approved"),
+    };
+    state.candidateProjectTaskPromotionResultCollections = {
+      "daily-proof": createProjectTaskPromotionResultCollection("Promoted"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[ISSUES]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION REVIEW]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION RESULT]")).toBeUndefined();
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -1123,6 +1204,7 @@ function createPortalState(options: {
     candidateAssignmentCollections: {},
     candidatePromotionReviewCollections: {},
     candidatePromotionDecisionRecords: {},
+    candidateProjectTaskPromotionResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1326,6 +1408,33 @@ function createCandidatePromotionCollection(
       availableActions: ["Approved", "Rejected", "Deferred", "PendingReview"],
       rulesetVersion: "candidate-promotion-v1",
     }],
+  };
+}
+
+function createProjectTaskPromotionResultCollection(
+  status: "Promoted" | "AlreadyPromoted" | "Rejected" | "Ineligible" | "Unavailable" | "Failed",
+): CandidateProjectTaskPromotionResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:project-task-promotion:daily-proof:candidate-task:ai-verse/daily-proof#12:candidate-promotion-v1",
+      projectId: "daily-proof",
+      candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+      promotionDecisionId: "daily-proof:candidate-promotion:daily-proof:candidate-task:ai-verse/daily-proof#12:candidate-promotion-v1",
+      createdProjectTaskId: "task-12",
+      status,
+      reasonCodes: [status === "Promoted" ? "PROMOTED" : "ALREADY_PROMOTED"],
+      duplicateExistingTask: status === "AlreadyPromoted",
+      promotedAt: "2026-01-02T00:00:00.000Z",
+      rulesetVersion: "candidate-promotion-v1",
+      activeTaskCreated: status === "Promoted" || status === "AlreadyPromoted",
+      workStarted: false,
+      employeeAssigned: false,
+      executionStarted: false,
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-02T00:00:00.000Z",
+    rulesetVersion: "candidate-promotion-v1",
   };
 }
 
