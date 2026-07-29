@@ -76,9 +76,9 @@
 - [X] T025 Run `npm run build`
 - [X] T026 Run `git diff --check`
 - [X] T027 Run `git diff --cached --check`
-- [ ] T028 Commit complete implementation locally
-- [ ] T029 Run independent Claude review against exact committed HEAD
-- [ ] T030 If review requests changes, fix blocking findings, revalidate, recommit, and re-review until Approved
+- [X] T028 Commit complete implementation locally
+- [X] T029 Run independent Claude review against exact committed HEAD
+- [X] T030 If review requests changes, fix blocking findings, revalidate, recommit, and re-review until Approved
 
 ## Dependencies & Execution Order
 
