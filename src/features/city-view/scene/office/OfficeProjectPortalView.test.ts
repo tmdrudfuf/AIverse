@@ -8,6 +8,7 @@ import {
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
 import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
+import type { ConfirmedEmployeeAssignmentResultCollection } from "./confirmed-assignments/ConfirmedEmployeeAssignmentTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import {
@@ -1020,6 +1021,83 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[PROMOTION RESULT]")).toBeUndefined();
   });
 
+  it("renders confirmed assignment rows below promotion result rows with safe non-execution wording", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [],
+        }],
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateProjectTaskPromotionResultCollections = {
+      "daily-proof": createProjectTaskPromotionResultCollection("Promoted"),
+    };
+    state.confirmedEmployeeAssignmentResultCollections = {
+      "daily-proof": createConfirmedAssignmentResultCollection("Assigned"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const promotionResultRow = findRenderedRow(renderedText, "[PROMOTION RESULT]");
+    const confirmedAssignmentRow = findRenderedRow(renderedText, "[CONFIRMED ASSIGNMENT]");
+
+    expect(confirmedAssignmentRow?.text).toContain("Confirmed GPT Engineer");
+    expect(confirmedAssignmentRow?.text).toContain("Not started");
+    expect(confirmedAssignmentRow?.text).toContain("No work session");
+    expect(confirmedAssignmentRow?.text).not.toMatch(/Working|Executing|Coding now|Running task|Work session active/i);
+    assertRowClears(promotionResultRow, confirmedAssignmentRow);
+    assertRowInsidePanel(confirmedAssignmentRow, lowerPanel);
+  });
+
+  it("drops confirmed assignment rows before promotion result rows when the lower panel is crowded", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("Approved"),
+    };
+    state.candidateProjectTaskPromotionResultCollections = {
+      "daily-proof": createProjectTaskPromotionResultCollection("Promoted"),
+    };
+    state.confirmedEmployeeAssignmentResultCollections = {
+      "daily-proof": createConfirmedAssignmentResultCollection("Assigned"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[ISSUES]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION REVIEW]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION RESULT]")).toBeUndefined();
+    expect(findRenderedRow(renderedText, "[CONFIRMED ASSIGNMENT]")).toBeUndefined();
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -1205,6 +1283,8 @@ function createPortalState(options: {
     candidatePromotionReviewCollections: {},
     candidatePromotionDecisionRecords: {},
     candidateProjectTaskPromotionResultCollections: {},
+    confirmedEmployeeAssignmentRecords: {},
+    confirmedEmployeeAssignmentResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1435,6 +1515,36 @@ function createProjectTaskPromotionResultCollection(
     resultCount: 1,
     generatedAt: "2026-01-02T00:00:00.000Z",
     rulesetVersion: "candidate-promotion-v1",
+  };
+}
+
+function createConfirmedAssignmentResultCollection(
+  status: "Assigned" | "AlreadyAssigned" | "Ineligible" | "Unavailable" | "Conflict" | "Failed",
+): ConfirmedEmployeeAssignmentResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:task-assignment-result:task-12:confirmed-assignment-v1",
+      projectId: "daily-proof",
+      projectTaskId: "task-12",
+      candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+      employeeId: "gpt-engineer",
+      employeeDisplayName: "GPT Engineer",
+      assignmentRecordId: "daily-proof:task-assignment:task-12:gpt-engineer:confirmed-assignment-v1",
+      status,
+      reasonCodes: [status === "Assigned" ? "ASSIGNED" : status === "AlreadyAssigned" ? "ALREADY_ASSIGNED" : "EMPLOYEE_CONFLICT"],
+      assignedTask: status === "Assigned" || status === "AlreadyAssigned",
+      humanConfirmed: status === "Assigned" || status === "AlreadyAssigned",
+      workStarted: false,
+      workSessionCreated: false,
+      executionStarted: false,
+      duplicateExistingAssignment: status === "AlreadyAssigned",
+      resultAt: "2026-01-02T00:00:00.000Z",
+      rulesetVersion: "confirmed-assignment-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-02T00:00:00.000Z",
+    rulesetVersion: "confirmed-assignment-v1",
   };
 }
 
