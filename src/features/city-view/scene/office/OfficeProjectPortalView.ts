@@ -4,6 +4,7 @@ import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTa
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
+import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -272,6 +273,12 @@ export class OfficeProjectPortalView {
     const confirmedEmployeeAssignmentRows = confirmedEmployeeAssignmentCollection
       ? createConfirmedEmployeeAssignmentDisplayRows(confirmedEmployeeAssignmentCollection)
       : undefined;
+    const preparedWorkSessionCollection = dashboardProjectId
+      ? state.preparedWorkSessionResultCollections[dashboardProjectId]
+      : undefined;
+    const preparedWorkSessionRows = preparedWorkSessionCollection
+      ? createPreparedWorkSessionDisplayRows(preparedWorkSessionCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -284,6 +291,7 @@ export class OfficeProjectPortalView {
         candidatePromotionRows,
         candidateProjectTaskPromotionRows,
         confirmedEmployeeAssignmentRows,
+        preparedWorkSessionRows,
       ),
     );
     const lowerRows = fitProjectDashboardLowerRows(preparedLowerRows, maxLowerPanelHeight);
@@ -620,6 +628,7 @@ function createProjectDashboardLowerRows(
   candidatePromotionRows?: CandidatePromotionDisplayRows,
   candidateProjectTaskPromotionRows?: CandidateProjectTaskPromotionDisplayRows,
   confirmedEmployeeAssignmentRows?: ConfirmedEmployeeAssignmentDisplayRows,
+  preparedWorkSessionRows?: PreparedWorkSessionDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
@@ -690,6 +699,14 @@ function createProjectDashboardLowerRows(
       ? `; ${confirmedEmployeeAssignmentRows.resultText}`
       : "";
     lowerRows.push({ text: `[CONFIRMED ASSIGNMENT] ${confirmedEmployeeAssignmentRows.statusText}${resultText}`, maxLines: 1 });
+  }
+
+  if (preparedWorkSessionRows) {
+    const resultText = preparedWorkSessionRows.resultText
+      ? compactPreparationResultText(preparedWorkSessionRows.resultText)
+      : "";
+    const statusText = resultText || preparedWorkSessionRows.statusText;
+    lowerRows.push({ text: `[WORK SESSION PREPARATION] ${statusText}`, maxLines: 1 });
   }
 
   return lowerRows;
@@ -790,6 +807,12 @@ function compactTextLine(text: string, maxLength: number) {
   const suffix = overflowIndicator ? `${overflowIndicator}...` : "...";
   const maxTextLength = Math.max(0, maxLength - suffix.length);
   return `${text.slice(0, maxTextLength).trimEnd()}${suffix}`;
+}
+
+function compactPreparationResultText(text: string) {
+  return text
+    .replace(/^Prepared [^;]+;/, "Prepared;")
+    .replace(/^Already prepared [^;]+;/, "Already prepared;");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

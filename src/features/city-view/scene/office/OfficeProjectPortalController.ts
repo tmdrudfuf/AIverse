@@ -21,6 +21,7 @@ import {
   ConfirmedEmployeeAssignmentService,
   parsePromotedProjectTaskProvenance,
 } from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
+import { PreparedWorkSessionService } from "./prepared-work-sessions/PreparedWorkSessionService";
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
@@ -109,6 +110,7 @@ export class OfficeProjectPortalController {
   private candidatePromotionService: CandidatePromotionService;
   private candidateProjectTaskPromotionService: CandidateProjectTaskPromotionService;
   private confirmedEmployeeAssignmentService: ConfirmedEmployeeAssignmentService;
+  private preparedWorkSessionService: PreparedWorkSessionService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -157,6 +159,7 @@ export class OfficeProjectPortalController {
     this.candidatePromotionService = new CandidatePromotionService();
     this.candidateProjectTaskPromotionService = new CandidateProjectTaskPromotionService();
     this.confirmedEmployeeAssignmentService = new ConfirmedEmployeeAssignmentService();
+    this.preparedWorkSessionService = new PreparedWorkSessionService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -653,6 +656,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const prepared = this.prepareSelectedWorkSessionForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (prepared) {
+        this.view.render(this.state);
+        return;
+      }
+
       const assigned = this.confirmSelectedEmployeeAssignmentForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1152,6 +1164,61 @@ export class OfficeProjectPortalController {
       this.confirmedEmployeeAssignmentService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    return true;
+  }
+
+  private prepareSelectedWorkSessionForPromotion(projectId: string, candidateTaskId: string) {
+    this.preparedWorkSessionService ??= new PreparedWorkSessionService();
+    this.state.preparedWorkSessionRecords ??= {};
+    this.state.preparedWorkSessionResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask?.assigneeId) return false;
+
+    const assignment = Object.values(this.state.confirmedEmployeeAssignmentRecords)
+      .find((record) =>
+        record.projectId === projectId &&
+        record.projectTaskId === promotedTask.id &&
+        record.candidateTaskId === candidateTaskId &&
+        record.employeeId === promotedTask.assigneeId
+      );
+    if (!assignment) return false;
+
+    const beforeTaskCollections = this.state.taskCollections;
+    const beforeEmployees = this.state.employees;
+    const beforeWorkSessions = this.state.workSessions;
+    const beforeAssignments = this.state.confirmedEmployeeAssignmentRecords;
+    const outcome = this.preparedWorkSessionService.prepare({
+      request: {
+        projectId,
+        projectTaskId: promotedTask.id,
+        confirmedAssignmentId: assignment.id,
+        requestedAt: new Date().toISOString(),
+      },
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      employees: this.state.employees,
+      workSessions: this.state.workSessions,
+      existingPreparedSessions: this.state.preparedWorkSessionRecords,
+    });
+
+    if (outcome.preparedSession) {
+      this.state.preparedWorkSessionRecords = this.preparedWorkSessionService.upsertRecord(
+        this.state.preparedWorkSessionRecords,
+        outcome.preparedSession,
+      );
+    }
+
+    const existingResults = this.state.preparedWorkSessionResultCollections[projectId];
+    this.state.preparedWorkSessionResultCollections[projectId] =
+      this.preparedWorkSessionService.upsertResult(existingResults, outcome.result);
+    this.state.taskCollections = beforeTaskCollections;
+    this.state.employees = beforeEmployees;
+    this.state.workSessions = beforeWorkSessions;
+    this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
     return true;
   }
 
