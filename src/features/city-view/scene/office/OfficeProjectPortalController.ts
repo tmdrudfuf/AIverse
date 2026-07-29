@@ -13,6 +13,7 @@ import {
   getEnabledCompanyDashboardProvider,
 } from "./dashboard/CompanyDashboardProviderRegistry";
 import { CandidateAssignmentService } from "./candidate-assignments/CandidateAssignmentService";
+import { CandidateProjectTaskPromotionService } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionService";
 import { CandidatePromotionService } from "./candidate-promotions/CandidatePromotionService";
 import type { CandidatePromotionReview, CandidatePromotionStatus } from "./candidate-promotions/CandidatePromotionTypes";
 import { CandidateTaskService } from "./candidate-tasks/CandidateTaskService";
@@ -102,6 +103,7 @@ export class OfficeProjectPortalController {
   private candidateTaskService: CandidateTaskService;
   private candidateAssignmentService: CandidateAssignmentService;
   private candidatePromotionService: CandidatePromotionService;
+  private candidateProjectTaskPromotionService: CandidateProjectTaskPromotionService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -148,6 +150,7 @@ export class OfficeProjectPortalController {
     this.candidateTaskService = new CandidateTaskService();
     this.candidateAssignmentService = new CandidateAssignmentService();
     this.candidatePromotionService = new CandidatePromotionService();
+    this.candidateProjectTaskPromotionService = new CandidateProjectTaskPromotionService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -643,6 +646,17 @@ export class OfficeProjectPortalController {
       }
     }
 
+    if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const promoted = this.promoteSelectedCandidateTask(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (promoted) {
+        this.view.render(this.state);
+        return;
+      }
+    }
+
     if (input.enterPressed && canRecordPromotionDecision(selectedPromotion, "Approved")) {
       const recorded = this.recordCandidatePromotionDecision(
         selectedPromotion.projectId,
@@ -1031,6 +1045,40 @@ export class OfficeProjectPortalController {
     this.state.candidatePromotionDecisionRecords = result.decisions;
     this.refreshCandidatePromotionsForProject(projectId);
     this.state.taskCollections = beforeTasks;
+    this.state.employees = beforeEmployees;
+    this.state.workSessions = beforeWorkSessions;
+    return true;
+  }
+
+  private promoteSelectedCandidateTask(projectId: string, candidateTaskId: string) {
+    this.candidateProjectTaskPromotionService ??= new CandidateProjectTaskPromotionService();
+    this.state.candidateProjectTaskPromotionResultCollections ??= {};
+
+    const beforeEmployees = this.state.employees;
+    const beforeWorkSessions = this.state.workSessions;
+    const outcome = this.candidateProjectTaskPromotionService.promote({
+      request: {
+        projectId,
+        candidateTaskId,
+        requestedAt: new Date().toISOString(),
+      },
+      candidateTasks: this.state.candidateTaskCollections[projectId],
+      assignments: this.state.candidateAssignmentCollections[projectId],
+      decisions: this.state.candidatePromotionDecisionRecords,
+      taskCollection: this.state.taskCollections[projectId],
+    });
+
+    if (outcome.taskCollection && outcome.result.status === "Promoted") {
+      this.state.taskCollections[projectId] = outcome.taskCollection;
+      this.state.selectedTaskProjectId = projectId;
+      this.state.selectedTaskIndex = Math.max(0, outcome.taskCollection.tasks.findIndex((task) => task.id === outcome.result.createdProjectTaskId));
+      this.state.selectedTaskId = outcome.result.createdProjectTaskId;
+      void this.prepareTaskAnalyses(outcome.taskCollection.tasks, projectId);
+    }
+
+    const existingResults = this.state.candidateProjectTaskPromotionResultCollections[projectId];
+    this.state.candidateProjectTaskPromotionResultCollections[projectId] =
+      this.candidateProjectTaskPromotionService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
     return true;
