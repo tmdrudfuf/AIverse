@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PhaserScene } from "../shared/phaserTypes";
+import type { ActiveWorkSessionStartResultCollection } from "./active-work-sessions/ActiveWorkSessionTypes";
 import {
   createEmptyCompanyDashboardSnapshot,
   INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
@@ -1142,6 +1143,50 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[WORK SESSION PREPARATION]")).toBeUndefined();
   });
 
+  it("renders active work-session rows above candidate history without implying agent execution", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 1, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        sourceIssueSyncedAt: "2026-01-02T00:00:00.000Z",
+        tasks: [createCandidateTask(12, "Fix crash on launch", "High", "Bug")],
+        taskCount: 1,
+      },
+    };
+    state.activeWorkSessionStartResultCollections = {
+      "daily-proof": createActiveWorkSessionStartResultCollection("Started"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const issueRow = findRenderedRow(renderedText, "[ISSUES]");
+    const activeRow = findRenderedRow(renderedText, "[ACTIVE WORK SESSION]");
+
+    expect(activeRow?.text).toContain("Active");
+    expect(activeRow?.text).toContain("No agent execution");
+    expect(activeRow?.text).toContain("Repo safe");
+    expect(activeRow?.text).not.toMatch(/Codex running|Claude running|Agent executing|Repository updating/i);
+    assertRowClears(issueRow, activeRow);
+    assertRowInsidePanel(activeRow, lowerPanel);
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -1331,6 +1376,7 @@ function createPortalState(options: {
     confirmedEmployeeAssignmentResultCollections: {},
     preparedWorkSessionRecords: {},
     preparedWorkSessionResultCollections: {},
+    activeWorkSessionStartResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1624,6 +1670,42 @@ function createPreparedWorkSessionResultCollection(
     resultCount: 1,
     generatedAt: "2026-01-03T00:00:00.000Z",
     rulesetVersion: "prepared-session-v1",
+  };
+}
+
+function createActiveWorkSessionStartResultCollection(
+  status: "Started" | "AlreadyStarted" | "Ineligible" | "Unavailable" | "Conflict" | "Failed",
+): ActiveWorkSessionStartResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:work-session-start-result:task-12:prepared-12:active-session-v1",
+      projectId: "daily-proof",
+      projectTaskId: "task-12",
+      preparedSessionId: "prepared-12",
+      confirmedAssignmentId: "daily-proof:task-assignment:task-12:gpt-engineer:confirmed-assignment-v1",
+      candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+      employeeId: "gpt-engineer",
+      employeeDisplayName: "GPT Engineer",
+      activeSessionId: "daily-proof:work-session:task-12:prepared-12:active-session-v1",
+      status,
+      reasonCodes: [status === "Started" ? "STARTED" : status === "AlreadyStarted" ? "ALREADY_STARTED" : "EMPLOYEE_CONFLICT"],
+      started: status === "Started" || status === "AlreadyStarted",
+      duplicateExistingSession: status === "AlreadyStarted",
+      humanStarted: status === "Started" || status === "AlreadyStarted",
+      active: status === "Started" || status === "AlreadyStarted",
+      workStarted: status === "Started" || status === "AlreadyStarted",
+      executionStarted: false,
+      agentStarted: false,
+      employeeMoved: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-04T00:00:00.000Z",
+      rulesetVersion: "active-session-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-04T00:00:00.000Z",
+    rulesetVersion: "active-session-v1",
   };
 }
 

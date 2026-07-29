@@ -1,4 +1,5 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import { createActiveWorkSessionDisplayRows, type ActiveWorkSessionDisplayRows } from "./active-work-sessions/ActiveWorkSessionView";
 import { createCandidateAssignmentDisplayRows, type CandidateAssignmentDisplayRows } from "./candidate-assignments/CandidateAssignmentView";
 import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTaskPromotionDisplayRows } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionView";
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
@@ -279,6 +280,12 @@ export class OfficeProjectPortalView {
     const preparedWorkSessionRows = preparedWorkSessionCollection
       ? createPreparedWorkSessionDisplayRows(preparedWorkSessionCollection)
       : undefined;
+    const activeWorkSessionStartCollection = dashboardProjectId
+      ? state.activeWorkSessionStartResultCollections[dashboardProjectId]
+      : undefined;
+    const activeWorkSessionRows = activeWorkSessionStartCollection
+      ? createActiveWorkSessionDisplayRows(activeWorkSessionStartCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -286,6 +293,7 @@ export class OfficeProjectPortalView {
         rows,
         repositorySyncRows,
         issueSyncRows,
+        activeWorkSessionRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -623,6 +631,7 @@ function createProjectDashboardLowerRows(
   rows: ReturnType<typeof createProjectDashboardPanelRows>,
   repositorySyncRows: string[] = [],
   issueSyncRows?: IssueSyncDisplayRows,
+  activeWorkSessionRows?: ActiveWorkSessionDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -664,6 +673,13 @@ function createProjectDashboardLowerRows(
     if (issueSyncRows.issueDetailText) {
       lowerRows.push({ text: `[ISSUE DETAIL] ${issueSyncRows.issueDetailText}`, maxLines: 1 });
     }
+  }
+
+  if (activeWorkSessionRows) {
+    const resultText = activeWorkSessionRows.resultText
+      ? compactActiveWorkSessionResultText(activeWorkSessionRows.resultText)
+      : activeWorkSessionRows.statusText;
+    lowerRows.push({ text: `[ACTIVE WORK SESSION] ${resultText}`, maxLines: 1 });
   }
 
   if (candidateTaskRows) {
@@ -813,6 +829,15 @@ function compactPreparationResultText(text: string) {
   return text
     .replace(/^Prepared [^;]+;/, "Prepared;")
     .replace(/^Already prepared [^;]+;/, "Already prepared;");
+}
+
+function compactActiveWorkSessionResultText(text: string) {
+  return text
+    .replace(/^Work session active [^;]+;/, "Active;")
+    .replace(/^Already started [^;]+;/, "Already started;")
+    .replace(/; [^;]+; Work started;/, "; Work started;")
+    .replace("Agent execution not started", "No agent execution")
+    .replace("No repository mutation", "Repo safe");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {
