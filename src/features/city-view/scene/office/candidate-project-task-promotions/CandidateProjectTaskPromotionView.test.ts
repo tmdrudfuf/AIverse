@@ -30,6 +30,21 @@ describe("CandidateProjectTaskPromotionView", () => {
     expect(rows.resultText).toContain("+1 more");
   });
 
+  it("bounds long blocked-result task references", () => {
+    const rows = createCandidateProjectTaskPromotionDisplayRows(collection([
+      result({
+        status: "Ineligible",
+        candidateTaskId: "daily-proof:candidate-task:very-long-candidate-id",
+        createdProjectTaskId: undefined,
+        reasonCodes: ["STALE_ASSIGNMENT"],
+        activeTaskCreated: false,
+      }),
+    ]));
+
+    expect(rows.resultText).toContain("daily-proof:candidate...");
+    expect(rows.resultText).toContain("STALE_ASSIGNMENT");
+  });
+
   it("renders empty state", () => {
     expect(createCandidateProjectTaskPromotionDisplayRows(undefined).statusText).toBe("No promotion attempts");
     expect(createCandidateProjectTaskPromotionDisplayRows(collection([])).statusText).toBe("No promotion attempts");

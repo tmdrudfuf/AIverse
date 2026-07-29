@@ -985,6 +985,41 @@ describe("OfficeProjectPortalView", () => {
     assertRowInsidePanel(resultRow, lowerPanel);
   });
 
+  it("drops promotion result rows before promotion review rows when the lower panel is crowded", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("Approved"),
+    };
+    state.candidateProjectTaskPromotionResultCollections = {
+      "daily-proof": createProjectTaskPromotionResultCollection("Promoted"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(findRenderedRow(renderedText, "[ISSUES]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION REVIEW]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[PROMOTION RESULT]")).toBeUndefined();
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);

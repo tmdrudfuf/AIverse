@@ -1073,7 +1073,6 @@ export class OfficeProjectPortalController {
       this.state.selectedTaskProjectId = projectId;
       this.state.selectedTaskIndex = Math.max(0, outcome.taskCollection.tasks.findIndex((task) => task.id === outcome.result.createdProjectTaskId));
       this.state.selectedTaskId = outcome.result.createdProjectTaskId;
-      void this.prepareTaskAnalyses(outcome.taskCollection.tasks, projectId);
     }
 
     const existingResults = this.state.candidateProjectTaskPromotionResultCollections[projectId];

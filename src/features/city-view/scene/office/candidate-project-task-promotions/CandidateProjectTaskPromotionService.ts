@@ -41,7 +41,6 @@ export class CandidateProjectTaskPromotionService {
     if (!task) return { result: blocked(base, "Ineligible", ["TASK_NOT_FOUND"]) };
     const provenance = createCandidatePromotionProvenance(task);
 
-    if (!task.projectId) return { result: blocked({ ...base, candidateTaskProvenance: provenance }, "Ineligible", ["MISSING_PROJECT_ID"]) };
     if (!task.originatingIssueId || !Number.isFinite(task.issueNumber)) {
       return { result: blocked({ ...base, candidateTaskProvenance: provenance }, "Ineligible", ["MISSING_CANDIDATE_PROVENANCE"]) };
     }

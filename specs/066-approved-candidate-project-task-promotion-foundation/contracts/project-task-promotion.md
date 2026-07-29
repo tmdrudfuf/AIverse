@@ -21,7 +21,7 @@ Output:
 
 ```text
 CandidateProjectTaskPromotionResult
-Updated TaskCollection only when status = Promoted
+Updated TaskCollection when status = Promoted. `AlreadyPromoted` may include an unchanged copied TaskCollection for diagnostics/idempotency; callers must not apply it as a mutation.
 ```
 
 ## Status Contract
