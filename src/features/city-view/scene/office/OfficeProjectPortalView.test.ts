@@ -11,6 +11,7 @@ import type { CandidatePromotionReviewCollection } from "./candidate-promotions/
 import type { ConfirmedEmployeeAssignmentResultCollection } from "./confirmed-assignments/ConfirmedEmployeeAssignmentTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
 import {
   INTERNAL_SIMULATION_PROJECT_DASHBOARD_PROVIDER_ID,
   type ProjectDashboardSnapshot,
@@ -1059,6 +1060,45 @@ describe("OfficeProjectPortalView", () => {
     assertRowInsidePanel(confirmedAssignmentRow, lowerPanel);
   });
 
+  it("renders work-session preparation rows after confirmed assignment rows with inactive no-agent wording", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [],
+        }],
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.confirmedEmployeeAssignmentResultCollections = {
+      "daily-proof": createConfirmedAssignmentResultCollection("Assigned"),
+    };
+    state.preparedWorkSessionResultCollections = {
+      "daily-proof": createPreparedWorkSessionResultCollection("Prepared"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const confirmedAssignmentRow = findRenderedRow(renderedText, "[CONFIRMED ASSIGNMENT]");
+    const preparationRow = findRenderedRow(renderedText, "[WORK SESSION PREPARATION]");
+
+    expect(preparationRow?.text).toContain("Prepared");
+    expect(preparationRow?.text).toContain("Not started");
+    expect(preparationRow?.text).toContain("Inactive");
+    expect(preparationRow?.text).toContain("No agent execution");
+    expect(preparationRow?.text).not.toMatch(/Working|Active session|Executing|Running Codex|Running Claude/i);
+    assertRowClears(confirmedAssignmentRow, preparationRow);
+    assertRowInsidePanel(preparationRow, lowerPanel);
+  });
+
   it("drops confirmed assignment rows before promotion result rows when the lower panel is crowded", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
@@ -1089,6 +1129,9 @@ describe("OfficeProjectPortalView", () => {
     state.confirmedEmployeeAssignmentResultCollections = {
       "daily-proof": createConfirmedAssignmentResultCollection("Assigned"),
     };
+    state.preparedWorkSessionResultCollections = {
+      "daily-proof": createPreparedWorkSessionResultCollection("Prepared"),
+    };
 
     new OfficeProjectPortalView(scene, state);
 
@@ -1096,6 +1139,7 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[PROMOTION REVIEW]")).toBeDefined();
     expect(findRenderedRow(renderedText, "[PROMOTION RESULT]")).toBeUndefined();
     expect(findRenderedRow(renderedText, "[CONFIRMED ASSIGNMENT]")).toBeUndefined();
+    expect(findRenderedRow(renderedText, "[WORK SESSION PREPARATION]")).toBeUndefined();
   });
 
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
@@ -1285,6 +1329,8 @@ function createPortalState(options: {
     candidateProjectTaskPromotionResultCollections: {},
     confirmedEmployeeAssignmentRecords: {},
     confirmedEmployeeAssignmentResultCollections: {},
+    preparedWorkSessionRecords: {},
+    preparedWorkSessionResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1545,6 +1591,39 @@ function createConfirmedAssignmentResultCollection(
     resultCount: 1,
     generatedAt: "2026-01-02T00:00:00.000Z",
     rulesetVersion: "confirmed-assignment-v1",
+  };
+}
+
+function createPreparedWorkSessionResultCollection(
+  status: "Prepared" | "AlreadyPrepared" | "Ineligible" | "Unavailable" | "Conflict" | "Failed",
+): PreparedWorkSessionResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:prepared-work-session-result:task-12:prepared-session-v1",
+      projectId: "daily-proof",
+      projectTaskId: "task-12",
+      confirmedAssignmentId: "daily-proof:task-assignment:task-12:gpt-engineer:confirmed-assignment-v1",
+      employeeId: "gpt-engineer",
+      employeeDisplayName: "GPT Engineer",
+      preparedSessionId: "daily-proof:prepared-work-session:task-12:daily-proof:task-assignment:task-12:gpt-engineer:confirmed-assignment-v1:prepared-session-v1",
+      status,
+      reasonCodes: [status === "Prepared" ? "PREPARED" : status === "AlreadyPrepared" ? "ALREADY_PREPARED" : "EMPLOYEE_CONFLICT"],
+      prepared: status === "Prepared" || status === "AlreadyPrepared",
+      duplicateExistingPreparation: status === "AlreadyPrepared",
+      humanPrepared: status === "Prepared" || status === "AlreadyPrepared",
+      active: false,
+      workStarted: false,
+      executionStarted: false,
+      employeeMoved: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-03T00:00:00.000Z",
+      rulesetVersion: "prepared-session-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-03T00:00:00.000Z",
+    rulesetVersion: "prepared-session-v1",
   };
 }
 
