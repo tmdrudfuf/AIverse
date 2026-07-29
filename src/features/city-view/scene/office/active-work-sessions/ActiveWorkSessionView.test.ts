@@ -21,6 +21,15 @@ describe("ActiveWorkSessionView", () => {
     expect(createActiveWorkSessionDisplayRows(collection([result("Conflict")])).resultText).toContain("Start conflict");
   });
 
+  it("does not claim work started for blocked or failed start results", () => {
+    for (const status of ["Ineligible", "Unavailable", "Conflict", "Failed"] as const) {
+      const rows = createActiveWorkSessionDisplayRows(collection([result(status)]));
+
+      expect(rows.resultText).toContain("Not started");
+      expect(rows.resultText).not.toContain("Work started");
+    }
+  });
+
   it("bounds long identifiers and reports additional results", () => {
     const rows = createActiveWorkSessionDisplayRows(collection([
       result("Started", {

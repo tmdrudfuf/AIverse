@@ -33,7 +33,8 @@ function formatResult(
     ? `; ${truncateForRow(result.reasonCodes.join("/"), RESULT_REASON_MAX_LENGTH)}`
     : "";
   const hiddenText = hiddenCount > 0 ? `; +${hiddenCount} more` : "";
-  return `${formatStatus(result.status)}${taskRef}${employee}; Work started; Agent execution not started; No repository mutation${reason}${hiddenText}`;
+  const workState = result.workStarted ? "Work started" : "Not started";
+  return `${formatStatus(result.status)}${taskRef}${employee}; ${workState}; Agent execution not started; No repository mutation${reason}${hiddenText}`;
 }
 
 function formatStatus(status: ActiveWorkSessionStartResultCollection["results"][number]["status"]) {
