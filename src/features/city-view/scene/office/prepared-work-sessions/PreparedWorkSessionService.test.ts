@@ -64,6 +64,48 @@ describe("PreparedWorkSessionService", () => {
     expect(second.preparedSession?.id).toBe(first.preparedSession?.id);
   });
 
+  it("revalidates current state before returning AlreadyPrepared for a repeated command", () => {
+    const service = new PreparedWorkSessionService();
+    const first = service.prepare(createInput());
+    const second = service.prepare(createInput({
+      taskCollection: {
+        projectId: "daily-proof",
+        tasks: [createTask({ status: "In Progress" })],
+      },
+      existingPreparedSessions: {
+        [first.preparedSession!.id]: first.preparedSession!,
+      },
+    }));
+
+    expect(second.result).toMatchObject({
+      status: "Ineligible",
+      reasonCodes: ["TASK_ALREADY_STARTED"],
+      prepared: false,
+      duplicateExistingPreparation: false,
+    });
+    expect(second.preparedSession).toBeUndefined();
+  });
+
+  it("blocks repeated preparation when a later active employee work session appears", () => {
+    const service = new PreparedWorkSessionService();
+    const first = service.prepare(createInput());
+    const second = service.prepare(createInput({
+      existingPreparedSessions: {
+        [first.preparedSession!.id]: first.preparedSession!,
+      },
+      workSessions: {
+        "other-task": [createWorkSession()],
+      },
+    }));
+
+    expect(second.result).toMatchObject({
+      status: "Conflict",
+      reasonCodes: ["EMPLOYEE_CONFLICT"],
+      prepared: false,
+      duplicateExistingPreparation: false,
+    });
+  });
+
   it("blocks invalid task states and assignee mismatches", () => {
     expect(prepareWithTask({ assigneeId: undefined, assignee: undefined }).result.reasonCodes).toEqual(["CONFIRMED_ASSIGNMENT_STALE"]);
     expect(prepareWithTask({ assigneeId: "other" }).result.reasonCodes).toEqual(["CONFIRMED_ASSIGNMENT_STALE"]);

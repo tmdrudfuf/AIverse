@@ -50,29 +50,6 @@ export class PreparedWorkSessionService {
       };
     }
 
-    const existingSessionId = createPreparedWorkSessionId(request.projectId, request.projectTaskId, request.confirmedAssignmentId);
-    const existingSession = input.existingPreparedSessions[existingSessionId];
-    if (existingSession) {
-      return {
-        result: {
-          ...base,
-          employeeId: existingSession.employeeId,
-          employeeDisplayName: existingSession.employeeDisplayName,
-          preparedSessionId: existingSession.id,
-          status: "AlreadyPrepared",
-          reasonCodes: ["ALREADY_PREPARED"],
-          prepared: true,
-          duplicateExistingPreparation: true,
-          humanPrepared: true,
-        },
-        preparedSession: copyPreparedWorkSessionRecord({
-          ...existingSession,
-          status: "AlreadyPrepared",
-          reasonCodes: ["ALREADY_PREPARED"],
-        }),
-      };
-    }
-
     const assignment = input.confirmedAssignments?.[request.confirmedAssignmentId];
     if (!assignment) return { result: blocked({ ...base, candidateTaskId: provenance.candidateTaskId }, "Unavailable", ["CONFIRMED_ASSIGNMENT_MISSING"]) };
 
@@ -103,6 +80,30 @@ export class PreparedWorkSessionService {
           employeeBlock === "EMPLOYEE_UNAVAILABLE" ? "Unavailable" : "Conflict",
           [employeeBlock],
         ),
+      };
+    }
+
+    const existingSessionId = createPreparedWorkSessionId(request.projectId, request.projectTaskId, request.confirmedAssignmentId);
+    const existingSession = input.existingPreparedSessions[existingSessionId];
+    if (existingSession) {
+      return {
+        result: {
+          ...base,
+          candidateTaskId: provenance.candidateTaskId,
+          employeeId: existingSession.employeeId,
+          employeeDisplayName: existingSession.employeeDisplayName,
+          preparedSessionId: existingSession.id,
+          status: "AlreadyPrepared",
+          reasonCodes: ["ALREADY_PREPARED"],
+          prepared: true,
+          duplicateExistingPreparation: true,
+          humanPrepared: true,
+        },
+        preparedSession: copyPreparedWorkSessionRecord({
+          ...existingSession,
+          status: "AlreadyPrepared",
+          reasonCodes: ["ALREADY_PREPARED"],
+        }),
       };
     }
 
@@ -229,7 +230,7 @@ function getTaskBlockReason(
   if (task.status === "Done") return "TASK_COMPLETED";
   if (task.status !== "Todo") return "TASK_ALREADY_STARTED";
   if (!task.assigneeId) return "TASK_UNASSIGNED";
-  if (task.assigneeId !== assignment.employeeId || (task.assignee && task.assignee !== assignment.employeeDisplayName)) {
+  if (task.assignee && task.assignee !== assignment.employeeDisplayName) {
     return "TASK_ASSIGNEE_MISMATCH";
   }
   return undefined;

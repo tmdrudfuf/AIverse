@@ -567,6 +567,45 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     });
   });
 
+  it("revalidates an already-prepared assignment and blocks stale started task state", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    const preparedRecordId = Object.values(internals.state.preparedWorkSessionRecords)[0]?.id;
+    const task = internals.state.taskCollections["daily-proof"]!.tasks[0]!;
+    internals.state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [{ ...task, status: "In Progress" }],
+    };
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(Object.values(internals.state.preparedWorkSessionRecords)).toHaveLength(1);
+    expect(Object.values(internals.state.preparedWorkSessionRecords)[0]?.id).toBe(preparedRecordId);
+    expect(internals.state.preparedWorkSessionResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Ineligible",
+      reasonCodes: ["TASK_ALREADY_STARTED"],
+      prepared: false,
+      duplicateExistingPreparation: false,
+    });
+  });
+
   it("blocks preparation when employee has an active work session at command time", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
