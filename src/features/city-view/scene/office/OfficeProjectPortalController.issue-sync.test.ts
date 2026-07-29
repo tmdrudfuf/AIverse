@@ -8,6 +8,7 @@ import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTyp
 import type { Employee } from "./employees/EmployeeTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
+import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 
 describe("OfficeProjectPortalController issue sync concurrency and isolation", () => {
@@ -390,7 +391,61 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     expect(internals.state.workSessions).toEqual(workSessionsBefore);
   });
 
-  it("repeated promotion keypress returns already promoted without duplicating tasks", async () => {
+  it("confirms the recommended employee for a promoted ProjectTask without starting work", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    const employeesBefore = structuredClone(internals.state.employees);
+    const workSessionsBefore = structuredClone(internals.state.workSessions);
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve locally
+    controller.updateInput(createInput({ enterPressed: true })); // promote to ProjectTask
+    controller.updateInput(createInput({ enterPressed: true })); // confirm assignment
+
+    const tasks = internals.state.taskCollections["daily-proof"].tasks;
+    const assignmentResult = internals.state.confirmedEmployeeAssignmentResultCollections["daily-proof"]?.results[0];
+    const assignmentRecord = Object.values(internals.state.confirmedEmployeeAssignmentRecords)[0];
+
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      assigneeId: "gpt-engineer",
+      assignee: "GPT Engineer",
+      status: "Todo",
+    });
+    expect(tasks[0]?.activityLog?.filter((activity) => activity.type === "employee_assigned")).toHaveLength(1);
+    expect(assignmentResult).toMatchObject({
+      status: "Assigned",
+      assignedTask: true,
+      humanConfirmed: true,
+      workStarted: false,
+      workSessionCreated: false,
+      executionStarted: false,
+    });
+    expect(assignmentRecord).toMatchObject({
+      projectTaskId: tasks[0]?.id,
+      employeeId: "gpt-engineer",
+      humanConfirmed: true,
+      workStarted: false,
+      workSessionCreated: false,
+      executionStarted: false,
+    });
+    expect(internals.state.employees).toEqual(employeesBefore);
+    expect(internals.state.workSessions).toEqual(workSessionsBefore);
+  });
+
+  it("repeated assignment confirmation is idempotent and creates no duplicate activity", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     setDailyProofIdentity(internals);
@@ -409,12 +464,52 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     controller.updateInput(createInput({ enterPressed: true }));
     controller.updateInput(createInput({ enterPressed: true }));
     controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
 
     const tasks = internals.state.taskCollections["daily-proof"].tasks;
-    const result = internals.state.candidateProjectTaskPromotionResultCollections["daily-proof"]?.results[0];
+    const result = internals.state.confirmedEmployeeAssignmentResultCollections["daily-proof"]?.results[0];
     expect(tasks).toHaveLength(1);
-    expect(result?.status).toBe("AlreadyPromoted");
-    expect(result?.duplicateExistingTask).toBe(true);
+    expect(tasks[0]?.activityLog?.filter((activity) => activity.type === "employee_assigned")).toHaveLength(1);
+    expect(Object.values(internals.state.confirmedEmployeeAssignmentRecords)).toHaveLength(1);
+    expect(result?.status).toBe("AlreadyAssigned");
+    expect(result?.duplicateExistingAssignment).toBe(true);
+  });
+
+  it("blocks confirmed assignment when the recommended employee becomes unavailable before command time", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    let issueSyncReadCount = 0;
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => {
+        issueSyncReadCount += 1;
+        return succeededIssueCollectionWithBug();
+      },
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+    internals.state.employees = [employee({ id: "gpt-engineer", status: "Offline", capabilities: ["Coding"] })];
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve locally
+    controller.updateInput(createInput({ enterPressed: true })); // promote to ProjectTask
+    controller.updateInput(createInput({ enterPressed: true })); // blocked assignment attempt
+
+    const task = internals.state.taskCollections["daily-proof"].tasks[0];
+    const result = internals.state.confirmedEmployeeAssignmentResultCollections["daily-proof"]?.results[0];
+    expect(task?.assigneeId).toBeUndefined();
+    expect(result).toMatchObject({
+      status: "Unavailable",
+      reasonCodes: ["EMPLOYEE_UNAVAILABLE"],
+      assignedTask: false,
+      workStarted: false,
+    });
+    expect(Object.values(internals.state.confirmedEmployeeAssignmentRecords)).toHaveLength(0);
   });
 
   it("does not auto-promote merely because a Candidate Task is approved", async () => {
@@ -550,6 +645,8 @@ type ControllerInternals = {
     candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
     candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
     candidateProjectTaskPromotionResultCollections: Record<string, CandidateProjectTaskPromotionResultCollection>;
+    confirmedEmployeeAssignmentRecords: ProjectPortalState["confirmedEmployeeAssignmentRecords"];
+    confirmedEmployeeAssignmentResultCollections: ProjectPortalState["confirmedEmployeeAssignmentResultCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, unknown[]>;

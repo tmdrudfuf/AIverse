@@ -3,6 +3,7 @@ import { createCandidateAssignmentDisplayRows, type CandidateAssignmentDisplayRo
 import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTaskPromotionDisplayRows } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionView";
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
+import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -265,6 +266,12 @@ export class OfficeProjectPortalView {
     const candidateProjectTaskPromotionRows = candidateProjectTaskPromotionCollection
       ? createCandidateProjectTaskPromotionDisplayRows(candidateProjectTaskPromotionCollection)
       : undefined;
+    const confirmedEmployeeAssignmentCollection = dashboardProjectId
+      ? state.confirmedEmployeeAssignmentResultCollections[dashboardProjectId]
+      : undefined;
+    const confirmedEmployeeAssignmentRows = confirmedEmployeeAssignmentCollection
+      ? createConfirmedEmployeeAssignmentDisplayRows(confirmedEmployeeAssignmentCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -276,6 +283,7 @@ export class OfficeProjectPortalView {
         candidateAssignmentRows,
         candidatePromotionRows,
         candidateProjectTaskPromotionRows,
+        confirmedEmployeeAssignmentRows,
       ),
     );
     const lowerRows = fitProjectDashboardLowerRows(preparedLowerRows, maxLowerPanelHeight);
@@ -611,6 +619,7 @@ function createProjectDashboardLowerRows(
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
   candidateProjectTaskPromotionRows?: CandidateProjectTaskPromotionDisplayRows,
+  confirmedEmployeeAssignmentRows?: ConfirmedEmployeeAssignmentDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
@@ -674,6 +683,13 @@ function createProjectDashboardLowerRows(
       ? `; ${candidateProjectTaskPromotionRows.resultText}`
       : "";
     lowerRows.push({ text: `[PROMOTION RESULT] ${candidateProjectTaskPromotionRows.statusText}${resultText}`, maxLines: 1 });
+  }
+
+  if (confirmedEmployeeAssignmentRows) {
+    const resultText = confirmedEmployeeAssignmentRows.resultText
+      ? `; ${confirmedEmployeeAssignmentRows.resultText}`
+      : "";
+    lowerRows.push({ text: `[CONFIRMED ASSIGNMENT] ${confirmedEmployeeAssignmentRows.statusText}${resultText}`, maxLines: 1 });
   }
 
   return lowerRows;

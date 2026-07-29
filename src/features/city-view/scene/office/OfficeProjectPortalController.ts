@@ -17,6 +17,10 @@ import { CandidateProjectTaskPromotionService } from "./candidate-project-task-p
 import { CandidatePromotionService } from "./candidate-promotions/CandidatePromotionService";
 import type { CandidatePromotionReview, CandidatePromotionStatus } from "./candidate-promotions/CandidatePromotionTypes";
 import { CandidateTaskService } from "./candidate-tasks/CandidateTaskService";
+import {
+  ConfirmedEmployeeAssignmentService,
+  parsePromotedProjectTaskProvenance,
+} from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
@@ -104,6 +108,7 @@ export class OfficeProjectPortalController {
   private candidateAssignmentService: CandidateAssignmentService;
   private candidatePromotionService: CandidatePromotionService;
   private candidateProjectTaskPromotionService: CandidateProjectTaskPromotionService;
+  private confirmedEmployeeAssignmentService: ConfirmedEmployeeAssignmentService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -151,6 +156,7 @@ export class OfficeProjectPortalController {
     this.candidateAssignmentService = new CandidateAssignmentService();
     this.candidatePromotionService = new CandidatePromotionService();
     this.candidateProjectTaskPromotionService = new CandidateProjectTaskPromotionService();
+    this.confirmedEmployeeAssignmentService = new ConfirmedEmployeeAssignmentService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -647,6 +653,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const assigned = this.confirmSelectedEmployeeAssignmentForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (assigned) {
+        this.view.render(this.state);
+        return;
+      }
+
       const promoted = this.promoteSelectedCandidateTask(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1078,6 +1093,63 @@ export class OfficeProjectPortalController {
     const existingResults = this.state.candidateProjectTaskPromotionResultCollections[projectId];
     this.state.candidateProjectTaskPromotionResultCollections[projectId] =
       this.candidateProjectTaskPromotionService.upsertResult(existingResults, outcome.result);
+    this.state.employees = beforeEmployees;
+    this.state.workSessions = beforeWorkSessions;
+    return true;
+  }
+
+  private confirmSelectedEmployeeAssignmentForPromotion(projectId: string, candidateTaskId: string) {
+    this.confirmedEmployeeAssignmentService ??= new ConfirmedEmployeeAssignmentService();
+    this.state.confirmedEmployeeAssignmentRecords ??= {};
+    this.state.confirmedEmployeeAssignmentResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const assignment = this.state.candidateAssignmentCollections[projectId]?.recommendations
+      .find((item) => item.candidateTaskId === candidateTaskId);
+    const provenance = parsePromotedProjectTaskProvenance(promotedTask.description);
+    const assignmentRecommendationId = provenance?.assignmentRecommendationId ?? assignment?.id;
+    const employeeId = assignment?.recommendedEmployeeId;
+    if (!assignmentRecommendationId || !employeeId) return false;
+
+    const beforeEmployees = this.state.employees;
+    const beforeWorkSessions = this.state.workSessions;
+    const outcome = this.confirmedEmployeeAssignmentService.confirm({
+      request: {
+        projectId,
+        projectTaskId: promotedTask.id,
+        assignmentRecommendationId,
+        employeeId,
+        requestedAt: new Date().toISOString(),
+      },
+      taskCollection,
+      assignments: this.state.candidateAssignmentCollections[projectId],
+      employees: this.state.employees,
+      workSessions: this.state.workSessions,
+      existingAssignments: this.state.confirmedEmployeeAssignmentRecords,
+    });
+
+    if (outcome.taskCollection && outcome.result.status === "Assigned") {
+      this.state.taskCollections[projectId] = outcome.taskCollection;
+      this.state.selectedTaskProjectId = projectId;
+      this.state.selectedTaskIndex = Math.max(0, outcome.taskCollection.tasks.findIndex((task) => task.id === outcome.result.projectTaskId));
+      this.state.selectedTaskId = outcome.result.projectTaskId;
+    }
+
+    if (outcome.assignmentRecord) {
+      this.state.confirmedEmployeeAssignmentRecords = this.confirmedEmployeeAssignmentService.upsertRecord(
+        this.state.confirmedEmployeeAssignmentRecords,
+        outcome.assignmentRecord,
+      );
+    }
+
+    const existingResults = this.state.confirmedEmployeeAssignmentResultCollections[projectId];
+    this.state.confirmedEmployeeAssignmentResultCollections[projectId] =
+      this.confirmedEmployeeAssignmentService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
     return true;
