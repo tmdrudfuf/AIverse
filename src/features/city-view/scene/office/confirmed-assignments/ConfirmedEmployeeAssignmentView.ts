@@ -27,11 +27,10 @@ function createResultText(
   result: ConfirmedEmployeeAssignmentResultCollection["results"][number],
   hiddenCount: number,
 ) {
-  const employee = result.status === "Assigned" || result.status === "AlreadyAssigned"
-    ? ""
-    : result.employeeId
-      ? ` ${truncateForRow(result.employeeId, RESULT_EMPLOYEE_MAX_LENGTH)}`
-      : "";
+  const employeeLabel = result.employeeDisplayName ?? result.employeeId;
+  const employee = employeeLabel
+    ? ` ${truncateForRow(employeeLabel, RESULT_EMPLOYEE_MAX_LENGTH)}`
+    : "";
   const reason = result.status === "Assigned" || result.status === "AlreadyAssigned"
     ? ""
     : `; ${truncateForRow(result.reasonCodes.join(","), RESULT_REASON_MAX_LENGTH)}`;
@@ -41,7 +40,7 @@ function createResultText(
 }
 
 function formatStatus(status: ConfirmedEmployeeAssignmentResultCollection["results"][number]["status"]) {
-  if (status === "Assigned") return "Assignment confirmed";
+  if (status === "Assigned") return "Confirmed";
   if (status === "AlreadyAssigned") return "Already assigned";
   if (status === "Conflict") return "Assignment blocked";
   if (status === "Unavailable") return "Assignment unavailable";

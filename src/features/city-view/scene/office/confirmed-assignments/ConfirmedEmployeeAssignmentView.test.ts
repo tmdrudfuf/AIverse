@@ -14,7 +14,7 @@ describe("ConfirmedEmployeeAssignmentView", () => {
     const rows = createConfirmedEmployeeAssignmentDisplayRows(createCollection([createResult("Assigned")]));
 
     expect(rows.statusText).toBe("1");
-    expect(rows.resultText).toContain("Assignment confirmed");
+    expect(rows.resultText).toContain("Confirmed GPT Engineer");
     expect(rows.resultText).toContain("Not started");
     expect(rows.resultText).toContain("No work session");
     expect(rows.resultText).not.toMatch(/Working|Executing|Coding now|Running task|Work session active/i);
@@ -32,7 +32,11 @@ describe("ConfirmedEmployeeAssignmentView", () => {
   it("bounds long employee IDs and reason text with +N more", () => {
     const rows = createConfirmedEmployeeAssignmentDisplayRows(createCollection([
       createResult("Ineligible", { reasonCodes: ["RECOMMENDATION_STALE", "PROJECT_MISMATCH"] }),
-      createResult("Conflict", { employeeId: "employee-with-a-very-long-identifier", reasonCodes: ["EMPLOYEE_CONFLICT"] }),
+      createResult("Conflict", {
+        employeeId: "employee-with-a-very-long-identifier",
+        employeeDisplayName: undefined,
+        reasonCodes: ["EMPLOYEE_CONFLICT"],
+      }),
     ]));
 
     expect(rows.statusText).toBe("2");
@@ -63,6 +67,7 @@ function createResult(
     projectTaskId: "task-12",
     candidateTaskId: "candidate-12",
     employeeId: "gpt-engineer",
+    employeeDisplayName: "GPT Engineer",
     assignmentRecordId: createConfirmedEmployeeAssignmentRecordId("daily-proof", "task-12", "gpt-engineer"),
     status,
     reasonCodes: assigned ? [status === "Assigned" ? "ASSIGNED" : "ALREADY_ASSIGNED"] : ["EMPLOYEE_CONFLICT"],

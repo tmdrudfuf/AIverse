@@ -1051,7 +1051,7 @@ describe("OfficeProjectPortalView", () => {
     const promotionResultRow = findRenderedRow(renderedText, "[PROMOTION RESULT]");
     const confirmedAssignmentRow = findRenderedRow(renderedText, "[CONFIRMED ASSIGNMENT]");
 
-    expect(confirmedAssignmentRow?.text).toContain("Assignment confirmed");
+    expect(confirmedAssignmentRow?.text).toContain("Confirmed GPT Engineer");
     expect(confirmedAssignmentRow?.text).toContain("Not started");
     expect(confirmedAssignmentRow?.text).toContain("No work session");
     expect(confirmedAssignmentRow?.text).not.toMatch(/Working|Executing|Coding now|Running task|Work session active/i);
@@ -1529,6 +1529,7 @@ function createConfirmedAssignmentResultCollection(
       projectTaskId: "task-12",
       candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
       employeeId: "gpt-engineer",
+      employeeDisplayName: "GPT Engineer",
       assignmentRecordId: "daily-proof:task-assignment:task-12:gpt-engineer:confirmed-assignment-v1",
       status,
       reasonCodes: [status === "Assigned" ? "ASSIGNED" : status === "AlreadyAssigned" ? "ALREADY_ASSIGNED" : "EMPLOYEE_CONFLICT"],

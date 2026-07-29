@@ -28,11 +28,13 @@ describe("ConfirmedEmployeeAssignmentService", () => {
       id: createConfirmedEmployeeAssignmentRecordId("daily-proof", "task-12", "gpt-engineer"),
       projectTaskId: "task-12",
       employeeId: "gpt-engineer",
+      employeeDisplayName: "GPT Engineer",
       humanConfirmed: true,
       workStarted: false,
       workSessionCreated: false,
       executionStarted: false,
     });
+    expect(outcome.result.employeeDisplayName).toBe("GPT Engineer");
     expect(outcome.taskCollection?.tasks[0]).toMatchObject({
       id: "task-12",
       status: "Todo",
@@ -126,6 +128,40 @@ describe("ConfirmedEmployeeAssignmentService", () => {
     expect(new ConfirmedEmployeeAssignmentService().confirm(createInput({
       workSessions: { "other-task": [runningSession] },
     })).result.reasonCodes).toEqual(["EMPLOYEE_CONFLICT"]);
+  });
+
+  it("does not treat another employee with the same display name as a conflict", () => {
+    const sameNameTask: ProjectTask = {
+      ...createTask(),
+      id: "other-task",
+      assigneeId: "other-engineer",
+      assignee: "GPT Engineer",
+    };
+    const outcome = new ConfirmedEmployeeAssignmentService().confirm(createInput({
+      taskCollection: {
+        projectId: "daily-proof",
+        tasks: [createTask(), sameNameTask],
+      },
+    }));
+
+    expect(outcome.result.status).toBe("Assigned");
+    expect(outcome.taskCollection?.tasks[0]?.assigneeId).toBe("gpt-engineer");
+  });
+
+  it("blocks stale project task collections and assignment collections", () => {
+    expect(new ConfirmedEmployeeAssignmentService().confirm(createInput({
+      taskCollection: {
+        projectId: "other-project",
+        tasks: [createTask({ projectId: "other-project" })],
+      },
+    })).result.reasonCodes).toEqual(["PROJECT_MISMATCH"]);
+
+    expect(new ConfirmedEmployeeAssignmentService().confirm(createInput({
+      assignments: {
+        ...createAssignments(),
+        projectId: "other-project",
+      },
+    })).result.reasonCodes).toEqual(["PROJECT_MISMATCH"]);
   });
 
   it("keeps input tasks, employees, and work sessions immutable", () => {

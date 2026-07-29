@@ -62,6 +62,7 @@ export type ConfirmedEmployeeAssignmentResult = {
   projectTaskId: string;
   candidateTaskId?: string;
   employeeId?: string;
+  employeeDisplayName?: string;
   assignmentRecordId?: string;
   status: ConfirmedEmployeeAssignmentStatus;
   reasonCodes: ConfirmedEmployeeAssignmentReasonCode[];

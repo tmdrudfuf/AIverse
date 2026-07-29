@@ -1,4 +1,5 @@
 import type { CandidateAssignmentRecommendation } from "../candidate-assignments/CandidateAssignmentTypes";
+import { CANDIDATE_PROJECT_TASK_PROMOTION_RULESET_VERSION } from "../candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { Employee } from "../employees/EmployeeTypes";
 import type { ProjectTask, TaskActivity, TaskCollection } from "../tasks/ProjectTaskTypes";
 import type { WorkSession } from "../work-sessions/WorkSessionTypes";
@@ -57,6 +58,7 @@ export class ConfirmedEmployeeAssignmentService {
         result: {
           ...base,
           candidateTaskId: provenance.candidateTaskId,
+          employeeDisplayName: existingRecord.employeeDisplayName,
           assignmentRecordId: existingRecord.id,
           status: "AlreadyAssigned",
           reasonCodes: ["ALREADY_ASSIGNED"],
@@ -137,6 +139,7 @@ export class ConfirmedEmployeeAssignmentService {
       result: {
         ...base,
         candidateTaskId: provenance.candidateTaskId,
+        employeeDisplayName: employee.name,
         assignmentRecordId: record.id,
         status: "Assigned",
         reasonCodes: ["ASSIGNED"],
@@ -182,7 +185,9 @@ export class ConfirmedEmployeeAssignmentService {
 }
 
 export function parsePromotedProjectTaskProvenance(description: string): PromotedProjectTaskProvenance | undefined {
-  const marker = description.match(/\[AIverse Promotion: project=([^;\]]+);\s*candidateTask=([^;\]]+);\s*ruleset=candidate-promotion-v1\]/);
+  const marker = description.match(new RegExp(
+    `\\[AIverse Promotion: project=([^;\\]]+);\\s*candidateTask=([^;\\]]+);\\s*ruleset=${escapeRegExp(CANDIDATE_PROJECT_TASK_PROMOTION_RULESET_VERSION)}\\]`,
+  ));
   if (!marker?.[1] || !marker[2]) return undefined;
 
   return {
@@ -267,7 +272,7 @@ function getEmployeeBlockReason(
   const conflictingTask = tasks.find((task) =>
     task.id !== selectedTaskId &&
     task.status !== "Done" &&
-    (task.assigneeId === employee.id || task.assignee === employee.name)
+    task.assigneeId === employee.id
   );
   if (conflictingTask) return "EMPLOYEE_CONFLICT";
 
@@ -336,8 +341,12 @@ function createAssignedTask(task: ProjectTask, employee: Employee, assignedAt: s
   };
 }
 
-function isTaskAssignedToEmployee(task: ProjectTask, employeeId: string, employeeName: string) {
-  return task.assigneeId === employeeId || task.assignee === employeeName;
+function isTaskAssignedToEmployee(task: ProjectTask, employeeId: string, _employeeName: string) {
+  return task.assigneeId === employeeId;
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function copyTaskCollection(collection: { projectId: string; tasks: ReadonlyArray<ProjectTask> }): TaskCollection {

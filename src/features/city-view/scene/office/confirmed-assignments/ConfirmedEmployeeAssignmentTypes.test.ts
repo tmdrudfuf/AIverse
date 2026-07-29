@@ -50,6 +50,7 @@ function createResult(): ConfirmedEmployeeAssignmentResult {
     projectTaskId: "task-1",
     candidateTaskId: "candidate-1",
     employeeId: "employee-1",
+    employeeDisplayName: "Ada",
     assignmentRecordId: createConfirmedEmployeeAssignmentRecordId("daily-proof", "task-1", "employee-1"),
     status: "Assigned",
     reasonCodes: ["ASSIGNED"],
