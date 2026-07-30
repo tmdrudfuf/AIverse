@@ -16,6 +16,10 @@ import type {
   HumanExecutionApprovalCollection,
   HumanExecutionApprovalResultCollection,
 } from "./human-execution-approvals/HumanExecutionApprovalTypes";
+import type {
+  RuntimeStartCollection,
+  RuntimeStartResultCollection,
+} from "./runtime-start/RuntimeStartTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -771,6 +775,33 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       executionStarted: false,
       agentStarted: false,
     });
+    expect(internals.state.runtimeStartCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.runtimeStartResultCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
+    expect(internals.state.employees[0]?.status).toBe("Working");
+
+    controller.updateInput(createInput({ enterPressed: true })); // explicit runtime start
+
+    expect(internals.state.runtimeStartCollections["daily-proof"]?.starts).toHaveLength(1);
+    expect(internals.state.runtimeStartCollections["daily-proof"]?.starts[0]).toMatchObject({
+      startedBy: "Local Human",
+      executionApproved: true,
+      runtimePreflightPassed: true,
+      executionStarted: true,
+      agentStarted: false,
+      implementerStarted: false,
+      reviewerStarted: false,
+      validationStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(internals.state.runtimeStartResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Started",
+      reasonCodes: ["STARTED"],
+      started: true,
+      executionStarted: true,
+      agentStarted: false,
+    });
     expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
     expect(internals.state.employees[0]?.status).toBe("Working");
 
@@ -789,6 +820,14 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       status: "Blocked",
       reasonCodes: ["APPROVAL_ROLE_CONTEXT_MISMATCH"],
       runtimePreflightPassed: false,
+    });
+    expect(internals.state.runtimeStartCollections["daily-proof"]?.starts).toHaveLength(1);
+    expect(internals.state.runtimeStartResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["RUNTIME_START_ROLE_CONTEXT_MISMATCH"],
+      started: false,
+      executionStarted: false,
+      agentStarted: false,
     });
   });
 
@@ -1148,6 +1187,8 @@ type ControllerInternals = {
     humanExecutionApprovalResultCollections: Record<string, HumanExecutionApprovalResultCollection>;
     runtimePreflightCollections: ProjectPortalState["runtimePreflightCollections"];
     runtimePreflightResultCollections: ProjectPortalState["runtimePreflightResultCollections"];
+    runtimeStartCollections: Record<string, RuntimeStartCollection>;
+    runtimeStartResultCollections: Record<string, RuntimeStartResultCollection>;
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;

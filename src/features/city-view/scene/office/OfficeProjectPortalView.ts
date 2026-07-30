@@ -10,6 +10,7 @@ import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows
 import { createHumanExecutionApprovalDisplayRows, type HumanExecutionApprovalDisplayRows } from "./human-execution-approvals/HumanExecutionApprovalView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
 import { createRuntimePreflightDisplayRows, type RuntimePreflightDisplayRows } from "./runtime-preflight/RuntimePreflightView";
+import { createRuntimeStartDisplayRows, type RuntimeStartDisplayRows } from "./runtime-start/RuntimeStartView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -310,6 +311,16 @@ export class OfficeProjectPortalView {
     const runtimePreflightRows = runtimePreflightCollection || runtimePreflightResultCollection || humanExecutionApprovalCollection
       ? createRuntimePreflightDisplayRows(runtimePreflightCollection, runtimePreflightResultCollection)
       : undefined;
+    const runtimeStartCollection = dashboardProjectId ? state.runtimeStartCollections[dashboardProjectId] : undefined;
+    const runtimeStartResultCollection = dashboardProjectId ? state.runtimeStartResultCollections[dashboardProjectId] : undefined;
+    const runtimeStartRows = runtimeStartCollection || runtimeStartResultCollection || runtimePreflightResultCollection || humanExecutionApprovalCollection
+      ? createRuntimeStartDisplayRows(
+        runtimeStartCollection,
+        runtimeStartResultCollection,
+        runtimePreflightResultCollection,
+        humanExecutionApprovalCollection,
+      )
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -322,6 +333,7 @@ export class OfficeProjectPortalView {
         executionReadinessRows,
         humanExecutionApprovalRows,
         runtimePreflightRows,
+        runtimeStartRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -668,6 +680,7 @@ function createProjectDashboardLowerRows(
   executionReadinessRows?: ExecutionReadinessDisplayRows,
   humanExecutionApprovalRows?: HumanExecutionApprovalDisplayRows,
   runtimePreflightRows?: RuntimePreflightDisplayRows,
+  runtimeStartRows?: RuntimeStartDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -762,6 +775,19 @@ function createProjectDashboardLowerRows(
       text: `[RUNTIME PREFLIGHT] ${compactRuntimePreflightResultText(resultText)}${checkText}`,
       maxLines: 1,
       dropPriority: 11,
+      usePriorityFit: true,
+    });
+  }
+
+  if (runtimeStartRows) {
+    const resultText = runtimeStartRows.resultText ?? runtimeStartRows.statusText;
+    const startText = !runtimeStartRows.resultText && runtimeStartRows.startText
+      ? `; ${compactRuntimeStartText(runtimeStartRows.startText)}`
+      : "";
+    lowerRows.push({
+      text: `[RUNTIME START] ${compactRuntimeStartText(resultText)}${startText}`,
+      maxLines: 1,
+      dropPriority: 13,
       usePriorityFit: true,
     });
   }
@@ -1012,6 +1038,22 @@ function compactRuntimePreflightCheckText(text: string) {
     .replace(/RuntimeEnvironment:/g, "Runtime:")
     .replace(/ValidationCommands:/g, "Commands:")
     .replace(/WorkingTree:/g, "Tree:");
+}
+
+function compactRuntimeStartText(text: string) {
+  return text
+    .replace("Runtime Start Unavailable", "Start unavailable")
+    .replace("Human Approval Required", "Approval required")
+    .replace("Runtime Preflight Required", "Preflight required")
+    .replace("Runtime Start Blocked", "Start blocked")
+    .replace("Resolve Runtime Preflight", "Fix preflight")
+    .replace("Runtime Start Available", "Start available")
+    .replace("Explicit Human Start Required", "Explicit start required")
+    .replace("Runtime Start Recorded", "Start recorded")
+    .replace("Execution Started", "Execution Started")
+    .replace("Execution Not Started", "Not started")
+    .replace("Agents Not Started", "Agents not started")
+    .replace("Awaiting Implementer Start", "Awaiting implementer");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {
