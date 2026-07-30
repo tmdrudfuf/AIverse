@@ -6,6 +6,7 @@ import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { Employee } from "./employees/EmployeeTypes";
+import type { ActiveWorkSessionStartResultCollection } from "./active-work-sessions/ActiveWorkSessionTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -14,6 +15,7 @@ import type {
   PreparedWorkSessionResultCollection,
 } from "./prepared-work-sessions/PreparedWorkSessionTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
+import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
 describe("OfficeProjectPortalController issue sync concurrency and isolation", () => {
   it("keeps a newer Succeeded result even when an older request resolves Failed afterward", async () => {
@@ -535,7 +537,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     expect(internals.state.workSessions).toEqual(workSessionsBefore);
   });
 
-  it("repeated work-session preparation is idempotent and returns AlreadyPrepared", async () => {
+  it("does not duplicate prepared-session records when the next explicit input starts work", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     setDailyProofIdentity(internals);
@@ -560,10 +562,112 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
 
     expect(Object.values(internals.state.preparedWorkSessionRecords)).toHaveLength(1);
     expect(Object.values(internals.state.preparedWorkSessionRecords)[0]?.id).toBe(firstPreparedId);
-    expect(internals.state.preparedWorkSessionResultCollections["daily-proof"]?.results[0]).toMatchObject({
-      status: "AlreadyPrepared",
-      duplicateExistingPreparation: true,
+    expect(internals.state.activeWorkSessionStartResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Started",
       preparedSessionId: firstPreparedId,
+      started: true,
+    });
+  });
+
+  it("starts a prepared work session only after a distinct explicit input", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve locally
+    controller.updateInput(createInput({ enterPressed: true })); // promote to ProjectTask
+    controller.updateInput(createInput({ enterPressed: true })); // confirm assignment
+    controller.updateInput(createInput({ enterPressed: true })); // prepare only
+
+    expect(Object.values(internals.state.preparedWorkSessionRecords)).toHaveLength(1);
+    expect(internals.state.activeWorkSessionStartResultCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.workSessions).toEqual({});
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("Todo");
+    expect(internals.state.employees[0]?.status).toBe("Idle");
+
+    controller.updateInput(createInput({ enterPressed: true })); // start work session
+
+    const activeResult = internals.state.activeWorkSessionStartResultCollections["daily-proof"]?.results[0];
+    const activeSession = internals.state.workSessions[internals.state.taskCollections["daily-proof"]!.tasks[0]!.id]?.[0];
+    expect(activeResult).toMatchObject({
+      status: "Started",
+      started: true,
+      active: true,
+      workStarted: true,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(activeSession).toMatchObject({
+      status: "running",
+      employeeId: "gpt-engineer",
+      provider: "placeholder",
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]).toMatchObject({
+      status: "In Progress",
+      assigneeId: "gpt-engineer",
+      assignee: "GPT Engineer",
+    });
+    expect(internals.state.employees[0]).toMatchObject({
+      status: "Working",
+      assignedTaskId: internals.state.taskCollections["daily-proof"]?.tasks[0]?.id,
+      currentProjectId: "daily-proof",
+    });
+    expect(Object.values(internals.state.preparedWorkSessionRecords)[0]).toMatchObject({
+      active: false,
+      workStarted: false,
+      executionStarted: false,
+    });
+  });
+
+  it("revalidates an already-started session and blocks stale employee state", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    const firstSessionId = Object.values(internals.state.workSessions)[0]?.[0]?.id;
+    internals.state.employees = [employee({ id: "gpt-engineer", status: "Offline", capabilities: ["Coding"] })];
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(Object.values(internals.state.workSessions)[0]?.[0]?.id).toBe(firstSessionId);
+    expect(internals.state.activeWorkSessionStartResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Unavailable",
+      reasonCodes: ["EMPLOYEE_UNAVAILABLE"],
+      started: false,
+      duplicateExistingSession: false,
     });
   });
 
@@ -598,11 +702,11 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
 
     expect(Object.values(internals.state.preparedWorkSessionRecords)).toHaveLength(1);
     expect(Object.values(internals.state.preparedWorkSessionRecords)[0]?.id).toBe(preparedRecordId);
-    expect(internals.state.preparedWorkSessionResultCollections["daily-proof"]?.results[0]).toMatchObject({
+    expect(internals.state.activeWorkSessionStartResultCollections["daily-proof"]?.results[0]).toMatchObject({
       status: "Ineligible",
       reasonCodes: ["TASK_ALREADY_STARTED"],
-      prepared: false,
-      duplicateExistingPreparation: false,
+      started: false,
+      duplicateExistingSession: false,
     });
   });
 
@@ -824,9 +928,10 @@ type ControllerInternals = {
     confirmedEmployeeAssignmentResultCollections: ProjectPortalState["confirmedEmployeeAssignmentResultCollections"];
     preparedWorkSessionRecords: Record<string, PreparedWorkSessionRecord>;
     preparedWorkSessionResultCollections: Record<string, PreparedWorkSessionResultCollection>;
+    activeWorkSessionStartResultCollections: Record<string, ActiveWorkSessionStartResultCollection>;
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
-    workSessions: Record<string, unknown[]>;
+    workSessions: Record<string, WorkSession[]>;
   };
   issueSyncService: {
     readIssueSnapshots: (identity: { owner?: string; name?: string; provider: string }) => Promise<IssueSnapshotCollection>;

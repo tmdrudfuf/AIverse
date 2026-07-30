@@ -2,6 +2,7 @@ import type { PhaserScene } from "../shared/phaserTypes";
 import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
+import { ActiveWorkSessionStartService } from "./active-work-sessions/ActiveWorkSessionStartService";
 import { EmployeeConversationService } from "./conversations/EmployeeConversationService";
 import type {
   EmployeeConversation,
@@ -111,6 +112,7 @@ export class OfficeProjectPortalController {
   private candidateProjectTaskPromotionService: CandidateProjectTaskPromotionService;
   private confirmedEmployeeAssignmentService: ConfirmedEmployeeAssignmentService;
   private preparedWorkSessionService: PreparedWorkSessionService;
+  private activeWorkSessionStartService: ActiveWorkSessionStartService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -160,6 +162,7 @@ export class OfficeProjectPortalController {
     this.candidateProjectTaskPromotionService = new CandidateProjectTaskPromotionService();
     this.confirmedEmployeeAssignmentService = new ConfirmedEmployeeAssignmentService();
     this.preparedWorkSessionService = new PreparedWorkSessionService();
+    this.activeWorkSessionStartService = new ActiveWorkSessionStartService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -656,6 +659,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const started = this.startSelectedWorkSessionForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (started) {
+        this.view.render(this.state);
+        return;
+      }
+
       const prepared = this.prepareSelectedWorkSessionForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1219,6 +1231,67 @@ export class OfficeProjectPortalController {
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
+    return true;
+  }
+
+  private startSelectedWorkSessionForPromotion(projectId: string, candidateTaskId: string) {
+    this.activeWorkSessionStartService ??= new ActiveWorkSessionStartService();
+    this.state.activeWorkSessionStartResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask?.assigneeId) return false;
+
+    const preparedSession = Object.values(this.state.preparedWorkSessionRecords)
+      .find((record) =>
+        record.projectId === projectId &&
+        record.projectTaskId === promotedTask.id &&
+        record.candidateTaskId === candidateTaskId &&
+        record.employeeId === promotedTask.assigneeId
+      );
+    if (!preparedSession) return false;
+
+    const beforeAssignments = this.state.confirmedEmployeeAssignmentRecords;
+    const beforePreparedSessions = this.state.preparedWorkSessionRecords;
+    const outcome = this.activeWorkSessionStartService.start({
+      request: {
+        projectId,
+        projectTaskId: promotedTask.id,
+        preparedSessionId: preparedSession.id,
+        requestedAt: new Date().toISOString(),
+      },
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      preparedSessions: this.state.preparedWorkSessionRecords,
+      employees: this.state.employees,
+      activeSessions: this.state.workSessions,
+    });
+
+    if (
+      outcome.taskCollection &&
+      outcome.employees &&
+      outcome.activeSessions &&
+      outcome.result.status === "Started"
+    ) {
+      this.state.taskCollections[projectId] = outcome.taskCollection;
+      this.state.employees = outcome.employees;
+      this.state.workSessions = outcome.activeSessions;
+      this.state.selectedTaskProjectId = projectId;
+      this.state.selectedTaskIndex = Math.max(0, outcome.taskCollection.tasks.findIndex((task) => task.id === outcome.result.projectTaskId));
+      this.state.selectedTaskId = outcome.result.projectTaskId;
+      this.state.selectedWorkSessionId = outcome.result.activeSessionId;
+      this.refreshEmployeeSimulationSnapshotsForWorkStarted();
+    } else if (outcome.result.status === "AlreadyStarted") {
+      this.state.selectedWorkSessionId = outcome.result.activeSessionId;
+    }
+
+    const existingResults = this.state.activeWorkSessionStartResultCollections[projectId];
+    this.state.activeWorkSessionStartResultCollections[projectId] =
+      this.activeWorkSessionStartService.upsertResult(existingResults, outcome.result);
+    this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
+    this.state.preparedWorkSessionRecords = beforePreparedSessions;
     return true;
   }
 

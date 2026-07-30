@@ -118,6 +118,7 @@ export function createProjectPortalState(): ProjectPortalState {
     confirmedEmployeeAssignmentResultCollections: {},
     preparedWorkSessionRecords: {},
     preparedWorkSessionResultCollections: {},
+    activeWorkSessionStartResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

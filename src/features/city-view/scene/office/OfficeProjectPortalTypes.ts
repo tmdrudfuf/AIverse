@@ -16,6 +16,7 @@ import type {
   PreparedWorkSessionRecord,
   PreparedWorkSessionResultCollection,
 } from "./prepared-work-sessions/PreparedWorkSessionTypes";
+import type { ActiveWorkSessionStartResultCollection } from "./active-work-sessions/ActiveWorkSessionTypes";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -125,6 +126,7 @@ export type ProjectPortalState = {
   confirmedEmployeeAssignmentResultCollections: Record<string, ConfirmedEmployeeAssignmentResultCollection>;
   preparedWorkSessionRecords: Record<string, PreparedWorkSessionRecord>;
   preparedWorkSessionResultCollections: Record<string, PreparedWorkSessionResultCollection>;
+  activeWorkSessionStartResultCollections: Record<string, ActiveWorkSessionStartResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
