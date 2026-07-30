@@ -31,11 +31,19 @@ import { EmployeeSimulationService } from "./employees/EmployeeSimulationService
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
-import { createExecutionPlanCollection } from "./execution-plans/ExecutionPlanTypes";
+import { createExecutionPlanCollection, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
 import { createExecutionReadinessCollection, createExecutionReadinessResultCollection } from "./execution-readiness/ExecutionReadinessTypes";
 import { HumanExecutionApprovalService } from "./human-execution-approvals/HumanExecutionApprovalService";
 import { createHumanExecutionApprovalCollection } from "./human-execution-approvals/HumanExecutionApprovalTypes";
+import { RuntimePreflightService } from "./runtime-preflight/RuntimePreflightService";
+import { RepresentedRuntimeEnvironmentProvider } from "./runtime-preflight/RuntimePreflightProvider";
+import {
+  createRuntimePreflightCollection,
+  createRuntimePreflightResultCollection,
+  type RuntimeEnvironmentProvider,
+  type RuntimePreflightEvidence,
+} from "./runtime-preflight/RuntimePreflightTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -138,6 +146,8 @@ export class OfficeProjectPortalController {
   private executionPlanService: ExecutionPlanService;
   private executionReadinessService: ExecutionReadinessService;
   private humanExecutionApprovalService: HumanExecutionApprovalService;
+  private runtimePreflightService: RuntimePreflightService;
+  private runtimeEnvironmentProvider: RuntimeEnvironmentProvider;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -191,6 +201,8 @@ export class OfficeProjectPortalController {
     this.executionPlanService = new ExecutionPlanService();
     this.executionReadinessService = new ExecutionReadinessService();
     this.humanExecutionApprovalService = new HumanExecutionApprovalService();
+    this.runtimePreflightService = new RuntimePreflightService();
+    this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -687,6 +699,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const preflighted = this.runRuntimePreflightForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (preflighted) {
+        this.view.render(this.state);
+        return;
+      }
+
       const executionApproved = this.approveHumanExecutionForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1370,7 +1391,10 @@ export class OfficeProjectPortalController {
     if (!plan) return false;
 
     const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
-    if (!revalidatedPlan) return true;
+    if (!revalidatedPlan) {
+      this.clearRuntimePreflightForProject(projectId);
+      return true;
+    }
 
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
@@ -1529,6 +1553,140 @@ export class OfficeProjectPortalController {
     this.state.humanExecutionApprovalResultCollections[projectId] =
       this.humanExecutionApprovalService.upsertResult(existingApprovalResults, approvalOutcome.result);
     return true;
+  }
+
+  private runRuntimePreflightForPromotion(projectId: string, candidateTaskId: string) {
+    this.runtimePreflightService ??= new RuntimePreflightService();
+    this.runtimeEnvironmentProvider ??= new RepresentedRuntimeEnvironmentProvider();
+    this.executionReadinessService ??= new ExecutionReadinessService();
+    this.state.runtimePreflightCollections ??= {};
+    this.state.runtimePreflightResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const plan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    if (!plan) return false;
+
+    const approval = this.state.humanExecutionApprovalCollections[projectId]?.approvals
+      .find((item) => item.executionPlanId === plan.planId);
+    if (!approval) return false;
+
+    const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
+    if (!revalidatedPlan) return true;
+
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const repositoryIdentity = project?.repositoryIdentity;
+    const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
+    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+      : undefined;
+    const existingReadiness = this.state.executionReadinessCollections[projectId]
+      ?? createExecutionReadinessCollection({ projectId, readiness: [], rulesVersion: "readiness-v1" });
+    const existingReadinessResults = this.state.executionReadinessResultCollections[projectId]
+      ?? createExecutionReadinessResultCollection({ projectId, results: [], rulesVersion: "readiness-v1" });
+    const readinessOutcome = this.executionReadinessService.evaluateReadiness({
+      request: {
+        projectId,
+        executionPlanId: revalidatedPlan.planId,
+        evaluatedAt: new Date().toISOString(),
+      },
+      executionPlans: this.state.executionPlanCollections[projectId],
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      preparedSessions: this.state.preparedWorkSessionRecords,
+      activeSessions: this.state.workSessions,
+      employees: this.state.employees,
+      repositoryEvidence: {
+        projectId,
+        repositoryId,
+        repositoryPathSignal: repositoryIdentity?.localPath,
+        worktreePathSignal: repositoryIdentity?.localPath,
+        branchSignal: repositorySnapshot?.currentBranch,
+        specPathSignal: revalidatedPlan.specPath,
+        repositorySyncStatus: repositorySnapshot?.syncStatus,
+        owner: repositoryIdentity?.owner,
+        name: repositoryIdentity?.name,
+      },
+      roleContext: {
+        implementerAgent: "Implementer",
+        reviewerAgent: "Reviewer",
+        validationCommands: EXECUTION_PLAN_VALIDATION_COMMANDS,
+        allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
+      },
+      existingReadiness,
+      existingResults: existingReadinessResults,
+    });
+    this.state.executionReadinessCollections[projectId] = readinessOutcome.readinessCollection ?? existingReadiness;
+    this.state.executionReadinessResultCollections[projectId] = readinessOutcome.resultCollection ?? existingReadinessResults;
+
+    const existingPreflights = this.state.runtimePreflightCollections[projectId]
+      ?? createRuntimePreflightCollection({ projectId, preflights: [], rulesVersion: "preflight-v1" });
+    const existingPreflightResults = this.state.runtimePreflightResultCollections[projectId]
+      ?? createRuntimePreflightResultCollection({ projectId, results: [], rulesVersion: "preflight-v1" });
+
+    if (readinessOutcome.result.status !== "Ready") {
+      const blockedOutcome = this.runtimePreflightService.runPreflight({
+        command: {
+          projectId,
+          executionPlanId: revalidatedPlan.planId,
+          approvalId: approval.approvalId,
+          evaluatedAt: new Date().toISOString(),
+        },
+        executionPlan: revalidatedPlan,
+        readiness: readinessOutcome.readiness,
+        readinessResult: readinessOutcome.result,
+        approval,
+        existingPreflights,
+        existingResults: existingPreflightResults,
+      });
+      this.state.runtimePreflightCollections[projectId] = blockedOutcome.preflightCollection ?? existingPreflights;
+      this.state.runtimePreflightResultCollections[projectId] = blockedOutcome.resultCollection ?? existingPreflightResults;
+      return true;
+    }
+
+    let evidence: RuntimePreflightEvidence;
+    try {
+      evidence = this.runtimeEnvironmentProvider.inspect({
+        projectId,
+        executionPlan: revalidatedPlan,
+        approvedCommands: EXECUTION_PLAN_VALIDATION_COMMANDS,
+        approvedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
+      });
+    } catch {
+      evidence = createFailedRuntimePreflightEvidence(projectId, revalidatedPlan);
+    }
+    const outcome = this.runtimePreflightService.runPreflight({
+      command: {
+        projectId,
+        executionPlanId: revalidatedPlan.planId,
+        approvalId: approval.approvalId,
+        evaluatedAt: new Date().toISOString(),
+      },
+      executionPlan: revalidatedPlan,
+      readiness: readinessOutcome.readiness,
+      readinessResult: readinessOutcome.result,
+      approval,
+      evidence,
+      existingPreflights,
+      existingResults: existingPreflightResults,
+    });
+
+    this.state.runtimePreflightCollections[projectId] = outcome.preflightCollection ?? existingPreflights;
+    this.state.runtimePreflightResultCollections[projectId] = outcome.resultCollection ?? existingPreflightResults;
+    return true;
+  }
+
+  private clearRuntimePreflightForProject(projectId: string) {
+    if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
+    if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
   }
 
   private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {
@@ -2698,6 +2856,72 @@ function createLoadingRepositorySummary(): GitHubRepositorySummary {
     openIssueCount: 0,
     openPullRequestCount: 0,
     connectionStatus: "loading",
+  };
+}
+
+function createFailedRuntimePreflightEvidence(projectId: string, plan: ExecutionPlan): RuntimePreflightEvidence {
+  return {
+    repository: {
+      projectId,
+      repositoryId: plan.repositoryId,
+      pathExists: false,
+      isDirectory: false,
+      isGitRepository: false,
+      normalizedPath: plan.repositoryPath,
+    },
+    worktree: {
+      pathExists: false,
+      isDirectory: false,
+      isGitWorktree: false,
+      normalizedPath: plan.worktreePath,
+      isPrimaryWorktree: false,
+    },
+    branch: {
+      currentBranch: undefined,
+      detached: false,
+    },
+    workingTree: {
+      clean: false,
+      stagedChanges: false,
+      unstagedChanges: false,
+      untrackedFiles: false,
+      mergeState: false,
+      rebaseState: false,
+      conflicts: false,
+    },
+    specification: {
+      pathExists: false,
+      normalizedPath: plan.specPath,
+      insideWorktree: false,
+      featureMatches: false,
+      requiredArtifactsPresent: false,
+    },
+    implementer: {
+      role: "Implementer",
+      agentLabel: plan.implementerAgent,
+      available: false,
+      commandSafe: false,
+    },
+    reviewer: {
+      role: "Reviewer",
+      agentLabel: plan.reviewerAgent,
+      available: false,
+      commandSafe: false,
+    },
+    validationCommands: {
+      commands: [...plan.validationCommands],
+      commandsSafe: false,
+    },
+    mutationScope: {
+      scope: [...plan.allowedMutationScope],
+      scopeSafe: false,
+    },
+    runtimeEnvironment: {
+      supported: false,
+      spawnAvailable: false,
+      safeWorkingDirectory: false,
+      providerFailed: true,
+    },
   };
 }
 

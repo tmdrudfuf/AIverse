@@ -746,17 +746,49 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       executionStarted: false,
       agentStarted: false,
     });
+    expect(internals.state.runtimePreflightCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.runtimePreflightResultCollections["daily-proof"]).toBeUndefined();
     expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
     expect(internals.state.employees[0]?.status).toBe("Working");
 
-    controller.updateInput(createInput({ enterPressed: true })); // repeat approval
+    controller.updateInput(createInput({ enterPressed: true })); // run runtime preflight
 
     expect(internals.state.humanExecutionApprovalCollections["daily-proof"]?.approvals).toHaveLength(1);
-    expect(internals.state.humanExecutionApprovalResultCollections["daily-proof"]?.results[0]).toMatchObject({
-      status: "AlreadyApproved",
-      reasonCodes: ["ALREADY_APPROVED"],
-      duplicateExistingApproval: true,
+    expect(internals.state.runtimePreflightCollections["daily-proof"]?.preflights).toHaveLength(1);
+    expect(internals.state.runtimePreflightCollections["daily-proof"]?.preflights[0]).toMatchObject({
+      status: "Ready",
       executionApproved: true,
+      runtimePreflightPassed: true,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(internals.state.runtimePreflightResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Ready",
+      reasonCodes: ["READY"],
+      runtimePreflightPassed: true,
+      executionStarted: false,
+      agentStarted: false,
+    });
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
+    expect(internals.state.employees[0]?.status).toBe("Working");
+
+    internals.state.humanExecutionApprovalCollections["daily-proof"]!.approvals[0] = {
+      ...internals.state.humanExecutionApprovalCollections["daily-proof"]!.approvals[0]!,
+      reviewerAgent: "Codex Reviewer",
+    };
+    controller.updateInput(createInput({ enterPressed: true })); // approval revalidation blocks
+
+    expect(internals.state.runtimePreflightCollections["daily-proof"]?.preflights[0]).toMatchObject({
+      status: "Blocked",
+      runtimePreflightPassed: false,
+      executionStarted: false,
+    });
+    expect(internals.state.runtimePreflightResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["APPROVAL_ROLE_CONTEXT_MISMATCH"],
+      runtimePreflightPassed: false,
     });
   });
 
@@ -1114,6 +1146,8 @@ type ControllerInternals = {
     executionReadinessResultCollections: Record<string, ExecutionReadinessResultCollection>;
     humanExecutionApprovalCollections: Record<string, HumanExecutionApprovalCollection>;
     humanExecutionApprovalResultCollections: Record<string, HumanExecutionApprovalResultCollection>;
+    runtimePreflightCollections: ProjectPortalState["runtimePreflightCollections"];
+    runtimePreflightResultCollections: ProjectPortalState["runtimePreflightResultCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;

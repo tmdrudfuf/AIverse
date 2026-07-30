@@ -125,6 +125,8 @@ export function createProjectPortalState(): ProjectPortalState {
     executionReadinessResultCollections: {},
     humanExecutionApprovalCollections: {},
     humanExecutionApprovalResultCollections: {},
+    runtimePreflightCollections: {},
+    runtimePreflightResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
