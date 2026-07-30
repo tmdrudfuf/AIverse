@@ -84,9 +84,9 @@
 - [X] T021 Mark completed tasks in `specs/070-execution-plan-foundation/tasks.md`
 - [X] T022 Run focused tests for execution-plan, controller, and dashboard files
 - [X] T023 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`
-- [ ] T024 Commit the completed implementation locally with message `feat: add execution plan foundation`
-- [ ] T025 Run independent configured Claude review against the exact committed HEAD and fix blocking findings until Approved
-- [ ] T026 Run final exact-HEAD provenance checks: `git rev-parse HEAD`, `git status --short`, `git log -1 --oneline`
+- [X] T024 Commit the completed implementation locally with message `feat: add execution plan foundation`
+- [X] T025 Run independent configured Claude review against the exact committed HEAD and fix blocking findings until Approved
+- [X] T026 Run final exact-HEAD provenance checks: `git rev-parse HEAD`, `git status --short`, `git log -1 --oneline`
 
 ---
 
