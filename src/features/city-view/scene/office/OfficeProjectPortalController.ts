@@ -32,6 +32,8 @@ import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationT
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
 import { createExecutionPlanCollection } from "./execution-plans/ExecutionPlanTypes";
+import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
+import { createExecutionReadinessCollection, createExecutionReadinessResultCollection } from "./execution-readiness/ExecutionReadinessTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -132,6 +134,7 @@ export class OfficeProjectPortalController {
   private preparedWorkSessionService: PreparedWorkSessionService;
   private activeWorkSessionStartService: ActiveWorkSessionStartService;
   private executionPlanService: ExecutionPlanService;
+  private executionReadinessService: ExecutionReadinessService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -183,6 +186,7 @@ export class OfficeProjectPortalController {
     this.preparedWorkSessionService = new PreparedWorkSessionService();
     this.activeWorkSessionStartService = new ActiveWorkSessionStartService();
     this.executionPlanService = new ExecutionPlanService();
+    this.executionReadinessService = new ExecutionReadinessService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -679,6 +683,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const readied = this.evaluateExecutionReadinessForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (readied) {
+        this.view.render(this.state);
+        return;
+      }
+
       const planned = this.createExecutionPlanForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1322,6 +1335,139 @@ export class OfficeProjectPortalController {
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
     this.state.preparedWorkSessionRecords = beforePreparedSessions;
     return true;
+  }
+
+  private evaluateExecutionReadinessForPromotion(projectId: string, candidateTaskId: string) {
+    this.executionReadinessService ??= new ExecutionReadinessService();
+    this.state.executionReadinessCollections ??= {};
+    this.state.executionReadinessResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const planCollection = this.state.executionPlanCollections[projectId];
+    const plan = planCollection?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    if (!plan) return false;
+
+    const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
+    if (!revalidatedPlan) return true;
+
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const repositoryIdentity = project?.repositoryIdentity;
+    const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
+    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+      : undefined;
+    const existingReadiness = this.state.executionReadinessCollections[projectId]
+      ?? createExecutionReadinessCollection({ projectId, readiness: [], rulesVersion: "readiness-v1" });
+    const existingResults = this.state.executionReadinessResultCollections[projectId]
+      ?? createExecutionReadinessResultCollection({ projectId, results: [], rulesVersion: "readiness-v1" });
+
+    const outcome = this.executionReadinessService.evaluateReadiness({
+      request: {
+        projectId,
+        executionPlanId: revalidatedPlan.planId,
+        evaluatedAt: new Date().toISOString(),
+      },
+      executionPlans: this.state.executionPlanCollections[projectId],
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      preparedSessions: this.state.preparedWorkSessionRecords,
+      activeSessions: this.state.workSessions,
+      employees: this.state.employees,
+      repositoryEvidence: {
+        projectId,
+        repositoryId,
+        repositoryPathSignal: repositoryIdentity?.localPath,
+        worktreePathSignal: repositoryIdentity?.localPath,
+        branchSignal: repositorySnapshot?.currentBranch,
+        specPathSignal: revalidatedPlan.specPath,
+        repositorySyncStatus: repositorySnapshot?.syncStatus,
+        owner: repositoryIdentity?.owner,
+        name: repositoryIdentity?.name,
+      },
+      roleContext: {
+        implementerAgent: "Implementer",
+        reviewerAgent: "Reviewer",
+        validationCommands: EXECUTION_PLAN_VALIDATION_COMMANDS,
+        allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
+      },
+      existingReadiness,
+      existingResults,
+    });
+
+    this.state.executionReadinessCollections[projectId] = outcome.readinessCollection ?? existingReadiness;
+    this.state.executionReadinessResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    return true;
+  }
+
+  private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {
+    this.executionPlanService ??= new ExecutionPlanService();
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const activeSession = (this.state.workSessions[projectTaskId] ?? [])
+      .find((session) => session.projectId === projectId && session.id === activeSessionId);
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const repositoryIdentity = project?.repositoryIdentity;
+    const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
+    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+      : undefined;
+    const localPath = repositoryIdentity?.localPath;
+    const branchName = repositorySnapshot?.currentBranch;
+    const existingPlans = this.state.executionPlanCollections[projectId]
+      ?? createExecutionPlanCollection({ projectId, plans: [], rulesVersion: "plan-v1" });
+    const outcome = this.executionPlanService.createPlan({
+      request: {
+        projectId,
+        projectTaskId,
+        activeSessionId,
+        requestedAt: new Date().toISOString(),
+      },
+      featureId: EXECUTION_PLAN_FEATURE_ID,
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      preparedSessions: this.state.preparedWorkSessionRecords,
+      activeSessions: this.state.workSessions,
+      employees: this.state.employees,
+      repositoryIdentity,
+      repositorySnapshot,
+      repositoryContext: repositoryId && localPath && branchName
+        ? {
+            repositoryId,
+            repositoryPath: localPath,
+            worktreePath: localPath,
+            branchName,
+            specPath: EXECUTION_PLAN_SPEC_PATH,
+          }
+        : undefined,
+      roleContext: {
+        implementerAgent: "Implementer",
+        reviewerAgent: "Reviewer",
+        validationCommands: EXECUTION_PLAN_VALIDATION_COMMANDS,
+        allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
+      },
+      pathChecks: {
+        worktreeExists: Boolean(localPath),
+        specExists: true,
+      },
+      existingPlans,
+    });
+
+    if (outcome.planCollection && outcome.result.status === "Created") {
+      this.state.executionPlanCollections[projectId] = outcome.planCollection;
+    }
+    const existingResults = this.state.executionPlanResultCollections[projectId];
+    this.state.executionPlanResultCollections[projectId] =
+      this.executionPlanService.upsertResult(existingResults, outcome.result);
+    return outcome.result.status === "AlreadyExists" ? outcome.plan : undefined;
   }
 
   private createExecutionPlanForPromotion(projectId: string, candidateTaskId: string) {
