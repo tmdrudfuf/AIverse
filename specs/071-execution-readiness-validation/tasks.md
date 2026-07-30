@@ -67,10 +67,10 @@
 - [X] T020 Add runtime-safety import/string checks in `src/features/city-view/scene/office/execution-readiness/ExecutionReadinessService.test.ts`
 - [X] T021 Run focused readiness/controller/dashboard tests
 - [X] T022 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`
-- [ ] T023 Commit implementation locally with message `feat: add execution readiness validation`
-- [ ] T024 Run independent configured Claude review against exact HEAD and fix blocking findings until Approved
-- [ ] T025 Complete task checklist only after validation and review evidence exists
-- [ ] T026 Run exact-HEAD provenance checks: `git rev-parse HEAD`, `git status --short`, `git log -1 --oneline`
+- [X] T023 Commit implementation locally with message `feat: add execution readiness validation`
+- [X] T024 Run independent configured Claude review against exact HEAD and fix blocking findings until Approved
+- [X] T025 Complete task checklist only after validation and review evidence exists
+- [X] T026 Run exact-HEAD provenance checks: `git rev-parse HEAD`, `git status --short`, `git log -1 --oneline`
 
 ---
 
