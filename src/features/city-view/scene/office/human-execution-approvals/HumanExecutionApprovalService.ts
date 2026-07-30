@@ -81,6 +81,10 @@ export class HumanExecutionApprovalService {
       preparedSessionId: plan.preparedSessionId,
       employeeId: plan.employeeId,
       repositoryId: plan.repositoryId,
+      implementerAgent: plan.implementerAgent,
+      reviewerAgent: plan.reviewerAgent,
+      validationCommands: [...plan.validationCommands],
+      allowedMutationScope: [...plan.allowedMutationScope],
       decision: "Approved",
       executionApproved: true,
       approvedAt: command.requestedAt,
@@ -230,7 +234,15 @@ function getExistingApprovalBlockReason(
     approval.preparedSessionId !== plan.preparedSessionId ||
     approval.employeeId !== plan.employeeId ||
     approval.repositoryId !== plan.repositoryId ||
+    approval.implementerAgent !== plan.implementerAgent ||
+    approval.reviewerAgent !== plan.reviewerAgent ||
+    !arraysEqual(approval.validationCommands, plan.validationCommands) ||
+    !arraysEqual(approval.allowedMutationScope, plan.allowedMutationScope) ||
     approval.approvedBy !== actor.trim()
   ) return "APPROVAL_CONTEXT_MISMATCH";
   return undefined;
+}
+
+function arraysEqual(left: ReadonlyArray<string>, right: ReadonlyArray<string>) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

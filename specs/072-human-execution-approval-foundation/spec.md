@@ -81,6 +81,7 @@ A human operator can distinguish readiness, approval, and execution state in the
 
 - A previously Ready readiness result becomes Blocked before approval.
 - An approval already exists but the current execution context changed.
+- An approval already exists but role labels, validation commands, or mutation scope changed.
 - A Codex, Claude, bot, or automation label is supplied as approver.
 - The plan reports any execution or mutation flag as started.
 - Readiness reports execution approved or any execution/mutation flag as started.

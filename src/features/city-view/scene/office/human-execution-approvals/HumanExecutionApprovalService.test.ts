@@ -80,6 +80,33 @@ describe("HumanExecutionApprovalService", () => {
     expect(outcome.approvalCollection).toBeUndefined();
   });
 
+  it("blocks AlreadyApproved when role or mutation context changed", () => {
+    const plan = createPlan({ validationCommands: ["npm test", "npm run build"] });
+    const readinessId = createExecutionReadinessId("daily-proof", plan.planId);
+    const approval = createApproval({
+      approvalId: createHumanExecutionApprovalId("daily-proof", plan.planId),
+      executionPlanId: plan.planId,
+      readinessId,
+      validationCommands: ["npm test"],
+    });
+
+    const outcome = new HumanExecutionApprovalService().approve(validInput({
+      executionPlan: plan,
+      existingApprovals: createHumanExecutionApprovalCollection({
+        projectId: "daily-proof",
+        approvals: [approval],
+        rulesVersion: "approval-v1",
+      }),
+    }));
+
+    expect(outcome.result).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["APPROVAL_CONTEXT_MISMATCH"],
+      approved: false,
+    });
+  });
+
+
   it("blocks non-human approver labels", () => {
     for (const approvedBy of ["Codex", "Claude", "automation bot"]) {
       const outcome = new HumanExecutionApprovalService().approve(validInput({ approvedBy }));
@@ -165,6 +192,10 @@ function createApproval(overrides: Partial<HumanExecutionApproval> = {}): HumanE
     preparedSessionId: "prepared-1",
     employeeId: "employee-1",
     repositoryId: "repo-1",
+    implementerAgent: "Implementer",
+    reviewerAgent: "Reviewer",
+    validationCommands: ["npm test"],
+    allowedMutationScope: ["local-files"],
     decision: "Approved",
     executionApproved: true,
     approvedAt: "2026-01-07T00:00:00.000Z",

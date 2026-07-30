@@ -37,6 +37,10 @@ export type HumanExecutionApproval = {
   preparedSessionId: string;
   employeeId: string;
   repositoryId: string;
+  implementerAgent: string;
+  reviewerAgent: string;
+  validationCommands: string[];
+  allowedMutationScope: string[];
   decision: HumanExecutionApprovalDecision;
   executionApproved: true;
   approvedAt: string;
@@ -151,7 +155,11 @@ export function createHumanExecutionApprovalResultCollection(input: Omit<
 }
 
 export function copyHumanExecutionApproval(approval: HumanExecutionApproval): HumanExecutionApproval {
-  return { ...approval };
+  return {
+    ...approval,
+    validationCommands: [...approval.validationCommands],
+    allowedMutationScope: [...approval.allowedMutationScope],
+  };
 }
 
 export function copyHumanExecutionApprovalResult(result: HumanExecutionApprovalResult): HumanExecutionApprovalResult {

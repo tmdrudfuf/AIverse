@@ -1289,6 +1289,7 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // Keep this fixture focused on plan/readiness priority; source-row coexistence has its own test above.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot(),
@@ -2064,6 +2065,10 @@ function createHumanExecutionApprovalCollection(): HumanExecutionApprovalCollect
       preparedSessionId: "prepared-12",
       employeeId: "gpt-engineer",
       repositoryId: "github:ai-verse/daily-proof",
+      implementerAgent: "Implementer",
+      reviewerAgent: "Reviewer",
+      validationCommands: ["npm test"],
+      allowedMutationScope: ["local-files"],
       decision: "Approved",
       executionApproved: true,
       approvedAt: "2026-01-07T00:00:00.000Z",

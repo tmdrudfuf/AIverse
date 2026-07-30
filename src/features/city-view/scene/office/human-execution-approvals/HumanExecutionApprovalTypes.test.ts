@@ -34,6 +34,7 @@ describe("HumanExecutionApprovalTypes", () => {
     });
 
     approval.approvedBy = "mutated";
+    approval.validationCommands.push("mutated");
     result.reasonCodes.push("READINESS_NOT_READY");
     results.results[0]!.reasonCodes.push("READINESS_NOT_READY");
 
@@ -49,6 +50,7 @@ describe("HumanExecutionApprovalTypes", () => {
     });
 
     expect(approvals.approvals[0]?.approvedBy).toBe("Local Human");
+    expect(approvals.approvals[0]?.validationCommands).toEqual(["npm test"]);
     expect(freshApprovals.approvals[0]?.approvedBy).toBe("Local Human");
     expect(freshResults.results[0]?.reasonCodes).toEqual(["APPROVED"]);
   });
@@ -77,6 +79,10 @@ export function createApproval(overrides: Partial<HumanExecutionApproval> = {}):
     preparedSessionId: "prepared-1",
     employeeId: "employee-1",
     repositoryId: "repo-1",
+    implementerAgent: "Implementer",
+    reviewerAgent: "Reviewer",
+    validationCommands: ["npm test"],
+    allowedMutationScope: ["local-files"],
     decision: "Approved",
     executionApproved: true,
     approvedAt: "2026-01-07T00:00:00.000Z",

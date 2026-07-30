@@ -12,6 +12,10 @@
 - `preparedSessionId`: prepared-session context.
 - `employeeId`: approved employee context.
 - `repositoryId`: repository evidence identity.
+- `implementerAgent`: implementer role context captured from the Execution Plan.
+- `reviewerAgent`: reviewer role context captured from the Execution Plan.
+- `validationCommands`: ordered validation-command context captured from the Execution Plan.
+- `allowedMutationScope`: allowed mutation scope captured from the Execution Plan.
 - `decision`: `Approved`.
 - `executionApproved`: `true`.
 - `approvedAt`: local command timestamp.
