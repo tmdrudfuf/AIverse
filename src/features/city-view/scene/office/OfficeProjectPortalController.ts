@@ -1391,7 +1391,10 @@ export class OfficeProjectPortalController {
     if (!plan) return false;
 
     const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
-    if (!revalidatedPlan) return true;
+    if (!revalidatedPlan) {
+      this.clearRuntimePreflightForProject(projectId);
+      return true;
+    }
 
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
@@ -1624,12 +1627,30 @@ export class OfficeProjectPortalController {
     this.state.executionReadinessCollections[projectId] = readinessOutcome.readinessCollection ?? existingReadiness;
     this.state.executionReadinessResultCollections[projectId] = readinessOutcome.resultCollection ?? existingReadinessResults;
 
-    if (readinessOutcome.result.status !== "Ready") return true;
-
     const existingPreflights = this.state.runtimePreflightCollections[projectId]
       ?? createRuntimePreflightCollection({ projectId, preflights: [], rulesVersion: "preflight-v1" });
     const existingPreflightResults = this.state.runtimePreflightResultCollections[projectId]
       ?? createRuntimePreflightResultCollection({ projectId, results: [], rulesVersion: "preflight-v1" });
+
+    if (readinessOutcome.result.status !== "Ready") {
+      const blockedOutcome = this.runtimePreflightService.runPreflight({
+        command: {
+          projectId,
+          executionPlanId: revalidatedPlan.planId,
+          approvalId: approval.approvalId,
+          evaluatedAt: new Date().toISOString(),
+        },
+        executionPlan: revalidatedPlan,
+        readiness: readinessOutcome.readiness,
+        readinessResult: readinessOutcome.result,
+        approval,
+        existingPreflights,
+        existingResults: existingPreflightResults,
+      });
+      this.state.runtimePreflightCollections[projectId] = blockedOutcome.preflightCollection ?? existingPreflights;
+      this.state.runtimePreflightResultCollections[projectId] = blockedOutcome.resultCollection ?? existingPreflightResults;
+      return true;
+    }
 
     let evidence: RuntimePreflightEvidence;
     try {
@@ -1661,6 +1682,11 @@ export class OfficeProjectPortalController {
     this.state.runtimePreflightCollections[projectId] = outcome.preflightCollection ?? existingPreflights;
     this.state.runtimePreflightResultCollections[projectId] = outcome.resultCollection ?? existingPreflightResults;
     return true;
+  }
+
+  private clearRuntimePreflightForProject(projectId: string) {
+    if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
+    if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
   }
 
   private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {

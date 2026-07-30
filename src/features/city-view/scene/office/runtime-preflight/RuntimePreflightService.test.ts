@@ -96,10 +96,14 @@ describe("RuntimePreflightService", () => {
   it("blocks missing or non-ready readiness before runtime provider success matters", () => {
     const service = new RuntimePreflightService();
     expect(service.runPreflight(validInput({ readiness: undefined })).result.reasonCodes).toContain("READINESS_MISSING");
-    expect(service.runPreflight(validInput({
+    const blocked = service.runPreflight(validInput({
       readiness: createReadiness({ status: "Blocked" }),
       readinessResult: createReadinessResult({ status: "Blocked", blockedCheckCount: 1, reasonCodes: ["TASK_STATE_INCOMPATIBLE"] }),
-    })).result.reasonCodes).toContain("READINESS_NOT_READY");
+      evidence: createEvidence({ runtimeEnvironment: { providerFailed: true } }),
+    }));
+    expect(blocked.result.reasonCodes).toContain("READINESS_NOT_READY");
+    expect(blocked.result.reasonCodes).not.toContain("RUNTIME_PROVIDER_FAILED");
+    expect(blocked.preflight.checks).toHaveLength(3);
   });
 
   it("blocks stale execution plans and represented runtime flags", () => {

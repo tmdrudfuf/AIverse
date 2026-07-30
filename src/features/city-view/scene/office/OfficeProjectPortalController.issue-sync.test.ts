@@ -773,6 +773,23 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     });
     expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
     expect(internals.state.employees[0]?.status).toBe("Working");
+
+    internals.state.humanExecutionApprovalCollections["daily-proof"]!.approvals[0] = {
+      ...internals.state.humanExecutionApprovalCollections["daily-proof"]!.approvals[0]!,
+      reviewerAgent: "Codex Reviewer",
+    };
+    controller.updateInput(createInput({ enterPressed: true })); // approval revalidation blocks
+
+    expect(internals.state.runtimePreflightCollections["daily-proof"]?.preflights[0]).toMatchObject({
+      status: "Blocked",
+      runtimePreflightPassed: false,
+      executionStarted: false,
+    });
+    expect(internals.state.runtimePreflightResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["APPROVAL_ROLE_CONTEXT_MISMATCH"],
+      runtimePreflightPassed: false,
+    });
   });
 
   it("revalidates an existing execution plan before execution readiness", async () => {

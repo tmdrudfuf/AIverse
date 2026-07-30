@@ -39,11 +39,14 @@ export class RuntimePreflightService {
       return { preflight, result };
     }
 
-    const evidence = input.evidence ? copyRuntimePreflightEvidence(input.evidence) : undefined;
-    const checks = [
+    const chainChecks = [
       checkExecutionPlan(preflightId, input),
       checkReadiness(preflightId, input),
       checkApproval(preflightId, input),
+    ];
+    const evidence = input.evidence ? copyRuntimePreflightEvidence(input.evidence) : undefined;
+    const checks = getStatus(chainChecks) === "Ready" ? [
+      ...chainChecks,
       checkRepository(preflightId, input, evidence),
       checkWorktree(preflightId, input, evidence),
       checkBranch(preflightId, input, evidence),
@@ -55,7 +58,7 @@ export class RuntimePreflightService {
       checkMutationScope(preflightId, input, evidence),
       checkRuntimeEnvironment(preflightId, evidence),
       checkSafety(preflightId, input, evidence),
-    ];
+    ] : chainChecks;
     const preflight = createPreflightSnapshot({
       preflightId,
       projectId: command.projectId,
