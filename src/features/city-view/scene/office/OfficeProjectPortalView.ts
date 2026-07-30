@@ -7,6 +7,7 @@ import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from ".
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
+import { createHumanExecutionApprovalDisplayRows, type HumanExecutionApprovalDisplayRows } from "./human-execution-approvals/HumanExecutionApprovalView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
@@ -298,6 +299,11 @@ export class OfficeProjectPortalView {
     const executionReadinessRows = executionReadinessCollection || executionReadinessResultCollection
       ? createExecutionReadinessDisplayRows(executionReadinessCollection, executionReadinessResultCollection)
       : undefined;
+    const humanExecutionApprovalCollection = dashboardProjectId ? state.humanExecutionApprovalCollections[dashboardProjectId] : undefined;
+    const humanExecutionApprovalResultCollection = dashboardProjectId ? state.humanExecutionApprovalResultCollections[dashboardProjectId] : undefined;
+    const humanExecutionApprovalRows = humanExecutionApprovalCollection || humanExecutionApprovalResultCollection
+      ? createHumanExecutionApprovalDisplayRows(humanExecutionApprovalCollection, humanExecutionApprovalResultCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -308,6 +314,7 @@ export class OfficeProjectPortalView {
         activeWorkSessionRows,
         executionPlanRows,
         executionReadinessRows,
+        humanExecutionApprovalRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -652,6 +659,7 @@ function createProjectDashboardLowerRows(
   activeWorkSessionRows?: ActiveWorkSessionDisplayRows,
   executionPlanRows?: ExecutionPlanDisplayRows,
   executionReadinessRows?: ExecutionReadinessDisplayRows,
+  humanExecutionApprovalRows?: HumanExecutionApprovalDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -722,6 +730,19 @@ function createProjectDashboardLowerRows(
       text: `[EXECUTION READINESS] ${compactExecutionReadinessResultText(resultText)}${checkText}`,
       maxLines: 1,
       dropPriority: 14,
+      usePriorityFit: true,
+    });
+  }
+
+  if (humanExecutionApprovalRows) {
+    const resultText = humanExecutionApprovalRows.resultText ?? humanExecutionApprovalRows.statusText;
+    const approvalText = !humanExecutionApprovalRows.resultText && humanExecutionApprovalRows.approvalText
+      ? `; ${compactHumanExecutionApprovalText(humanExecutionApprovalRows.approvalText)}`
+      : "";
+    lowerRows.push({
+      text: `[HUMAN EXECUTION APPROVAL] ${compactHumanExecutionApprovalText(resultText)}${approvalText}`,
+      maxLines: 1,
+      dropPriority: 9,
       usePriorityFit: true,
     });
   }
@@ -935,6 +956,22 @@ function compactExecutionReadinessCheckText(text: string) {
     .replace(/ConfirmedAssignment:/g, "Assignment:")
     .replace(/PreparedSession:/g, "Prepared:")
     .replace(/ActiveSession:/g, "Active:");
+}
+
+function compactHumanExecutionApprovalText(text: string) {
+  return text
+    .replace("Human Execution Approval Recorded", "Approval recorded")
+    .replace("Human Execution Approval Already Recorded", "Approval already recorded")
+    .replace("Human Approval Required", "Required")
+    .replace("Execution Not Approved", "Not approved")
+    .replace("Execution Approved", "Execution Approved")
+    .replace("Execution Not Started", "Not started")
+    .replace("Approve Execution", "Approve")
+    .replace("; Awaiting Runtime Preflight", "")
+    .replace("Approval Unavailable", "Unavailable")
+    .replace("Resolve Readiness Requirements", "Fix readiness")
+    .replace("Approval Validation Failed", "Approval failed")
+    .replace("; READINESS_NOT_READY", "");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

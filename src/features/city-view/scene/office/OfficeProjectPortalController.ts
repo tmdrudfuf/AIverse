@@ -34,6 +34,8 @@ import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
 import { createExecutionPlanCollection } from "./execution-plans/ExecutionPlanTypes";
 import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
 import { createExecutionReadinessCollection, createExecutionReadinessResultCollection } from "./execution-readiness/ExecutionReadinessTypes";
+import { HumanExecutionApprovalService } from "./human-execution-approvals/HumanExecutionApprovalService";
+import { createHumanExecutionApprovalCollection } from "./human-execution-approvals/HumanExecutionApprovalTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -135,6 +137,7 @@ export class OfficeProjectPortalController {
   private activeWorkSessionStartService: ActiveWorkSessionStartService;
   private executionPlanService: ExecutionPlanService;
   private executionReadinessService: ExecutionReadinessService;
+  private humanExecutionApprovalService: HumanExecutionApprovalService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -187,6 +190,7 @@ export class OfficeProjectPortalController {
     this.activeWorkSessionStartService = new ActiveWorkSessionStartService();
     this.executionPlanService = new ExecutionPlanService();
     this.executionReadinessService = new ExecutionReadinessService();
+    this.humanExecutionApprovalService = new HumanExecutionApprovalService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -683,6 +687,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const executionApproved = this.approveHumanExecutionForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (executionApproved) {
+        this.view.render(this.state);
+        return;
+      }
+
       const readied = this.evaluateExecutionReadinessForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1405,6 +1418,116 @@ export class OfficeProjectPortalController {
 
     this.state.executionReadinessCollections[projectId] = outcome.readinessCollection ?? existingReadiness;
     this.state.executionReadinessResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    this.state.humanExecutionApprovalCollections ??= {};
+    this.state.humanExecutionApprovalCollections[projectId] ??= createHumanExecutionApprovalCollection({
+      projectId,
+      approvals: [],
+      rulesVersion: "approval-v1",
+    });
+    return true;
+  }
+
+  private approveHumanExecutionForPromotion(projectId: string, candidateTaskId: string) {
+    this.humanExecutionApprovalService ??= new HumanExecutionApprovalService();
+    this.executionReadinessService ??= new ExecutionReadinessService();
+    this.state.humanExecutionApprovalCollections ??= {};
+    this.state.humanExecutionApprovalResultCollections ??= {};
+    this.state.executionReadinessCollections ??= {};
+    this.state.executionReadinessResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const planCollection = this.state.executionPlanCollections[projectId];
+    const plan = planCollection?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    if (!plan) return false;
+
+    const currentReadiness = this.state.executionReadinessCollections[projectId]?.readiness
+      .find((item) => item.executionPlanId === plan.planId);
+    const currentReadinessResult = this.state.executionReadinessResultCollections[projectId]?.results
+      .find((item) => item.executionPlanId === plan.planId && item.readinessId === currentReadiness?.readinessId);
+    if (!currentReadiness || !currentReadinessResult) return false;
+
+    const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
+    if (!revalidatedPlan) return true;
+
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const repositoryIdentity = project?.repositoryIdentity;
+    const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
+    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+      : undefined;
+    const existingReadiness = this.state.executionReadinessCollections[projectId]
+      ?? createExecutionReadinessCollection({ projectId, readiness: [], rulesVersion: "readiness-v1" });
+    const existingReadinessResults = this.state.executionReadinessResultCollections[projectId]
+      ?? createExecutionReadinessResultCollection({ projectId, results: [], rulesVersion: "readiness-v1" });
+
+    const readinessOutcome = this.executionReadinessService.evaluateReadiness({
+      request: {
+        projectId,
+        executionPlanId: revalidatedPlan.planId,
+        evaluatedAt: new Date().toISOString(),
+      },
+      executionPlans: this.state.executionPlanCollections[projectId],
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      preparedSessions: this.state.preparedWorkSessionRecords,
+      activeSessions: this.state.workSessions,
+      employees: this.state.employees,
+      repositoryEvidence: {
+        projectId,
+        repositoryId,
+        repositoryPathSignal: repositoryIdentity?.localPath,
+        worktreePathSignal: repositoryIdentity?.localPath,
+        branchSignal: repositorySnapshot?.currentBranch,
+        specPathSignal: revalidatedPlan.specPath,
+        repositorySyncStatus: repositorySnapshot?.syncStatus,
+        owner: repositoryIdentity?.owner,
+        name: repositoryIdentity?.name,
+      },
+      roleContext: {
+        implementerAgent: "Implementer",
+        reviewerAgent: "Reviewer",
+        validationCommands: EXECUTION_PLAN_VALIDATION_COMMANDS,
+        allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
+      },
+      existingReadiness,
+      existingResults: existingReadinessResults,
+    });
+    this.state.executionReadinessCollections[projectId] = readinessOutcome.readinessCollection ?? existingReadiness;
+    this.state.executionReadinessResultCollections[projectId] = readinessOutcome.resultCollection ?? existingReadinessResults;
+
+    const existingApprovals = this.state.humanExecutionApprovalCollections[projectId]
+      ?? createHumanExecutionApprovalCollection({ projectId, approvals: [], rulesVersion: "approval-v1" });
+    const approvalOutcome = this.humanExecutionApprovalService.approve({
+      command: {
+        projectId,
+        executionPlanId: revalidatedPlan.planId,
+        readinessId: readinessOutcome.readiness.readinessId,
+        approvedBy: "Local Human",
+        requestedAt: new Date().toISOString(),
+      },
+      executionPlan: revalidatedPlan,
+      readiness: readinessOutcome.readiness,
+      readinessResult: readinessOutcome.result,
+      existingApprovals,
+    });
+
+    if (approvalOutcome.approvalCollection) {
+      this.state.humanExecutionApprovalCollections[projectId] = approvalOutcome.approvalCollection;
+    } else {
+      this.state.humanExecutionApprovalCollections[projectId] = existingApprovals;
+    }
+    const existingApprovalResults = this.state.humanExecutionApprovalResultCollections[projectId];
+    this.state.humanExecutionApprovalResultCollections[projectId] =
+      this.humanExecutionApprovalService.upsertResult(existingApprovalResults, approvalOutcome.result);
     return true;
   }
 
@@ -1412,8 +1535,6 @@ export class OfficeProjectPortalController {
     this.executionPlanService ??= new ExecutionPlanService();
 
     const taskCollection = this.state.taskCollections[projectId];
-    const activeSession = (this.state.workSessions[projectTaskId] ?? [])
-      .find((session) => session.projectId === projectId && session.id === activeSessionId);
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
     const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];

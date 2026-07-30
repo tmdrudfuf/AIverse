@@ -12,6 +12,10 @@ import type {
   ExecutionReadinessCollection,
   ExecutionReadinessResultCollection,
 } from "./execution-readiness/ExecutionReadinessTypes";
+import type {
+  HumanExecutionApprovalCollection,
+  HumanExecutionApprovalResultCollection,
+} from "./human-execution-approvals/HumanExecutionApprovalTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -721,6 +725,39 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       githubMutationStarted: false,
     });
     expect(internals.state.executionReadinessCollections["daily-proof"]?.readiness[0]?.checks).toHaveLength(10);
+    expect(internals.state.humanExecutionApprovalCollections["daily-proof"]?.approvals).toHaveLength(0);
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve execution
+
+    expect(internals.state.humanExecutionApprovalCollections["daily-proof"]?.approvals).toHaveLength(1);
+    expect(internals.state.humanExecutionApprovalCollections["daily-proof"]?.approvals[0]).toMatchObject({
+      decision: "Approved",
+      approvedBy: "Local Human",
+      executionApproved: true,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(internals.state.humanExecutionApprovalResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Approved",
+      reasonCodes: ["APPROVED"],
+      approved: true,
+      executionStarted: false,
+      agentStarted: false,
+    });
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
+    expect(internals.state.employees[0]?.status).toBe("Working");
+
+    controller.updateInput(createInput({ enterPressed: true })); // repeat approval
+
+    expect(internals.state.humanExecutionApprovalCollections["daily-proof"]?.approvals).toHaveLength(1);
+    expect(internals.state.humanExecutionApprovalResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "AlreadyApproved",
+      reasonCodes: ["ALREADY_APPROVED"],
+      duplicateExistingApproval: true,
+      executionApproved: true,
+    });
   });
 
   it("revalidates an existing execution plan before execution readiness", async () => {
@@ -775,6 +812,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       githubMutationStarted: false,
     });
     expect(internals.state.executionReadinessResultCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.humanExecutionApprovalCollections["daily-proof"]).toBeUndefined();
   });
 
   it("revalidates an already-started session and blocks stale employee state", async () => {
@@ -1074,6 +1112,8 @@ type ControllerInternals = {
     executionPlanResultCollections: Record<string, ExecutionPlanResultCollection>;
     executionReadinessCollections: Record<string, ExecutionReadinessCollection>;
     executionReadinessResultCollections: Record<string, ExecutionReadinessResultCollection>;
+    humanExecutionApprovalCollections: Record<string, HumanExecutionApprovalCollection>;
+    humanExecutionApprovalResultCollections: Record<string, HumanExecutionApprovalResultCollection>;
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
