@@ -18,6 +18,10 @@ import type {
   ExecutionReadinessCollection,
   ExecutionReadinessResultCollection,
 } from "./execution-readiness/ExecutionReadinessTypes";
+import type {
+  HumanExecutionApprovalCollection,
+  HumanExecutionApprovalResultCollection,
+} from "./human-execution-approvals/HumanExecutionApprovalTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
@@ -67,7 +71,7 @@ describe("OfficeProjectPortalView", () => {
   it("keeps wrapped Company Dashboard source signals above the project list panel", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
-    const scene = createSceneStub(renderedText, renderedPanels);
+    const scene = createSceneStub(renderedText, renderedPanels, 1200);
 
     new OfficeProjectPortalView(scene, createPortalState({
       companySummary: "2 of 3 employee(s) are active. 1 active project(s) are visible. 4 active task(s) are unassigned. 1 risk(s) need attention.",
@@ -100,7 +104,7 @@ describe("OfficeProjectPortalView", () => {
   it("renders Project Dashboard advisory rows in the Phaser portal panel", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
-    const scene = createSceneStub(renderedText, renderedPanels);
+    const scene = createSceneStub(renderedText, renderedPanels, 1200);
 
     new OfficeProjectPortalView(scene, createPortalState({
       viewMode: "project-dashboard",
@@ -1285,11 +1289,10 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // Keep this fixture focused on plan/readiness priority; source-row coexistence has its own test above.
     const state = createPortalState({
       viewMode: "project-dashboard",
-      projectDashboardSnapshot: createProjectDashboardSnapshot({
-        externalSources: [createExternalSource("ai-verse/daily-proof")],
-      }),
+      projectDashboardSnapshot: createProjectDashboardSnapshot(),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.executionPlanCollections = {
@@ -1317,6 +1320,39 @@ describe("OfficeProjectPortalView", () => {
     expect(readinessRow?.text).toContain("Not started");
     expect(readinessRow?.text).not.toMatch(/Approved to Execute|Execution Approved|Running|Executing|Coding|Reviewing|Codex Started|Claude Started|Repository Changing/i);
     [planRow, readinessRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
+  });
+
+  it("renders approved and blocked human execution approval rows safely", () => {
+    for (const status of ["Approved", "Blocked"] as const) {
+      const renderedText: RenderedText[] = [];
+      const renderedPanels: RenderedPanel[] = [];
+      const scene = createSceneStub(renderedText, renderedPanels, 1200);
+      const state = createPortalState({
+        viewMode: "project-dashboard",
+        projectDashboardSnapshot: createProjectDashboardSnapshot(),
+      });
+      state.selectedProjectDashboardProjectId = "daily-proof";
+      state.executionReadinessCollections = {
+        "daily-proof": createExecutionReadinessCollection(status === "Approved" ? "Ready" : "Blocked"),
+      };
+      state.executionReadinessResultCollections = {
+        "daily-proof": createExecutionReadinessResultCollection(status === "Approved" ? "Ready" : "Blocked"),
+      };
+      state.humanExecutionApprovalCollections = status === "Approved"
+        ? { "daily-proof": createHumanExecutionApprovalCollection() }
+        : {};
+      state.humanExecutionApprovalResultCollections = {
+        "daily-proof": createHumanExecutionApprovalResultCollection(status),
+      };
+
+      new OfficeProjectPortalView(scene, state);
+
+      const approvalRow = findRenderedRow(renderedText, "[HUMAN EXECUTION APPROVAL]");
+      expect(approvalRow?.text).toContain(status === "Approved" ? "Execution Approved" : "Unavailable");
+      expect(approvalRow?.text).toContain("Not started");
+      expect(approvalRow?.text).not.toMatch(/Running|Executing|Coding|Reviewing|Codex Started|Claude Started|Repository Changing/i);
+      assertRowInsidePanel(approvalRow, findLowerProjectPanel(renderedPanels));
+    }
   });
 
   it("renders blocked and failed execution readiness wording in the dashboard", () => {
@@ -1417,7 +1453,7 @@ function assertRowInsidePanel(row: RenderedText | undefined, panel: RenderedPane
   expect(rowBottom).toBeLessThanOrEqual((panel?.y ?? 0) + (panel?.height ?? 0));
 }
 
-function createSceneStub(renderedText: RenderedText[], renderedPanels: RenderedPanel[]): PhaserScene {
+function createSceneStub(renderedText: RenderedText[], renderedPanels: RenderedPanel[], height = 768): PhaserScene {
   const createChainable = () => ({
     setOrigin: () => createChainable(),
     setScrollFactor: () => createChainable(),
@@ -1450,7 +1486,7 @@ function createSceneStub(renderedText: RenderedText[], renderedPanels: RenderedP
   return {
     scale: {
       width: 1024,
-      height: 768,
+      height,
     },
     add: {
       rectangle: () => createChainable(),
@@ -1540,6 +1576,8 @@ function createPortalState(options: {
     executionPlanResultCollections: {},
     executionReadinessCollections: {},
     executionReadinessResultCollections: {},
+    humanExecutionApprovalCollections: {},
+    humanExecutionApprovalResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -2010,6 +2048,71 @@ function createExecutionReadinessResultCollection(status: "Ready" | "Blocked" | 
     resultCount: 1,
     generatedAt: "2026-01-06T00:00:00.000Z",
     rulesVersion: "readiness-v1",
+  };
+}
+
+function createHumanExecutionApprovalCollection(): HumanExecutionApprovalCollection {
+  return {
+    projectId: "daily-proof",
+    approvals: [{
+      approvalId: "daily-proof:human-execution-approval:plan-1:approval-v1",
+      projectId: "daily-proof",
+      executionPlanId: "plan-1",
+      readinessId: "daily-proof:execution-readiness:plan-1:readiness-v1",
+      activeSessionId: "active-session-1",
+      projectTaskId: "task-12",
+      confirmedAssignmentId: "assignment-12",
+      preparedSessionId: "prepared-12",
+      employeeId: "gpt-engineer",
+      repositoryId: "github:ai-verse/daily-proof",
+      implementerAgent: "Implementer",
+      reviewerAgent: "Reviewer",
+      validationCommands: ["npm test"],
+      allowedMutationScope: ["local-files"],
+      decision: "Approved",
+      executionApproved: true,
+      approvedAt: "2026-01-07T00:00:00.000Z",
+      approvedBy: "Local Human",
+      rulesVersion: "approval-v1",
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    }],
+    approvalCount: 1,
+    generatedAt: "2026-01-07T00:00:00.000Z",
+    rulesVersion: "approval-v1",
+  };
+}
+
+function createHumanExecutionApprovalResultCollection(
+  status: "Approved" | "AlreadyApproved" | "Blocked" | "Failed",
+): HumanExecutionApprovalResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:human-execution-approval-result:plan-1:approval-v1",
+      projectId: "daily-proof",
+      executionPlanId: "plan-1",
+      readinessId: "daily-proof:execution-readiness:plan-1:readiness-v1",
+      approvalId: status === "Approved" || status === "AlreadyApproved"
+        ? "daily-proof:human-execution-approval:plan-1:approval-v1"
+        : undefined,
+      status,
+      reasonCodes: [status === "Approved" ? "APPROVED" : status === "AlreadyApproved" ? "ALREADY_APPROVED" : "READINESS_NOT_READY"],
+      approved: status === "Approved",
+      duplicateExistingApproval: status === "AlreadyApproved",
+      executionApproved: status === "Approved" || status === "AlreadyApproved",
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-07T00:00:00.000Z",
+      rulesVersion: "approval-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-07T00:00:00.000Z",
+    rulesVersion: "approval-v1",
   };
 }
 

@@ -123,6 +123,8 @@ export function createProjectPortalState(): ProjectPortalState {
     executionPlanResultCollections: {},
     executionReadinessCollections: {},
     executionReadinessResultCollections: {},
+    humanExecutionApprovalCollections: {},
+    humanExecutionApprovalResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
