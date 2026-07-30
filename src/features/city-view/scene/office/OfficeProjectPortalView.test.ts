@@ -1578,6 +1578,8 @@ function createPortalState(options: {
     executionReadinessResultCollections: {},
     humanExecutionApprovalCollections: {},
     humanExecutionApprovalResultCollections: {},
+    runtimePreflightCollections: {},
+    runtimePreflightResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

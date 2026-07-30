@@ -9,6 +9,7 @@ import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from ".
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
 import { createHumanExecutionApprovalDisplayRows, type HumanExecutionApprovalDisplayRows } from "./human-execution-approvals/HumanExecutionApprovalView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
+import { createRuntimePreflightDisplayRows, type RuntimePreflightDisplayRows } from "./runtime-preflight/RuntimePreflightView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -304,6 +305,11 @@ export class OfficeProjectPortalView {
     const humanExecutionApprovalRows = humanExecutionApprovalCollection || humanExecutionApprovalResultCollection
       ? createHumanExecutionApprovalDisplayRows(humanExecutionApprovalCollection, humanExecutionApprovalResultCollection)
       : undefined;
+    const runtimePreflightCollection = dashboardProjectId ? state.runtimePreflightCollections[dashboardProjectId] : undefined;
+    const runtimePreflightResultCollection = dashboardProjectId ? state.runtimePreflightResultCollections[dashboardProjectId] : undefined;
+    const runtimePreflightRows = runtimePreflightCollection || runtimePreflightResultCollection || humanExecutionApprovalCollection
+      ? createRuntimePreflightDisplayRows(runtimePreflightCollection, runtimePreflightResultCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -315,6 +321,7 @@ export class OfficeProjectPortalView {
         executionPlanRows,
         executionReadinessRows,
         humanExecutionApprovalRows,
+        runtimePreflightRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -660,6 +667,7 @@ function createProjectDashboardLowerRows(
   executionPlanRows?: ExecutionPlanDisplayRows,
   executionReadinessRows?: ExecutionReadinessDisplayRows,
   humanExecutionApprovalRows?: HumanExecutionApprovalDisplayRows,
+  runtimePreflightRows?: RuntimePreflightDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -743,6 +751,17 @@ function createProjectDashboardLowerRows(
       text: `[HUMAN EXECUTION APPROVAL] ${compactHumanExecutionApprovalText(resultText)}${approvalText}`,
       maxLines: 1,
       dropPriority: 9,
+      usePriorityFit: true,
+    });
+  }
+
+  if (runtimePreflightRows) {
+    const resultText = runtimePreflightRows.resultText ?? runtimePreflightRows.statusText;
+    const checkText = runtimePreflightRows.checkText ? `; ${compactRuntimePreflightCheckText(runtimePreflightRows.checkText)}` : "";
+    lowerRows.push({
+      text: `[RUNTIME PREFLIGHT] ${compactRuntimePreflightResultText(resultText)}${checkText}`,
+      maxLines: 1,
+      dropPriority: 11,
       usePriorityFit: true,
     });
   }
@@ -972,6 +991,27 @@ function compactHumanExecutionApprovalText(text: string) {
     .replace("Resolve Readiness Requirements", "Fix readiness")
     .replace("Approval Validation Failed", "Approval failed")
     .replace("; READINESS_NOT_READY", "");
+}
+
+function compactRuntimePreflightResultText(text: string) {
+  return text
+    .replace("Runtime Preflight Required", "Preflight required")
+    .replace("Run Local Safety Checks", "Run checks")
+    .replace("Runtime Preflight Passed", "Preflight passed")
+    .replace("Ready for Runtime Start Decision", "Ready")
+    .replace("Runtime Preflight Blocked", "Preflight blocked")
+    .replace("Resolve Local Runtime Requirements", "Fix local requirements")
+    .replace("Runtime Preflight Failed", "Preflight failed")
+    .replace("Local Safety Checks Could Not Complete", "Checks failed")
+    .replace("Execution Not Started", "Not started")
+    .replace("Agents Not Started", "Agents not started");
+}
+
+function compactRuntimePreflightCheckText(text: string) {
+  return text
+    .replace(/RuntimeEnvironment:/g, "Runtime:")
+    .replace(/ValidationCommands:/g, "Commands:")
+    .replace(/WorkingTree:/g, "Tree:");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

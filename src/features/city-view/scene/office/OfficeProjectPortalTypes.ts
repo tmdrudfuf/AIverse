@@ -26,6 +26,10 @@ import type {
   HumanExecutionApprovalCollection,
   HumanExecutionApprovalResultCollection,
 } from "./human-execution-approvals/HumanExecutionApprovalTypes";
+import type {
+  RuntimePreflightCollection,
+  RuntimePreflightResultCollection,
+} from "./runtime-preflight/RuntimePreflightTypes";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -142,6 +146,8 @@ export type ProjectPortalState = {
   executionReadinessResultCollections: Record<string, ExecutionReadinessResultCollection>;
   humanExecutionApprovalCollections: Record<string, HumanExecutionApprovalCollection>;
   humanExecutionApprovalResultCollections: Record<string, HumanExecutionApprovalResultCollection>;
+  runtimePreflightCollections: Record<string, RuntimePreflightCollection>;
+  runtimePreflightResultCollections: Record<string, RuntimePreflightResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
