@@ -26,10 +26,10 @@
 
 - [x] T011 Run focused approval tests and record exact file/test counts
 - [x] T012 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`
-- [ ] T013 Commit the complete local implementation
-- [ ] T014 Run independent Claude review against exact HEAD
-- [ ] T015 Fix blocking findings, rerun validation, and repeat review until Approved
-- [ ] T016 Complete the exact-HEAD provenance gate
+- [x] T013 Commit the complete local implementation
+- [x] T014 Run independent Claude review against exact HEAD
+- [x] T015 Fix blocking findings, rerun validation, and repeat review until Approved
+- [x] T016 Complete the exact-HEAD provenance gate
 
 ## Dependencies
 
