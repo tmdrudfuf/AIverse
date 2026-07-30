@@ -1155,6 +1155,12 @@ describe("OfficeProjectPortalView", () => {
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: {
+          status: "available",
+          healthSummary: "Ok.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "None.",
+        },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1242,6 +1248,33 @@ describe("OfficeProjectPortalView", () => {
     expect(planRow?.text).not.toMatch(/Running|Executing|Coding|Reviewing/i);
     assertRowClears(activeRow, planRow);
     assertRowInsidePanel(planRow, lowerPanel);
+  });
+
+  it("keeps source rows visible alongside execution-plan rows when space allows", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.executionPlanResultCollections = {
+      "daily-proof": createExecutionPlanResultCollection("Blocked"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const sourceRow = findRenderedRow(renderedText, "[SOURCE]");
+    const planRow = findRenderedRow(renderedText, "[EXECUTION PLAN]");
+
+    expect(sourceRow?.text).toContain("Repo ai-verse/daily-proof");
+    expect(planRow?.text).toContain("Execution Plan Blocked");
+    assertRowClears(sourceRow, planRow);
+    [sourceRow, planRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
   });
 
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {

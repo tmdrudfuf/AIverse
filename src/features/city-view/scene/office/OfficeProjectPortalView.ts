@@ -628,10 +628,14 @@ function getLatestWorkSession(state: ProjectPortalState, task: ProjectTask) {
 type ProjectDashboardLowerRow = {
   text: string;
   maxLines: number;
+  dropPriority?: number;
+  usePriorityFit?: boolean;
 };
 
 type ProjectDashboardRenderedLowerRow = {
   text: string;
+  dropPriority?: number;
+  usePriorityFit?: boolean;
 };
 
 function createProjectDashboardLowerRows(
@@ -649,37 +653,37 @@ function createProjectDashboardLowerRows(
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
   const lowerRows: ProjectDashboardLowerRow[] = [
-    { text: `[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, maxLines: 1 },
-    { text: `[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, maxLines: 1 },
-    { text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`, maxLines: 2 },
-    { text: `[ATTENTION] ${rows.advisoryNextText.replace("Next attention: ", "")}`, maxLines: 1 },
+    { text: `[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, maxLines: 1, dropPriority: 0 },
+    { text: `[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, maxLines: 1, dropPriority: 0 },
+    { text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`, maxLines: 2, dropPriority: 0 },
+    { text: `[ATTENTION] ${rows.advisoryNextText.replace("Next attention: ", "")}`, maxLines: 1, dropPriority: 0 },
   ];
 
-  if (sourceSignalRows.length > 0 && !executionPlanRows) {
-    lowerRows.push({ text: `[SOURCE] ${sourceSignalRows[0]}`, maxLines: 1 });
+  if (sourceSignalRows.length > 0) {
+    lowerRows.push({ text: `[SOURCE] ${sourceSignalRows[0]}`, maxLines: 1, dropPriority: 30 });
     if (sourceSignalRows.length > 1) {
-      lowerRows.push({ text: `[SYNC] ${sourceSignalRows.slice(1).join(" | ")}`, maxLines: 1 });
+      lowerRows.push({ text: `[SYNC] ${sourceSignalRows.slice(1).join(" | ")}`, maxLines: 1, dropPriority: 30 });
     }
   }
 
-  if (sourceSignalRows.length === 0 && !executionPlanRows) {
+  if (sourceSignalRows.length === 0) {
     lowerRows.push(
-      { text: `[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, maxLines: 1 },
-      { text: `[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, maxLines: 1 },
+      { text: `[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, maxLines: 1, dropPriority: 30 },
+      { text: `[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, maxLines: 1, dropPriority: 30 },
     );
   }
 
   if (repositorySyncRows.length > 0) {
-    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1 });
+    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 30 });
   }
 
   if (issueSyncRows) {
-    lowerRows.push({ text: `[ISSUES] ${issueSyncRows.statusText}`, maxLines: 1 });
+    lowerRows.push({ text: `[ISSUES] ${issueSyncRows.statusText}`, maxLines: 1, dropPriority: 10 });
     if (issueSyncRows.issueListText) {
-      lowerRows.push({ text: `[ISSUE LIST] ${issueSyncRows.issueListText}`, maxLines: 1 });
+      lowerRows.push({ text: `[ISSUE LIST] ${issueSyncRows.issueListText}`, maxLines: 1, dropPriority: 10 });
     }
     if (issueSyncRows.issueDetailText) {
-      lowerRows.push({ text: `[ISSUE DETAIL] ${issueSyncRows.issueDetailText}`, maxLines: 1 });
+      lowerRows.push({ text: `[ISSUE DETAIL] ${issueSyncRows.issueDetailText}`, maxLines: 1, dropPriority: 10 });
     }
   }
 
@@ -687,7 +691,7 @@ function createProjectDashboardLowerRows(
     const resultText = activeWorkSessionRows.resultText
       ? compactActiveWorkSessionResultText(activeWorkSessionRows.resultText)
       : activeWorkSessionRows.statusText;
-    lowerRows.push({ text: `[ACTIVE WORK SESSION] ${resultText}`, maxLines: 1 });
+    lowerRows.push({ text: `[ACTIVE WORK SESSION] ${resultText}`, maxLines: 1, dropPriority: 5 });
   }
 
   if (executionPlanRows) {
@@ -695,13 +699,18 @@ function createProjectDashboardLowerRows(
     const planText = executionPlanRows.planText
       ? `; ${compactExecutionPlanDetailText(executionPlanRows.planText)}`
       : "";
-    lowerRows.push({ text: `[EXECUTION PLAN] ${compactExecutionPlanResultText(resultText)}${planText}`, maxLines: 2 });
+    lowerRows.push({
+      text: `[EXECUTION PLAN] ${compactExecutionPlanResultText(resultText)}${planText}`,
+      maxLines: 2,
+      dropPriority: 12,
+      usePriorityFit: true,
+    });
   }
 
   if (candidateTaskRows) {
-    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1 });
+    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 20 });
     if (candidateTaskRows.topTaskText) {
-      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1 });
+      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 20 });
     }
   }
 
@@ -709,28 +718,28 @@ function createProjectDashboardLowerRows(
     const topText = candidateAssignmentRows.topRecommendationText
       ? `; ${candidateAssignmentRows.topRecommendationText}`
       : "";
-    lowerRows.push({ text: `[ASSIGNMENT RECOMMENDATIONS] ${candidateAssignmentRows.statusText}${topText}`, maxLines: 1 });
+    lowerRows.push({ text: `[ASSIGNMENT RECOMMENDATIONS] ${candidateAssignmentRows.statusText}${topText}`, maxLines: 1, dropPriority: 25 });
   }
 
   if (candidatePromotionRows) {
     const reviewText = candidatePromotionRows.reviewText
       ? `; ${candidatePromotionRows.reviewText}`
       : "";
-    lowerRows.push({ text: `[PROMOTION REVIEW] ${candidatePromotionRows.statusText}${reviewText}`, maxLines: 1 });
+    lowerRows.push({ text: `[PROMOTION REVIEW] ${candidatePromotionRows.statusText}${reviewText}`, maxLines: 1, dropPriority: 26 });
   }
 
   if (candidateProjectTaskPromotionRows) {
     const resultText = candidateProjectTaskPromotionRows.resultText
       ? `; ${candidateProjectTaskPromotionRows.resultText}`
       : "";
-    lowerRows.push({ text: `[PROMOTION RESULT] ${candidateProjectTaskPromotionRows.statusText}${resultText}`, maxLines: 1 });
+    lowerRows.push({ text: `[PROMOTION RESULT] ${candidateProjectTaskPromotionRows.statusText}${resultText}`, maxLines: 1, dropPriority: 27 });
   }
 
   if (confirmedEmployeeAssignmentRows) {
     const resultText = confirmedEmployeeAssignmentRows.resultText
       ? `; ${confirmedEmployeeAssignmentRows.resultText}`
       : "";
-    lowerRows.push({ text: `[CONFIRMED ASSIGNMENT] ${confirmedEmployeeAssignmentRows.statusText}${resultText}`, maxLines: 1 });
+    lowerRows.push({ text: `[CONFIRMED ASSIGNMENT] ${confirmedEmployeeAssignmentRows.statusText}${resultText}`, maxLines: 1, dropPriority: 28 });
   }
 
   if (preparedWorkSessionRows) {
@@ -738,7 +747,7 @@ function createProjectDashboardLowerRows(
       ? compactPreparationResultText(preparedWorkSessionRows.resultText)
       : "";
     const statusText = resultText || preparedWorkSessionRows.statusText;
-    lowerRows.push({ text: `[WORK SESSION PREPARATION] ${statusText}`, maxLines: 1 });
+    lowerRows.push({ text: `[WORK SESSION PREPARATION] ${statusText}`, maxLines: 1, dropPriority: 29 });
   }
 
   return lowerRows;
@@ -747,6 +756,8 @@ function createProjectDashboardLowerRows(
 function prepareProjectDashboardLowerRows(rows: ProjectDashboardLowerRow[]): ProjectDashboardRenderedLowerRow[] {
   return rows.map((row) => ({
     text: wrapAndClampText(row.text, PROJECT_DASHBOARD_LOWER_WRAP_LENGTH, row.maxLines),
+    dropPriority: row.dropPriority,
+    usePriorityFit: row.usePriorityFit,
   }));
 }
 
@@ -777,8 +788,22 @@ function fitProjectDashboardLowerRows(
   maxHeight: number,
 ): ProjectDashboardRenderedLowerRow[] {
   let fitted = rows;
+  const usePriorityFit = rows.some((row) => row.usePriorityFit);
   while (fitted.length > 0 && calculateProjectDashboardLowerRowsDesiredHeight(fitted) > maxHeight) {
-    fitted = fitted.slice(0, -1);
+    if (!usePriorityFit) {
+      fitted = fitted.slice(0, -1);
+      continue;
+    }
+    let removeIndex = fitted.length - 1;
+    let removePriority = fitted[removeIndex]?.dropPriority ?? removeIndex;
+    fitted.forEach((row, index) => {
+      const priority = row.dropPriority ?? index;
+      if (priority > removePriority || (priority === removePriority && index > removeIndex)) {
+        removePriority = priority;
+        removeIndex = index;
+      }
+    });
+    fitted = fitted.filter((_row, index) => index !== removeIndex);
   }
   return fitted;
 }

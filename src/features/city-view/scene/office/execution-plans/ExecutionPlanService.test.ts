@@ -98,6 +98,8 @@ describe("ExecutionPlanService", () => {
       .toEqual(["ACTIVE_SESSION_NOT_ACTIVE"]);
     expect(service.createPlan(createInput({ taskCollection: { projectId: "daily-proof", tasks: [createTask({ status: "Todo" })] } })).result.reasonCodes)
       .toEqual(["TASK_NOT_ACTIVE"]);
+    expect(service.createPlan(createInput({ taskCollection: { projectId: "daily-proof", tasks: [createTask({ description: "Missing promoted-task provenance." })] } })).result.reasonCodes)
+      .toEqual(["MALFORMED_PROVENANCE"]);
     expect(service.createPlan(createInput({ taskCollection: { projectId: "daily-proof", tasks: [createTask({ assigneeId: "other" })] } })).result.reasonCodes)
       .toEqual(["ACTIVE_SESSION_STALE"]);
     expect(service.createPlan(createInput({ confirmedAssignments: {} })).result.reasonCodes).toEqual(["CONFIRMED_ASSIGNMENT_MISSING"]);
