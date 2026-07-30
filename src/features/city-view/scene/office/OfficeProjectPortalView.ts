@@ -6,6 +6,7 @@ import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
+import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
@@ -292,6 +293,11 @@ export class OfficeProjectPortalView {
     const executionPlanRows = executionPlanCollection || executionPlanResultCollection
       ? createExecutionPlanDisplayRows(executionPlanCollection, executionPlanResultCollection)
       : undefined;
+    const executionReadinessCollection = dashboardProjectId ? state.executionReadinessCollections[dashboardProjectId] : undefined;
+    const executionReadinessResultCollection = dashboardProjectId ? state.executionReadinessResultCollections[dashboardProjectId] : undefined;
+    const executionReadinessRows = executionReadinessCollection || executionReadinessResultCollection
+      ? createExecutionReadinessDisplayRows(executionReadinessCollection, executionReadinessResultCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -301,6 +307,7 @@ export class OfficeProjectPortalView {
         issueSyncRows,
         activeWorkSessionRows,
         executionPlanRows,
+        executionReadinessRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -644,6 +651,7 @@ function createProjectDashboardLowerRows(
   issueSyncRows?: IssueSyncDisplayRows,
   activeWorkSessionRows?: ActiveWorkSessionDisplayRows,
   executionPlanRows?: ExecutionPlanDisplayRows,
+  executionReadinessRows?: ExecutionReadinessDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -703,6 +711,17 @@ function createProjectDashboardLowerRows(
       text: `[EXECUTION PLAN] ${compactExecutionPlanResultText(resultText)}${planText}`,
       maxLines: 2,
       dropPriority: 12,
+      usePriorityFit: true,
+    });
+  }
+
+  if (executionReadinessRows) {
+    const resultText = executionReadinessRows.resultText ?? executionReadinessRows.statusText;
+    const checkText = executionReadinessRows.checkText ? `; ${compactExecutionReadinessCheckText(executionReadinessRows.checkText)}` : "";
+    lowerRows.push({
+      text: `[EXECUTION READINESS] ${compactExecutionReadinessResultText(resultText)}${checkText}`,
+      maxLines: 1,
+      dropPriority: 14,
       usePriorityFit: true,
     });
   }
@@ -895,6 +914,25 @@ function compactExecutionPlanDetailText(text: string) {
     .replace(/; Spec [^;]+/, "; Spec captured")
     .replace(/validation command(s?)/, "validation cmd$1")
     .replace(/mutation scope(s?)/, "mutation scope$1");
+}
+
+function compactExecutionReadinessResultText(text: string) {
+  return text
+    .replace("Readiness Checks Passed", "Checks passed")
+    .replace("Ready for Human Execution Decision", "Ready")
+    .replace("Human Approval Not Granted", "No approval")
+    .replace("Execution Not Started", "Not started")
+    .replace("Resolve Readiness Requirements", "Resolve requirements")
+    .replace("Readiness Validation Failed", "Readiness failed");
+}
+
+function compactExecutionReadinessCheckText(text: string) {
+  return text
+    .replace(/ExecutionPlan:/g, "Plan:")
+    .replace(/ProjectTask:/g, "Task:")
+    .replace(/ConfirmedAssignment:/g, "Assignment:")
+    .replace(/PreparedSession:/g, "Prepared:")
+    .replace(/ActiveSession:/g, "Active:");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

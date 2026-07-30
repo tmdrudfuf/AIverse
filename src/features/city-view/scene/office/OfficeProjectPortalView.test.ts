@@ -14,6 +14,10 @@ import type {
   ExecutionPlanCollection,
   ExecutionPlanResultCollection,
 } from "./execution-plans/ExecutionPlanTypes";
+import type {
+  ExecutionReadinessCollection,
+  ExecutionReadinessResultCollection,
+} from "./execution-readiness/ExecutionReadinessTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
@@ -1277,6 +1281,44 @@ describe("OfficeProjectPortalView", () => {
     [sourceRow, planRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
   });
 
+  it("renders execution readiness rows without hiding execution-plan context", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.executionPlanCollections = {
+      "daily-proof": createExecutionPlanCollection(),
+    };
+    state.executionPlanResultCollections = {
+      "daily-proof": createExecutionPlanResultCollection("Created"),
+    };
+    state.executionReadinessCollections = {
+      "daily-proof": createExecutionReadinessCollection("Ready"),
+    };
+    state.executionReadinessResultCollections = {
+      "daily-proof": createExecutionReadinessResultCollection("Ready"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const planRow = findRenderedRow(renderedText, "[EXECUTION PLAN]");
+    const readinessRow = findRenderedRow(renderedText, "[EXECUTION READINESS]");
+
+    expect(planRow?.text).toContain("Execution Plan Ready");
+    expect(readinessRow?.text).toContain("Ready");
+    expect(readinessRow?.text).toContain("No approval");
+    expect(readinessRow?.text).toContain("Not started");
+    expect(readinessRow?.text).not.toMatch(/Approved to Execute|Execution Approved|Running|Executing|Coding|Reviewing|Codex Started|Claude Started|Repository Changing/i);
+    [planRow, readinessRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -1469,6 +1511,8 @@ function createPortalState(options: {
     activeWorkSessionStartResultCollections: {},
     executionPlanCollections: {},
     executionPlanResultCollections: {},
+    executionReadinessCollections: {},
+    executionReadinessResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1867,6 +1911,78 @@ function createExecutionPlanResultCollection(
     resultCount: 1,
     generatedAt: "2026-01-05T00:00:00.000Z",
     rulesVersion: "plan-v1",
+  };
+}
+
+function createExecutionReadinessCollection(status: "Ready" | "Blocked" | "Failed"): ExecutionReadinessCollection {
+  return {
+    projectId: "daily-proof",
+    readiness: [{
+      readinessId: "daily-proof:execution-readiness:plan-1:readiness-v1",
+      projectId: "daily-proof",
+      executionPlanId: "plan-1",
+      activeSessionId: "active-session-1",
+      projectTaskId: "task-12",
+      confirmedAssignmentId: "assignment-12",
+      preparedSessionId: "prepared-12",
+      employeeId: "gpt-engineer",
+      repositoryId: "github:ai-verse/daily-proof",
+      status,
+      checks: [
+        {
+          checkId: "check-plan",
+          category: "ExecutionPlan",
+          status: "Passed",
+          reason: "READY",
+          message: "Execution plan is current.",
+        },
+        {
+          checkId: "check-task",
+          category: "ProjectTask",
+          status: status === "Ready" ? "Passed" : "Blocked",
+          reason: status === "Ready" ? "READY" : "TASK_STATE_INCOMPATIBLE",
+          message: "ProjectTask state checked.",
+        },
+      ],
+      evaluatedAt: "2026-01-06T00:00:00.000Z",
+      rulesVersion: "readiness-v1",
+      executionApproved: false,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    }],
+    readinessCount: 1,
+    generatedAt: "2026-01-06T00:00:00.000Z",
+    rulesVersion: "readiness-v1",
+  };
+}
+
+function createExecutionReadinessResultCollection(status: "Ready" | "Blocked" | "Failed"): ExecutionReadinessResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:execution-readiness-result:plan-1:readiness-v1",
+      projectId: "daily-proof",
+      executionPlanId: "plan-1",
+      readinessId: "daily-proof:execution-readiness:plan-1:readiness-v1",
+      status,
+      reasonCodes: status === "Ready" ? ["READY"] : ["TASK_STATE_INCOMPATIBLE"],
+      primaryReason: status === "Ready" ? "READY" : "TASK_STATE_INCOMPATIBLE",
+      passedCheckCount: status === "Ready" ? 10 : 9,
+      blockedCheckCount: status === "Blocked" ? 1 : 0,
+      failedCheckCount: status === "Failed" ? 1 : 0,
+      executionApproved: false,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      evaluatedAt: "2026-01-06T00:00:00.000Z",
+      rulesVersion: "readiness-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-06T00:00:00.000Z",
+    rulesVersion: "readiness-v1",
   };
 }
 

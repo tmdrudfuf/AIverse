@@ -8,6 +8,10 @@ import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTyp
 import type { Employee } from "./employees/EmployeeTypes";
 import type { ActiveWorkSessionStartResultCollection } from "./active-work-sessions/ActiveWorkSessionTypes";
 import type { ExecutionPlanCollection, ExecutionPlanResultCollection } from "./execution-plans/ExecutionPlanTypes";
+import type {
+  ExecutionReadinessCollection,
+  ExecutionReadinessResultCollection,
+} from "./execution-readiness/ExecutionReadinessTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -704,9 +708,22 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     });
     expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
     expect(internals.state.employees[0]?.status).toBe("Working");
+
+    controller.updateInput(createInput({ enterPressed: true })); // evaluate execution readiness
+
+    expect(internals.state.executionReadinessResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Ready",
+      reasonCodes: ["READY"],
+      executionApproved: false,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(internals.state.executionReadinessCollections["daily-proof"]?.readiness[0]?.checks).toHaveLength(10);
   });
 
-  it("revalidates an existing execution plan and blocks stale repeated creation", async () => {
+  it("evaluates execution readiness as a separate input after execution-plan creation", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     setDailyProofIdentity(internals);
@@ -748,12 +765,16 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
 
     expect(internals.state.executionPlanCollections["daily-proof"]?.plans[0]?.planId).toBe(firstPlanId);
     expect(internals.state.executionPlanCollections["daily-proof"]?.plans).toHaveLength(1);
-    expect(internals.state.executionPlanResultCollections["daily-proof"]?.results[0]).toMatchObject({
+    expect(internals.state.executionReadinessResultCollections["daily-proof"]?.results[0]).toMatchObject({
       status: "Blocked",
-      reasonCodes: ["EMPLOYEE_STALE"],
-      createdPlan: false,
-      duplicateExistingPlan: false,
+      reasonCodes: ["EMPLOYEE_STATE_INCOMPATIBLE"],
+      executionApproved: false,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
     });
+    expect(internals.state.executionPlanResultCollections["daily-proof"]?.results[0]?.status).toBe("Created");
   });
 
   it("revalidates an already-started session and blocks stale employee state", async () => {
@@ -1051,6 +1072,8 @@ type ControllerInternals = {
     activeWorkSessionStartResultCollections: Record<string, ActiveWorkSessionStartResultCollection>;
     executionPlanCollections: Record<string, ExecutionPlanCollection>;
     executionPlanResultCollections: Record<string, ExecutionPlanResultCollection>;
+    executionReadinessCollections: Record<string, ExecutionReadinessCollection>;
+    executionReadinessResultCollections: Record<string, ExecutionReadinessResultCollection>;
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
