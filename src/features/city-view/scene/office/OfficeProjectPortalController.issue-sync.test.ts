@@ -7,6 +7,7 @@ import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } f
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { ActiveWorkSessionStartResultCollection } from "./active-work-sessions/ActiveWorkSessionTypes";
+import type { ExecutionPlanCollection, ExecutionPlanResultCollection } from "./execution-plans/ExecutionPlanTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -636,6 +637,125 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     });
   });
 
+  it("creates an execution plan only after a separate input following work-session start", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.projects[0]!.repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-070",
+      connectionState: "Available",
+    };
+    internals.state.repositorySyncSnapshots["daily-proof"] = {
+      provider: "github",
+      availability: "available",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      currentBranch: "codex/070-execution-plan-foundation",
+      syncStatus: "Succeeded",
+      workingTreeState: "clean",
+    };
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve
+    controller.updateInput(createInput({ enterPressed: true })); // promote
+    controller.updateInput(createInput({ enterPressed: true })); // confirm assignment
+    controller.updateInput(createInput({ enterPressed: true })); // prepare
+    controller.updateInput(createInput({ enterPressed: true })); // start
+
+    expect(internals.state.executionPlanCollections["daily-proof"]).toBeUndefined();
+
+    controller.updateInput(createInput({ enterPressed: true })); // create execution plan
+
+    const plan = internals.state.executionPlanCollections["daily-proof"]?.plans[0];
+    const result = internals.state.executionPlanResultCollections["daily-proof"]?.results[0];
+    expect(result).toMatchObject({
+      status: "Created",
+      createdPlan: true,
+      executionStarted: false,
+      subprocessStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(plan).toMatchObject({
+      featureId: "070-execution-plan-foundation",
+      projectTaskId: internals.state.taskCollections["daily-proof"]?.tasks[0]?.id,
+      implementerAgent: "Implementer",
+      reviewerAgent: "Reviewer",
+      branchName: "codex/070-execution-plan-foundation",
+      specPath: "specs/070-execution-plan-foundation/spec.md",
+      executionStarted: false,
+      runtimeStarted: false,
+      subprocessStarted: false,
+    });
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
+    expect(internals.state.employees[0]?.status).toBe("Working");
+  });
+
+  it("revalidates an existing execution plan and blocks stale repeated creation", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.projects[0]!.repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-070",
+      connectionState: "Available",
+    };
+    internals.state.repositorySyncSnapshots["daily-proof"] = {
+      provider: "github",
+      availability: "available",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      currentBranch: "codex/070-execution-plan-foundation",
+      syncStatus: "Succeeded",
+      workingTreeState: "clean",
+    };
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    for (let index = 0; index < 6; index += 1) controller.updateInput(createInput({ enterPressed: true }));
+    const firstPlanId = internals.state.executionPlanCollections["daily-proof"]?.plans[0]?.planId;
+    internals.state.employees = [employee({ id: "gpt-engineer", status: "Offline", capabilities: ["Coding"] })];
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(internals.state.executionPlanCollections["daily-proof"]?.plans[0]?.planId).toBe(firstPlanId);
+    expect(internals.state.executionPlanCollections["daily-proof"]?.plans).toHaveLength(1);
+    expect(internals.state.executionPlanResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["EMPLOYEE_STALE"],
+      createdPlan: false,
+      duplicateExistingPlan: false,
+    });
+  });
+
   it("revalidates an already-started session and blocks stale employee state", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
@@ -917,7 +1037,7 @@ type ControllerInternals = {
     selectedProjectDashboardProjectId: string | undefined;
     projects: ProjectPortalProjectLike[];
     repositorySummaries: Record<string, { connectionStatus: string }>;
-    repositorySyncSnapshots: Record<string, { syncStatus: string }>;
+    repositorySyncSnapshots: ProjectPortalState["repositorySyncSnapshots"];
     issueSyncCollections: Record<string, IssueSnapshotCollection>;
     candidateTaskCollections: Record<string, CandidateTaskCollection>;
     candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
@@ -929,6 +1049,8 @@ type ControllerInternals = {
     preparedWorkSessionRecords: Record<string, PreparedWorkSessionRecord>;
     preparedWorkSessionResultCollections: Record<string, PreparedWorkSessionResultCollection>;
     activeWorkSessionStartResultCollections: Record<string, ActiveWorkSessionStartResultCollection>;
+    executionPlanCollections: Record<string, ExecutionPlanCollection>;
+    executionPlanResultCollections: Record<string, ExecutionPlanResultCollection>;
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;

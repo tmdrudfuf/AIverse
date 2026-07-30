@@ -30,6 +30,8 @@ import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
+import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
+import { createExecutionPlanCollection } from "./execution-plans/ExecutionPlanTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -90,6 +92,22 @@ const CONVERSATION_POSITION_ZONES = new Set<string>([
   "breakArea",
   "idleSpot",
 ]);
+const EXECUTION_PLAN_FEATURE_ID = "070-execution-plan-foundation";
+const EXECUTION_PLAN_SPEC_PATH = "specs/070-execution-plan-foundation/spec.md";
+const EXECUTION_PLAN_VALIDATION_COMMANDS = [
+  "npm test",
+  "npx tsc --noEmit",
+  "npm run build",
+  "git diff --check",
+  "git diff --cached --check",
+];
+const EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE = [
+  "local-worktree-only",
+  "no-agent-runtime",
+  "no-subprocess",
+  "no-repository-mutation",
+  "no-github-mutation",
+];
 
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
@@ -113,6 +131,7 @@ export class OfficeProjectPortalController {
   private confirmedEmployeeAssignmentService: ConfirmedEmployeeAssignmentService;
   private preparedWorkSessionService: PreparedWorkSessionService;
   private activeWorkSessionStartService: ActiveWorkSessionStartService;
+  private executionPlanService: ExecutionPlanService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -163,6 +182,7 @@ export class OfficeProjectPortalController {
     this.confirmedEmployeeAssignmentService = new ConfirmedEmployeeAssignmentService();
     this.preparedWorkSessionService = new PreparedWorkSessionService();
     this.activeWorkSessionStartService = new ActiveWorkSessionStartService();
+    this.executionPlanService = new ExecutionPlanService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -659,6 +679,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const planned = this.createExecutionPlanForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (planned) {
+        this.view.render(this.state);
+        return;
+      }
+
       const started = this.startSelectedWorkSessionForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1292,6 +1321,82 @@ export class OfficeProjectPortalController {
       this.activeWorkSessionStartService.upsertResult(existingResults, outcome.result);
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
     this.state.preparedWorkSessionRecords = beforePreparedSessions;
+    return true;
+  }
+
+  private createExecutionPlanForPromotion(projectId: string, candidateTaskId: string) {
+    this.executionPlanService ??= new ExecutionPlanService();
+    this.state.executionPlanCollections ??= {};
+    this.state.executionPlanResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const activeSession = (this.state.workSessions[promotedTask.id] ?? [])
+      .find((session) => session.projectId === projectId && session.taskId === promotedTask.id);
+    if (!activeSession) return false;
+
+    const project = this.state.projects.find((item) => item.id === projectId);
+    const repositoryIdentity = project?.repositoryIdentity;
+    const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
+    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+      : undefined;
+    const localPath = repositoryIdentity?.localPath;
+    const branchName = repositorySnapshot?.currentBranch;
+    if (!repositoryIdentity || !repositorySnapshot || !repositoryId || !localPath || !branchName) {
+      return false;
+    }
+
+    const existingPlans = this.state.executionPlanCollections[projectId]
+      ?? createExecutionPlanCollection({ projectId, plans: [], rulesVersion: "plan-v1" });
+    const outcome = this.executionPlanService.createPlan({
+      request: {
+        projectId,
+        projectTaskId: promotedTask.id,
+        activeSessionId: activeSession.id,
+        requestedAt: new Date().toISOString(),
+      },
+      featureId: EXECUTION_PLAN_FEATURE_ID,
+      taskCollection,
+      confirmedAssignments: this.state.confirmedEmployeeAssignmentRecords,
+      preparedSessions: this.state.preparedWorkSessionRecords,
+      activeSessions: this.state.workSessions,
+      employees: this.state.employees,
+      repositoryIdentity,
+      repositorySnapshot,
+      repositoryContext: repositoryId && localPath && branchName
+        ? {
+            repositoryId,
+            repositoryPath: localPath,
+            worktreePath: localPath,
+            branchName,
+            specPath: EXECUTION_PLAN_SPEC_PATH,
+          }
+        : undefined,
+      roleContext: {
+        implementerAgent: "Implementer",
+        reviewerAgent: "Reviewer",
+        validationCommands: EXECUTION_PLAN_VALIDATION_COMMANDS,
+        allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
+      },
+      pathChecks: {
+        worktreeExists: Boolean(localPath),
+        specExists: true,
+      },
+      existingPlans,
+    });
+
+    if (outcome.planCollection && outcome.result.status === "Created") {
+      this.state.executionPlanCollections[projectId] = outcome.planCollection;
+    }
+
+    const existingResults = this.state.executionPlanResultCollections[projectId];
+    this.state.executionPlanResultCollections[projectId] =
+      this.executionPlanService.upsertResult(existingResults, outcome.result);
     return true;
   }
 

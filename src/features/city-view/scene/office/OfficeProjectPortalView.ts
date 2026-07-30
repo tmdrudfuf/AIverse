@@ -5,6 +5,7 @@ import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTa
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
+import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
@@ -286,6 +287,11 @@ export class OfficeProjectPortalView {
     const activeWorkSessionRows = activeWorkSessionStartCollection
       ? createActiveWorkSessionDisplayRows(activeWorkSessionStartCollection)
       : undefined;
+    const executionPlanCollection = dashboardProjectId ? state.executionPlanCollections[dashboardProjectId] : undefined;
+    const executionPlanResultCollection = dashboardProjectId ? state.executionPlanResultCollections[dashboardProjectId] : undefined;
+    const executionPlanRows = executionPlanCollection || executionPlanResultCollection
+      ? createExecutionPlanDisplayRows(executionPlanCollection, executionPlanResultCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -294,6 +300,7 @@ export class OfficeProjectPortalView {
         repositorySyncRows,
         issueSyncRows,
         activeWorkSessionRows,
+        executionPlanRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -632,6 +639,7 @@ function createProjectDashboardLowerRows(
   repositorySyncRows: string[] = [],
   issueSyncRows?: IssueSyncDisplayRows,
   activeWorkSessionRows?: ActiveWorkSessionDisplayRows,
+  executionPlanRows?: ExecutionPlanDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -647,14 +655,14 @@ function createProjectDashboardLowerRows(
     { text: `[ATTENTION] ${rows.advisoryNextText.replace("Next attention: ", "")}`, maxLines: 1 },
   ];
 
-  if (sourceSignalRows.length > 0) {
+  if (sourceSignalRows.length > 0 && !executionPlanRows) {
     lowerRows.push({ text: `[SOURCE] ${sourceSignalRows[0]}`, maxLines: 1 });
     if (sourceSignalRows.length > 1) {
       lowerRows.push({ text: `[SYNC] ${sourceSignalRows.slice(1).join(" | ")}`, maxLines: 1 });
     }
   }
 
-  if (sourceSignalRows.length === 0) {
+  if (sourceSignalRows.length === 0 && !executionPlanRows) {
     lowerRows.push(
       { text: `[FOCUS] ${rows.relatedFocusText.replace("Focus: ", "")}`, maxLines: 1 },
       { text: `[NEXT] ${rows.nextSuggestedFocusText.replace("Next suggested focus: ", "")}`, maxLines: 1 },
@@ -680,6 +688,14 @@ function createProjectDashboardLowerRows(
       ? compactActiveWorkSessionResultText(activeWorkSessionRows.resultText)
       : activeWorkSessionRows.statusText;
     lowerRows.push({ text: `[ACTIVE WORK SESSION] ${resultText}`, maxLines: 1 });
+  }
+
+  if (executionPlanRows) {
+    const resultText = executionPlanRows.resultText ?? executionPlanRows.statusText;
+    const planText = executionPlanRows.planText
+      ? `; ${compactExecutionPlanDetailText(executionPlanRows.planText)}`
+      : "";
+    lowerRows.push({ text: `[EXECUTION PLAN] ${compactExecutionPlanResultText(resultText)}${planText}`, maxLines: 2 });
   }
 
   if (candidateTaskRows) {
@@ -838,6 +854,22 @@ function compactActiveWorkSessionResultText(text: string) {
     .replace(/; [^;]+; Work started;/, "; Work started;")
     .replace("Agent execution not started", "No agent execution")
     .replace("No repository mutation", "Repo safe");
+}
+
+function compactExecutionPlanResultText(text: string) {
+  return text
+    .replace(/^Execution Plan Ready [^;]+;/, "Execution Plan Ready;")
+    .replace(/^Execution Plan Exists [^;]+;/, "Execution Plan Exists;")
+    .replace(/^Execution Plan Blocked [^;]+;/, "Execution Plan Blocked;")
+    .replace(/^Execution Plan Failed [^;]+;/, "Execution Plan Failed;");
+}
+
+function compactExecutionPlanDetailText(text: string) {
+  return text
+    .replace(/; Worktree [^;]+/, "; Worktree captured")
+    .replace(/; Spec [^;]+/, "; Spec captured")
+    .replace(/validation command(s?)/, "validation cmd$1")
+    .replace(/mutation scope(s?)/, "mutation scope$1");
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

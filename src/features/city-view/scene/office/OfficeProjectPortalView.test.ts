@@ -10,6 +10,10 @@ import type { CandidateAssignmentRecommendationCollection } from "./candidate-as
 import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { ConfirmedEmployeeAssignmentResultCollection } from "./confirmed-assignments/ConfirmedEmployeeAssignmentTypes";
+import type {
+  ExecutionPlanCollection,
+  ExecutionPlanResultCollection,
+} from "./execution-plans/ExecutionPlanTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
@@ -1187,6 +1191,59 @@ describe("OfficeProjectPortalView", () => {
     assertRowInsidePanel(activeRow, lowerPanel);
   });
 
+  it("renders execution-plan rows after active work sessions without implying execution", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.issueSyncCollections = {
+      "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 1, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        sourceIssueSyncedAt: "2026-01-02T00:00:00.000Z",
+        tasks: [createCandidateTask(12, "Fix crash on launch", "High", "Bug")],
+        taskCount: 1,
+      },
+    };
+    state.activeWorkSessionStartResultCollections = {
+      "daily-proof": createActiveWorkSessionStartResultCollection("Started"),
+    };
+    state.executionPlanCollections = {
+      "daily-proof": createExecutionPlanCollection(),
+    };
+    state.executionPlanResultCollections = {
+      "daily-proof": createExecutionPlanResultCollection("Created"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const activeRow = findRenderedRow(renderedText, "[ACTIVE WORK SESSION]");
+    const planRow = findRenderedRow(renderedText, "[EXECUTION PLAN]");
+
+    expect(planRow?.text).toContain("Execution Plan Ready");
+    expect(planRow?.text).toContain("Execution Not Started");
+    expect(planRow?.text).toMatch(/Awaiting\s+Readiness Validation/);
+    expect(planRow?.text).toContain("Implementer Codex CLI");
+    expect(planRow?.text).toContain("Reviewer Claude CLI");
+    expect(planRow?.text).toContain("Branch");
+    expect(planRow?.text).not.toMatch(/Running|Executing|Coding|Reviewing/i);
+    assertRowClears(activeRow, planRow);
+    assertRowInsidePanel(planRow, lowerPanel);
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -1377,6 +1434,8 @@ function createPortalState(options: {
     preparedWorkSessionRecords: {},
     preparedWorkSessionResultCollections: {},
     activeWorkSessionStartResultCollections: {},
+    executionPlanCollections: {},
+    executionPlanResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -1706,6 +1765,75 @@ function createActiveWorkSessionStartResultCollection(
     resultCount: 1,
     generatedAt: "2026-01-04T00:00:00.000Z",
     rulesetVersion: "active-session-v1",
+  };
+}
+
+function createExecutionPlanCollection(): ExecutionPlanCollection {
+  return {
+    projectId: "daily-proof",
+    plans: [{
+      planId: "daily-proof:execution-plan:daily-proof:work-session:task-12:prepared-12:active-session-v1:plan-v1",
+      projectId: "daily-proof",
+      featureId: "070-execution-plan-foundation",
+      projectTaskId: "task-12",
+      candidateTaskId: "daily-proof:candidate-task:ai-verse/daily-proof#12",
+      recommendationId: "daily-proof:assignment:candidate-12:gpt-engineer:candidate-assignment-v1",
+      promotionDecisionId: "daily-proof:candidate-promotion:daily-proof:candidate-task:ai-verse/daily-proof#12:candidate-promotion-v1",
+      confirmedAssignmentId: "daily-proof:task-assignment:task-12:gpt-engineer:confirmed-assignment-v1",
+      preparedSessionId: "prepared-12",
+      activeSessionId: "daily-proof:work-session:task-12:prepared-12:active-session-v1",
+      employeeId: "gpt-engineer",
+      repositoryId: "github:ai-verse/daily-proof",
+      repositoryPath: "C:\\Projects\\daily-proof",
+      worktreePath: "C:\\Projects\\daily-proof-spec-070",
+      branchName: "codex/070-execution-plan-foundation",
+      specPath: "specs/070-execution-plan-foundation/spec.md",
+      implementerAgent: "Codex CLI",
+      reviewerAgent: "Claude CLI",
+      validationCommands: ["npm test", "npx tsc --noEmit"],
+      allowedMutationScope: ["local-worktree-only", "no-agent-runtime"],
+      createdAt: "2026-01-05T00:00:00.000Z",
+      rulesVersion: "plan-v1",
+      executionStarted: false,
+      runtimeStarted: false,
+      subprocessStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    }],
+    planCount: 1,
+    generatedAt: "2026-01-05T00:00:00.000Z",
+    rulesVersion: "plan-v1",
+  };
+}
+
+function createExecutionPlanResultCollection(
+  status: "Created" | "AlreadyExists" | "Blocked" | "Failed",
+): ExecutionPlanResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:execution-plan-result:daily-proof:work-session:task-12:prepared-12:active-session-v1:plan-v1",
+      projectId: "daily-proof",
+      projectTaskId: "task-12",
+      activeSessionId: "daily-proof:work-session:task-12:prepared-12:active-session-v1",
+      planId: status === "Created" || status === "AlreadyExists"
+        ? "daily-proof:execution-plan:daily-proof:work-session:task-12:prepared-12:active-session-v1:plan-v1"
+        : undefined,
+      status,
+      reasonCodes: [status === "Created" ? "CREATED" : status === "AlreadyExists" ? "ALREADY_EXISTS" : "EMPLOYEE_STALE"],
+      createdPlan: status === "Created" || status === "AlreadyExists",
+      duplicateExistingPlan: status === "AlreadyExists",
+      executionStarted: false,
+      runtimeStarted: false,
+      subprocessStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-05T00:00:00.000Z",
+      rulesVersion: "plan-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-05T00:00:00.000Z",
+    rulesVersion: "plan-v1",
   };
 }
 

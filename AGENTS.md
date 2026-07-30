@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/069-explicit-work-session-start-foundation/plan.md
+shell commands, and other important information, read specs/070-execution-plan-foundation/plan.md
 <!-- SPECKIT END -->
