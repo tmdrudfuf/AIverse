@@ -30,7 +30,7 @@
 
 - [x] T015 Run focused runtime preflight tests and record exact file/test counts
 - [x] T016 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`
-- [ ] T017 Commit the complete local implementation
+- [x] T017 Commit the complete local implementation
 - [ ] T018 Run independent Claude review against exact HEAD
 - [ ] T019 Fix blocking findings, rerun validation, and repeat review until Approved
 - [ ] T020 Complete the exact-HEAD provenance gate
