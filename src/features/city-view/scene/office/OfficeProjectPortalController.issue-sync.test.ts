@@ -723,7 +723,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     expect(internals.state.executionReadinessCollections["daily-proof"]?.readiness[0]?.checks).toHaveLength(10);
   });
 
-  it("evaluates execution readiness as a separate input after execution-plan creation", async () => {
+  it("revalidates an existing execution plan before execution readiness", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     setDailyProofIdentity(internals);
@@ -765,16 +765,16 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
 
     expect(internals.state.executionPlanCollections["daily-proof"]?.plans[0]?.planId).toBe(firstPlanId);
     expect(internals.state.executionPlanCollections["daily-proof"]?.plans).toHaveLength(1);
-    expect(internals.state.executionReadinessResultCollections["daily-proof"]?.results[0]).toMatchObject({
+    expect(internals.state.executionPlanResultCollections["daily-proof"]?.results[0]).toMatchObject({
       status: "Blocked",
-      reasonCodes: ["EMPLOYEE_STATE_INCOMPATIBLE"],
-      executionApproved: false,
+      reasonCodes: ["EMPLOYEE_STALE"],
+      createdPlan: false,
+      duplicateExistingPlan: false,
       executionStarted: false,
-      agentStarted: false,
       repositoryMutationStarted: false,
       githubMutationStarted: false,
     });
-    expect(internals.state.executionPlanResultCollections["daily-proof"]?.results[0]?.status).toBe("Created");
+    expect(internals.state.executionReadinessResultCollections["daily-proof"]).toBeUndefined();
   });
 
   it("revalidates an already-started session and blocks stale employee state", async () => {

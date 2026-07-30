@@ -64,6 +64,7 @@ src/features/city-view/scene/office/
 3. **Latest result with immutable snapshot**: Follow existing domain patterns by storing/readiness collections in project portal state. Repeated evaluation can append results while preserving immutable check snapshots.
 4. **Command-time revalidation**: Every evaluation recomputes from current task/session/employee/repository/role/validation/mutation-scope state. Prior `Ready` never bypasses current checks.
 5. **Dashboard wording**: Render `Ready for Human Execution Decision`, `Human Approval Not Granted`, and `Execution Not Started`. Never render execution/runtime language as active.
+6. **Plan revalidation boundary**: The controller revalidates an existing Execution Plan through the Spec 070 plan service before running readiness. A stale plan updates the execution-plan result and blocks readiness for that input event; a valid `AlreadyExists` plan may then proceed to readiness evaluation. Spec 071 extends, rather than supersedes, Spec 070 repeated-plan idempotency.
 
 ## Implementation Phases
 

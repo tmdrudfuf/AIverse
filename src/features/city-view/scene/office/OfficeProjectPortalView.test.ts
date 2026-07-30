@@ -1319,6 +1319,33 @@ describe("OfficeProjectPortalView", () => {
     [planRow, readinessRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
   });
 
+  it("renders blocked and failed execution readiness wording in the dashboard", () => {
+    for (const status of ["Blocked", "Failed"] as const) {
+      const renderedText: RenderedText[] = [];
+      const renderedPanels: RenderedPanel[] = [];
+      const scene = createSceneStub(renderedText, renderedPanels);
+      const state = createPortalState({
+        viewMode: "project-dashboard",
+        projectDashboardSnapshot: createProjectDashboardSnapshot(),
+      });
+      state.selectedProjectDashboardProjectId = "daily-proof";
+      state.executionReadinessCollections = {
+        "daily-proof": createExecutionReadinessCollection(status),
+      };
+      state.executionReadinessResultCollections = {
+        "daily-proof": createExecutionReadinessResultCollection(status),
+      };
+
+      new OfficeProjectPortalView(scene, state);
+
+      const readinessRow = findRenderedRow(renderedText, "[EXECUTION READINESS]");
+      expect(readinessRow?.text).toContain(status === "Blocked" ? "Blocked" : "Readiness failed");
+      expect(readinessRow?.text).toContain("Not started");
+      expect(readinessRow?.text).toContain("TASK_STATE");
+      assertRowInsidePanel(readinessRow, findLowerProjectPanel(renderedPanels));
+    }
+  });
+
   it("renders an explicit No repository identity row (never silence) when the selected project has none", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);

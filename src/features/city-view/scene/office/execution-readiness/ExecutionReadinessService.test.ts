@@ -73,6 +73,16 @@ describe("ExecutionReadinessService", () => {
       .toContain("VALIDATION_COMMANDS_MISSING");
     expect(service.evaluateReadiness(createInput({ roleContext: { ...createRoleContext(), allowedMutationScope: ["github-mutation"] } })).result.reasonCodes)
       .toContain("MUTATION_SCOPE_UNSAFE");
+    expect(service.evaluateReadiness(createInput({
+      executionPlans: createPlanCollection(createPlan({
+        allowedMutationScope: ["local-worktree-only", "no-agent-runtime", "no-subprocess", "no-repository-mutation", "github-mutation"],
+      })),
+      roleContext: {
+        ...createRoleContext(),
+        allowedMutationScope: ["local-worktree-only", "no-agent-runtime", "no-subprocess", "no-repository-mutation", "github-mutation"],
+      },
+    })).result.reasonCodes)
+      .toContain("MUTATION_SCOPE_UNSAFE");
   });
 
   it("revalidates command-time state and does not reuse stale Ready results", () => {

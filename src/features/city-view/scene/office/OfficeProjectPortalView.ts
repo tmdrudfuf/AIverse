@@ -922,8 +922,10 @@ function compactExecutionReadinessResultText(text: string) {
     .replace("Ready for Human Execution Decision", "Ready")
     .replace("Human Approval Not Granted", "No approval")
     .replace("Execution Not Started", "Not started")
-    .replace("Resolve Readiness Requirements", "Resolve requirements")
-    .replace("Readiness Validation Failed", "Readiness failed");
+    .replace("Execution Blocked", "Blocked")
+    .replace("Resolve Readiness Requirements", "Fix")
+    .replace("Readiness Validation Failed", "Readiness failed")
+    .replace("TASK_STATE_INCOMPATIBLE", "TASK_STATE");
 }
 
 function compactExecutionReadinessCheckText(text: string) {

@@ -29,7 +29,7 @@ No input is a live filesystem, subprocess, Git, GitHub, Codex, or Claude handle.
 
 ```ts
 type ExecutionReadinessEvaluationOutcome = {
-  readiness?: ExecutionReadiness;
+  readiness: ExecutionReadiness;
   readinessCollection?: ExecutionReadinessCollection;
   result: ExecutionReadinessResult;
   resultCollection?: ExecutionReadinessResultCollection;
