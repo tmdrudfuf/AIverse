@@ -831,6 +831,89 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
     });
   });
 
+  it("blocks runtime start when the ready preflight becomes stale after a branch change", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    setDailyProofIdentity(internals);
+    internals.state.projects[0]!.repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-070",
+      connectionState: "Available",
+    };
+    internals.state.repositorySyncSnapshots["daily-proof"] = {
+      provider: "github",
+      availability: "available",
+      owner: "ai-verse",
+      name: "daily-proof",
+      defaultBranch: "main",
+      currentBranch: "codex/070-execution-plan-foundation",
+      syncStatus: "Succeeded",
+      workingTreeState: "clean",
+    };
+    internals.state.employees = [employee({ id: "gpt-engineer", capabilities: ["Coding"] })];
+    internals.state.taskCollections["daily-proof"] = { projectId: "daily-proof", tasks: [] };
+    internals.issueSyncService = {
+      readIssueSnapshots: async () => succeededIssueCollectionWithBug(),
+    };
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    internals.state.viewMode = "project-dashboard";
+    internals.state.selectedProjectDashboardProjectId = "daily-proof";
+    await internals.syncIssueSnapshots("daily-proof");
+
+    controller.updateInput(createInput({ enterPressed: true })); // approve
+    controller.updateInput(createInput({ enterPressed: true })); // promote
+    controller.updateInput(createInput({ enterPressed: true })); // confirm assignment
+    controller.updateInput(createInput({ enterPressed: true })); // prepare
+    controller.updateInput(createInput({ enterPressed: true })); // start work session
+    controller.updateInput(createInput({ enterPressed: true })); // create execution plan
+    controller.updateInput(createInput({ enterPressed: true })); // evaluate readiness
+    controller.updateInput(createInput({ enterPressed: true })); // approve execution
+    controller.updateInput(createInput({ enterPressed: true })); // run runtime preflight
+
+    expect(internals.state.runtimePreflightResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Ready",
+      reasonCodes: ["READY"],
+      runtimePreflightPassed: true,
+    });
+    expect(internals.state.runtimeStartCollections["daily-proof"]).toBeUndefined();
+
+    internals.state.repositorySyncSnapshots["daily-proof"] = {
+      ...internals.state.repositorySyncSnapshots["daily-proof"]!,
+      currentBranch: "codex/changed-after-preflight",
+    };
+
+    controller.updateInput(createInput({ enterPressed: true })); // explicit runtime start attempt revalidates and blocks
+
+    expect(internals.state.runtimePreflightCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.runtimePreflightResultCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.runtimeStartCollections["daily-proof"]).toBeUndefined();
+    expect(internals.state.runtimeStartResultCollections["daily-proof"]?.results[0]).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["RUNTIME_START_PREFLIGHT_MISSING"],
+      started: false,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    const planBlock = internals.state.executionPlanResultCollections["daily-proof"]?.results[0];
+    expect(planBlock).toMatchObject({
+      status: "Blocked",
+      createdPlan: false,
+      executionStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(planBlock?.reasonCodes.length).toBeGreaterThan(0);
+    expect(internals.state.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
+    expect(internals.state.employees[0]?.status).toBe("Working");
+  });
+
   it("revalidates an existing execution plan before execution readiness", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);

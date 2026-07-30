@@ -1496,7 +1496,10 @@ export class OfficeProjectPortalController {
     if (!currentReadiness || !currentReadinessResult) return false;
 
     const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
-    if (!revalidatedPlan) return true;
+    if (!revalidatedPlan) {
+      this.clearRuntimePreflightForProject(projectId);
+      return true;
+    }
 
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
@@ -1596,7 +1599,10 @@ export class OfficeProjectPortalController {
     if (!approval) return false;
 
     const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
-    if (!revalidatedPlan) return true;
+    if (!revalidatedPlan) {
+      this.clearRuntimePreflightForProject(projectId);
+      return true;
+    }
 
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
