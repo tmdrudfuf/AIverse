@@ -145,6 +145,34 @@ describe("OfficeProjectPortalController Implementer Runtime concurrency and isol
     expect(internals.state.implementerRuntimeResultCollections["daily-proof"]).toBeUndefined();
   });
 
+  it("reports a Blocked stale-chain result (not a Failed/malformed command) when Runtime Start is invalidated between the guard check and the service call", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    const { promotedTaskId } = await driveDailyProofToRuntimeStart(controller, internals);
+
+    const startImplementer = vi.fn(async () => createOutcome("Completed"));
+    internals.implementerRuntimeService = { startImplementer, upsertResult: realUpsertResult(internals) };
+
+    // Invalidate the plan the same way the existing stale-branch regression
+    // test does, but then call startImplementerRuntimeForPromotion directly
+    // (rather than the generic Enter cascade) so revalidation runs and
+    // Runtime Start comes back missing/stale right before the service would
+    // otherwise be called.
+    internals.state.repositorySyncSnapshots["daily-proof"] = {
+      ...internals.state.repositorySyncSnapshots["daily-proof"],
+      currentBranch: "some-other-branch",
+    };
+
+    await internals.startImplementerRuntimeForPromotion("daily-proof", promotedTaskId);
+
+    expect(startImplementer).not.toHaveBeenCalled();
+    const result = internals.state.implementerRuntimeResultCollections["daily-proof"]?.results.at(-1);
+    expect(result?.status).toBe("Blocked");
+    expect(result?.reasonCodes).toContain("IMPLEMENTER_RUNTIME_START_STALE");
+    expect(result?.status).not.toBe("Failed");
+    expect(result?.reasonCodes).not.toContain("IMPLEMENTER_RUNTIME_MALFORMED");
+  });
+
   it("wires a real ImplementerRuntimeService and ClaudeImplementerRuntimeProvider end to end via the explicit startImplementerPressed input", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);

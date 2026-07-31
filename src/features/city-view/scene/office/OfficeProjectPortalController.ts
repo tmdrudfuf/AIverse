@@ -1897,6 +1897,39 @@ export class OfficeProjectPortalController {
     const existingResults = this.state.implementerRuntimeResultCollections[projectId]
       ?? createImplementerRuntimeResultCollection({ projectId, results: [], rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION });
 
+    // Revalidation above can invalidate a Runtime Start that existed when
+    // this attempt began (a stale plan/approval/preflight/branch change),
+    // leaving `runtimeStart`/`runtimeStartResult` undefined or no longer
+    // Started/AlreadyStarted here. Report that plainly as a Blocked
+    // stale-chain result rather than falling through to the service with an
+    // empty runtimeStartId, which would misreport it as a malformed command.
+    const runtimeStartStillValid = Boolean(
+      runtimeStart && runtimeStartResult && (runtimeStartResult.status === "Started" || runtimeStartResult.status === "AlreadyStarted"),
+    );
+    if (!runtimeStartStillValid) {
+      const staleResult = {
+        id: `${projectId}:implementer-runtime-result:${existingPlan.planId}:start-stale`,
+        projectId,
+        runtimeStartId: runtimeStart?.runtimeStartId,
+        executionPlanId: existingPlan.planId,
+        status: "Blocked" as const,
+        reasonCodes: ["IMPLEMENTER_RUNTIME_START_STALE" as const],
+        started: false,
+        duplicateActiveAttempt: false,
+        agentStarted: false,
+        implementerStarted: false,
+        reviewerStarted: false as const,
+        validationStarted: false as const,
+        repositoryMutationStarted: false as const,
+        githubMutationStarted: false as const,
+        resultAt: new Date().toISOString(),
+        rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION,
+      };
+      this.state.implementerRuntimeResultCollections[projectId] =
+        this.implementerRuntimeService.upsertResult(existingResults, staleResult);
+      return true;
+    }
+
     const activeKey = runtimeStart?.runtimeStartId ?? `${projectId}:${existingPlan.planId}`;
     if (this.activeImplementerRuntimeKeys.has(activeKey)) {
       const blockedResult = {

@@ -361,9 +361,20 @@ describe("OfficeProjectPortalView", () => {
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
 
+    // Short advisory override: this test is about REPO-SYNC content
+    // correctness, not row-count crowding, so give it headroom to fit
+    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) always renders too.
     const state = createPortalState({
       viewMode: "project-dashboard",
-      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.projects[0].repositoryIdentity = {
@@ -398,9 +409,20 @@ describe("OfficeProjectPortalView", () => {
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
 
+    // Short advisory override: this test is about REPO-SYNC content
+    // correctness, not row-count crowding, so give it headroom to fit
+    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) always renders too.
     const state = createPortalState({
       viewMode: "project-dashboard",
-      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        externalSources: [],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
+      }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.projects[0].repositoryIdentity = { provider: "local", connectionState: "Unknown" };
@@ -613,21 +635,14 @@ describe("OfficeProjectPortalView", () => {
     assertRowInsidePanel(issueDetailRow, lowerPanel);
   });
 
-  it("drops lowest-priority issue rows (list and detail) rather than overlapping the panel when space is limited", () => {
+  it("drops the lowest-priority issue row ([ISSUE DETAIL]) rather than overlapping the panel when space is limited", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
 
-    // The default advisory/attention text below is long enough to wrap the
-    // [ADVISORY] row to two lines, and the default external source produces
-    // both [SOURCE] and [SYNC] rows -- which, combined with the always-present
-    // [REPO-SYNC] row, leaves room for only the [ISSUES] row, not
-    // [ISSUE LIST] or [ISSUE DETAIL]. This is the real, realistic worst case
-    // (this is the default createProjectDashboardSnapshot() fixture), not a
-    // synthetic one.
     const state = createPortalState({
       viewMode: "project-dashboard",
-      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+      projectDashboardSnapshot: createProjectDashboardSnapshot(),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.projects[0].repositoryIdentity = {
@@ -662,6 +677,36 @@ describe("OfficeProjectPortalView", () => {
         ],
       },
     };
+    // [ISSUES]/[ISSUE LIST]/[ISSUE DETAIL] all share dropPriority 10, lower
+    // (more protected) than [IMPLEMENTER RUNTIME]'s 15 -- so demonstrating
+    // that this tier gets touched at all (not just some other, higher-
+    // dropPriority row) requires enough real crowding that every higher-
+    // dropPriority row is already gone. With that real pressure applied
+    // (reusing the same active-session/readiness/approval/preflight/Runtime
+    // Start/Implementer Runtime fixtures the adjacent "[IMPLEMENTER RUNTIME]
+    // before [RUNTIME START]" test already proves get dropped first), the
+    // fit algorithm's index tie-break (same-priority rows drop
+    // latest-appended-first) removes only [ISSUE DETAIL] -- [ISSUES] and
+    // [ISSUE LIST] both still fit. This is the real, verified worst case
+    // achievable with realistic fixture data, not an assumed one.
+    state.activeWorkSessionStartResultCollections = {
+      "daily-proof": createActiveWorkSessionStartResultCollection("Started"),
+    };
+    state.executionReadinessResultCollections = {
+      "daily-proof": createExecutionReadinessResultCollection("Ready"),
+    };
+    state.humanExecutionApprovalResultCollections = {
+      "daily-proof": createHumanExecutionApprovalResultCollection("Approved"),
+    };
+    state.runtimePreflightResultCollections = {
+      "daily-proof": createRuntimePreflightResultCollection("Ready"),
+    };
+    state.runtimeStartResultCollections = {
+      "daily-proof": createRuntimeStartResultCollectionFixture("Started"),
+    };
+    state.implementerRuntimeResultCollections = {
+      "daily-proof": createImplementerRuntimeResultCollectionFixture("Completed"),
+    };
 
     new OfficeProjectPortalView(scene, state);
 
@@ -671,9 +716,9 @@ describe("OfficeProjectPortalView", () => {
     const issueDetailRow = findRenderedRow(renderedText, "[ISSUE DETAIL]");
 
     expect(issuesRow?.text).toBe("[ISSUES] Succeeded · 1 open, 0 closed");
-    expect(issueListRow).toBeUndefined();
+    expect(issueListRow?.text).toBe("[ISSUE LIST] #1 An issue with labels and assignees (Open)");
     expect(issueDetailRow).toBeUndefined();
-    assertRowInsidePanel(issuesRow, lowerPanel);
+    [issuesRow, issueListRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
   });
 
   it("distinguishes a real zero-issue Succeeded collection from an Unavailable one", () => {
@@ -846,20 +891,13 @@ describe("OfficeProjectPortalView", () => {
     const scene = createSceneStub(renderedText, renderedPanels);
     const state = createPortalState({
       viewMode: "project-dashboard",
+      // Uses the real, unmodified default createProjectDashboardSnapshot()
+      // fixture (long advisory, default external source producing both
+      // [SOURCE] and [SYNC]) so the panel is genuinely crowded once the
+      // always-present [IMPLEMENTER RUNTIME] row (Spec 075) is added -- a
+      // realistic worst case, not an artificially short one.
       projectDashboardSnapshot: createProjectDashboardSnapshot({
-        externalSources: [{
-          sourceType: "github",
-          sourceId: "github:ai-verse/daily-proof",
-          displayName: "ai-verse/daily-proof",
-          mappingConfidence: "mapped",
-          signals: [{ id: "repository", label: "Repository", value: "ai-verse/daily-proof" }],
-        }],
-        advisory: {
-          status: "available",
-          healthSummary: "On track.",
-          topRiskLabel: "None.",
-          nextAttentionLabel: "Keep going.",
-        },
+        externalSources: [createExternalSource("ai-verse/daily-proof")],
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1007,22 +1045,37 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // A realistic worst case, not a synthetic one: the real default long
+    // advisory plus a linked external source plus a real candidate task
+    // (dropPriority 20, lower than the promotion rows' 26/27, so it stays
+    // visible) is enough crowding to force [PROMOTION RESULT] out once the
+    // always-present [IMPLEMENTER RUNTIME] row (Spec 075) adds its own line
+    // to the budget -- without also pushing out [PROMOTION REVIEW] itself.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
-        advisory: {
-          status: "available",
-          healthSummary: "On track.",
-          topRiskLabel: "None.",
-          nextAttentionLabel: "Keep going.",
-        },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
+    state.repositorySyncSnapshots = {
+      "daily-proof": {
+        provider: "github",
+        availability: "available",
+        syncStatus: "Succeeded",
+        defaultBranch: "main",
+        latestCommit: { sha: "a1b2c3d4e5f6", message: "Fix bug", committedAt: "2026-01-01T00:00:00.000Z" },
+      },
+    };
     state.issueSyncCollections = {
       "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    // A single active-work-session row (dropPriority 5, far safer than the
+    // promotion rows' 26/27) is exactly enough additional crowding to force
+    // [PROMOTION RESULT] out without also displacing [PROMOTION REVIEW].
+    state.activeWorkSessionStartResultCollections = {
+      "daily-proof": createActiveWorkSessionStartResultCollection("Started"),
     };
     state.candidatePromotionReviewCollections = {
       "daily-proof": createCandidatePromotionCollection("Approved"),
@@ -1119,22 +1172,28 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // Uses the real, unmodified default long advisory (not a short override)
+    // so the panel is genuinely crowded once the always-present
+    // [IMPLEMENTER RUNTIME] row (Spec 075) is added -- a realistic worst
+    // case, not an artificially short one.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
-        advisory: {
-          status: "available",
-          healthSummary: "On track.",
-          topRiskLabel: "None.",
-          nextAttentionLabel: "Keep going.",
-        },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.projects[0].repositoryIdentity = { provider: "github", owner: "ai-verse", name: "daily-proof", connectionState: "Configured" };
     state.issueSyncCollections = {
       "daily-proof": { provider: "github", syncStatus: "Succeeded", openCount: 0, closedCount: 0, isTruncated: false, issues: [] },
+    };
+    // A single active-work-session row (dropPriority 5, far safer than any
+    // of the promotion/assignment/preparation rows' 21/26/27) is enough
+    // additional crowding, on top of the always-present [IMPLEMENTER
+    // RUNTIME] row (Spec 075), to force all three lower-priority rows out
+    // while [PROMOTION REVIEW] itself survives.
+    state.activeWorkSessionStartResultCollections = {
+      "daily-proof": createActiveWorkSessionStartResultCollection("Started"),
     };
     state.candidatePromotionReviewCollections = {
       "daily-proof": createCandidatePromotionCollection("Approved"),
@@ -1265,10 +1324,20 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // Shortened advisory gives enough headroom for [SOURCE]/[EXECUTION PLAN]
+    // to coexist with the now-always-present [IMPLEMENTER RUNTIME] row --
+    // the default long-advisory fixture is used elsewhere specifically to
+    // prove crowding/drop behavior, not coexistence.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: {
+          status: "available",
+          healthSummary: "On track.",
+          topRiskLabel: "None.",
+          nextAttentionLabel: "Keep going.",
+        },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1400,6 +1469,30 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[ISSUES]")?.text).toBe("[ISSUES] No repository identity");
     expect(findRenderedRow(renderedText, "[ISSUE LIST]")).toBeUndefined();
     expect(findRenderedRow(renderedText, "[ISSUE DETAIL]")).toBeUndefined();
+  });
+
+  it("renders an explicit Implementer Unavailable [IMPLEMENTER RUNTIME] row (never silence) when no Runtime Start has ever been reached", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    // No execution-plan/readiness/approval/preflight/Runtime Start/Implementer
+    // Runtime state is set at all -- a project that has never touched this
+    // pipeline. The row must still appear (Codex review finding P2-001: this
+    // was previously silently omitted whenever neither collection existed).
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const implementerRuntimeRow = findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]");
+
+    expect(implementerRuntimeRow).toBeDefined();
+    expect(implementerRuntimeRow?.text.toLowerCase()).toContain("unavailable");
+    assertRowInsidePanel(implementerRuntimeRow, lowerPanel);
   });
 
   it("renders both [RUNTIME START] and [IMPLEMENTER RUNTIME] rows inside the drawn panel on a realistic full dashboard", () => {

@@ -326,9 +326,12 @@ export class OfficeProjectPortalView {
       )
       : undefined;
     const implementerRuntimeResultCollection = dashboardProjectId ? state.implementerRuntimeResultCollections[dashboardProjectId] : undefined;
-    const implementerRuntimeRows = runtimeStartResultCollection || implementerRuntimeResultCollection
-      ? createImplementerRuntimeDisplayRows(runtimeStartResultCollection, implementerRuntimeResultCollection)
-      : undefined;
+    // Always computed (never gated on a collection already existing) --
+    // createImplementerRuntimeDisplayRows itself renders the required
+    // "Implementer Unavailable" state when no Runtime Start exists yet, so
+    // gating this call on collection presence would silently omit that
+    // required row for a project that hasn't reached Runtime Start at all.
+    const implementerRuntimeRows = createImplementerRuntimeDisplayRows(runtimeStartResultCollection, implementerRuntimeResultCollection);
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
