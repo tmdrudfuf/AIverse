@@ -44,6 +44,11 @@ import {
   type RuntimeEnvironmentProvider,
   type RuntimePreflightEvidence,
 } from "./runtime-preflight/RuntimePreflightTypes";
+import { RuntimeStartService } from "./runtime-start/RuntimeStartService";
+import {
+  createRuntimeStartCollection,
+  createRuntimeStartResultCollection,
+} from "./runtime-start/RuntimeStartTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -147,6 +152,7 @@ export class OfficeProjectPortalController {
   private executionReadinessService: ExecutionReadinessService;
   private humanExecutionApprovalService: HumanExecutionApprovalService;
   private runtimePreflightService: RuntimePreflightService;
+  private runtimeStartService: RuntimeStartService;
   private runtimeEnvironmentProvider: RuntimeEnvironmentProvider;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
@@ -202,6 +208,7 @@ export class OfficeProjectPortalController {
     this.executionReadinessService = new ExecutionReadinessService();
     this.humanExecutionApprovalService = new HumanExecutionApprovalService();
     this.runtimePreflightService = new RuntimePreflightService();
+    this.runtimeStartService = new RuntimeStartService();
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
@@ -699,6 +706,15 @@ export class OfficeProjectPortalController {
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const runtimeStarted = this.startRuntimeForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (runtimeStarted) {
+        this.view.render(this.state);
+        return;
+      }
+
       const preflighted = this.runRuntimePreflightForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
@@ -1480,7 +1496,10 @@ export class OfficeProjectPortalController {
     if (!currentReadiness || !currentReadinessResult) return false;
 
     const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
-    if (!revalidatedPlan) return true;
+    if (!revalidatedPlan) {
+      this.clearRuntimePreflightForProject(projectId);
+      return true;
+    }
 
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
@@ -1580,7 +1599,10 @@ export class OfficeProjectPortalController {
     if (!approval) return false;
 
     const revalidatedPlan = this.revalidateExecutionPlanForPromotion(projectId, promotedTask.id, plan.activeSessionId);
-    if (!revalidatedPlan) return true;
+    if (!revalidatedPlan) {
+      this.clearRuntimePreflightForProject(projectId);
+      return true;
+    }
 
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
@@ -1684,9 +1706,92 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+  private startRuntimeForPromotion(projectId: string, candidateTaskId: string) {
+    this.runtimeStartService ??= new RuntimeStartService();
+    this.state.runtimeStartCollections ??= {};
+    this.state.runtimeStartResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const existingPlan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    if (!existingPlan) return false;
+
+    const priorPreflightResult = this.state.runtimePreflightResultCollections[projectId]?.results
+      .find((item) => item.executionPlanId === existingPlan.planId);
+    if (!priorPreflightResult) return false;
+
+    const preflighted = this.runRuntimePreflightForPromotion(projectId, candidateTaskId);
+    if (!preflighted) return false;
+
+    const plan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    const readiness = plan
+      ? this.state.executionReadinessCollections[projectId]?.readiness.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const readinessResult = plan && readiness
+      ? this.state.executionReadinessResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.readinessId === readiness.readinessId
+      )
+      : undefined;
+    const approval = plan
+      ? this.state.humanExecutionApprovalCollections[projectId]?.approvals.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const preflight = plan
+      ? this.state.runtimePreflightCollections[projectId]?.preflights.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const preflightResult = plan && preflight
+      ? this.state.runtimePreflightResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.preflightId === preflight.preflightId
+      )
+      : undefined;
+    const existingStarts = this.state.runtimeStartCollections[projectId]
+      ?? createRuntimeStartCollection({ projectId, starts: [], rulesVersion: "start-v1" });
+    const existingResults = this.state.runtimeStartResultCollections[projectId]
+      ?? createRuntimeStartResultCollection({ projectId, results: [], rulesVersion: "start-v1" });
+
+    const outcome = this.runtimeStartService.start({
+      command: {
+        projectId,
+        executionPlanId: plan?.planId ?? existingPlan.planId,
+        runtimePreflightId: preflight?.preflightId ?? priorPreflightResult.preflightId,
+        startedBy: "Local Human",
+        requestedAt: new Date().toISOString(),
+      },
+      executionPlan: plan,
+      readiness,
+      readinessResult,
+      approval,
+      preflight,
+      preflightResult,
+      existingStarts,
+      existingResults,
+    });
+
+    if (outcome.startCollection && outcome.result.status === "Started") {
+      this.state.runtimeStartCollections[projectId] = outcome.startCollection;
+    } else if (outcome.result.status === "AlreadyStarted") {
+      this.state.runtimeStartCollections[projectId] = existingStarts;
+    }
+    this.state.runtimeStartResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    return true;
+  }
+
   private clearRuntimePreflightForProject(projectId: string) {
     if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
     if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
+    if (this.state.runtimeStartCollections) delete this.state.runtimeStartCollections[projectId];
+    if (this.state.runtimeStartResultCollections) delete this.state.runtimeStartResultCollections[projectId];
   }
 
   private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {
