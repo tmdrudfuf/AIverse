@@ -49,6 +49,15 @@ import {
   createRuntimeStartCollection,
   createRuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
+import { ClaudeImplementerRuntimeProvider } from "./implementer-runtime/ClaudeImplementerRuntimeProvider";
+import { ImplementerRuntimeService } from "./implementer-runtime/ImplementerRuntimeService";
+import {
+  IMPLEMENTER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
+  IMPLEMENTER_RUNTIME_APPROVED_REVIEWER_AGENT,
+  IMPLEMENTER_RUNTIME_RULES_VERSION,
+  createImplementerRuntimeCollection,
+  createImplementerRuntimeResultCollection,
+} from "./implementer-runtime/ImplementerRuntimeTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -132,6 +141,12 @@ export type OfficeProjectPortalInput = {
   upPressed: boolean;
   downPressed: boolean;
   enterPressed: boolean;
+  // Distinct from enterPressed/actionPressed by design: those drive the
+  // existing Plan -> Readiness -> Approval -> Preflight -> Runtime Start
+  // cascade, while this field exists solely to request an Implementer
+  // Runtime attempt -- Runtime Start's mere existence must never trigger
+  // one on its own (see specs/075-claude-implementer-runtime-foundation).
+  startImplementerPressed: boolean;
 };
 
 export class OfficeProjectPortalController {
@@ -154,6 +169,8 @@ export class OfficeProjectPortalController {
   private runtimePreflightService: RuntimePreflightService;
   private runtimeStartService: RuntimeStartService;
   private runtimeEnvironmentProvider: RuntimeEnvironmentProvider;
+  private implementerRuntimeService: ImplementerRuntimeService;
+  private readonly activeImplementerRuntimeKeys = new Set<string>();
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -210,6 +227,7 @@ export class OfficeProjectPortalController {
     this.runtimePreflightService = new RuntimePreflightService();
     this.runtimeStartService = new RuntimeStartService();
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
+    this.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -703,6 +721,20 @@ export class OfficeProjectPortalController {
         this.view.render(this.state);
         return;
       }
+    }
+
+    // Entirely separate from enterPressed/actionPressed below: this is the
+    // one and only path that can attempt a Claude Implementer Runtime start,
+    // and it never fires merely because Runtime Start exists, the dashboard
+    // rendered, or any other input branch executed.
+    if (input.startImplementerPressed && selectedPromotion?.promotionStatus === "Approved") {
+      void this.startImplementerRuntimeForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      ).then((handled) => {
+        if (handled) this.view.render(this.state);
+      });
+      return;
     }
 
     if (input.enterPressed && selectedPromotion?.promotionStatus === "Approved") {
@@ -1724,6 +1756,11 @@ export class OfficeProjectPortalController {
     );
     if (!existingPlan) return false;
 
+    // Requiring a prior preflight result here is what makes reaching Runtime
+    // Start take two separate Enter presses in practice: the first press
+    // (via runRuntimePreflightForPromotion below) only ever produces a fresh
+    // preflight result; only a second press, once that result already
+    // exists, proceeds far enough to create the Runtime Start record itself.
     const priorPreflightResult = this.state.runtimePreflightResultCollections[projectId]?.results
       .find((item) => item.executionPlanId === existingPlan.planId);
     if (!priorPreflightResult) return false;
@@ -1787,11 +1824,145 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+  /**
+   * Requires a Runtime Start to already exist for this exact plan before
+   * doing anything -- this method never originates a first Runtime Start on
+   * its own, so pressing the distinct Start-Implementer input can never be
+   * the thing that first creates one. Once a Runtime Start already exists,
+   * it forces the same full revalidation cascade `startRuntimeForPromotion`
+   * itself uses (fresh plan/readiness/preflight/start recomputation) before
+   * ever constructing an Implementer Runtime request.
+   */
+  private async startImplementerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
+    this.implementerRuntimeService ??= new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
+    this.state.implementerRuntimeCollections ??= {};
+    this.state.implementerRuntimeResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const existingPlan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    if (!existingPlan) return false;
+
+    const hadRuntimeStart = this.state.runtimeStartResultCollections[projectId]?.results.some(
+      (item) => item.executionPlanId === existingPlan.planId && (item.status === "Started" || item.status === "AlreadyStarted"),
+    );
+    if (!hadRuntimeStart) return false;
+
+    const revalidated = this.startRuntimeForPromotion(projectId, candidateTaskId);
+    if (!revalidated) return false;
+
+    const plan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    const readiness = plan
+      ? this.state.executionReadinessCollections[projectId]?.readiness.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const readinessResult = plan && readiness
+      ? this.state.executionReadinessResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.readinessId === readiness.readinessId
+      )
+      : undefined;
+    const approval = plan
+      ? this.state.humanExecutionApprovalCollections[projectId]?.approvals.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const preflight = plan
+      ? this.state.runtimePreflightCollections[projectId]?.preflights.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const preflightResult = plan && preflight
+      ? this.state.runtimePreflightResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.preflightId === preflight.preflightId
+      )
+      : undefined;
+    const runtimeStart = plan
+      ? this.state.runtimeStartCollections[projectId]?.starts.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const runtimeStartResult = plan && runtimeStart
+      ? this.state.runtimeStartResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.runtimeStartId === runtimeStart.runtimeStartId
+      )
+      : undefined;
+
+    const existingRuntimes = this.state.implementerRuntimeCollections[projectId]
+      ?? createImplementerRuntimeCollection({ projectId, runtimes: [], rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION });
+    const existingResults = this.state.implementerRuntimeResultCollections[projectId]
+      ?? createImplementerRuntimeResultCollection({ projectId, results: [], rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION });
+
+    const activeKey = runtimeStart?.runtimeStartId ?? `${projectId}:${existingPlan.planId}`;
+    if (this.activeImplementerRuntimeKeys.has(activeKey)) {
+      const blockedResult = {
+        id: `${projectId}:implementer-runtime-result:${activeKey}:active-block`,
+        projectId,
+        runtimeStartId: runtimeStart?.runtimeStartId,
+        executionPlanId: existingPlan.planId,
+        status: "Blocked" as const,
+        reasonCodes: ["IMPLEMENTER_RUNTIME_ALREADY_ACTIVE" as const],
+        started: false,
+        duplicateActiveAttempt: true,
+        agentStarted: false,
+        implementerStarted: false,
+        reviewerStarted: false as const,
+        validationStarted: false as const,
+        repositoryMutationStarted: false as const,
+        githubMutationStarted: false as const,
+        resultAt: new Date().toISOString(),
+        rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION,
+      };
+      this.state.implementerRuntimeResultCollections[projectId] =
+        this.implementerRuntimeService.upsertResult(existingResults, blockedResult);
+      return true;
+    }
+
+    this.activeImplementerRuntimeKeys.add(activeKey);
+    try {
+      const outcome = await this.implementerRuntimeService.startImplementer({
+        command: {
+          projectId,
+          runtimeStartId: runtimeStart?.runtimeStartId ?? "",
+          executionPlanId: plan?.planId ?? existingPlan.planId,
+          approvedImplementerAgent: IMPLEMENTER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
+          approvedReviewerAgent: IMPLEMENTER_RUNTIME_APPROVED_REVIEWER_AGENT,
+          startedBy: "Local Human",
+          requestedAt: new Date().toISOString(),
+        },
+        executionPlan: plan,
+        readiness,
+        readinessResult,
+        approval,
+        preflight,
+        preflightResult,
+        runtimeStart,
+        runtimeStartResult,
+        existingRuntimes,
+        existingResults,
+      });
+
+      if (outcome.runtimeCollection) {
+        this.state.implementerRuntimeCollections[projectId] = outcome.runtimeCollection;
+      }
+      this.state.implementerRuntimeResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    } finally {
+      this.activeImplementerRuntimeKeys.delete(activeKey);
+    }
+    return true;
+  }
+
   private clearRuntimePreflightForProject(projectId: string) {
     if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
     if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
     if (this.state.runtimeStartCollections) delete this.state.runtimeStartCollections[projectId];
     if (this.state.runtimeStartResultCollections) delete this.state.runtimeStartResultCollections[projectId];
+    if (this.state.implementerRuntimeCollections) delete this.state.implementerRuntimeCollections[projectId];
+    if (this.state.implementerRuntimeResultCollections) delete this.state.implementerRuntimeResultCollections[projectId];
   }
 
   private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {

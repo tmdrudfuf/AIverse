@@ -22,9 +22,12 @@ import type {
   HumanExecutionApprovalCollection,
   HumanExecutionApprovalResultCollection,
 } from "./human-execution-approvals/HumanExecutionApprovalTypes";
+import type { RuntimePreflightResultCollection } from "./runtime-preflight/RuntimePreflightTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
+import type { RuntimeStartResultCollection } from "./runtime-start/RuntimeStartTypes";
+import type { ImplementerRuntimeResultCollection } from "./implementer-runtime/ImplementerRuntimeTypes";
 import {
   INTERNAL_SIMULATION_PROJECT_DASHBOARD_PROVIDER_ID,
   type ProjectDashboardSnapshot,
@@ -1398,6 +1401,75 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[ISSUE LIST]")).toBeUndefined();
     expect(findRenderedRow(renderedText, "[ISSUE DETAIL]")).toBeUndefined();
   });
+
+  it("renders both [RUNTIME START] and [IMPLEMENTER RUNTIME] rows inside the drawn panel on a realistic full dashboard", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.runtimeStartResultCollections = {
+      "daily-proof": createRuntimeStartResultCollectionFixture("Started"),
+    };
+    state.implementerRuntimeResultCollections = {
+      "daily-proof": createImplementerRuntimeResultCollectionFixture("Completed"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const runtimeStartRow = findRenderedRow(renderedText, "[RUNTIME START]");
+    const implementerRuntimeRow = findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]");
+
+    expect(runtimeStartRow).toBeDefined();
+    expect(implementerRuntimeRow).toBeDefined();
+    expect(implementerRuntimeRow?.text).toContain("Completed");
+    expect(implementerRuntimeRow?.text).toContain("Codex not started");
+    expect(implementerRuntimeRow?.text).not.toMatch(/Validation Passed|Codex Approved|Ready to Merge/i);
+    [runtimeStartRow, implementerRuntimeRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
+  });
+
+  it("drops the [IMPLEMENTER RUNTIME] row before [RUNTIME START] when the panel overflows, and never overlaps the panel", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    // Uses the real, unmodified default createProjectDashboardSnapshot() fixture
+    // (long advisory text) so the panel is already near its budget before these
+    // two new rows are added -- a realistic worst case, not a synthetic one.
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot(),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.executionReadinessResultCollections = {
+      "daily-proof": createExecutionReadinessResultCollection("Ready"),
+    };
+    state.humanExecutionApprovalResultCollections = {
+      "daily-proof": createHumanExecutionApprovalResultCollection("Approved"),
+    };
+    state.runtimePreflightResultCollections = {
+      "daily-proof": createRuntimePreflightResultCollection("Ready"),
+    };
+    state.runtimeStartResultCollections = {
+      "daily-proof": createRuntimeStartResultCollectionFixture("Started"),
+    };
+    state.implementerRuntimeResultCollections = {
+      "daily-proof": createImplementerRuntimeResultCollectionFixture("Completed"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const runtimeStartRow = findRenderedRow(renderedText, "[RUNTIME START]");
+    const implementerRuntimeRow = findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]");
+
+    expect(runtimeStartRow).toBeDefined();
+    expect(implementerRuntimeRow).toBeUndefined();
+    assertRowInsidePanel(runtimeStartRow, lowerPanel);
+  });
 });
 
 type RenderedText = {
@@ -1582,6 +1654,8 @@ function createPortalState(options: {
     runtimePreflightResultCollections: {},
     runtimeStartCollections: {},
     runtimeStartResultCollections: {},
+    implementerRuntimeCollections: {},
+    implementerRuntimeResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -2139,5 +2213,104 @@ function createExternalSource(displayName: string): NonNullable<ProjectDashboard
           value: "main",
         },
       ],
+  };
+}
+
+function createRuntimePreflightResultCollection(status: "Ready" | "Blocked" | "Failed"): RuntimePreflightResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:runtime-preflight-result:plan-1:preflight-v1",
+      projectId: "daily-proof",
+      executionPlanId: "plan-1",
+      preflightId: "daily-proof:runtime-preflight:plan-1:preflight-v1",
+      approvalId: "daily-proof:human-execution-approval:plan-1:approval-v1",
+      readinessId: "daily-proof:execution-readiness:plan-1:readiness-v1",
+      status,
+      reasonCodes: [status === "Ready" ? "READY" : "RUNTIME_ENVIRONMENT_UNSUPPORTED"],
+      primaryReason: status === "Ready" ? "READY" : "RUNTIME_ENVIRONMENT_UNSUPPORTED",
+      passedCheckCount: status === "Ready" ? 12 : 11,
+      blockedCheckCount: status === "Blocked" ? 1 : 0,
+      failedCheckCount: status === "Failed" ? 1 : 0,
+      runtimePreflightPassed: status === "Ready",
+      executionApproved: true,
+      executionStarted: false,
+      agentStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      evaluatedAt: "2026-01-08T00:00:00.000Z",
+      rulesVersion: "preflight-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-08T00:00:00.000Z",
+    rulesVersion: "preflight-v1",
+  };
+}
+
+function createRuntimeStartResultCollectionFixture(
+  status: "Started" | "AlreadyStarted" | "Blocked" | "Failed",
+): RuntimeStartResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:runtime-start-result:plan-1:start-v1",
+      projectId: "daily-proof",
+      executionPlanId: "plan-1",
+      runtimeStartId: status === "Started" || status === "AlreadyStarted"
+        ? "daily-proof:runtime-start:plan-1:start-v1"
+        : undefined,
+      runtimePreflightId: "daily-proof:runtime-preflight:plan-1:preflight-v1",
+      approvalId: "daily-proof:human-execution-approval:plan-1:approval-v1",
+      status,
+      reasonCodes: [status === "Started" ? "STARTED" : status === "AlreadyStarted" ? "ALREADY_STARTED" : "RUNTIME_START_PREFLIGHT_BLOCKED"],
+      started: status === "Started" || status === "AlreadyStarted",
+      duplicateExistingStart: status === "AlreadyStarted",
+      executionApproved: status === "Started" || status === "AlreadyStarted",
+      runtimePreflightPassed: status === "Started" || status === "AlreadyStarted",
+      executionStarted: status === "Started" || status === "AlreadyStarted",
+      agentStarted: false,
+      implementerStarted: false,
+      reviewerStarted: false,
+      validationStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-09T00:00:00.000Z",
+      rulesVersion: "start-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-09T00:00:00.000Z",
+    rulesVersion: "start-v1",
+  };
+}
+
+function createImplementerRuntimeResultCollectionFixture(
+  status: "Completed" | "TimedOut" | "Cancelled" | "Blocked" | "Failed",
+): ImplementerRuntimeResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:implementer-runtime-result:daily-proof:runtime-start:plan-1:start-v1:claude-implementer-v1",
+      projectId: "daily-proof",
+      runtimeStartId: "daily-proof:runtime-start:plan-1:start-v1",
+      executionPlanId: "plan-1",
+      implementerRuntimeId: status === "Completed" || status === "TimedOut"
+        ? "daily-proof:implementer-runtime:daily-proof:runtime-start:plan-1:start-v1:claude-implementer-v1"
+        : undefined,
+      status,
+      reasonCodes: ["IMPLEMENTER_RUNTIME_STARTED"],
+      started: status === "Completed" || status === "TimedOut",
+      duplicateActiveAttempt: false,
+      agentStarted: status === "Completed" || status === "TimedOut",
+      implementerStarted: status === "Completed" || status === "TimedOut",
+      reviewerStarted: false,
+      validationStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-10T00:00:00.000Z",
+      rulesVersion: "claude-implementer-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-10T00:00:00.000Z",
+    rulesVersion: "claude-implementer-v1",
   };
 }

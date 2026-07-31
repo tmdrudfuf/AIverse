@@ -5,6 +5,11 @@ const ESCAPE_KEY_CODE = "Escape";
 const UP_KEY_CODE = "ArrowUp";
 const DOWN_KEY_CODE = "ArrowDown";
 const ENTER_KEY_CODE = "Enter";
+// Deliberately distinct from ENTER_KEY_CODE/ACTION_KEY_CODE: this is the one
+// and only input that can request a Claude Implementer Runtime start, and it
+// must never be satisfied by the same keypress that advances the existing
+// Plan -> Readiness -> Approval -> Preflight -> Runtime Start cascade.
+const START_IMPLEMENTER_KEY_CODE = "KeyI";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -12,6 +17,7 @@ export class OfficeActionInputController {
   private pendingUp = false;
   private pendingDown = false;
   private pendingEnter = false;
+  private pendingStartImplementer = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -42,6 +48,12 @@ export class OfficeActionInputController {
     if (event.code === ENTER_KEY_CODE) {
       event.preventDefault();
       this.pendingEnter = true;
+      return;
+    }
+
+    if (event.code === START_IMPLEMENTER_KEY_CODE) {
+      event.preventDefault();
+      this.pendingStartImplementer = true;
     }
   };
 
@@ -84,6 +96,12 @@ export class OfficeActionInputController {
     return enterPressed;
   }
 
+  consumeStartImplementerPressed() {
+    const startImplementerPressed = this.pendingStartImplementer;
+    this.pendingStartImplementer = false;
+    return startImplementerPressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -96,5 +114,6 @@ export class OfficeActionInputController {
     this.pendingUp = false;
     this.pendingDown = false;
     this.pendingEnter = false;
+    this.pendingStartImplementer = false;
   }
 }

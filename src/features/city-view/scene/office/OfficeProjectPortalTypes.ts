@@ -34,6 +34,10 @@ import type {
   RuntimeStartCollection,
   RuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
+import type {
+  ImplementerRuntimeCollection,
+  ImplementerRuntimeResultCollection,
+} from "./implementer-runtime/ImplementerRuntimeTypes";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -154,6 +158,8 @@ export type ProjectPortalState = {
   runtimePreflightResultCollections: Record<string, RuntimePreflightResultCollection>;
   runtimeStartCollections: Record<string, RuntimeStartCollection>;
   runtimeStartResultCollections: Record<string, RuntimeStartResultCollection>;
+  implementerRuntimeCollections: Record<string, ImplementerRuntimeCollection>;
+  implementerRuntimeResultCollections: Record<string, ImplementerRuntimeResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
