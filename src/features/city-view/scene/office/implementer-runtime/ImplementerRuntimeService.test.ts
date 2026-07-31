@@ -626,8 +626,42 @@ describe("ImplementerRuntimeService", () => {
     const outcome = await service.startImplementer(createInput(chain));
 
     expect(outcome.result.status).toBe("Blocked");
-    expect(outcome.runtime?.agentStarted).toBe(false);
-    expect(outcome.runtime?.implementerStarted).toBe(false);
+    // A pre-spawn Blocked outcome never creates an ImplementerRuntime record
+    // at all (per data-model.md) -- only the result carries the false flags.
+    expect(outcome.runtime).toBeUndefined();
+    expect(outcome.result.agentStarted).toBe(false);
+    expect(outcome.result.implementerStarted).toBe(false);
+  });
+
+  it("does not create an ImplementerRuntime record for a Failed provider result (only a result)", async () => {
+    const chain = createValidChain();
+    const provider = createStubProvider({
+      status: "Failed",
+      evidence: {
+        providerId: "claude",
+        agentId: "Claude",
+        role: "Implementer",
+        commandDisplay: "claude ...",
+        workingDirectory: "C:/worktrees/075",
+        started: true,
+        completed: false,
+        timedOut: false,
+        cancelled: false,
+        durationMs: 5,
+        stdoutSummary: "",
+        stderrSummary: "spawn failed",
+        outputTruncated: false,
+      },
+    });
+    const service = new ImplementerRuntimeService(provider);
+
+    const outcome = await service.startImplementer(createInput(chain));
+
+    expect(outcome.result.status).toBe("Failed");
+    expect(outcome.runtime).toBeUndefined();
+    expect(outcome.runtimeCollection).toBeUndefined();
+    expect(outcome.result.agentStarted).toBe(false);
+    expect(outcome.result.implementerStarted).toBe(false);
   });
 
   it("maps a provider exception to a Failed result without setting agentStarted", async () => {
@@ -659,5 +693,69 @@ describe("ImplementerRuntimeService", () => {
     expect(outcome.runtime?.reviewerStarted).toBe(false);
     expect(outcome.runtime?.validationStarted).toBe(false);
     expect(outcome.runtime?.githubMutationStarted).toBe(false);
+  });
+
+  describe("command safety uses the exact same shared check the provider itself applies", () => {
+    it("blocks a destructive git verb (git commit) that the provider's isSafeCommandLine rejects, without invoking the provider", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider, {
+        command: "git",
+        arguments: ["commit", "-m", "oops"],
+        inputMode: "argument",
+        timeoutMs: 60000,
+      });
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+      expect(provider.invoke).not.toHaveBeenCalled();
+    });
+
+    it("blocks a cmd /c wrapper that only the additional implementer-specific check rejects, without invoking the provider", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider, {
+        command: "cmd",
+        arguments: ["/c", "claude -p hello"],
+        inputMode: "argument",
+        timeoutMs: 60000,
+      });
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+      expect(provider.invoke).not.toHaveBeenCalled();
+    });
+
+    it("blocks an -EncodedCommand PowerShell wrapper without invoking the provider", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider, {
+        command: "powershell",
+        arguments: ["-EncodedCommand", "ZABlAGwAIAAvAHMA"],
+        inputMode: "argument",
+        timeoutMs: 60000,
+      });
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+      expect(provider.invoke).not.toHaveBeenCalled();
+    });
+
+    it("accepts the approved Claude command configuration and reaches the provider", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider);
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Completed");
+      expect(provider.invoke).toHaveBeenCalledTimes(1);
+    });
   });
 });

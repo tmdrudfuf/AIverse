@@ -1,6 +1,7 @@
 import { createExecutionPlanId, EXECUTION_PLAN_RULES_VERSION } from "../execution-plans/ExecutionPlanTypes";
 import { RUNTIME_PREFLIGHT_RULES_VERSION, createRuntimePreflightId } from "../runtime-preflight/RuntimePreflightTypes";
 import { RUNTIME_START_RULES_VERSION, createRuntimeStartId } from "../runtime-start/RuntimeStartTypes";
+import { isSafeImplementerCommand } from "./ClaudeImplementerRuntimeProvider";
 import { createImplementerPrompt } from "./ImplementerPrompt";
 import type { ImplementerRuntimeProvider, ImplementerRuntimeProviderCommand } from "./ImplementerRuntimeProvider";
 import {
@@ -81,7 +82,7 @@ export class ImplementerRuntimeService {
       };
     }
 
-    if (!isSafeConfiguredCommand(this.commandConfig)) {
+    if (!isValidTimeout(this.commandConfig.timeoutMs)) {
       return this.createBlockedOutcome(input, implementerRuntimeId, "IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
     }
 
@@ -112,11 +113,39 @@ export class ImplementerRuntimeService {
       timeoutMs: this.commandConfig.timeoutMs,
     };
 
+    // Reuses the exact same safety validation the provider itself applies
+    // (isSafeImplementerCommand, exported from ClaudeImplementerRuntimeProvider)
+    // rather than a second, narrower, independently-maintained copy -- a
+    // command the service considers safe must be identical to a command the
+    // provider considers safe, with no gap where an unsafe or non-approved
+    // config could still reach provider.invoke.
+    if (!isSafeImplementerCommand(providerCommand)) {
+      return this.createBlockedOutcome(input, implementerRuntimeId, "IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+    }
+
     let providerResult;
     try {
       providerResult = await this.provider.invoke(providerCommand);
     } catch {
       return this.createBlockedOutcome(input, implementerRuntimeId, "IMPLEMENTER_RUNTIME_INTERNAL_FAILURE", "Failed");
+    }
+
+    // Blocked/Failed pre-spawn outcomes never create an ImplementerRuntime
+    // record -- only Completed/TimedOut represent an actual confirmed spawn
+    // (matching data-model.md's own stated rule); anything else is a
+    // result-only outcome with agentStarted/implementerStarted left false.
+    const spawned = providerResult.status === "Completed" || providerResult.status === "TimedOut";
+    if (!spawned) {
+      const result = createResult({
+        input,
+        implementerRuntimeId,
+        status: providerResult.status,
+        reasonCodes: [statusReasonCode(providerResult.status)],
+      });
+      return {
+        result,
+        resultCollection: this.upsertResult(input.existingResults, result),
+      };
     }
 
     const runtime = createRuntime(input, implementerRuntimeId, prompt.promptId, providerResult);
@@ -351,13 +380,8 @@ function validateRoleBinding(input: ImplementerRuntimeInput): ImplementerRuntime
   return undefined;
 }
 
-function isSafeConfiguredCommand(config: ImplementerRuntimeCommandConfig) {
-  const joined = [config.command, ...config.arguments].join(" ").toLowerCase();
-  if (!config.command.trim()) return false;
-  if (config.timeoutMs <= 0 || !Number.isFinite(config.timeoutMs) || config.timeoutMs > 30 * 60 * 1000) return false;
-  if (/(git\s+push|gh\s+pr\s+(create|merge|ready)|gh\s+issue\s+edit|gh\s+repo\s+edit)/.test(joined)) return false;
-  if (/(&&|\|\||[;|]|`|\$\()/.test(joined)) return false;
-  return true;
+function isValidTimeout(timeoutMs: number) {
+  return Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= 30 * 60 * 1000;
 }
 
 function createRuntime(
