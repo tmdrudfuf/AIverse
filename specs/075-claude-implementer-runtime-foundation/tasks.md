@@ -74,7 +74,7 @@ description: "Task list for Spec 075 — Claude Implementer Runtime Foundation"
 - [X] T023 Run focused Implementer Runtime tests (`quickstart.md`'s focused-test command) and record exact file/test counts.
 - [X] T024 Run `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, and `git diff --cached --check`.
 - [X] T025 Complete every task checkbox above (this file) before the commit that will be submitted for independent review — not after — so no post-approval documentation-only recommit is needed.
-- [ ] T026 Commit the complete implementation and run an independent Codex CLI review (Codex = Reviewer, Claude = Implementer, per the approved role swap) until Approved on the exact committed HEAD, fixing every blocking finding and re-validating/re-reviewing as needed.
+- [X] T026 Commit the complete implementation and run an independent Codex CLI review (Codex = Reviewer, Claude = Implementer, per the approved role swap) until Approved on the exact committed HEAD, fixing every blocking finding and re-validating/re-reviewing as needed.
 
 ## Dependencies & Execution Order
 
