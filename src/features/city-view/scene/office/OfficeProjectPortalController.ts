@@ -2091,9 +2091,11 @@ export class OfficeProjectPortalController {
     const implementerRuntime = plan
       ? this.state.implementerRuntimeCollections[projectId]?.runtimes.find((item) => item.executionPlanId === plan.planId)
       : undefined;
-    const implementerRuntimeResult = plan
+    const implementerRuntimeResult = plan && implementerRuntime
       ? this.state.implementerRuntimeResultCollections[projectId]?.results.find((item) =>
-        item.executionPlanId === plan.planId && item.status === "Completed"
+        item.executionPlanId === plan.planId &&
+        item.implementerRuntimeId === implementerRuntime.implementerRuntimeId &&
+        item.status === "Completed"
       )
       : undefined;
 

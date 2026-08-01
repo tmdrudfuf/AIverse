@@ -328,6 +328,17 @@ function validateContext(input: ReviewerRuntimeInput): ReviewerRuntimeReasonCode
   if (implementerRuntime.status !== "Completed" || implementerRuntimeResult.status !== "Completed") {
     return "REVIEWER_RUNTIME_IMPLEMENTER_NOT_COMPLETED";
   }
+  // The Implementer Runtime Result must belong to this exact Implementer
+  // Runtime attempt, not merely share the same plan -- a stale Completed
+  // result left over from an earlier, superseded attempt must never be
+  // accepted here (see plan.md, "Implementer Result Revalidation").
+  if (
+    implementerRuntimeResult.executionPlanId !== plan.planId ||
+    implementerRuntimeResult.runtimeStartId !== runtimeStart.runtimeStartId ||
+    implementerRuntimeResult.implementerRuntimeId !== implementerRuntime.implementerRuntimeId
+  ) {
+    return "REVIEWER_RUNTIME_IMPLEMENTER_NOT_COMPLETED";
+  }
   if (implementerRuntime.reviewerStarted || implementerRuntime.validationStarted || implementerRuntime.githubMutationStarted) {
     return "REVIEWER_RUNTIME_START_STALE";
   }

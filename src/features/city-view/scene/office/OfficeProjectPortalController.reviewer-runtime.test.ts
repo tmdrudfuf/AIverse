@@ -336,11 +336,17 @@ function createImplementerOutcomeForPlan(
   status: "Completed" | "TimedOut" | "Blocked" | "Failed",
 ) {
   const spawned = status === "Completed" || status === "TimedOut";
+  // Mirrors ImplementerRuntimeService's own createResult, which only ever
+  // populates implementerRuntimeId once an ImplementerRuntime record exists
+  // (i.e. a spawned Completed/TimedOut attempt) -- a drift from that real
+  // behavior here would let this fixture silently pass checks the real
+  // service-produced result could never pass.
   const result = {
     id: `daily-proof:implementer-runtime-result:${planId}:${status}`,
     projectId: "daily-proof",
     runtimeStartId,
     executionPlanId: planId,
+    implementerRuntimeId: spawned ? `daily-proof:implementer-runtime:${runtimeStartId}:claude-implementer-v1` : undefined,
     status,
     reasonCodes: ["IMPLEMENTER_RUNTIME_STARTED" as const],
     started: spawned,
@@ -453,7 +459,10 @@ function buildValidReviewerInput(internals: ControllerInternals): ReviewerRuntim
     (item) => item.executionPlanId === plan.planId,
   );
   const implementerRuntimeResult = internals.state.implementerRuntimeResultCollections[projectId]?.results.find(
-    (item) => item.executionPlanId === plan.planId && item.status === "Completed",
+    (item) =>
+      item.executionPlanId === plan.planId &&
+      item.implementerRuntimeId === implementerRuntime?.implementerRuntimeId &&
+      item.status === "Completed",
   );
   if (!readiness || !readinessResult || !approval || !preflight || !preflightResult || !runtimeStart || !runtimeStartResult || !implementerRuntime || !implementerRuntimeResult) {
     throw new Error("Test setup failed to reach a fully valid Reviewer Runtime context.");
