@@ -15,6 +15,10 @@ import {
   createImplementerRuntimeDisplayRows,
   type ImplementerRuntimeDisplayRows,
 } from "./implementer-runtime/ImplementerRuntimeView";
+import {
+  createReviewerRuntimeDisplayRows,
+  type ReviewerRuntimeDisplayRows,
+} from "./reviewer-runtime/ReviewerRuntimeView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -332,6 +336,11 @@ export class OfficeProjectPortalView {
     // gating this call on collection presence would silently omit that
     // required row for a project that hasn't reached Runtime Start at all.
     const implementerRuntimeRows = createImplementerRuntimeDisplayRows(runtimeStartResultCollection, implementerRuntimeResultCollection);
+    const reviewerRuntimeResultCollection = dashboardProjectId ? state.reviewerRuntimeResultCollections[dashboardProjectId] : undefined;
+    // Always computed for the same reason as implementerRuntimeRows above --
+    // createReviewerRuntimeDisplayRows itself renders the required "Codex
+    // unavailable" state when the Implementer Runtime hasn't Completed yet.
+    const reviewerRuntimeRows = createReviewerRuntimeDisplayRows(implementerRuntimeResultCollection, reviewerRuntimeResultCollection);
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -346,6 +355,7 @@ export class OfficeProjectPortalView {
         runtimePreflightRows,
         runtimeStartRows,
         implementerRuntimeRows,
+        reviewerRuntimeRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -694,6 +704,7 @@ function createProjectDashboardLowerRows(
   runtimePreflightRows?: RuntimePreflightDisplayRows,
   runtimeStartRows?: RuntimeStartDisplayRows,
   implementerRuntimeRows?: ImplementerRuntimeDisplayRows,
+  reviewerRuntimeRows?: ReviewerRuntimeDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -810,6 +821,15 @@ function createProjectDashboardLowerRows(
       text: `[IMPLEMENTER RUNTIME] ${implementerRuntimeRows.statusText}`,
       maxLines: 1,
       dropPriority: 15,
+      usePriorityFit: true,
+    });
+  }
+
+  if (reviewerRuntimeRows) {
+    lowerRows.push({
+      text: `[REVIEWER RUNTIME] ${reviewerRuntimeRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 16,
       usePriorityFit: true,
     });
   }

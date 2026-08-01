@@ -58,6 +58,16 @@ import {
   createImplementerRuntimeCollection,
   createImplementerRuntimeResultCollection,
 } from "./implementer-runtime/ImplementerRuntimeTypes";
+import { CodexReviewerRuntimeProvider } from "./reviewer-runtime/CodexReviewerRuntimeProvider";
+import { ReviewerRuntimeService } from "./reviewer-runtime/ReviewerRuntimeService";
+import {
+  REVIEWER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
+  REVIEWER_RUNTIME_APPROVED_REVIEWER_AGENT,
+  REVIEWER_RUNTIME_RULES_VERSION,
+  createReviewerRuntimeCollection,
+  createReviewerRuntimeResultCollection,
+} from "./reviewer-runtime/ReviewerRuntimeTypes";
+import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -147,6 +157,10 @@ export type OfficeProjectPortalInput = {
   // Runtime attempt -- Runtime Start's mere existence must never trigger
   // one on its own (see specs/075-claude-implementer-runtime-foundation).
   startImplementerPressed: boolean;
+  // Distinct from startImplementerPressed by design: this requests a Codex
+  // Reviewer Runtime attempt, gated separately so the same keypress can
+  // never satisfy both starts (see specs/076-codex-reviewer-runtime-foundation).
+  startReviewerPressed: boolean;
 };
 
 export class OfficeProjectPortalController {
@@ -171,6 +185,8 @@ export class OfficeProjectPortalController {
   private runtimeEnvironmentProvider: RuntimeEnvironmentProvider;
   private implementerRuntimeService: ImplementerRuntimeService;
   private readonly activeImplementerRuntimeKeys = new Set<string>();
+  private reviewerRuntimeService: ReviewerRuntimeService;
+  private readonly activeReviewerRuntimeKeys = new Set<string>();
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -228,6 +244,7 @@ export class OfficeProjectPortalController {
     this.runtimeStartService = new RuntimeStartService();
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
     this.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
+    this.reviewerRuntimeService = new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -729,6 +746,20 @@ export class OfficeProjectPortalController {
     // rendered, or any other input branch executed.
     if (input.startImplementerPressed && selectedPromotion?.promotionStatus === "Approved") {
       void this.startImplementerRuntimeForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      ).then((handled) => {
+        if (handled) this.view.render(this.state);
+      });
+      return;
+    }
+
+    // Entirely separate from startImplementerPressed above: this is the one
+    // and only path that can attempt a Codex Reviewer Runtime start, and it
+    // never fires merely because an Implementer Runtime exists or any other
+    // input branch executed.
+    if (input.startReviewerPressed && selectedPromotion?.promotionStatus === "Approved") {
+      void this.startReviewerRuntimeForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
       ).then((handled) => {
@@ -1989,6 +2020,191 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+  /**
+   * Requires an already-Completed Implementer Runtime for this exact plan
+   * before doing anything -- this method never originates one on its own.
+   * It then forces the same full revalidation cascade
+   * `startImplementerRuntimeForPromotion` uses (which itself revalidates
+   * Plan/Readiness/Approval/Preflight/Runtime Start); because that service
+   * is idempotent for an already-Completed run (IMPLEMENTER_RUNTIME_ALREADY_COMPLETED),
+   * this never re-spawns Claude -- it only re-confirms the chain is still valid.
+   */
+  private async startReviewerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
+    this.reviewerRuntimeService ??= new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
+    this.state.reviewTargets ??= {};
+    this.state.reviewerRuntimeCollections ??= {};
+    this.state.reviewerRuntimeResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const existingPlan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    if (!existingPlan) return false;
+
+    const hadCompletedImplementerRuntime = this.state.implementerRuntimeResultCollections[projectId]?.results.some(
+      (item) => item.executionPlanId === existingPlan.planId && item.status === "Completed",
+    );
+    if (!hadCompletedImplementerRuntime) return false;
+
+    const revalidated = await this.startImplementerRuntimeForPromotion(projectId, candidateTaskId);
+    if (!revalidated) return false;
+
+    const plan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
+      item.projectId === projectId &&
+      item.projectTaskId === promotedTask.id &&
+      item.candidateTaskId === candidateTaskId
+    );
+    const readiness = plan
+      ? this.state.executionReadinessCollections[projectId]?.readiness.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const readinessResult = plan && readiness
+      ? this.state.executionReadinessResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.readinessId === readiness.readinessId
+      )
+      : undefined;
+    const approval = plan
+      ? this.state.humanExecutionApprovalCollections[projectId]?.approvals.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const preflight = plan
+      ? this.state.runtimePreflightCollections[projectId]?.preflights.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const preflightResult = plan && preflight
+      ? this.state.runtimePreflightResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.preflightId === preflight.preflightId
+      )
+      : undefined;
+    const runtimeStart = plan
+      ? this.state.runtimeStartCollections[projectId]?.starts.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const runtimeStartResult = plan && runtimeStart
+      ? this.state.runtimeStartResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.runtimeStartId === runtimeStart.runtimeStartId
+      )
+      : undefined;
+    const implementerRuntime = plan
+      ? this.state.implementerRuntimeCollections[projectId]?.runtimes.find((item) => item.executionPlanId === plan.planId)
+      : undefined;
+    const implementerRuntimeResult = plan
+      ? this.state.implementerRuntimeResultCollections[projectId]?.results.find((item) =>
+        item.executionPlanId === plan.planId && item.status === "Completed"
+      )
+      : undefined;
+
+    const existingRuntimes = this.state.reviewerRuntimeCollections[projectId]
+      ?? createReviewerRuntimeCollection({ projectId, runtimes: [], rulesVersion: REVIEWER_RUNTIME_RULES_VERSION });
+    const existingResults = this.state.reviewerRuntimeResultCollections[projectId]
+      ?? createReviewerRuntimeResultCollection({ projectId, results: [], rulesVersion: REVIEWER_RUNTIME_RULES_VERSION });
+
+    // Revalidation above can invalidate an Implementer Runtime that was
+    // Completed when this attempt began (a stale plan/approval/preflight/
+    // branch change). Report that plainly as a Blocked stale-chain result
+    // rather than falling through to the service with a missing
+    // implementerRuntime, which would misreport it as a malformed command.
+    const implementerRuntimeStillValid = Boolean(implementerRuntime && implementerRuntime.status === "Completed");
+    if (!implementerRuntimeStillValid) {
+      const staleResult = {
+        id: `${projectId}:reviewer-runtime-result:${existingPlan.planId}:start-stale`,
+        projectId,
+        runtimeStartId: runtimeStart?.runtimeStartId,
+        implementerRuntimeId: implementerRuntime?.implementerRuntimeId,
+        status: "Blocked" as const,
+        decision: "Unknown" as const,
+        blockingFindingCount: 0,
+        nonBlockingFindingCount: 0,
+        reasonCodes: ["REVIEWER_RUNTIME_START_STALE" as const],
+        started: false,
+        duplicateActiveAttempt: false,
+        agentStarted: false,
+        implementerStarted: true as const,
+        reviewerStarted: false,
+        validationStarted: false as const,
+        repositoryMutationStarted: false as const,
+        githubMutationStarted: false as const,
+        resultAt: new Date().toISOString(),
+        rulesVersion: REVIEWER_RUNTIME_RULES_VERSION,
+      };
+      this.state.reviewerRuntimeResultCollections[projectId] =
+        this.reviewerRuntimeService.upsertResult(existingResults, staleResult);
+      return true;
+    }
+
+    const activeKey = implementerRuntime!.implementerRuntimeId;
+    if (this.activeReviewerRuntimeKeys.has(activeKey)) {
+      const blockedResult = {
+        id: `${projectId}:reviewer-runtime-result:${activeKey}:active-block`,
+        projectId,
+        runtimeStartId: runtimeStart?.runtimeStartId,
+        implementerRuntimeId: implementerRuntime?.implementerRuntimeId,
+        status: "Blocked" as const,
+        decision: "Unknown" as const,
+        blockingFindingCount: 0,
+        nonBlockingFindingCount: 0,
+        reasonCodes: ["REVIEWER_RUNTIME_ALREADY_ACTIVE" as const],
+        started: false,
+        duplicateActiveAttempt: true,
+        agentStarted: false,
+        implementerStarted: true as const,
+        reviewerStarted: false,
+        validationStarted: false as const,
+        repositoryMutationStarted: false as const,
+        githubMutationStarted: false as const,
+        resultAt: new Date().toISOString(),
+        rulesVersion: REVIEWER_RUNTIME_RULES_VERSION,
+      };
+      this.state.reviewerRuntimeResultCollections[projectId] =
+        this.reviewerRuntimeService.upsertResult(existingResults, blockedResult);
+      return true;
+    }
+
+    const reviewTarget = plan && runtimeStart && implementerRuntime
+      ? resolveReviewTarget(plan, runtimeStart, implementerRuntime)
+      : undefined;
+    if (reviewTarget) this.state.reviewTargets[projectId] = reviewTarget;
+
+    this.activeReviewerRuntimeKeys.add(activeKey);
+    try {
+      const outcome = await this.reviewerRuntimeService.startReviewer({
+        command: {
+          projectId,
+          runtimeStartId: runtimeStart?.runtimeStartId ?? "",
+          executionPlanId: plan?.planId ?? existingPlan.planId,
+          approvedImplementerAgent: REVIEWER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
+          approvedReviewerAgent: REVIEWER_RUNTIME_APPROVED_REVIEWER_AGENT,
+          startedBy: "Local Human",
+          requestedAt: new Date().toISOString(),
+        },
+        executionPlan: plan,
+        readiness,
+        readinessResult,
+        approval,
+        preflight,
+        preflightResult,
+        runtimeStart,
+        runtimeStartResult,
+        implementerRuntime,
+        implementerRuntimeResult,
+        reviewTarget,
+        existingRuntimes,
+        existingResults,
+      });
+
+      if (outcome.runtimeCollection) {
+        this.state.reviewerRuntimeCollections[projectId] = outcome.runtimeCollection;
+      }
+      this.state.reviewerRuntimeResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    } finally {
+      this.activeReviewerRuntimeKeys.delete(activeKey);
+    }
+    return true;
+  }
+
   private clearRuntimePreflightForProject(projectId: string) {
     if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
     if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
@@ -1996,6 +2212,9 @@ export class OfficeProjectPortalController {
     if (this.state.runtimeStartResultCollections) delete this.state.runtimeStartResultCollections[projectId];
     if (this.state.implementerRuntimeCollections) delete this.state.implementerRuntimeCollections[projectId];
     if (this.state.implementerRuntimeResultCollections) delete this.state.implementerRuntimeResultCollections[projectId];
+    if (this.state.reviewTargets) delete this.state.reviewTargets[projectId];
+    if (this.state.reviewerRuntimeCollections) delete this.state.reviewerRuntimeCollections[projectId];
+    if (this.state.reviewerRuntimeResultCollections) delete this.state.reviewerRuntimeResultCollections[projectId];
   }
 
   private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {
