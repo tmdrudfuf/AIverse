@@ -669,6 +669,32 @@ describe("ReviewerRuntimeService", () => {
     expect(provider.invoke).not.toHaveBeenCalled();
   });
 
+  it("blocks when the Runtime Start's repositoryId does not match the Execution Plan", async () => {
+    const chain = createValidChain();
+    const provider = createStubProvider(createApprovedResult());
+    const service = new ReviewerRuntimeService(provider);
+
+    const mismatched = { ...chain.runtimeStart, repositoryId: "some-other-repo" };
+    const outcome = await service.startReviewer({ ...createInput(chain), runtimeStart: mismatched });
+
+    expect(outcome.result.status).toBe("Blocked");
+    expect(outcome.result.reasonCodes).toContain("REVIEWER_RUNTIME_START_STALE");
+    expect(provider.invoke).not.toHaveBeenCalled();
+  });
+
+  it("blocks when the Implementer Runtime's repositoryId does not match the Execution Plan", async () => {
+    const chain = createValidChain();
+    const provider = createStubProvider(createApprovedResult());
+    const service = new ReviewerRuntimeService(provider);
+
+    const mismatched = { ...chain.implementerRuntime, repositoryId: "some-other-repo" };
+    const outcome = await service.startReviewer({ ...createInput(chain), implementerRuntime: mismatched });
+
+    expect(outcome.result.status).toBe("Blocked");
+    expect(outcome.result.reasonCodes).toContain("REVIEWER_RUNTIME_WORKTREE_MISMATCH");
+    expect(provider.invoke).not.toHaveBeenCalled();
+  });
+
   describe("Claude Implementer Runtime revalidation", () => {
     it("blocks when the Implementer Runtime is missing", async () => {
       const chain = createValidChain();
@@ -758,6 +784,18 @@ describe("ReviewerRuntimeService", () => {
 
       expect(outcome.result.status).toBe("Blocked");
       expect(outcome.result.reasonCodes).toContain("REVIEWER_RUNTIME_TARGET_MISMATCH");
+    });
+
+    it("blocks when the review target's repositoryId does not match the Execution Plan", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createApprovedResult());
+      const service = new ReviewerRuntimeService(provider);
+
+      const mismatched = { ...chain.reviewTarget, repositoryId: "some-other-repo" };
+      const outcome = await service.startReviewer({ ...createInput(chain), reviewTarget: mismatched });
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("REVIEWER_RUNTIME_WORKTREE_MISMATCH");
       expect(provider.invoke).not.toHaveBeenCalled();
     });
   });

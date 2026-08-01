@@ -304,6 +304,19 @@ function validateContext(input: ReviewerRuntimeInput): ReviewerRuntimeReasonCode
   ) {
     return "REVIEWER_RUNTIME_START_STALE";
   }
+  if (
+    runtimeStart.executionPlanId !== plan.planId ||
+    runtimeStart.humanExecutionApprovalId !== approval.approvalId ||
+    runtimeStart.runtimePreflightId !== preflight.preflightId ||
+    runtimeStart.taskId !== plan.projectTaskId ||
+    runtimeStart.confirmedAssignmentId !== plan.confirmedAssignmentId ||
+    runtimeStart.preparedSessionId !== plan.preparedSessionId ||
+    runtimeStart.activeSessionId !== plan.activeSessionId ||
+    runtimeStart.employeeId !== plan.employeeId ||
+    runtimeStart.repositoryId !== plan.repositoryId
+  ) {
+    return "REVIEWER_RUNTIME_START_STALE";
+  }
   if (runtimeStart.worktreePath !== plan.worktreePath || runtimeStart.repositoryRoot !== plan.repositoryPath) {
     return "REVIEWER_RUNTIME_WORKTREE_MISMATCH";
   }
@@ -321,6 +334,7 @@ function validateContext(input: ReviewerRuntimeInput): ReviewerRuntimeReasonCode
     return "REVIEWER_RUNTIME_PROJECT_MISMATCH";
   }
   if (implementerRuntime.runtimeStartId !== runtimeStart.runtimeStartId) return "REVIEWER_RUNTIME_IMPLEMENTER_NOT_COMPLETED";
+  if (implementerRuntime.repositoryId !== plan.repositoryId) return "REVIEWER_RUNTIME_WORKTREE_MISMATCH";
   if (implementerRuntime.worktreePath !== plan.worktreePath || implementerRuntime.branch !== plan.branchName) {
     return "REVIEWER_RUNTIME_WORKTREE_MISMATCH";
   }
@@ -399,6 +413,7 @@ function validateReviewTarget(input: ReviewerRuntimeInput): ReviewerRuntimeReaso
   if (target.projectId !== plan.projectId) return "REVIEWER_RUNTIME_PROJECT_MISMATCH";
   if (target.runtimeStartId !== runtimeStart.runtimeStartId) return "REVIEWER_RUNTIME_TARGET_MISMATCH";
   if (target.implementerRuntimeId !== implementerRuntime.implementerRuntimeId) return "REVIEWER_RUNTIME_TARGET_MISMATCH";
+  if (target.repositoryId !== plan.repositoryId) return "REVIEWER_RUNTIME_WORKTREE_MISMATCH";
   if (target.worktreePath !== plan.worktreePath) return "REVIEWER_RUNTIME_WORKTREE_MISMATCH";
   if (target.featureBranch !== plan.branchName) return "REVIEWER_RUNTIME_BRANCH_MISMATCH";
   if (target.specificationPath !== plan.specPath) return "REVIEWER_RUNTIME_SPEC_MISMATCH";
