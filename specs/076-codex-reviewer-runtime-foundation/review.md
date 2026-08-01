@@ -20,7 +20,7 @@ Seven independent Codex CLI review rounds were run against this feature (Impleme
 ## Blocking Findings
 
 ### Round 2 (commit `aef498a`) — fixed in `c90e0a7`
-- Codex's stdout parsing used a truncated evidence summary instead of the full process output, causing the structured-review JSON block to be missed for outputs longer than the summary window. **Fixed**: parse full stdout, not the truncated summary.
+- **P1-001** — `CodexReviewerRuntimeProvider.ts:115-154`: the provider truncated stdout to the 2000-character evidence summary before handing it to `parseReviewOutput`, so a blocking `Finding` line past the truncation boundary could be silently dropped while an earlier `Decision: Approved` marker was still trusted. **Fixed**: parse the untruncated stdout for decision/finding extraction; only the persisted evidence record itself stays truncated.
 
 ### Round 3 (commit `c90e0a7`) — fixed in `dcdd4ba`
 - **P1-001** — `ReviewerPrompt.ts`: mandatory prohibition/decision-format clauses could be truncated off the end of the bound prompt because they were assembled after unbounded variable-length context fields. **Fixed**: reordered so mandatory clauses are assembled first, ahead of all variable-length fields; `prompt-contract.md` updated to describe the guarantee accurately; added `ReviewerPrompt.test.ts` proving every mandatory clause survives even with maximally long variable fields.
