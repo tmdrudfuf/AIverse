@@ -2021,13 +2021,17 @@ export class OfficeProjectPortalController {
   }
 
   /**
-   * Requires an already-Completed Implementer Runtime for this exact plan
-   * before doing anything -- this method never originates one on its own.
-   * It then forces the same full revalidation cascade
-   * `startImplementerRuntimeForPromotion` uses (which itself revalidates
-   * Plan/Readiness/Approval/Preflight/Runtime Start); because that service
-   * is idempotent for an already-Completed run (IMPLEMENTER_RUNTIME_ALREADY_COMPLETED),
-   * this never re-spawns Claude -- it only re-confirms the chain is still valid.
+   * Requires an already-Completed Implementer Runtime *record* (not merely a
+   * result) for this exact plan before doing anything -- this method never
+   * originates one on its own. It then forces the same full revalidation
+   * cascade `startImplementerRuntimeForPromotion` uses (which itself
+   * revalidates Plan/Readiness/Approval/Preflight/Runtime Start), and
+   * afterward re-asserts that the Completed runtime's implementerRuntimeId
+   * is unchanged before proceeding. Requiring the record up front means the
+   * revalidation cascade's own deterministic-id lookup will find it and take
+   * the IMPLEMENTER_RUNTIME_ALREADY_COMPLETED short-circuit rather than
+   * reaching the Claude provider; the post-check catches it if that ever
+   * fails to hold.
    */
   private async startReviewerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
     this.reviewerRuntimeService ??= new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
@@ -2048,10 +2052,10 @@ export class OfficeProjectPortalController {
     );
     if (!existingPlan) return false;
 
-    const hadCompletedImplementerRuntime = this.state.implementerRuntimeResultCollections[projectId]?.results.some(
+    const priorImplementerRuntime = this.state.implementerRuntimeCollections[projectId]?.runtimes.find(
       (item) => item.executionPlanId === existingPlan.planId && item.status === "Completed",
     );
-    if (!hadCompletedImplementerRuntime) return false;
+    if (!priorImplementerRuntime) return false;
 
     const revalidated = await this.startImplementerRuntimeForPromotion(projectId, candidateTaskId);
     if (!revalidated) return false;
@@ -2109,7 +2113,11 @@ export class OfficeProjectPortalController {
     // branch change). Report that plainly as a Blocked stale-chain result
     // rather than falling through to the service with a missing
     // implementerRuntime, which would misreport it as a malformed command.
-    const implementerRuntimeStillValid = Boolean(implementerRuntime && implementerRuntime.status === "Completed");
+    const implementerRuntimeStillValid = Boolean(
+      implementerRuntime &&
+      implementerRuntime.status === "Completed" &&
+      implementerRuntime.implementerRuntimeId === priorImplementerRuntime.implementerRuntimeId,
+    );
     if (!implementerRuntimeStillValid) {
       const staleResult = {
         id: `${projectId}:reviewer-runtime-result:${existingPlan.planId}:start-stale`,

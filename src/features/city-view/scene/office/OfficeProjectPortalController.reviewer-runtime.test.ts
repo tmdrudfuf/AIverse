@@ -153,6 +153,33 @@ describe("OfficeProjectPortalController Reviewer Runtime concurrency and isolati
     expect(result?.status).not.toBe("Failed");
   });
 
+  it("refuses to start a Reviewer Runtime attempt when a Completed Implementer Runtime result exists but the matching Implementer Runtime record does not", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    const { promotedTaskId } = await driveDailyProofToCompletedImplementer(controller, internals);
+
+    // Simulate a drifted/stale state: the Completed result survives, but its
+    // backing Implementer Runtime record is gone -- the exact gap P1-001
+    // flagged, where the prior gate checked only the result collection.
+    internals.state.implementerRuntimeCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      runtimes: [],
+      runtimeCount: 0,
+      rulesVersion: "claude-implementer-v1",
+    };
+
+    const startImplementer = vi.fn();
+    internals.implementerRuntimeService = { startImplementer, upsertResult: realUpsertResult(internals) };
+    const startReviewer = vi.fn();
+    internals.reviewerRuntimeService = { startReviewer, upsertResult: realUpsertReviewerResult(internals) };
+
+    const started = await internals.startReviewerRuntimeForPromotion("daily-proof", promotedTaskId);
+
+    expect(started).toBe(false);
+    expect(startImplementer).not.toHaveBeenCalled();
+    expect(startReviewer).not.toHaveBeenCalled();
+  });
+
   it("wires the controller's real default ReviewerRuntimeService and CodexReviewerRuntimeProvider end to end, safely blocking at the always-Uncommitted review-target gate without spawning", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
@@ -297,9 +324,9 @@ async function driveDailyProofToCompletedImplementer(
   }
 
   // The Reviewer Runtime gate below matches the driven Implementer Runtime
-  // result to the real Execution Plan by executionPlanId (see
+  // record to the real Execution Plan by executionPlanId (see
   // OfficeProjectPortalController.startReviewerRuntimeForPromotion's
-  // hadCompletedImplementerRuntime check), so this stub must carry the real
+  // priorImplementerRuntime check), so this stub must carry the real
   // plan/runtime-start ids rather than the sibling Implementer Runtime
   // test's hardcoded "test-plan" fixture.
   internals.implementerRuntimeService = {
