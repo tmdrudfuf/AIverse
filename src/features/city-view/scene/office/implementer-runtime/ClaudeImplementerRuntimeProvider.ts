@@ -274,6 +274,6 @@ export function isSafeImplementerCommandLine(commandLine: string) {
   return true;
 }
 
-function hasPathTraversal(value: string) {
+export function hasPathTraversal(value: string) {
   return /\.\.[\\/]/.test(value);
 }

@@ -217,5 +217,19 @@ describe("CodexReviewerRuntimeProvider", () => {
     it("rejects when the underlying reused isSafeImplementerCommandLine check fails (encoded PowerShell)", () => {
       expect(isSafeReviewerCommand(createCommand({ command: "powershell", arguments: ["-EncodedCommand", "ZABlAGwA"] }))).toBe(false);
     });
+
+    it("rejects a workingDirectory containing a path traversal segment", () => {
+      expect(isSafeReviewerCommand(createCommand({ workingDirectory: "C:/worktrees/076/../../etc" }))).toBe(false);
+    });
+  });
+
+  it("blocks without spawning when workingDirectory contains a path traversal segment", async () => {
+    const spawnSync = createSpawnSyncStub({ status: 0 });
+    const provider = new CodexReviewerRuntimeProvider(spawnSync);
+
+    const result = await provider.invoke(createCommand({ workingDirectory: "C:/worktrees/076/../../etc" }));
+
+    expect(result.status).toBe("Blocked");
+    expect(spawnSync).not.toHaveBeenCalled();
   });
 });

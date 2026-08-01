@@ -10,7 +10,17 @@ describe("parseReviewOutput", () => {
   });
 
   it("maps a standalone Changes Requested heading to ChangesRequested", () => {
-    const result = parseReviewOutput("## Changes Requested\nFix the bug.", 0);
+    const result = parseReviewOutput("# Changes Requested\nFix the bug.", 0);
+    expect(result.decision).toBe("ChangesRequested");
+  });
+
+  it("does not treat an h2+ standalone heading as a decision marker (mirrors agentWorkflow.js#detectDecision)", () => {
+    const result = parseReviewOutput("## Approved\nLooks fine so far.", 0);
+    expect(result.decision).toBe("Unknown");
+  });
+
+  it("still treats a Decision:-prefixed marker as valid at any heading depth", () => {
+    const result = parseReviewOutput("## Decision: Changes Requested\nFix the bug.", 0);
     expect(result.decision).toBe("ChangesRequested");
   });
 

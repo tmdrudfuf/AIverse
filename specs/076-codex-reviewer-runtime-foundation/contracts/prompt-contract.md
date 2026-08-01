@@ -42,7 +42,7 @@ These clauses exist because Codex, as Reviewer, is invoked with full local execu
 ## Bounding
 
 - `promptId`: deterministic, `<projectId>:reviewer-prompt:<reviewTargetId>:<rulesVersion>`.
-- `text`: bounded to 4000 characters (`PROMPT_MAX_LENGTH`); a prompt that would exceed this is truncated with a trailing `...` rather than silently dropping the stop-condition clauses (the clause list is short and always fits comfortably within the bound in practice).
+- `text`: bounded to 4000 characters (`PROMPT_MAX_LENGTH`). The role statement, all prohibition clauses, and the decision/finding output-format instructions are assembled first, ahead of every variable-length context field (paths, branches, SHAs, changed-file list); a prompt that would exceed the bound is truncated from the tail, so truncation can only ever remove context fields, never the stop-condition or output-format clauses.
 - Immutable once constructed; never mutated after creation.
 
 ## Non-Goals

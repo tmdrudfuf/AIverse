@@ -36,20 +36,13 @@ export function createReviewerPrompt(input: ReviewerPromptInput): ReviewerPrompt
   const changedFiles = input.changedFiles.slice(0, MAX_CHANGED_FILES_LISTED);
   const changedFilesOverflow = input.changedFiles.length - changedFiles.length;
 
+  // Prohibition and output-format clauses are emitted first, deliberately
+  // ahead of the unbounded-length context fields (paths, branches, the
+  // changed-file list). boundPromptText truncates the tail of the joined
+  // text, so anything after these clauses may be cut -- these clauses
+  // themselves must never be at risk of truncation.
   const lines = [
     "You are the independent Reviewer.",
-    `Implementer: ${input.approvedImplementerAgent} (Claude CLI)`,
-    `Reviewer: ${input.approvedReviewerAgent} (Codex CLI)`,
-    `Project: ${input.projectId}`,
-    `Feature: ${input.featureId}`,
-    `Specification: ${input.specificationPath}`,
-    `Worktree: ${input.worktreePath}`,
-    `Base branch: ${input.baseBranch} (${input.baseSha})`,
-    `Feature branch: ${input.featureBranch}`,
-    `Review target commit: ${input.reviewTargetSha}`,
-    `Merge base: ${input.mergeBaseSha}`,
-    `Changed files: ${changedFiles.join(", ") || "none"}${changedFilesOverflow > 0 ? ` (+${changedFilesOverflow} more)` : ""}`,
-    "Inspect the exact review target commit in the worktree yourself.",
     "Do not modify any file.",
     "Do not implement a fix.",
     "Do not stage or commit any change.",
@@ -65,6 +58,18 @@ export function createReviewerPrompt(input: ReviewerPromptInput): ReviewerPrompt
     "Decision: Approved",
     "Decision: Changes Requested",
     "List any findings as: Finding: <P1|P2|P3> | <blocking|non-blocking> | <category> | <path[:line]> | <message> | <suggestion>",
+    "Inspect the exact review target commit in the worktree yourself.",
+    `Implementer: ${input.approvedImplementerAgent} (Claude CLI)`,
+    `Reviewer: ${input.approvedReviewerAgent} (Codex CLI)`,
+    `Project: ${input.projectId}`,
+    `Feature: ${input.featureId}`,
+    `Specification: ${input.specificationPath}`,
+    `Worktree: ${input.worktreePath}`,
+    `Base branch: ${input.baseBranch} (${input.baseSha})`,
+    `Feature branch: ${input.featureBranch}`,
+    `Review target commit: ${input.reviewTargetSha}`,
+    `Merge base: ${input.mergeBaseSha}`,
+    `Changed files: ${changedFiles.join(", ") || "none"}${changedFilesOverflow > 0 ? ` (+${changedFilesOverflow} more)` : ""}`,
   ];
 
   const text = boundPromptText(lines.join("\n"));

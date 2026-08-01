@@ -47,12 +47,21 @@ function parseDecisionText(text: string): ReviewerRuntimeDecision {
     .filter(Boolean);
 
   const normalizeInline = (line: string) => line.replace(/^\*\*(.+)\*\*$/, "$1").trim();
-  const normalizeHeading = (line: string) => normalizeInline(line.replace(/^#+\s*/, "").trim());
+  // Mirrors agentWorkflow.js#detectDecision's two distinct normalizers: the
+  // `Decision:`-prefixed marker form strips any heading depth, but a
+  // standalone bare-line marker (no `Decision:` prefix) only strips a single
+  // `#` -- an h2+ heading (`## Approved`) never counts as a standalone
+  // marker, since headings routinely restate section titles that are not
+  // decisions.
+  const normalizeDecisionHeading = (line: string) => normalizeInline(line.replace(/^#+\s*/, "").trim());
+  const normalizeStandaloneDecision = (line: string) => {
+    if (/^#{2,}\s*/.test(line)) return "";
+    return normalizeInline(line.replace(/^#\s*/, "").trim());
+  };
 
   const isMarker = (line: string, label: string) => {
-    const heading = normalizeHeading(line);
-    if (new RegExp(`^(Review\\s+)?Decision:\\s*${label}\\b`, "i").test(heading)) return true;
-    const standalone = heading;
+    if (new RegExp(`^(Review\\s+)?Decision:\\s*${label}\\b`, "i").test(normalizeDecisionHeading(line))) return true;
+    const standalone = normalizeStandaloneDecision(line);
     return standalone === label || standalone.startsWith(`${label} `);
   };
 

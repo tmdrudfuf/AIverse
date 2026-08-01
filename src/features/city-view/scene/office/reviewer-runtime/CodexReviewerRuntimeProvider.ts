@@ -1,4 +1,4 @@
-import { isSafeImplementerCommandLine } from "../implementer-runtime/ClaudeImplementerRuntimeProvider";
+import { hasPathTraversal, isSafeImplementerCommandLine } from "../implementer-runtime/ClaudeImplementerRuntimeProvider";
 import { isSafeCommandLine } from "../runtime-preflight/RuntimePreflightProvider";
 import { parseReviewOutput } from "./ReviewDecisionParser";
 import type {
@@ -223,13 +223,17 @@ function truncateOutput(text: string) {
  * Reuses the two existing, independently-maintained safety checks
  * (runtime-preflight's `isSafeCommandLine` and the Implementer Runtime's
  * `isSafeImplementerCommandLine`) rather than a third, narrower copy -- see
- * plan.md, Architecture Decision 5 -- and layers one additional check
- * (unsafe redirection) neither of them covers.
+ * plan.md, Architecture Decision 5 -- and layers two additional checks
+ * neither of them covers: unsafe redirection, and `workingDirectory`
+ * traversal (mirrors the Implementer Runtime's own separate
+ * `!hasPathTraversal(command.workingDirectory)` check, since
+ * `isSafeImplementerCommandLine` only inspects the joined command line).
  */
 export function isSafeReviewerCommand(command: ReviewerRuntimeProviderCommand) {
   const joined = [command.command, ...command.arguments].join(" ");
   if (!isSafeCommandLine(joined)) return false;
   if (!isSafeImplementerCommandLine(joined)) return false;
+  if (hasPathTraversal(command.workingDirectory)) return false;
   return !hasUnsafeRedirection(joined);
 }
 

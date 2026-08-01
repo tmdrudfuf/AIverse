@@ -14,7 +14,7 @@ The `Finding:` line's trailing `<suggestion>` segment is optional. This format i
 
 ## Decision Parsing Rules
 
-- Only explicit `Decision: Approved` / `Decision: Changes Requested` markers are consulted (heading-prefixed, bold-wrapped, or bare-line variants are normalized) — never free-form approval-sounding prose anywhere else in the output.
+- A line counts as a decision marker in either of two forms: (1) a `Decision: Approved` / `Decision: Changes Requested` marker, optionally heading-prefixed at any depth (`#`, `##`, ...) and/or bold-wrapped; or (2) a standalone bare line that is exactly the label or begins with the label plus a space (`Approved`, `Approved pending the fix above`), optionally prefixed with a single `#` heading marker — an h2+ heading (`## Approved`) is never treated as a standalone marker, since headings routinely restate section titles that are not themselves a decision. Free-form approval-sounding prose that is not one of these two forms is never consulted.
 - Both markers present in the same output → `Unknown` (a conflicting explicit signal is never resolved in favor of the more permissive one).
 - `Approved` co-occurring with at least one parsed **blocking** finding → downgraded to `ChangesRequested`. A finding search that turns up a blocking issue is not overridden by an `Approved` line elsewhere in the same output.
 - `Approved` co-occurring with a non-zero process exit code → downgraded to `Unknown`. A non-zero exit is never sufficient evidence of a safe `Approved` outcome without an explicit repository policy permitting it (none exists today); the parser does not trust output text the process may not have finished emitting.
