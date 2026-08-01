@@ -1883,6 +1883,8 @@ function createPortalState(options: {
     reviewTargets: {},
     reviewerRuntimeCollections: {},
     reviewerRuntimeResultCollections: {},
+    reviewPromotionCollections: {},
+    reviewPromotionResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

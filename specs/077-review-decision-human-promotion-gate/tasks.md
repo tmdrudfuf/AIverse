@@ -3,54 +3,54 @@
 **Input**: Design documents from `specs/077-review-decision-human-promotion-gate/`
 **Prerequisites**: spec.md, plan.md, data-model.md, contracts/, research.md, quickstart.md
 
-None of the tasks below have been executed. This file is a planning artifact only; implementation has not begun.
+Phases 1 and 2 are complete. Remaining phases have not been executed.
 
 ## Phase 1: Investigation & Domain Model
 
-- [ ] T001 Re-read `ReviewerRuntimeService.validateContext` (`src/features/city-view/scene/office/reviewer-runtime/ReviewerRuntimeService.ts`) end to end and confirm which exact upstream validation functions can be reused as-is by `ReviewDecisionService` without duplication.
-- [ ] T002 Create `src/features/city-view/scene/office/review-decision/ReviewDecisionTypes.ts` with `ReviewDecisionState`, `ReviewPromotionReasonCode`, `ReviewPromotionRequest`, `ReviewPromotion`, `ReviewPromotionResult`, `ReviewPromotionCollection`, `ReviewPromotionResultCollection`, per data-model.md.
-- [ ] T003 [P] Write `ReviewDecisionTypes.test.ts` covering deterministic id construction and literal-type invariants (`validationStarted`/`repositoryMutationStarted`/`githubMutationStarted` always `false`).
+- [x] T001 Re-read `ReviewerRuntimeService.validateContext` (`src/features/city-view/scene/office/reviewer-runtime/ReviewerRuntimeService.ts`) end to end and confirm which exact upstream validation functions can be reused as-is by `ReviewDecisionService` without duplication. Finding: none — the repository's established convention duplicates per-stage validation rather than importing a sibling's private functions (`ImplementerRuntimeService.validateContext` and `ReviewerRuntimeService.validateContext` are already independent copies). `ReviewDecisionService` follows that same convention with its own private `validateChain`; see plan.md's corrected "Chain Revalidation" section.
+- [x] T002 Create `src/features/city-view/scene/office/review-decision/ReviewDecisionTypes.ts` with `ReviewDecisionState`, `ReviewPromotionReasonCode`, `ReviewPromotionRequest`, `ReviewPromotion`, `ReviewPromotionResult`, `ReviewPromotionCollection`, `ReviewPromotionResultCollection`, per data-model.md.
+- [x] T003 [P] Write `ReviewDecisionTypes.test.ts` covering deterministic id construction and literal-type invariants (`validationStarted`/`repositoryMutationStarted`/`githubMutationStarted` always `false`).
 
 ## Phase 2: Review Decision Service
 
-- [ ] T004 Implement `ReviewDecisionService.classify(projectId, planId)` per `contracts/review-decision-contract.md`, reusing `ReviewerRuntimeService.validateContext`'s chain-revalidation functions.
-- [ ] T005 Implement `ReviewDecisionService.promote(request)` per `contracts/human-promotion-contract.md`, including the deterministic-id idempotency short-circuit (Decision 5).
-- [ ] T006 [P] Write `ReviewDecisionService.test.ts` covering every `ReviewDecisionState` value, every `ReviewPromotionReasonCode`, and the idempotent-repeat path.
+- [x] T004 Implement `ReviewDecisionService.classify(input)` per `contracts/review-decision-contract.md`, via its own private `validateChain` (mirroring, not importing, `ReviewerRuntimeService.validateContext`'s chain-revalidation logic — see T001 finding).
+- [x] T005 Implement `ReviewDecisionService.promote(input, request)` per `contracts/human-promotion-contract.md`, including the deterministic-id idempotency short-circuit (Decision 5).
+- [x] T006 [P] Write `ReviewDecisionService.test.ts` covering every `ReviewDecisionState` value, every `ReviewPromotionReasonCode` reachable from `promote`, and the idempotent-repeat path.
 
 ## Phase 3: Controller Wiring
 
-- [ ] T007 Add `reviewPromotionCollections`/`reviewPromotionResultCollections` to `OfficeProjectPortalTypes.ts`'s `ProjectPortalState`.
-- [ ] T008 Wire `ReviewDecisionService` into `OfficeProjectPortalController.ts` (construction, project-scoped read/write of the two new collections).
-- [ ] T009 Extend `clearRuntimePreflightForProject` to also delete the two new collections on upstream invalidation, per plan.md's "State and Storage."
+- [x] T007 Add `reviewPromotionCollections`/`reviewPromotionResultCollections` to `OfficeProjectPortalTypes.ts`'s `ProjectPortalState`.
+- [x] T008 Wire `ReviewDecisionService` into `OfficeProjectPortalController.ts` (construction, project-scoped read/write of the two new collections). See `promoteReviewForPromotion`.
+- [x] T009 Correction made during implementation: per FR-011 (spec.md), `clearRuntimePreflightForProject` must NOT delete the two new collections — a recorded Review Promotion is an immutable historical record that must survive upstream invalidation; staleness is shown via the dashboard row comparing the promotion's `reviewerRuntimeId` against the current latest Reviewer Runtime result instead. Everything else upstream of it (readiness/approval/preflight/start/implementer/reviewer runtime) is still deleted as before.
 
 ## Phase 4: Explicit Human Promotion Input
 
-- [ ] T010 Add `promoteReviewPressed: boolean` to the controller's input type and `PROMOTE_REVIEW_KEY_CODE = "KeyP"` to `OfficeActionInputController.ts`, with a code comment stating why it must never share a keypress with any existing action (matching the `START_IMPLEMENTER_KEY_CODE`/`START_REVIEWER_KEY_CODE` precedent).
-- [ ] T011 Wire the Promote input through to `ReviewDecisionService.promote`, using the same `"Local Human"` actor constant every prior stage uses.
+- [x] T010 Add `promoteReviewPressed: boolean` to the controller's input type and `PROMOTE_REVIEW_KEY_CODE = "KeyP"` to `OfficeActionInputController.ts`, with a code comment stating why it must never share a keypress with any existing action (matching the `START_IMPLEMENTER_KEY_CODE`/`START_REVIEWER_KEY_CODE` precedent).
+- [x] T011 Wire the Promote input through to `ReviewDecisionService.promote`, using the same `"Local Human"` actor constant every prior stage uses. See `updateProjectDashboardInput`'s `promoteReviewPressed` branch.
 
 ## Phase 5: Stale-Chain & Idempotency Behavior
 
-- [ ] T012 Implement and test the `Stale` classification path: individually invalidate plan, readiness, approval, preflight, Runtime Start, Implementer Runtime, and role binding, and verify each yields `Stale` and blocks Promote.
-- [ ] T013 Implement and test the idempotent double-Promote path: verify a second Promote for an already-Promoted Reviewer Runtime returns the same record, creates no duplicate, and invokes nothing.
-- [ ] T014 Implement and test that a Review Promotion, once recorded, remains immutable and readable even after a later, unrelated upstream invalidation clears the *current* classification — while the historical record is not shown as currently applicable (per spec.md Edge Cases).
+- [x] T012 Implement and test the `Stale` classification path: individually invalidate plan, readiness, approval, preflight, Runtime Start, Implementer Runtime, and role binding, and verify each yields `Stale` and blocks Promote. Per-stage coverage of `validateChain`'s individual branches is at `ReviewDecisionService.test.ts` (service level, every stage); controller-level coverage (`OfficeProjectPortalController.review-decision.test.ts`, "blocks Promote and records no Review Promotion when the chain has gone Stale before Promote is pressed") proves the same drift blocks Promote through the real controller wiring and surfaces the generic `REVIEW_PROMOTION_REVIEWER_STALE` reason code, per `contracts/human-promotion-contract.md` precondition 2 (any Stale classification collapses to that one reason code, not a per-stage-specific one — confirmed by reading the contract before writing the assertion).
+- [x] T013 Implement and test the idempotent double-Promote path: verify a second Promote for an already-Promoted Reviewer Runtime returns the same record, creates no duplicate, and invokes nothing. Covered at `ReviewDecisionService.test.ts` and at the controller level (`OfficeProjectPortalController.review-decision.test.ts`, "is idempotent..."). Correction made while writing the controller test: the `ReviewPromotionResult`'s own id is also deterministic (`projectId` + `reviewerRuntimeId`), so a second Promote overwrites the same result record via `upsertResult` rather than appending a second one — the result collection stays at length 1, not 2.
+- [x] T014 Implement and test that a Review Promotion, once recorded, remains immutable and readable even after a later, unrelated upstream invalidation clears the *current* classification — while the historical record is not shown as currently applicable (per spec.md Edge Cases). Covered at the controller level (`OfficeProjectPortalController.review-decision.test.ts`, "keeps a previously recorded Review Promotion after a later, unrelated upstream invalidation clears the current Reviewer Runtime chain"): a stale-branch invalidation deletes `reviewerRuntimeCollections`/`reviewerRuntimeResultCollections` as before, while `reviewPromotionCollections` is left untouched. The "not shown as currently applicable" display side is covered separately by `ReviewDecisionView.test.ts`.
 
 ## Phase 6: Dashboard
 
-- [ ] T015 Add the `[REVIEW DECISION]` row to `OfficeProjectPortalView.ts` per plan.md's "Dashboard Strategy," covering unavailable, ready-not-approved, approved-not-yet-promoted, blocked, stale, and promoted wording.
-- [ ] T016 [P] Write/extend `OfficeProjectPortalView.test.ts` proving no row ever pairs with "Merged," "Pushed," "PR Created," "Validation Passed," or "Repository Mutated" wording, and extend the existing full-layout containment test to include `[REVIEW DECISION]`.
+- [x] T015 Add the `[REVIEW DECISION]` row to `OfficeProjectPortalView.ts` per plan.md's "Dashboard Strategy," covering unavailable, ready-not-approved, approved-not-yet-promoted, blocked, stale, and promoted wording. Correction made during implementation: the row is gated on `reviewerRuntimeResultCollection || reviewPromotionCollection` existing (matching the majority Execution Plan/Readiness/Approval/Preflight/Start pattern), not unconditionally computed like Implementer/Reviewer Runtime — it is one step further downstream of the already-always-visible Reviewer Runtime row, which already reports "unavailable" until a result exists, so an unconditional second "unavailable" row would be redundant and also broke several pre-existing fixed-height dashboard layout tests. `createReviewDecisionDisplayRows` (`ReviewDecisionView.ts`) takes `ReviewerRuntimeResultCollection` + `ReviewPromotionCollection` directly (not a `ReviewDecisionClassification`), consistent with `ReviewerRuntimeView.ts` never re-deriving chain staleness at render time — a present latest Reviewer Runtime result is trustworthy by construction because `clearRuntimePreflightForProject` deletes it the instant any upstream stage invalidates. The one case that doesn't cover is a Review Promotion whose chain has since changed; that's detected by comparing the promotion's `reviewerRuntimeId` against the current latest result.
+- [x] T016 [P] Write/extend `OfficeProjectPortalView.test.ts` proving no row ever pairs with "Merged," "Pushed," "PR Created," "Validation Passed," or "Repository Mutated" wording (new `ReviewDecisionView.test.ts`), and add `reviewDecisionRows` to `createProjectDashboardLowerRows`'s dropPriority-17 slot (immediately below Reviewer Runtime's 16, per FR-013).
 
 ## Phase 7: Targeted Tests (cross-cutting)
 
-- [ ] T017 Controller-level test file `OfficeProjectPortalController.review-decision.test.ts` covering the full User Story 1–3 acceptance scenarios end to end through the controller.
-- [ ] T018 Run targeted validation (`npx vitest run` on every file touched above, `npx tsc --noEmit` on touched files) after each of Phases 1–6 — not a full suite run per phase, per `docs/agent-workflow/token-efficient-review-policy.md`.
+- [x] T017 Controller-level test file `OfficeProjectPortalController.review-decision.test.ts` covering the full User Story 1–3 acceptance scenarios end to end through the controller: base happy-path Promote (US1/US2), idempotent double-Promote (US2), Stale-blocks-Promote (US3), and historical-promotion-survives-invalidation (US3/Edge Cases). Reuses `driveDailyProofToRuntimeStart` from the shared `testHelpers.ts`; duplicates its own `driveDailyProofToApprovedReviewer`/`createImplementerOutcomeForPlan`/`createReviewerOutcomeForRuntime` fixtures rather than importing the sibling `reviewer-runtime.test.ts` file's private ones, per the established per-test-file fixture-duplication convention. Added `reviewPromotionCollections`/`reviewPromotionResultCollections` to the shared `ControllerInternals` type in `testHelpers.ts` since no prior test file needed to read those two fields.
+- [x] T018 Ran targeted validation (`npx vitest run` on every file touched, `npx tsc --noEmit`) after each of Phases 1–7 — not a full suite run per phase, per `docs/agent-workflow/token-efficient-review-policy.md`. All targeted runs passed; `tsc --noEmit` clean.
 
 ## Phase 8: Documentation
 
-- [ ] T019 Update this `tasks.md` file's checkboxes as work completes (no other spec file requires mid-implementation edits unless empirical implementation reveals a plan.md correction, in which case document it in plan.md directly, matching Spec 076's precedent).
+- [x] T019 Updated this `tasks.md` file's checkboxes as work completed. plan.md received one mid-implementation correction (T009's FR-011 immutability finding); documented there directly, matching Spec 076's precedent.
 
 ## Phase 9: Final Validation
 
-- [ ] T020 Run the full validation gate once: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check` — all passing before the implementation commit.
+- [x] T020 Ran the full validation gate once in the `AIverse-spec-077` worktree: `npx tsc --noEmit` (clean), `npx vitest run` (119 test files, 1448 tests, all passed), `npm run build` (succeeded), `git status --short` (confirmed only the expected new/modified files), `git diff --cached --check` (no whitespace errors) — all passing before the implementation commit.
 
 ## Phase 10: Independent Review
 

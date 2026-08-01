@@ -14,6 +14,10 @@ const START_IMPLEMENTER_KEY_CODE = "KeyI";
 // that can request a Codex Reviewer Runtime start, gated separately so a
 // Start-Implementer keypress can never also be read as Start-Reviewer.
 const START_REVIEWER_KEY_CODE = "KeyR";
+// Distinct from START_IMPLEMENTER_KEY_CODE/START_REVIEWER_KEY_CODE: this is
+// the one and only input that can record a Review Promotion, and it must
+// never share a keypress with any existing pipeline-action key.
+const PROMOTE_REVIEW_KEY_CODE = "KeyP";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -23,6 +27,7 @@ export class OfficeActionInputController {
   private pendingEnter = false;
   private pendingStartImplementer = false;
   private pendingStartReviewer = false;
+  private pendingPromoteReview = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -65,6 +70,12 @@ export class OfficeActionInputController {
     if (event.code === START_REVIEWER_KEY_CODE) {
       event.preventDefault();
       this.pendingStartReviewer = true;
+      return;
+    }
+
+    if (event.code === PROMOTE_REVIEW_KEY_CODE) {
+      event.preventDefault();
+      this.pendingPromoteReview = true;
     }
   };
 
@@ -119,6 +130,12 @@ export class OfficeActionInputController {
     return startReviewerPressed;
   }
 
+  consumePromoteReviewPressed() {
+    const promoteReviewPressed = this.pendingPromoteReview;
+    this.pendingPromoteReview = false;
+    return promoteReviewPressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -133,5 +150,6 @@ export class OfficeActionInputController {
     this.pendingEnter = false;
     this.pendingStartImplementer = false;
     this.pendingStartReviewer = false;
+    this.pendingPromoteReview = false;
   }
 }

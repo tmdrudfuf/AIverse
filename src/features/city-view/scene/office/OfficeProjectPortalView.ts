@@ -19,6 +19,10 @@ import {
   createReviewerRuntimeDisplayRows,
   type ReviewerRuntimeDisplayRows,
 } from "./reviewer-runtime/ReviewerRuntimeView";
+import {
+  createReviewDecisionDisplayRows,
+  type ReviewDecisionDisplayRows,
+} from "./review-decision/ReviewDecisionView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -341,6 +345,17 @@ export class OfficeProjectPortalView {
     // createReviewerRuntimeDisplayRows itself renders the required "Codex
     // unavailable" state when the Implementer Runtime hasn't Completed yet.
     const reviewerRuntimeRows = createReviewerRuntimeDisplayRows(implementerRuntimeResultCollection, reviewerRuntimeResultCollection);
+    const reviewPromotionCollection = dashboardProjectId ? state.reviewPromotionCollections[dashboardProjectId] : undefined;
+    // Gated on reviewerRuntimeResultCollection/reviewPromotionCollection
+    // existing, unlike ImplementerRuntimeRows/ReviewerRuntimeRows above --
+    // this stage is one step further downstream of the always-visible
+    // Reviewer Runtime row, which already reports "unavailable" until a
+    // result exists, so repeating that here would be redundant. This matches
+    // the majority gated pattern (Execution Plan/Readiness/Approval/
+    // Preflight/Start) rather than the Implementer/Reviewer Runtime exception.
+    const reviewDecisionRows = reviewerRuntimeResultCollection || reviewPromotionCollection
+      ? createReviewDecisionDisplayRows(reviewerRuntimeResultCollection, reviewPromotionCollection)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -356,6 +371,7 @@ export class OfficeProjectPortalView {
         runtimeStartRows,
         implementerRuntimeRows,
         reviewerRuntimeRows,
+        reviewDecisionRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -705,6 +721,7 @@ function createProjectDashboardLowerRows(
   runtimeStartRows?: RuntimeStartDisplayRows,
   implementerRuntimeRows?: ImplementerRuntimeDisplayRows,
   reviewerRuntimeRows?: ReviewerRuntimeDisplayRows,
+  reviewDecisionRows?: ReviewDecisionDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -830,6 +847,15 @@ function createProjectDashboardLowerRows(
       text: `[REVIEWER RUNTIME] ${reviewerRuntimeRows.statusText}`,
       maxLines: 1,
       dropPriority: 16,
+      usePriorityFit: true,
+    });
+  }
+
+  if (reviewDecisionRows) {
+    lowerRows.push({
+      text: `[REVIEW DECISION] ${reviewDecisionRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 17,
       usePriorityFit: true,
     });
   }
