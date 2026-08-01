@@ -113,7 +113,8 @@ export class CodexReviewerRuntimeProvider implements ReviewerRuntimeProvider {
     }
 
     const durationMs = Date.now() - startedAt;
-    const stdout = truncateOutput(bufferToString(raw.stdout));
+    const stdoutFull = bufferToString(raw.stdout);
+    const stdout = truncateOutput(stdoutFull);
     const stderr = truncateOutput(bufferToString(raw.stderr));
 
     if (raw.error?.code === "ETIMEDOUT" || raw.signal === "SIGTERM" || raw.signal === "SIGKILL") {
@@ -151,7 +152,7 @@ export class CodexReviewerRuntimeProvider implements ReviewerRuntimeProvider {
       };
     }
 
-    const parsed = parseReviewOutput(stdout.text, raw.status);
+    const parsed = parseReviewOutput(stdoutFull, raw.status);
     return {
       status: "Completed",
       decision: parsed.decision,

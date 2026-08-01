@@ -63,6 +63,20 @@ describe("CodexReviewerRuntimeProvider", () => {
     expect(result.evidence.reviewTargetSha).toBe("abc123");
   });
 
+  it("parses a blocking finding that appears after the 2000-character evidence-summary truncation boundary, downgrading Approved to ChangesRequested", async () => {
+    const padding = "x".repeat(2100);
+    const stdout = `Decision: Approved\n${padding}\nFinding: P1 | blocking | safety | src/example.ts:1 | Late finding past the truncation boundary`;
+    const spawnSync = createSpawnSyncStub({ status: 0, stdout });
+    const provider = new CodexReviewerRuntimeProvider(spawnSync);
+
+    const result = await provider.invoke(createCommand());
+
+    expect(result.status).toBe("Completed");
+    expect(result.decision).toBe("ChangesRequested");
+    expect(result.findings).toHaveLength(1);
+    expect(result.evidence.outputTruncated).toBe(true);
+  });
+
   it("represents Completed status with a ChangesRequested decision as distinct, truthful fields", async () => {
     const spawnSync = createSpawnSyncStub({ status: 0, stdout: "Decision: Changes Requested" });
     const provider = new CodexReviewerRuntimeProvider(spawnSync);
