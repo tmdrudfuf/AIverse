@@ -38,6 +38,11 @@ import type {
   ImplementerRuntimeCollection,
   ImplementerRuntimeResultCollection,
 } from "./implementer-runtime/ImplementerRuntimeTypes";
+import type {
+  ReviewerRuntimeCollection,
+  ReviewerRuntimeResultCollection,
+} from "./reviewer-runtime/ReviewerRuntimeTypes";
+import type { ReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -160,6 +165,9 @@ export type ProjectPortalState = {
   runtimeStartResultCollections: Record<string, RuntimeStartResultCollection>;
   implementerRuntimeCollections: Record<string, ImplementerRuntimeCollection>;
   implementerRuntimeResultCollections: Record<string, ImplementerRuntimeResultCollection>;
+  reviewTargets: Record<string, ReviewTarget>;
+  reviewerRuntimeCollections: Record<string, ReviewerRuntimeCollection>;
+  reviewerRuntimeResultCollections: Record<string, ReviewerRuntimeResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

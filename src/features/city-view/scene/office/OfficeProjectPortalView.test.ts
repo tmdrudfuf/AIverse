@@ -28,6 +28,7 @@ import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
 import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
 import type { RuntimeStartResultCollection } from "./runtime-start/RuntimeStartTypes";
 import type { ImplementerRuntimeResultCollection } from "./implementer-runtime/ImplementerRuntimeTypes";
+import type { ReviewerRuntimeDecision, ReviewerRuntimeResultCollection, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import {
   INTERNAL_SIMULATION_PROJECT_DASHBOARD_PROVIDER_ID,
   type ProjectDashboardSnapshot,
@@ -112,6 +113,11 @@ describe("OfficeProjectPortalView", () => {
     new OfficeProjectPortalView(scene, createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
+        // Short advisory override: this test is about ADVISORY/ATTENTION/SOURCE/SYNC
+        // content correctness, not row-count crowding, so give it headroom to fit
+        // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+        // (Spec 076) both always render too.
+        advisory: { status: "available", healthSummary: "On track.", topRiskLabel: "None.", nextAttentionLabel: "Keep going." },
         externalSources: [createExternalSource("ai-verse/daily-proof-enterprise-operations-terminal-source-with-read-only-provider-context")],
       }),
     }));
@@ -127,12 +133,8 @@ describe("OfficeProjectPortalView", () => {
 
     expect(riskRow).toBeDefined();
     expect(activityRow).toBeDefined();
-    expect(advisoryRow?.text).toBe(
-      "[ADVISORY] Daily Proof has 1 active task and 0 completed tasks. Risk:\nDashboard advisory needs review.",
-    );
-    expect(attentionRow?.text).toBe(
-      "[ATTENTION] Reduce project risk: Critical dashboard work needs attention.",
-    );
+    expect(advisoryRow?.text).toBe("[ADVISORY] On track. Risk: None.");
+    expect(attentionRow?.text).toBe("[ATTENTION] Keep going.");
     expect(sourceRow?.text).toContain("[SOURCE] Repo ai-verse/daily-proof-enterprise-operations-terminal-source");
     expect(sourceRow?.text).toContain("...");
     expect(sourceRow?.text).not.toContain("\n");
@@ -326,10 +328,14 @@ describe("OfficeProjectPortalView", () => {
     new OfficeProjectPortalView(scene, createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
+        // Short risk label: this test is about the empty advisory state's wording and
+        // row ordering, not row-count crowding, so give it headroom to fit genuinely
+        // now that [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME] (Spec 076)
+        // both always render too.
         advisory: {
           status: "empty",
           healthSummary: "Local advisory waiting for project-manager signal.",
-          topRiskLabel: "No local advisory risk is available.",
+          topRiskLabel: "None.",
           nextAttentionLabel: "Open project work areas to prepare advisory context.",
         },
         externalSources: [],
@@ -361,13 +367,20 @@ describe("OfficeProjectPortalView", () => {
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
 
-    // Short advisory override: this test is about REPO-SYNC content
-    // correctness, not row-count crowding, so give it headroom to fit
-    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) always renders too.
+    // Short advisory override and single-row source: this test is about REPO-SYNC
+    // content correctness, not row-count crowding, so give it headroom to fit
+    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+    // (Spec 076) both always render too.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
-        externalSources: [],
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [],
+        }],
         advisory: {
           status: "available",
           healthSummary: "On track.",
@@ -409,13 +422,20 @@ describe("OfficeProjectPortalView", () => {
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
 
-    // Short advisory override: this test is about REPO-SYNC content
-    // correctness, not row-count crowding, so give it headroom to fit
-    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) always renders too.
+    // Short advisory override and single-row source: this test is about REPO-SYNC
+    // content correctness, not row-count crowding, so give it headroom to fit
+    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+    // (Spec 076) both always render too.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
-        externalSources: [],
+        externalSources: [{
+          sourceType: "github",
+          sourceId: "github:ai-verse/daily-proof",
+          displayName: "ai-verse/daily-proof",
+          mappingConfidence: "mapped",
+          signals: [],
+        }],
         advisory: {
           status: "available",
           healthSummary: "On track.",
@@ -891,13 +911,15 @@ describe("OfficeProjectPortalView", () => {
     const scene = createSceneStub(renderedText, renderedPanels);
     const state = createPortalState({
       viewMode: "project-dashboard",
-      // Uses the real, unmodified default createProjectDashboardSnapshot()
-      // fixture (long advisory, default external source producing both
-      // [SOURCE] and [SYNC]) so the panel is genuinely crowded once the
-      // always-present [IMPLEMENTER RUNTIME] row (Spec 075) is added -- a
-      // realistic worst case, not an artificially short one.
+      // The crowding under test comes from a realistic default external
+      // source (producing both [SOURCE] and [SYNC]) plus the two
+      // always-present [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER
+      // RUNTIME] (Spec 076) rows. The advisory text is shortened only so the
+      // drop boundary under test is the assignment/candidate-task one, not
+      // an incidental advisory-length one.
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: { status: "available", healthSummary: "On track.", topRiskLabel: "None.", nextAttentionLabel: "Keep going." },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1045,16 +1067,17 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
-    // A realistic worst case, not a synthetic one: the real default long
-    // advisory plus a linked external source plus a real candidate task
-    // (dropPriority 20, lower than the promotion rows' 26/27, so it stays
-    // visible) is enough crowding to force [PROMOTION RESULT] out once the
-    // always-present [IMPLEMENTER RUNTIME] row (Spec 075) adds its own line
-    // to the budget -- without also pushing out [PROMOTION REVIEW] itself.
+    // The crowding under test comes from a linked external source plus the
+    // always-present [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+    // (Spec 076) rows both adding their own lines to the budget. The advisory
+    // text is shortened only so the drop boundary under test is
+    // [PROMOTION RESULT] vs. [PROMOTION REVIEW], not an incidental
+    // advisory-length one.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: { status: "available", healthSummary: "On track.", topRiskLabel: "None.", nextAttentionLabel: "Keep going." },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1095,6 +1118,10 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // Short advisory override: this test is about promotion-result/confirmed-
+    // assignment ordering, not row-count crowding, so give it headroom to fit
+    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+    // (Spec 076) both always render too.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
@@ -1105,6 +1132,7 @@ describe("OfficeProjectPortalView", () => {
           mappingConfidence: "mapped",
           signals: [],
         }],
+        advisory: { status: "available", healthSummary: "On track.", topRiskLabel: "None.", nextAttentionLabel: "Keep going." },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1133,6 +1161,10 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
+    // Short advisory override: this test is about confirmed-assignment/work-
+    // session ordering, not row-count crowding, so give it headroom to fit
+    // genuinely now that [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+    // (Spec 076) both always render too.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
@@ -1143,6 +1175,7 @@ describe("OfficeProjectPortalView", () => {
           mappingConfidence: "mapped",
           signals: [],
         }],
+        advisory: { status: "available", healthSummary: "On track.", topRiskLabel: "None.", nextAttentionLabel: "Keep going." },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1172,14 +1205,16 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
-    // Uses the real, unmodified default long advisory (not a short override)
-    // so the panel is genuinely crowded once the always-present
-    // [IMPLEMENTER RUNTIME] row (Spec 075) is added -- a realistic worst
-    // case, not an artificially short one.
+    // The crowding under test comes from a linked external source plus the
+    // always-present [IMPLEMENTER RUNTIME] (Spec 075) and [REVIEWER RUNTIME]
+    // (Spec 076) rows both being added. The advisory text is shortened only
+    // so the drop boundary under test below is the confirmed-assignment one,
+    // not an incidental advisory-length one.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
         externalSources: [createExternalSource("ai-verse/daily-proof")],
+        advisory: { status: "available", healthSummary: "On track.", topRiskLabel: "None.", nextAttentionLabel: "Keep going." },
       }),
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
@@ -1189,8 +1224,8 @@ describe("OfficeProjectPortalView", () => {
     };
     // A single active-work-session row (dropPriority 5, far safer than any
     // of the promotion/assignment/preparation rows' 21/26/27) is enough
-    // additional crowding, on top of the always-present [IMPLEMENTER
-    // RUNTIME] row (Spec 075), to force all three lower-priority rows out
+    // additional crowding, on top of the always-present [IMPLEMENTER RUNTIME]
+    // and [REVIEWER RUNTIME] rows, to force all three lower-priority rows out
     // while [PROMOTION REVIEW] itself survives.
     state.activeWorkSessionStartResultCollections = {
       "daily-proof": createActiveWorkSessionStartResultCollection("Started"),
@@ -1324,10 +1359,15 @@ describe("OfficeProjectPortalView", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
     const scene = createSceneStub(renderedText, renderedPanels);
-    // Shortened advisory gives enough headroom for [SOURCE]/[EXECUTION PLAN]
-    // to coexist with the now-always-present [IMPLEMENTER RUNTIME] row --
-    // the default long-advisory fixture is used elsewhere specifically to
-    // prove crowding/drop behavior, not coexistence.
+    // Shortened advisory, plus an execution-plan collection with no plan or
+    // result yet, keep this fixture's total lower-panel content within the
+    // real 184px budget so [SOURCE]/[SYNC]/[EXECUTION PLAN] can genuinely
+    // coexist with both always-present [IMPLEMENTER RUNTIME] (Spec 075) and
+    // [REVIEWER RUNTIME] (Spec 076) rows. A result-backed "Blocked" plan row
+    // is always 2 lines and cannot fit alongside a full [SOURCE]+[SYNC] pair
+    // in that budget; that status wording is already covered directly by
+    // ExecutionPlanView.test.ts, so this test focuses on row coexistence
+    // rather than re-asserting result-status text.
     const state = createPortalState({
       viewMode: "project-dashboard",
       projectDashboardSnapshot: createProjectDashboardSnapshot({
@@ -1342,7 +1382,7 @@ describe("OfficeProjectPortalView", () => {
     });
     state.selectedProjectDashboardProjectId = "daily-proof";
     state.executionPlanResultCollections = {
-      "daily-proof": createExecutionPlanResultCollection("Blocked"),
+      "daily-proof": { projectId: "daily-proof", results: [], resultCount: 0, generatedAt: "2026-01-05T00:00:00.000Z", rulesVersion: "plan-v1" },
     };
 
     new OfficeProjectPortalView(scene, state);
@@ -1352,7 +1392,7 @@ describe("OfficeProjectPortalView", () => {
     const planRow = findRenderedRow(renderedText, "[EXECUTION PLAN]");
 
     expect(sourceRow?.text).toContain("Repo ai-verse/daily-proof");
-    expect(planRow?.text).toContain("Execution Plan Blocked");
+    expect(planRow?.text).toContain("No execution plans");
     assertRowClears(sourceRow, planRow);
     [sourceRow, planRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
   });
@@ -1563,6 +1603,97 @@ describe("OfficeProjectPortalView", () => {
     expect(implementerRuntimeRow).toBeUndefined();
     assertRowInsidePanel(runtimeStartRow, lowerPanel);
   });
+
+  it("renders an explicit Codex Unavailable [REVIEWER RUNTIME] row (never silence) when no Implementer Runtime has ever completed", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const reviewerRuntimeRow = findRenderedRow(renderedText, "[REVIEWER RUNTIME]");
+
+    expect(reviewerRuntimeRow).toBeDefined();
+    expect(reviewerRuntimeRow?.text.toLowerCase()).toContain("unavailable");
+    assertRowInsidePanel(reviewerRuntimeRow, lowerPanel);
+  });
+
+  it("renders [IMPLEMENTER RUNTIME] and [REVIEWER RUNTIME] rows together with the required Approved wording and no mutation claim", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.implementerRuntimeResultCollections = {
+      "daily-proof": createImplementerRuntimeResultCollectionFixture("Completed"),
+    };
+    state.reviewerRuntimeResultCollections = {
+      "daily-proof": createReviewerRuntimeResultCollectionFixture("Completed", "Approved", 0),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const implementerRuntimeRow = findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]");
+    const reviewerRuntimeRow = findRenderedRow(renderedText, "[REVIEWER RUNTIME]");
+
+    expect(implementerRuntimeRow).toBeDefined();
+    expect(reviewerRuntimeRow).toBeDefined();
+    expect(reviewerRuntimeRow?.text).toContain("Approved");
+    expect(reviewerRuntimeRow?.text).toContain("Human Decision Required");
+    expect(reviewerRuntimeRow?.text).not.toMatch(/Approved for Merge|Merged|Ready to Merge/i);
+    [implementerRuntimeRow, reviewerRuntimeRow].forEach((row) => assertRowInsidePanel(row, lowerPanel));
+  });
+
+  it("drops the [REVIEWER RUNTIME] row before [IMPLEMENTER RUNTIME] when the panel overflows, and never overlaps the panel", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    // No external source is linked (so [SOURCE]/[FOCUS]/[NEXT] absorb the
+    // first drops at dropPriority 30, as they should) and [EXECUTION
+    // READINESS]/[HUMAN EXECUTION APPROVAL] add just enough real lower-panel
+    // content on top of the default long-advisory fixture to push the panel
+    // past budget by exactly one row's worth once [REVIEWER RUNTIME] (16) is
+    // added -- enough to prove it is dropped before the more-protected
+    // [IMPLEMENTER RUNTIME] (15), without also forcing out lower-priority
+    // rows this test isn't about.
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.executionReadinessResultCollections = {
+      "daily-proof": createExecutionReadinessResultCollection("Ready"),
+    };
+    state.humanExecutionApprovalResultCollections = {
+      "daily-proof": createHumanExecutionApprovalResultCollection("Approved"),
+    };
+    state.implementerRuntimeResultCollections = {
+      "daily-proof": createImplementerRuntimeResultCollectionFixture("Completed"),
+    };
+    state.reviewerRuntimeResultCollections = {
+      "daily-proof": createReviewerRuntimeResultCollectionFixture("Completed", "Approved", 0),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const implementerRuntimeRow = findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]");
+    const reviewerRuntimeRow = findRenderedRow(renderedText, "[REVIEWER RUNTIME]");
+
+    expect(implementerRuntimeRow).toBeDefined();
+    expect(reviewerRuntimeRow).toBeUndefined();
+    assertRowInsidePanel(implementerRuntimeRow, lowerPanel);
+  });
 });
 
 type RenderedText = {
@@ -1749,6 +1880,9 @@ function createPortalState(options: {
     runtimeStartResultCollections: {},
     implementerRuntimeCollections: {},
     implementerRuntimeResultCollections: {},
+    reviewTargets: {},
+    reviewerRuntimeCollections: {},
+    reviewerRuntimeResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -2405,5 +2539,42 @@ function createImplementerRuntimeResultCollectionFixture(
     resultCount: 1,
     generatedAt: "2026-01-10T00:00:00.000Z",
     rulesVersion: "claude-implementer-v1",
+  };
+}
+
+function createReviewerRuntimeResultCollectionFixture(
+  status: ReviewerRuntimeStatus,
+  decision: ReviewerRuntimeDecision = "Unknown",
+  blockingFindingCount = 0,
+): ReviewerRuntimeResultCollection {
+  return {
+    projectId: "daily-proof",
+    results: [{
+      id: "daily-proof:reviewer-runtime-result:daily-proof:runtime-start:plan-1:start-v1:codex-reviewer-v1",
+      projectId: "daily-proof",
+      runtimeStartId: "daily-proof:runtime-start:plan-1:start-v1",
+      implementerRuntimeId: "daily-proof:implementer-runtime:daily-proof:runtime-start:plan-1:start-v1:claude-implementer-v1",
+      reviewerRuntimeId: status === "Completed" || status === "TimedOut"
+        ? "daily-proof:reviewer-runtime:daily-proof:runtime-start:plan-1:start-v1:codex-reviewer-v1"
+        : undefined,
+      status,
+      decision,
+      blockingFindingCount,
+      nonBlockingFindingCount: 0,
+      reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
+      started: status === "Completed" || status === "TimedOut",
+      duplicateActiveAttempt: false,
+      agentStarted: status === "Completed" || status === "TimedOut",
+      implementerStarted: true,
+      reviewerStarted: status === "Completed" || status === "TimedOut",
+      validationStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: "2026-01-11T00:00:00.000Z",
+      rulesVersion: "codex-reviewer-v1",
+    }],
+    resultCount: 1,
+    generatedAt: "2026-01-11T00:00:00.000Z",
+    rulesVersion: "codex-reviewer-v1",
   };
 }

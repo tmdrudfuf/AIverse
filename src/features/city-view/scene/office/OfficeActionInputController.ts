@@ -10,6 +10,10 @@ const ENTER_KEY_CODE = "Enter";
 // must never be satisfied by the same keypress that advances the existing
 // Plan -> Readiness -> Approval -> Preflight -> Runtime Start cascade.
 const START_IMPLEMENTER_KEY_CODE = "KeyI";
+// Distinct from START_IMPLEMENTER_KEY_CODE: this is the one and only input
+// that can request a Codex Reviewer Runtime start, gated separately so a
+// Start-Implementer keypress can never also be read as Start-Reviewer.
+const START_REVIEWER_KEY_CODE = "KeyR";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -18,6 +22,7 @@ export class OfficeActionInputController {
   private pendingDown = false;
   private pendingEnter = false;
   private pendingStartImplementer = false;
+  private pendingStartReviewer = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -54,6 +59,12 @@ export class OfficeActionInputController {
     if (event.code === START_IMPLEMENTER_KEY_CODE) {
       event.preventDefault();
       this.pendingStartImplementer = true;
+      return;
+    }
+
+    if (event.code === START_REVIEWER_KEY_CODE) {
+      event.preventDefault();
+      this.pendingStartReviewer = true;
     }
   };
 
@@ -102,6 +113,12 @@ export class OfficeActionInputController {
     return startImplementerPressed;
   }
 
+  consumeStartReviewerPressed() {
+    const startReviewerPressed = this.pendingStartReviewer;
+    this.pendingStartReviewer = false;
+    return startReviewerPressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -115,5 +132,6 @@ export class OfficeActionInputController {
     this.pendingDown = false;
     this.pendingEnter = false;
     this.pendingStartImplementer = false;
+    this.pendingStartReviewer = false;
   }
 }
