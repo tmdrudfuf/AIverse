@@ -173,67 +173,29 @@ describe("OfficeProjectPortalController Implementer Runtime concurrency and isol
     expect(result?.reasonCodes).not.toContain("IMPLEMENTER_RUNTIME_MALFORMED");
   });
 
-  it("wires a real ImplementerRuntimeService and ClaudeImplementerRuntimeProvider end to end via the explicit startImplementerPressed input", async () => {
+  it("wires the controller's real default ImplementerRuntimeService and ClaudeImplementerRuntimeProvider end to end, safely stopping at the spawn-allow env-var gate", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     await driveDailyProofToRuntimeStart(controller, internals);
 
-    // IMPORTANT: do not use the controller's own default-wired service here.
-    // That default config's command is the literal `claude` CLI with
-    // `--dangerously-skip-permissions`, and this test previously spawned five
-    // real, live, unsupervised Claude Code agent processes against this
-    // actual worktree before being caught and killed -- exactly the danger
-    // quickstart.md's "Safe Manual Smoke Test" section exists to fence off
-    // as opt-in and human-triggered, never something the automated suite
-    // runs. To still prove the real ImplementerRuntimeService + real
-    // ClaudeImplementerRuntimeProvider wiring (guarded dynamic import,
-    // command-safety validation, prompt substitution, real spawnSync, real
-    // result mapping) without spawning anything dangerous, inject a harmless
-    // instant command (`node --version`) in place of the real Claude
-    // command config.
-    internals.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider(), {
-      command: process.execPath,
-      arguments: ["--version"],
-      inputMode: "argument",
-      timeoutMs: 5000,
-    });
-
-    // ClaudeImplementerRuntimeProvider additionally requires an explicit
-    // AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN=1 opt-in before it will ever
-    // resolve the real node:child_process spawnSync (added after the
-    // incident described above) -- set it only for this one deliberate,
-    // harmless invocation, and always restore it afterward.
-    const originalSpawnAllowEnv = process.env[SPAWN_ALLOW_ENV_VAR];
-    process.env[SPAWN_ALLOW_ENV_VAR] = "1";
-    try {
-      controller.updateInput(createInput({ startImplementerPressed: true }));
-      await flushPromises();
-    } finally {
-      if (originalSpawnAllowEnv === undefined) delete process.env[SPAWN_ALLOW_ENV_VAR];
-      else process.env[SPAWN_ALLOW_ENV_VAR] = originalSpawnAllowEnv;
-    }
-
-    const result = internals.state.implementerRuntimeResultCollections["daily-proof"]?.results.at(-1);
-    expect(result).toBeDefined();
-    expect(result?.status).toBe("Completed");
-    expect(result?.agentStarted).toBe(true);
-    expect(result?.reviewerStarted).toBe(false);
-    expect(result?.validationStarted).toBe(false);
-    expect(result?.githubMutationStarted).toBe(false);
-  });
-
-  it("reports Blocked (not a real spawn) when the explicit spawn-allow env var is not set, even through the full controller wiring", async () => {
-    const controller = new OfficeProjectPortalController(createSceneStub());
-    const internals = getControllerInternals(controller);
-    await driveDailyProofToRuntimeStart(controller, internals);
-
-    internals.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider(), {
-      command: process.execPath,
-      arguments: ["--version"],
-      inputMode: "argument",
-      timeoutMs: 5000,
-    });
-
+    // IMPORTANT: uses the controller's own default-wired service and its
+    // real, unmodified, approved Claude command configuration -- no
+    // substituted command. ImplementerRuntimeService now rejects any
+    // command configuration that is not an exact match for the approved
+    // one (a Codex review finding: a harmless-but-different substitute like
+    // `node --version` must not be treated as equivalent to "approved"), so
+    // a test wanting to reach the real ClaudeImplementerRuntimeProvider
+    // through the service can no longer inject a safe substitute -- it must
+    // use the real config. That real config's command is the literal
+    // `claude` CLI with `--dangerously-skip-permissions`; an early version
+    // of this test spawned five real, live, unsupervised Claude Code agent
+    // processes against this actual worktree before being caught and
+    // killed, which is exactly why AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN
+    // exists. This test deliberately leaves that variable unset, so the
+    // real service correctly accepts the real config and reaches the real
+    // provider, which then safely reports Blocked at the env-var gate
+    // without ever attempting node:child_process at all -- proving the full
+    // wiring is correct without spawning anything.
     const originalSpawnAllowEnv = process.env[SPAWN_ALLOW_ENV_VAR];
     delete process.env[SPAWN_ALLOW_ENV_VAR];
     try {
@@ -245,7 +207,46 @@ describe("OfficeProjectPortalController Implementer Runtime concurrency and isol
     }
 
     const result = internals.state.implementerRuntimeResultCollections["daily-proof"]?.results.at(-1);
+    expect(result).toBeDefined();
     expect(result?.status).toBe("Blocked");
+    expect(result?.agentStarted).toBe(false);
+    expect(result?.reviewerStarted).toBe(false);
+    expect(result?.validationStarted).toBe(false);
+    expect(result?.githubMutationStarted).toBe(false);
+  });
+
+  it("blocks a non-approved substituted command before it ever reaches the provider, even when the spawn-allow env var is set", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToRuntimeStart(controller, internals);
+
+    // Two independent gates must both hold: the service's exact-approved-
+    // command check, and the provider's spawn-allow env-var check. This
+    // proves the first gate alone is sufficient to block a substituted
+    // command -- IMPLEMENTER_RUNTIME_COMMAND_UNSAFE can only be produced by
+    // the service's own config check, never by the provider, so seeing it
+    // here (even with the env var set) proves the service intercepted this
+    // before the provider was ever consulted.
+    internals.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider(), {
+      command: process.execPath,
+      arguments: ["--version"],
+      inputMode: "argument",
+      timeoutMs: 5000,
+    });
+
+    const originalSpawnAllowEnv = process.env[SPAWN_ALLOW_ENV_VAR];
+    process.env[SPAWN_ALLOW_ENV_VAR] = "1";
+    try {
+      controller.updateInput(createInput({ startImplementerPressed: true }));
+      await flushPromises();
+    } finally {
+      if (originalSpawnAllowEnv === undefined) delete process.env[SPAWN_ALLOW_ENV_VAR];
+      else process.env[SPAWN_ALLOW_ENV_VAR] = originalSpawnAllowEnv;
+    }
+
+    const result = internals.state.implementerRuntimeResultCollections["daily-proof"]?.results.at(-1);
+    expect(result?.status).toBe("Blocked");
+    expect(result?.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
     expect(result?.agentStarted).toBe(false);
   });
 });

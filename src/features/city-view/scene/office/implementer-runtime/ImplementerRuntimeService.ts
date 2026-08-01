@@ -86,6 +86,15 @@ export class ImplementerRuntimeService {
       return this.createBlockedOutcome(input, implementerRuntimeId, "IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
     }
 
+    // The configured command must be *exactly* the approved Claude CLI
+    // configuration -- not merely "safe" by the shared regex checks below.
+    // A harmless-but-different command (e.g. `node --version`) would pass
+    // every safety check yet is not what was approved for this feature, and
+    // must never be recorded as a genuine Implementer Runtime attempt.
+    if (!isApprovedCommandConfig(this.commandConfig)) {
+      return this.createBlockedOutcome(input, implementerRuntimeId, "IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+    }
+
     const plan = input.executionPlan!;
     const runtimeStart = input.runtimeStart!;
     const prompt = createImplementerPrompt({
@@ -382,6 +391,15 @@ function validateRoleBinding(input: ImplementerRuntimeInput): ImplementerRuntime
 
 function isValidTimeout(timeoutMs: number) {
   return Number.isFinite(timeoutMs) && timeoutMs > 0 && timeoutMs <= 30 * 60 * 1000;
+}
+
+function isApprovedCommandConfig(config: ImplementerRuntimeCommandConfig) {
+  return (
+    config.command === DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG.command &&
+    config.inputMode === DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG.inputMode &&
+    config.arguments.length === DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG.arguments.length &&
+    config.arguments.every((arg, index) => arg === DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG.arguments[index])
+  );
 }
 
 function createRuntime(

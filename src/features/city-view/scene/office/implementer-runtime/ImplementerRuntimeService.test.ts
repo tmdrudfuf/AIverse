@@ -757,5 +757,60 @@ describe("ImplementerRuntimeService", () => {
       expect(outcome.result.status).toBe("Completed");
       expect(provider.invoke).toHaveBeenCalledTimes(1);
     });
+
+    it("blocks a harmless, otherwise-safe command that is not the exact approved Claude configuration, without invoking the provider", async () => {
+      // node --version passes every safety-regex check (no destructive verb,
+      // no chaining, no GitHub mutation) but is not the approved
+      // claude --dangerously-skip-permissions -p {{prompt}} configuration --
+      // "safe" must never be treated as a substitute for "approved".
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider, {
+        command: "node",
+        arguments: ["--version"],
+        inputMode: "argument",
+        timeoutMs: 60000,
+      });
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+      expect(provider.invoke).not.toHaveBeenCalled();
+    });
+
+    it("blocks when the arguments differ from the approved configuration even if the command matches", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider, {
+        command: "claude",
+        arguments: ["--dangerously-skip-permissions", "-p", "{{prompt}}", "--extra-flag"],
+        inputMode: "argument",
+        timeoutMs: 60000,
+      });
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+      expect(provider.invoke).not.toHaveBeenCalled();
+    });
+
+    it("blocks when the input mode differs from the approved configuration even if command and arguments match", async () => {
+      const chain = createValidChain();
+      const provider = createStubProvider(createCompletedResult());
+      const service = new ImplementerRuntimeService(provider, {
+        command: "claude",
+        arguments: ["--dangerously-skip-permissions", "-p", "{{prompt}}"],
+        inputMode: "stdin",
+        timeoutMs: 60000,
+      });
+
+      const outcome = await service.startImplementer(createInput(chain));
+
+      expect(outcome.result.status).toBe("Blocked");
+      expect(outcome.result.reasonCodes).toContain("IMPLEMENTER_RUNTIME_COMMAND_UNSAFE");
+      expect(provider.invoke).not.toHaveBeenCalled();
+    });
   });
 });
