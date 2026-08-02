@@ -14,9 +14,9 @@ Defines the exact preconditions, idempotency behavior, and non-actions of `Revie
 ## Preconditions (checked in order, every call, no caching)
 
 1. `ReviewDecisionService.classify` for the given `projectId` is called fresh; if the resulting `reviewerRuntimeId` does not match the request's `reviewerRuntimeId`, block with `REVIEW_PROMOTION_TARGET_MISMATCH`.
-2. If the classification is not exactly `Approved`, block with `REVIEW_PROMOTION_DECISION_NOT_APPROVED` (for `ChangesRequested`/status-based non-approval) or `REVIEW_PROMOTION_REVIEWER_STALE` (for `Stale`) or the matching missing/blocked/timed-out/failed reason code.
-3. If a `ReviewPromotion` already exists for the deterministic id derived from this exact `reviewerRuntimeId`, return it unchanged with `REVIEW_PROMOTION_ALREADY_PROMOTED` and `alreadyPromoted: true` — no new record, no re-validation side effect beyond the checks already performed, no provider invocation.
-4. If the actor is not a valid human label, block with `REVIEW_PROMOTION_INVALID_ACTOR`.
+2. If the classification is not exactly `Approved`, block with a truthful, status-specific reason (Round 8 P2-001): `REVIEW_PROMOTION_REVIEWER_MISSING` (`Unavailable`), `REVIEW_PROMOTION_REVIEWER_STALE` (`Stale`), `REVIEW_PROMOTION_REVIEWER_BLOCKED`, `REVIEW_PROMOTION_REVIEWER_TIMED_OUT`, `REVIEW_PROMOTION_REVIEWER_FAILED`, `REVIEW_PROMOTION_DECISION_NOT_APPROVED` (a genuine `ChangesRequested` decision), or `REVIEW_PROMOTION_REVIEWER_DECISION_UNKNOWN` (`Completed` with decision `Unknown`). None of these ever maps to Approved.
+3. If the actor is not a valid human label, block with `REVIEW_PROMOTION_INVALID_ACTOR`. Checked before precondition 4 (Round 8 P2-002) — an invalid actor can never receive `granted: true` merely because a valid promotion already exists, for both first-time and repeated requests, and never mutates or deletes any existing `ReviewPromotion`.
+4. If a `ReviewPromotion` already exists for the deterministic id derived from this exact `reviewerRuntimeId`, return it unchanged with `REVIEW_PROMOTION_ALREADY_PROMOTED` and `alreadyPromoted: true` — no new record, no re-validation side effect beyond the checks already performed, no provider invocation. Only reachable once the actor has already validated.
 
 Only if every precondition passes does `promote` construct and store a new `ReviewPromotion` record.
 

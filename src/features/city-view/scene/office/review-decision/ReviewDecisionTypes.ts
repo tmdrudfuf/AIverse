@@ -3,7 +3,7 @@ import type { ExecutionReadiness, ExecutionReadinessResult } from "../execution-
 import type { HumanExecutionApproval } from "../human-execution-approvals/HumanExecutionApprovalTypes";
 import type { ImplementerRuntime, ImplementerRuntimeResult } from "../implementer-runtime/ImplementerRuntimeTypes";
 import type { ReviewTarget } from "../reviewer-runtime/ReviewTarget";
-import type { ReviewerRuntime, ReviewerRuntimeResult } from "../reviewer-runtime/ReviewerRuntimeTypes";
+import type { ReviewerRuntime, ReviewerRuntimeDecision, ReviewerRuntimeResult } from "../reviewer-runtime/ReviewerRuntimeTypes";
 import type { RuntimePreflight, RuntimePreflightResult } from "../runtime-preflight/RuntimePreflightTypes";
 import type { RuntimeStart, RuntimeStartResult } from "../runtime-start/RuntimeStartTypes";
 
@@ -28,6 +28,14 @@ export type ReviewDecisionState =
 export type ReviewDecisionClassification = {
   state: ReviewDecisionState;
   reviewerRuntimeId?: string;
+  // Raw ReviewerRuntimeDecision behind a "ChangesRequested" state, carried
+  // through only when it is truthfully known (see review.md, Round 8
+  // P2-001). Lets reasonForNonApproved distinguish an actual reviewer
+  // ChangesRequested decision from a Completed run whose decision came back
+  // "Unknown" without adding a second ReviewDecisionState value for what is
+  // still, for every promotion/display purpose, the same non-promotable
+  // bucket.
+  decision?: ReviewerRuntimeDecision;
 };
 
 export type ReviewPromotionReasonCode =
@@ -42,6 +50,10 @@ export type ReviewPromotionReasonCode =
   | "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED"
   | "REVIEW_PROMOTION_REVIEWER_MISSING"
   | "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED"
+  | "REVIEW_PROMOTION_REVIEWER_BLOCKED"
+  | "REVIEW_PROMOTION_REVIEWER_TIMED_OUT"
+  | "REVIEW_PROMOTION_REVIEWER_FAILED"
+  | "REVIEW_PROMOTION_REVIEWER_DECISION_UNKNOWN"
   | "REVIEW_PROMOTION_DECISION_NOT_APPROVED"
   | "REVIEW_PROMOTION_REVIEWER_STALE"
   | "REVIEW_PROMOTION_ROLE_MISMATCH"

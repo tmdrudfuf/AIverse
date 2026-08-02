@@ -773,6 +773,13 @@ describe("ReviewDecisionService.classify", () => {
       expect(classification.state).toBe("Unavailable");
     });
 
+    // A result-only outcome has no reviewerRuntimeId at all, so Promote's
+    // own precondition 1 (target mismatch) always intercepts before
+    // reasonForNonApproved is ever consulted -- REVIEW_PROMOTION_TARGET_MISMATCH
+    // is the truthful reason here, since the request necessarily names a
+    // reviewerRuntimeId the classification cannot confirm. The Blocked/
+    // TimedOut/Failed-specific reasons (Round 8 P2-001) are exercised below
+    // against a full Reviewer Runtime chain, where that precondition passes.
     it.each(["Blocked", "Failed", "TimedOut"] as const)(
       "cannot Promote a result-only %s outcome, and creates no ReviewPromotion record",
       (status) => {
@@ -1018,5 +1025,142 @@ describe("ReviewDecisionService.promote", () => {
     expect(outcome.result.validationStarted).toBe(false);
     expect(outcome.result.repositoryMutationStarted).toBe(false);
     expect(outcome.result.githubMutationStarted).toBe(false);
+  });
+});
+
+// Round 8 P2-001: reason-code fidelity. A genuine reviewer ChangesRequested
+// decision and a Completed run whose decision came back Unknown must not
+// share a reason code, and neither can back a promotion.
+describe("ReviewDecisionService.promote reason-code fidelity for a full Reviewer Runtime chain (Round 8 P2-001)", () => {
+  it.each([
+    ["Blocked", "REVIEW_PROMOTION_REVIEWER_BLOCKED", undefined],
+    ["TimedOut", "REVIEW_PROMOTION_REVIEWER_TIMED_OUT", undefined],
+    ["Failed", "REVIEW_PROMOTION_REVIEWER_FAILED", undefined],
+    ["Completed", "REVIEW_PROMOTION_DECISION_NOT_APPROVED", "ChangesRequested"],
+    ["Completed", "REVIEW_PROMOTION_REVIEWER_DECISION_UNKNOWN", "Unknown"],
+  ] as const)(
+    "gives a truthful, status-specific reason for status=%s (%s), never the generic REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED",
+    (status, expectedReason, decision) => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const reviewerRuntime = { ...chain.reviewerRuntime, status, ...(decision ? { decision } : {}) };
+      const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status, ...(decision ? { decision } : {}) };
+
+      const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
+      expect(classification.state).not.toBe("Approved");
+
+      const outcome = service.promote(
+        { ...createInput(chain), reviewerRuntime, reviewerRuntimeResult },
+        createRequest(chain),
+      );
+
+      expect(outcome.result.granted).toBe(false);
+      expect(outcome.result.reasonCodes).toEqual([expectedReason]);
+      expect(outcome.result.reasonCodes).not.toContain("REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED");
+      expect(outcome.promotion).toBeUndefined();
+    },
+  );
+
+  // A never-attempted reviewer (Unavailable) has no reviewerRuntimeId for
+  // Promote's precondition 1 to match against, so REVIEW_PROMOTION_TARGET_MISMATCH
+  // -- not REVIEW_PROMOTION_REVIEWER_MISSING -- is the reason a promote()
+  // caller actually observes; the "no runtime and no result stays Unavailable"
+  // requirement is a classify()-level guarantee, already covered above.
+  it("classifies (never promotes) an Unavailable outcome when the reviewer was never attempted at all -- no runtime and no result", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+
+    const classification = service.classify({ ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult: undefined });
+    expect(classification.state).toBe("Unavailable");
+
+    const outcome = service.promote(
+      { ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult: undefined },
+      createRequest(chain),
+    );
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.promotion).toBeUndefined();
+  });
+});
+
+// Round 8 P2-002: actor validation must run before the existing-promotion
+// idempotency short-circuit, for both first-time and repeated requests, so
+// an invalid actor can never receive granted: true merely because a valid
+// promotion already exists.
+describe("ReviewDecisionService.promote actor-before-idempotency ordering (Round 8 P2-002)", () => {
+  it("a valid human actor creates the first promotion", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+
+    const outcome = service.promote(createInput(chain), createRequest(chain, { actor: "Local Human" }));
+
+    expect(outcome.result.granted).toBe(true);
+    expect(outcome.promotion).toBeDefined();
+    expect(outcome.promotionCollection?.promotionCount).toBe(1);
+  });
+
+  it("the same valid human actor repeating the request receives the established idempotent success", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+
+    const first = service.promote(createInput(chain), createRequest(chain, { actor: "Local Human" }));
+    const second = service.promote(
+      { ...createInput(chain), existingPromotions: first.promotionCollection, existingPromotionResults: first.resultCollection },
+      createRequest(chain, { actor: "Local Human" }),
+    );
+
+    expect(second.result.granted).toBe(true);
+    expect(second.result.alreadyPromoted).toBe(true);
+    expect(second.result.reasonCodes).toContain("REVIEW_PROMOTION_ALREADY_PROMOTED");
+    expect(second.promotion?.reviewPromotionId).toBe(first.promotion?.reviewPromotionId);
+    expect(second.promotionCollection?.promotionCount).toBe(1);
+  });
+
+  it("validates the actor before ever reaching the existing-promotion idempotency read, on a first-time request too", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+
+    const outcome = service.promote(createInput(chain), createRequest(chain, { actor: "Codex" }));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_INVALID_ACTOR");
+    expect(outcome.result.reasonCodes).not.toContain("REVIEW_PROMOTION_ALREADY_PROMOTED");
+    expect(outcome.promotion).toBeUndefined();
+    expect(outcome.promotionCollection).toBeUndefined();
+  });
+
+  it.each(["Codex", "Claude", "agent-runner", "release-bot", "automation-script", ""])(
+    "an invalid actor (%j) repeating after a valid promotion exists receives granted: false, not the stored idempotent success",
+    (actor) => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+
+      const first = service.promote(createInput(chain), createRequest(chain, { actor: "Local Human" }));
+      const second = service.promote(
+        { ...createInput(chain), existingPromotions: first.promotionCollection, existingPromotionResults: first.resultCollection },
+        createRequest(chain, { actor }),
+      );
+
+      expect(second.result.granted).toBe(false);
+      expect(second.result.alreadyPromoted).toBe(false);
+      expect(second.result.reasonCodes).toContain("REVIEW_PROMOTION_INVALID_ACTOR");
+      expect(second.result.reasonCodes).not.toContain("REVIEW_PROMOTION_ALREADY_PROMOTED");
+    },
+  );
+
+  it("creates no duplicate promotion and leaves the existing promotion collection unmutated after an invalid-actor repeat", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+
+    const first = service.promote(createInput(chain), createRequest(chain, { actor: "Local Human" }));
+    const existingPromotionsSnapshot = JSON.parse(JSON.stringify(first.promotionCollection));
+
+    const second = service.promote(
+      { ...createInput(chain), existingPromotions: first.promotionCollection, existingPromotionResults: first.resultCollection },
+      createRequest(chain, { actor: "Codex" }),
+    );
+
+    expect(second.promotion).toBeUndefined();
+    expect(second.promotionCollection).toBeUndefined();
+    expect(first.promotionCollection).toEqual(existingPromotionsSnapshot);
   });
 });

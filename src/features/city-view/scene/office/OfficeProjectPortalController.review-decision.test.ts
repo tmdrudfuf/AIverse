@@ -4,6 +4,7 @@ import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeSt
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
+import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
 import {
   createInput,
   createSceneStub,
@@ -136,6 +137,59 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
       const results = internals.state.reviewPromotionResultCollections?.[PROJECT_ID]?.results;
       expect(results).toHaveLength(1);
       expect(results![0].granted).toBe(false);
+    },
+  );
+
+  // Round 8 P2-002: an invalid actor must never receive granted: true, and
+  // the dashboard (which reads the same classify() result, independent of
+  // actor) must never show a success row for a request that Promote blocked.
+  it.each(["Codex", "Claude", "release-bot", "automation-script"] as const)(
+    "blocks Promote for a %s actor against an otherwise-Approved chain, and the dashboard never shows a success row for it",
+    async (actor) => {
+      const controller = new OfficeProjectPortalController(createSceneStub());
+      const internals = getControllerInternals(controller);
+      await driveDailyProofToApprovedReviewer(controller, internals);
+
+      const plan = internals.state.executionPlanCollections[PROJECT_ID]?.plans[0];
+      if (!plan) throw new Error("Test setup failed to reach an Execution Plan.");
+      const input = resolveReviewDecisionInput({
+        projectId: PROJECT_ID,
+        plan,
+        readinessCollection: internals.state.executionReadinessCollections[PROJECT_ID],
+        readinessResultCollection: internals.state.executionReadinessResultCollections[PROJECT_ID],
+        approvalCollection: internals.state.humanExecutionApprovalCollections[PROJECT_ID],
+        preflightCollection: internals.state.runtimePreflightCollections[PROJECT_ID],
+        preflightResultCollection: internals.state.runtimePreflightResultCollections[PROJECT_ID],
+        runtimeStartCollection: internals.state.runtimeStartCollections[PROJECT_ID],
+        runtimeStartResultCollection: internals.state.runtimeStartResultCollections[PROJECT_ID],
+        implementerRuntimeCollection: internals.state.implementerRuntimeCollections[PROJECT_ID],
+        implementerRuntimeResultCollection: internals.state.implementerRuntimeResultCollections[PROJECT_ID],
+        reviewTarget: internals.state.reviewTargets?.[PROJECT_ID],
+        reviewerRuntimeCollection: internals.state.reviewerRuntimeCollections[PROJECT_ID],
+        reviewerRuntimeResultCollection: internals.state.reviewerRuntimeResultCollections[PROJECT_ID],
+      });
+
+      const service = new ReviewDecisionService();
+      const outcome = service.promote(input, {
+        projectId: PROJECT_ID,
+        reviewerRuntimeId: input.reviewerRuntime?.reviewerRuntimeId ?? "",
+        actor,
+        requestedAt: new Date().toISOString(),
+      });
+
+      expect(outcome.result.granted).toBe(false);
+      expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_INVALID_ACTOR");
+      expect(outcome.promotion).toBeUndefined();
+
+      // The dashboard's own classify() call is unaffected by actor validity
+      // (Promote-only concern) and still reports Approved; what proves the
+      // shared classification path is that the dashboard never renders a
+      // success row, because no promotion collection was ever produced.
+      const classification = service.classify(input);
+      expect(classification.state).toBe("Approved");
+      const rows = createReviewDecisionDisplayRows(classification, outcome.promotionCollection);
+      expect(rows.statusText).not.toContain("Promoted by");
+      expect(rows.statusText).toContain("Promote (P)");
     },
   );
 });

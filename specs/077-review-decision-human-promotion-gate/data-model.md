@@ -28,8 +28,12 @@ Mapping from Reviewer Runtime state:
 - `REVIEW_PROMOTION_IMPLEMENTER_MISSING`
 - `REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED`
 - `REVIEW_PROMOTION_REVIEWER_MISSING`
-- `REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED`
-- `REVIEW_PROMOTION_DECISION_NOT_APPROVED`
+- `REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED` (chain-parity mismatch between a Reviewer Runtime and its own Result only — see Round 8 P2-001 below; no longer used for a truthful Blocked/TimedOut/Failed status)
+- `REVIEW_PROMOTION_REVIEWER_BLOCKED` (added Round 8, P2-001)
+- `REVIEW_PROMOTION_REVIEWER_TIMED_OUT` (added Round 8, P2-001)
+- `REVIEW_PROMOTION_REVIEWER_FAILED` (added Round 8, P2-001)
+- `REVIEW_PROMOTION_REVIEWER_DECISION_UNKNOWN` (added Round 8, P2-001; a Completed run whose decision came back `"Unknown"`, distinct from a genuine `"ChangesRequested"` decision)
+- `REVIEW_PROMOTION_DECISION_NOT_APPROVED` (a genuine reviewer `"ChangesRequested"` decision only, as of Round 8 P2-001)
 - `REVIEW_PROMOTION_REVIEWER_STALE`
 - `REVIEW_PROMOTION_ROLE_MISMATCH`
 - `REVIEW_PROMOTION_TARGET_MISMATCH`
@@ -69,9 +73,9 @@ Explicit human request, not derived from any dashboard render:
 ## Validation Rules
 
 - Plan, readiness, approval, preflight, Runtime Start, and Implementer Runtime must all match the same project and exact context (reused, unmodified, from the existing chain `ReviewerRuntimeService.validateContext` already validates).
-- The Reviewer Runtime must exist, match the project, and be exactly `Completed` with `decision: "Approved"`; anything else blocks with `REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED` or `REVIEW_PROMOTION_DECISION_NOT_APPROVED`.
+- The Reviewer Runtime must exist, match the project, and be exactly `Completed` with `decision: "Approved"`; anything else blocks with a status-specific reason (Round 8 P2-001): `REVIEW_PROMOTION_REVIEWER_BLOCKED`, `REVIEW_PROMOTION_REVIEWER_TIMED_OUT`, `REVIEW_PROMOTION_REVIEWER_FAILED`, `REVIEW_PROMOTION_DECISION_NOT_APPROVED` (genuine `ChangesRequested`), `REVIEW_PROMOTION_REVIEWER_DECISION_UNKNOWN` (`Completed` with decision `Unknown`), or `REVIEW_PROMOTION_REVIEWER_MISSING` (no attempt at all). No failure-like or Unknown-decision state ever maps to Approved.
 - A Reviewer Runtime whose upstream chain no longer revalidates identically to what it was built from blocks with `REVIEW_PROMOTION_REVIEWER_STALE`, even if its own recorded decision was `Approved`.
 - `approvedImplementerAgent` must equal `"claude"`, `approvedReviewerAgent` must equal `"codex"`, matching the exact values already recorded on the Reviewer Runtime — this feature does not re-derive the binding independently, it re-checks the same one Spec 076 already validated remains unchanged.
-- Actor must be a human label and must not be Claude, Codex, agent, bot, automation, or workflow.
-- A Review Promotion already recorded for the exact `reviewerRuntimeId` short-circuits to `REVIEW_PROMOTION_ALREADY_PROMOTED`, returning the existing record — no second record, no re-invocation of anything.
+- Actor must be a human label and must not be Claude, Codex, agent, bot, automation, or workflow. As of Round 8 (P2-002), actor validation runs *before* the existing-promotion idempotency short-circuit below, for both first-time and repeated requests — an invalid actor never receives `granted: true` merely because a valid promotion already exists, and never mutates or deletes that existing promotion.
+- A Review Promotion already recorded for the exact `reviewerRuntimeId` short-circuits to `REVIEW_PROMOTION_ALREADY_PROMOTED`, returning the existing record — no second record, no re-invocation of anything. This path is only reached once the requesting actor has already validated.
 - `validationStarted`, `repositoryMutationStarted`, and `githubMutationStarted` are `false` on every record and result, unconditionally, with no code path that ever sets them otherwise (this feature performs no validation run and no mutation of any kind).

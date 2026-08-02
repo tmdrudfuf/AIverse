@@ -59,12 +59,22 @@ export class ReviewDecisionService {
 
     // Precondition 2: the fresh classification must be exactly Approved.
     if (classification.state !== "Approved") {
-      return this.blockedOutcome(request, existingResults, reasonForNonApproved(classification.state));
+      return this.blockedOutcome(request, existingResults, reasonForNonApproved(classification));
     }
 
-    // Precondition 3: an existing Review Promotion for this exact
+    // Precondition 3: the requesting actor must be a human label. Checked
+    // before the existing-promotion idempotency read below so an invalid
+    // actor can never receive granted: true merely because a valid
+    // promotion already exists (see review.md, Round 8 P2-002) -- this
+    // applies identically to first-time and repeated requests.
+    if (getActorBlockReason(request.actor)) {
+      return this.blockedOutcome(request, existingResults, "REVIEW_PROMOTION_INVALID_ACTOR");
+    }
+
+    // Precondition 4: an existing Review Promotion for this exact
     // reviewerRuntimeId short-circuits to an idempotent read -- no new
-    // record, no re-invocation of anything, no actor check.
+    // record, no re-invocation of anything. The actor was already validated
+    // above, so this path is only reachable for a valid human actor.
     const reviewPromotionId = createReviewPromotionId(request.projectId, request.reviewerRuntimeId);
     const existingPromotion = existingPromotions?.promotions.find(
       (promotion) => promotion.reviewPromotionId === reviewPromotionId,
@@ -77,11 +87,6 @@ export class ReviewDecisionService {
         promotionCollection: this.upsertPromotion(existingPromotions, existingPromotion),
         resultCollection: this.upsertResult(existingResults, result),
       };
-    }
-
-    // Precondition 4: the requesting actor must be a human label.
-    if (getActorBlockReason(request.actor)) {
-      return this.blockedOutcome(request, existingResults, "REVIEW_PROMOTION_INVALID_ACTOR");
     }
 
     const plan = input.executionPlan!;
@@ -180,9 +185,9 @@ function classifyStatusDecision(
     case "Completed":
       return decision === "Approved"
         ? { state: "Approved", reviewerRuntimeId }
-        : { state: "ChangesRequested", reviewerRuntimeId };
+        : { state: "ChangesRequested", reviewerRuntimeId, decision };
     default:
-      return { state: "ChangesRequested", reviewerRuntimeId };
+      return { state: "ChangesRequested", reviewerRuntimeId, decision };
   }
 }
 
@@ -207,17 +212,29 @@ function classifyResultOnly(reviewerRuntimeResult: ReviewerRuntimeResult | undef
   return classification.state === "Approved" ? { state: "ChangesRequested" } : classification;
 }
 
-function reasonForNonApproved(state: ReviewDecisionClassification["state"]): ReviewPromotionReasonCode {
-  switch (state) {
+// Status-specific reasons for every non-Approved classification (see
+// review.md, Round 8 P2-001). Blocked/TimedOut/Failed no longer collapse
+// into the shared REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED code; that code
+// remains in use elsewhere (validateChain's chain-parity mismatches), just
+// no longer as a stand-in for these three distinct terminal statuses here.
+// A Completed run whose decision came back "Unknown" gets its own reason,
+// distinct from a genuine reviewer ChangesRequested decision.
+function reasonForNonApproved(classification: ReviewDecisionClassification): ReviewPromotionReasonCode {
+  switch (classification.state) {
     case "Unavailable":
       return "REVIEW_PROMOTION_REVIEWER_MISSING";
     case "Stale":
       return "REVIEW_PROMOTION_REVIEWER_STALE";
     case "ChangesRequested":
-      return "REVIEW_PROMOTION_DECISION_NOT_APPROVED";
+      return classification.decision === "Unknown"
+        ? "REVIEW_PROMOTION_REVIEWER_DECISION_UNKNOWN"
+        : "REVIEW_PROMOTION_DECISION_NOT_APPROVED";
     case "Blocked":
+      return "REVIEW_PROMOTION_REVIEWER_BLOCKED";
     case "TimedOut":
+      return "REVIEW_PROMOTION_REVIEWER_TIMED_OUT";
     case "Failed":
+      return "REVIEW_PROMOTION_REVIEWER_FAILED";
     default:
       return "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED";
   }
