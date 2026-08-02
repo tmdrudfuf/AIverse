@@ -9,7 +9,7 @@ Defines how `ReviewDecisionService.classify` derives a `ReviewDecisionState` fro
 `classify(projectId, planId)` reads only:
 
 - The current `ReviewerRuntime` record and `ReviewerRuntimeResult` for the exact active execution chain (via the existing `reviewerRuntimeCollections`/`reviewerRuntimeResultCollections` state, unmodified).
-- The full upstream chain (Execution Plan, Execution Readiness, Human Execution Approval, Runtime Preflight, Runtime Start, Implementer Runtime, approved role binding), revalidated using the same functions `ReviewerRuntimeService.validateContext` already exposes/reuses — never a duplicated copy of that logic.
+- The full upstream chain (Execution Plan, Execution Readiness, Human Execution Approval, Runtime Preflight, Runtime Start, Implementer Runtime, approved role binding), revalidated by `ReviewDecisionService`'s own private `validateChain`, which mirrors `ReviewerRuntimeService.validateContext` field-by-field rather than importing it — the repository's established per-stage convention (see research.md, "Precedent-scope boundary"; `ImplementerRuntimeService.validateContext` and `ReviewerRuntimeService.validateContext` are likewise independent copies, not a shared/exported import).
 
 It never reads raw process output, never re-parses Codex's stdout, and never accepts a caller-supplied "assume approved" override.
 

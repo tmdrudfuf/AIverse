@@ -356,7 +356,18 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   ) {
     return "REVIEW_PROMOTION_ROLE_MISMATCH";
   }
-  if (!reviewerRuntimeResult || reviewerRuntimeResult.reviewerRuntimeId !== reviewerRuntime.reviewerRuntimeId) {
+  if (
+    !reviewerRuntimeResult ||
+    reviewerRuntimeResult.reviewerRuntimeId !== reviewerRuntime.reviewerRuntimeId ||
+    reviewerRuntimeResult.projectId !== plan.projectId ||
+    reviewerRuntimeResult.status !== reviewerRuntime.status ||
+    reviewerRuntimeResult.decision !== reviewerRuntime.decision
+  ) {
+    // Mirrors the Implementer Runtime chain's own runtime/result status
+    // parity check above (line ~298) -- the Reviewer Runtime Result must
+    // describe the exact same outcome as its Reviewer Runtime record, not
+    // merely share its id, before that outcome can back an Approved
+    // classification or a granted Promote (see review.md P1-001).
     return "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED";
   }
 

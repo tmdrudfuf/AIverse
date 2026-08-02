@@ -103,7 +103,7 @@ Before deriving a classification or accepting a Promote action, `ReviewDecisionS
 
 ## State and Storage
 
-`ReviewPromotion`/`ReviewPromotionResult` collections are project-scoped (`Record<projectId, ReviewPromotionCollection>` / `Record<projectId, ReviewPromotionResultCollection>`), immutable, and stored in `ProjectPortalState` exactly like every prior stage. `clearRuntimePreflightForProject` (the existing shared invalidation helper) is extended to also delete both new collections, so a stale plan cannot leave a stale classification or promotion visible — matching FR-011's requirement not to delete an already-recorded historical Review Promotion from that promotion's own project scope while still clearing it when the project's whole chain is invalidated, exactly as every prior stage's records are cleared together today.
+`ReviewPromotion`/`ReviewPromotionResult` collections are project-scoped (`Record<projectId, ReviewPromotionCollection>` / `Record<projectId, ReviewPromotionResultCollection>`), immutable, and stored in `ProjectPortalState` exactly like every prior stage. Per FR-011, `clearRuntimePreflightForProject` (the existing shared invalidation helper) does **not** delete these two collections — a recorded Review Promotion is an immutable historical record that must survive upstream invalidation, unlike every prior stage's records, which are still cleared together as before. Staleness is instead shown via the dashboard row comparing the promotion's `reviewerRuntimeId` against the current classification (see tasks.md T009).
 
 ## Dashboard Strategy
 

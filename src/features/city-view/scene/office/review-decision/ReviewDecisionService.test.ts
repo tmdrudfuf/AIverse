@@ -523,7 +523,8 @@ describe("ReviewDecisionService.classify", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
     const reviewerRuntime = { ...chain.reviewerRuntime, decision: "ChangesRequested" as const };
-    const classification = service.classify({ ...createInput(chain), reviewerRuntime });
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, decision: "ChangesRequested" as const };
+    const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
     expect(classification.state).toBe("ChangesRequested");
   });
@@ -532,7 +533,8 @@ describe("ReviewDecisionService.classify", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
     const reviewerRuntime = { ...chain.reviewerRuntime, status: "Blocked" as const };
-    const classification = service.classify({ ...createInput(chain), reviewerRuntime });
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status: "Blocked" as const };
+    const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
     expect(classification.state).toBe("Blocked");
   });
@@ -541,7 +543,8 @@ describe("ReviewDecisionService.classify", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
     const reviewerRuntime = { ...chain.reviewerRuntime, status: "TimedOut" as const };
-    const classification = service.classify({ ...createInput(chain), reviewerRuntime });
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status: "TimedOut" as const };
+    const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
     expect(classification.state).toBe("TimedOut");
   });
@@ -550,9 +553,19 @@ describe("ReviewDecisionService.classify", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
     const reviewerRuntime = { ...chain.reviewerRuntime, status: "Failed" as const };
-    const classification = service.classify({ ...createInput(chain), reviewerRuntime });
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status: "Failed" as const };
+    const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
     expect(classification.state).toBe("Failed");
+  });
+
+  it("returns Stale (not ChangesRequested/Blocked/etc.) when the Reviewer Runtime Result's status/decision diverges from its Reviewer Runtime record (P1-001 regression)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, decision: "ChangesRequested" as const };
+    const classification = service.classify({ ...createInput(chain), reviewerRuntimeResult });
+
+    expect(classification.state).toBe("Stale");
   });
 
   describe("Stale (any upstream chain invalidation collapses to Stale regardless of the Reviewer Runtime's own status/decision)", () => {
@@ -699,11 +712,30 @@ describe("ReviewDecisionService.promote", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
     const reviewerRuntime = { ...chain.reviewerRuntime, decision: "ChangesRequested" as const };
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, decision: "ChangesRequested" as const };
 
-    const outcome = service.promote({ ...createInput(chain), reviewerRuntime }, createRequest(chain));
+    const outcome = service.promote(
+      { ...createInput(chain), reviewerRuntime, reviewerRuntimeResult },
+      createRequest(chain),
+    );
 
     expect(outcome.result.granted).toBe(false);
     expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_DECISION_NOT_APPROVED");
+    expect(outcome.promotion).toBeUndefined();
+  });
+
+  it("blocks Promote when the Reviewer Runtime Result's decision diverges from its Reviewer Runtime record (P1-001 regression)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, decision: "ChangesRequested" as const };
+
+    const outcome = service.promote(
+      { ...createInput(chain), reviewerRuntimeResult },
+      createRequest(chain),
+    );
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
     expect(outcome.promotion).toBeUndefined();
   });
 
