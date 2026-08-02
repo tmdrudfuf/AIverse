@@ -402,10 +402,22 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
     reviewerRuntimeResult.decision !== reviewerRuntime.decision
   ) {
     // Mirrors the Implementer Runtime chain's own runtime/result status
-    // parity check above (line ~298) -- the Reviewer Runtime Result must
+    // parity check above (line ~316) -- the Reviewer Runtime Result must
     // describe the exact same outcome as its Reviewer Runtime record, not
     // merely share its id, before that outcome can back an Approved
     // classification or a granted Promote (see review.md P1-001).
+    return "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED";
+  }
+  if (
+    reviewerRuntimeResult.runtimeStartId !== runtimeStart.runtimeStartId ||
+    reviewerRuntimeResult.implementerRuntimeId !== implementerRuntime.implementerRuntimeId
+  ) {
+    // Mirrors the Implementer Runtime Result's own runtimeStartId/
+    // implementerRuntimeId parity check above (line ~330) -- a result
+    // sharing only reviewerRuntimeId with the current Reviewer Runtime
+    // could otherwise belong to a different upstream Runtime Start or
+    // Implementer Runtime attempt and still back an Approved promotion
+    // (see review.md P1-001, round 6).
     return "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED";
   }
 

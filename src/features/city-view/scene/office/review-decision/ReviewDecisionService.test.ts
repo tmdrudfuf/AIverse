@@ -568,6 +568,18 @@ describe("ReviewDecisionService.classify", () => {
     expect(classification.state).toBe("Stale");
   });
 
+  it.each([
+    ["runtimeStartId", { runtimeStartId: "a-different-runtime-start-id" }],
+    ["implementerRuntimeId", { implementerRuntimeId: "a-different-implementer-runtime-id" }],
+  ] as const)("returns Stale when the Reviewer Runtime Result's %s belongs to a different upstream attempt (round 6 P1-001 regression)", (_field, override) => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, ...override };
+    const classification = service.classify({ ...createInput(chain), reviewerRuntimeResult });
+
+    expect(classification.state).toBe("Stale");
+  });
+
   describe("Stale (any upstream chain invalidation collapses to Stale regardless of the Reviewer Runtime's own status/decision)", () => {
     it("is Stale when the plan has been recreated (stale planId)", () => {
       const service = new ReviewDecisionService();
@@ -773,6 +785,41 @@ describe("ReviewDecisionService.promote", () => {
     expect(outcome.result.granted).toBe(false);
     expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
     expect(outcome.promotion).toBeUndefined();
+  });
+
+  it.each([
+    ["runtimeStartId", { runtimeStartId: "a-different-runtime-start-id" }],
+    ["implementerRuntimeId", { implementerRuntimeId: "a-different-implementer-runtime-id" }],
+  ] as const)(
+    "blocks Promote and records no promotion when the Reviewer Runtime Result's %s belongs to a different upstream attempt (round 6 P1-001 regression)",
+    (_field, override) => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, ...override };
+
+      const outcome = service.promote(
+        { ...createInput(chain), reviewerRuntimeResult },
+        createRequest(chain),
+      );
+
+      expect(outcome.result.granted).toBe(false);
+      expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+      expect(outcome.promotion).toBeUndefined();
+      expect(outcome.promotionCollection).toBeUndefined();
+    },
+  );
+
+  it("does not mutate the source Reviewer Runtime/Result when the Reviewer Runtime Result's runtimeStartId belongs to a different upstream attempt (round 6 P1-001 regression)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, runtimeStartId: "a-different-runtime-start-id" };
+    const reviewerRuntimeSnapshot = { ...chain.reviewerRuntime };
+    const reviewerRuntimeResultSnapshot = { ...chain.reviewerRuntimeResult };
+
+    service.promote({ ...createInput(chain), reviewerRuntimeResult }, createRequest(chain));
+
+    expect(chain.reviewerRuntime).toEqual(reviewerRuntimeSnapshot);
+    expect(chain.reviewerRuntimeResult).toEqual(reviewerRuntimeResultSnapshot);
   });
 
   it("blocks Promote when the chain has gone Stale since the Reviewer Runtime completed", () => {
