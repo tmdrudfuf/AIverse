@@ -19,6 +19,7 @@ import {
   createReviewerRuntimeDisplayRows,
   type ReviewerRuntimeDisplayRows,
 } from "./reviewer-runtime/ReviewerRuntimeView";
+import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import {
   createReviewDecisionDisplayRows,
   type ReviewDecisionDisplayRows,
@@ -353,8 +354,37 @@ export class OfficeProjectPortalView {
     // result exists, so repeating that here would be redundant. This matches
     // the majority gated pattern (Execution Plan/Readiness/Approval/
     // Preflight/Start) rather than the Implementer/Reviewer Runtime exception.
+    //
+    // The classification itself is computed fresh here via
+    // ReviewDecisionService.classify/resolveReviewDecisionInput, not derived
+    // only from reviewerRuntimeResultCollection -- per
+    // contracts/review-decision-contract.md, the dashboard and the Promote
+    // precondition must read the same single classification, so this must
+    // detect Stale the same way Promote does rather than trusting a leftover
+    // Reviewer Runtime result alone.
+    const latestReviewDecisionPlan = executionPlanCollection?.plans[executionPlanCollection.plans.length - 1];
+    const reviewDecisionClassification = dashboardProjectId && latestReviewDecisionPlan
+      ? new ReviewDecisionService().classify(
+        resolveReviewDecisionInput({
+          projectId: dashboardProjectId,
+          plan: latestReviewDecisionPlan,
+          readinessCollection: executionReadinessCollection,
+          readinessResultCollection: executionReadinessResultCollection,
+          approvalCollection: humanExecutionApprovalCollection,
+          preflightCollection: runtimePreflightCollection,
+          preflightResultCollection: runtimePreflightResultCollection,
+          runtimeStartCollection: runtimeStartCollection,
+          runtimeStartResultCollection: runtimeStartResultCollection,
+          implementerRuntimeCollection: state.implementerRuntimeCollections[dashboardProjectId],
+          implementerRuntimeResultCollection: implementerRuntimeResultCollection,
+          reviewTarget: state.reviewTargets[dashboardProjectId],
+          reviewerRuntimeCollection: state.reviewerRuntimeCollections[dashboardProjectId],
+          reviewerRuntimeResultCollection: reviewerRuntimeResultCollection,
+        }),
+      )
+      : undefined;
     const reviewDecisionRows = reviewerRuntimeResultCollection || reviewPromotionCollection
-      ? createReviewDecisionDisplayRows(reviewerRuntimeResultCollection, reviewPromotionCollection)
+      ? createReviewDecisionDisplayRows(reviewDecisionClassification, reviewPromotionCollection)
       : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;

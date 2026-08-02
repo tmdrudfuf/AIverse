@@ -617,6 +617,33 @@ describe("ReviewDecisionService.classify", () => {
       expect(classification.state).toBe("Stale");
     });
 
+    it("is Stale when Runtime Start's repositoryId no longer matches the plan's", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const runtimeStart = { ...chain.runtimeStart, repositoryId: "a-different-repo" };
+      const classification = service.classify({ ...createInput(chain), runtimeStart });
+
+      expect(classification.state).toBe("Stale");
+    });
+
+    it("is Stale when the Implementer Runtime's repositoryId no longer matches the plan's", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const implementerRuntime = { ...chain.implementerRuntime, repositoryId: "a-different-repo" };
+      const classification = service.classify({ ...createInput(chain), implementerRuntime });
+
+      expect(classification.state).toBe("Stale");
+    });
+
+    it("is Stale when the Review Target's repositoryId no longer matches the plan's", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const reviewTarget = { ...chain.reviewTarget, repositoryId: "a-different-repo" };
+      const classification = service.classify({ ...createInput(chain), reviewTarget });
+
+      expect(classification.state).toBe("Stale");
+    });
+
     it("is Stale when the Review Target is missing", () => {
       const service = new ReviewDecisionService();
       const chain = createValidChain();

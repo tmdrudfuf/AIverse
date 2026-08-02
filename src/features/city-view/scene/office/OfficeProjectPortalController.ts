@@ -68,7 +68,7 @@ import {
   createReviewerRuntimeResultCollection,
 } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
-import { ReviewDecisionService } from "./review-decision/ReviewDecisionService";
+import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import {
   createReviewPromotionCollection,
   createReviewPromotionResultCollection,
@@ -2263,84 +2263,36 @@ export class OfficeProjectPortalController {
     );
     if (!plan) return false;
 
-    const readiness = this.state.executionReadinessCollections[projectId]?.readiness.find(
-      (item) => item.executionPlanId === plan.planId,
-    );
-    const readinessResult = readiness
-      ? this.state.executionReadinessResultCollections[projectId]?.results.find((item) =>
-        item.executionPlanId === plan.planId && item.readinessId === readiness.readinessId
-      )
-      : undefined;
-    const approval = this.state.humanExecutionApprovalCollections[projectId]?.approvals.find(
-      (item) => item.executionPlanId === plan.planId,
-    );
-    const preflight = this.state.runtimePreflightCollections[projectId]?.preflights.find(
-      (item) => item.executionPlanId === plan.planId,
-    );
-    const preflightResult = preflight
-      ? this.state.runtimePreflightResultCollections[projectId]?.results.find((item) =>
-        item.executionPlanId === plan.planId && item.preflightId === preflight.preflightId
-      )
-      : undefined;
-    const runtimeStart = this.state.runtimeStartCollections[projectId]?.starts.find(
-      (item) => item.executionPlanId === plan.planId,
-    );
-    const runtimeStartResult = runtimeStart
-      ? this.state.runtimeStartResultCollections[projectId]?.results.find((item) =>
-        item.executionPlanId === plan.planId && item.runtimeStartId === runtimeStart.runtimeStartId
-      )
-      : undefined;
-    const implementerRuntime = this.state.implementerRuntimeCollections[projectId]?.runtimes.find(
-      (item) => item.executionPlanId === plan.planId,
-    );
-    const implementerRuntimeResult = implementerRuntime
-      ? this.state.implementerRuntimeResultCollections[projectId]?.results.find((item) =>
-        item.executionPlanId === plan.planId && item.implementerRuntimeId === implementerRuntime.implementerRuntimeId
-      )
-      : undefined;
-    const reviewTarget = this.state.reviewTargets[projectId];
-    const reviewerRuntime = implementerRuntime
-      ? this.state.reviewerRuntimeCollections[projectId]?.runtimes.find(
-        (item) => item.implementerRuntimeId === implementerRuntime.implementerRuntimeId,
-      )
-      : undefined;
-    const reviewerRuntimeResult = reviewerRuntime
-      ? this.state.reviewerRuntimeResultCollections[projectId]?.results.find(
-        (item) => item.reviewerRuntimeId === reviewerRuntime.reviewerRuntimeId,
-      )
-      : undefined;
-
     const existingPromotions = this.state.reviewPromotionCollections[projectId]
       ?? createReviewPromotionCollection({ projectId, promotions: [], rulesVersion: REVIEW_PROMOTION_RULES_VERSION });
     const existingPromotionResults = this.state.reviewPromotionResultCollections[projectId]
       ?? createReviewPromotionResultCollection({ projectId, results: [], rulesVersion: REVIEW_PROMOTION_RULES_VERSION });
 
-    const outcome = this.reviewDecisionService.promote(
-      {
-        projectId,
-        executionPlan: plan,
-        readiness,
-        readinessResult,
-        approval,
-        preflight,
-        preflightResult,
-        runtimeStart,
-        runtimeStartResult,
-        implementerRuntime,
-        implementerRuntimeResult,
-        reviewTarget,
-        reviewerRuntime,
-        reviewerRuntimeResult,
-        existingPromotions,
-        existingPromotionResults,
-      },
-      {
-        projectId,
-        reviewerRuntimeId: reviewerRuntime?.reviewerRuntimeId ?? "",
-        actor: "Local Human",
-        requestedAt: new Date().toISOString(),
-      },
-    );
+    const input = resolveReviewDecisionInput({
+      projectId,
+      plan,
+      readinessCollection: this.state.executionReadinessCollections[projectId],
+      readinessResultCollection: this.state.executionReadinessResultCollections[projectId],
+      approvalCollection: this.state.humanExecutionApprovalCollections[projectId],
+      preflightCollection: this.state.runtimePreflightCollections[projectId],
+      preflightResultCollection: this.state.runtimePreflightResultCollections[projectId],
+      runtimeStartCollection: this.state.runtimeStartCollections[projectId],
+      runtimeStartResultCollection: this.state.runtimeStartResultCollections[projectId],
+      implementerRuntimeCollection: this.state.implementerRuntimeCollections[projectId],
+      implementerRuntimeResultCollection: this.state.implementerRuntimeResultCollections[projectId],
+      reviewTarget: this.state.reviewTargets[projectId],
+      reviewerRuntimeCollection: this.state.reviewerRuntimeCollections[projectId],
+      reviewerRuntimeResultCollection: this.state.reviewerRuntimeResultCollections[projectId],
+      existingPromotions,
+      existingPromotionResults,
+    });
+
+    const outcome = this.reviewDecisionService.promote(input, {
+      projectId,
+      reviewerRuntimeId: input.reviewerRuntime?.reviewerRuntimeId ?? "",
+      actor: "Local Human",
+      requestedAt: new Date().toISOString(),
+    });
 
     this.state.reviewPromotionCollections[projectId] = outcome.promotionCollection ?? existingPromotions;
     this.state.reviewPromotionResultCollections[projectId] = outcome.resultCollection ?? existingPromotionResults;

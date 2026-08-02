@@ -1,7 +1,16 @@
-import { createExecutionPlanId, EXECUTION_PLAN_RULES_VERSION } from "../execution-plans/ExecutionPlanTypes";
+import { createExecutionPlanId, EXECUTION_PLAN_RULES_VERSION, type ExecutionPlan } from "../execution-plans/ExecutionPlanTypes";
+import type { ExecutionReadinessCollection, ExecutionReadinessResultCollection } from "../execution-readiness/ExecutionReadinessTypes";
+import type { HumanExecutionApprovalCollection } from "../human-execution-approvals/HumanExecutionApprovalTypes";
+import type { ImplementerRuntimeCollection, ImplementerRuntimeResultCollection } from "../implementer-runtime/ImplementerRuntimeTypes";
+import type { ReviewTarget } from "../reviewer-runtime/ReviewTarget";
+import type { ReviewerRuntimeCollection, ReviewerRuntimeResultCollection } from "../reviewer-runtime/ReviewerRuntimeTypes";
 import { RUNTIME_PREFLIGHT_RULES_VERSION, createRuntimePreflightId } from "../runtime-preflight/RuntimePreflightTypes";
+import type { RuntimePreflightCollection, RuntimePreflightResultCollection } from "../runtime-preflight/RuntimePreflightTypes";
 import { RUNTIME_START_RULES_VERSION, createRuntimeStartId } from "../runtime-start/RuntimeStartTypes";
+import type { RuntimeStartCollection, RuntimeStartResultCollection } from "../runtime-start/RuntimeStartTypes";
 import {
+  type ReviewPromotionCollection,
+  type ReviewPromotionResultCollection,
   REVIEW_PROMOTION_APPROVED_IMPLEMENTER_AGENT,
   REVIEW_PROMOTION_APPROVED_REVIEWER_AGENT,
   REVIEW_PROMOTION_RULES_VERSION,
@@ -277,6 +286,7 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   ) {
     return "REVIEW_PROMOTION_START_STALE";
   }
+  if (runtimeStart.repositoryId !== plan.repositoryId) return "REVIEW_PROMOTION_START_STALE";
 
   if (!implementerRuntime || !implementerRuntimeResult) return "REVIEW_PROMOTION_IMPLEMENTER_MISSING";
   if (implementerRuntime.projectId !== plan.projectId || implementerRuntimeResult.projectId !== plan.projectId) {
@@ -286,6 +296,9 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
   if (implementerRuntime.status !== "Completed" || implementerRuntimeResult.status !== "Completed") {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  if (implementerRuntime.repositoryId !== plan.repositoryId) {
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
   if (
@@ -317,7 +330,8 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   if (
     reviewTarget.projectId !== plan.projectId ||
     reviewTarget.runtimeStartId !== runtimeStart.runtimeStartId ||
-    reviewTarget.implementerRuntimeId !== implementerRuntime.implementerRuntimeId
+    reviewTarget.implementerRuntimeId !== implementerRuntime.implementerRuntimeId ||
+    reviewTarget.repositoryId !== plan.repositoryId
   ) {
     return "REVIEW_PROMOTION_TARGET_MISMATCH";
   }
@@ -347,4 +361,90 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   }
 
   return undefined;
+}
+
+// Single shared assembly of ReviewDecisionInput from raw per-project stage
+// collections, keyed by the given plan. Used by both the Promote action
+// (OfficeProjectPortalController.promoteReviewForPromotion) and the dashboard
+// render (OfficeProjectPortalView.render) so both call classify() against an
+// identically-assembled input rather than each maintaining their own
+// find-by-planId lookups that could drift apart -- see
+// contracts/review-decision-contract.md ("every caller reads the same single
+// classification").
+export function resolveReviewDecisionInput(params: {
+  projectId: string;
+  plan: ExecutionPlan;
+  readinessCollection?: ExecutionReadinessCollection;
+  readinessResultCollection?: ExecutionReadinessResultCollection;
+  approvalCollection?: HumanExecutionApprovalCollection;
+  preflightCollection?: RuntimePreflightCollection;
+  preflightResultCollection?: RuntimePreflightResultCollection;
+  runtimeStartCollection?: RuntimeStartCollection;
+  runtimeStartResultCollection?: RuntimeStartResultCollection;
+  implementerRuntimeCollection?: ImplementerRuntimeCollection;
+  implementerRuntimeResultCollection?: ImplementerRuntimeResultCollection;
+  reviewTarget?: ReviewTarget;
+  reviewerRuntimeCollection?: ReviewerRuntimeCollection;
+  reviewerRuntimeResultCollection?: ReviewerRuntimeResultCollection;
+  existingPromotions?: ReviewPromotionCollection;
+  existingPromotionResults?: ReviewPromotionResultCollection;
+}): ReviewDecisionInput {
+  const { projectId, plan } = params;
+
+  const readiness = params.readinessCollection?.readiness.find((item) => item.executionPlanId === plan.planId);
+  const readinessResult = readiness
+    ? params.readinessResultCollection?.results.find((item) =>
+      item.executionPlanId === plan.planId && item.readinessId === readiness.readinessId
+    )
+    : undefined;
+  const approval = params.approvalCollection?.approvals.find((item) => item.executionPlanId === plan.planId);
+  const preflight = params.preflightCollection?.preflights.find((item) => item.executionPlanId === plan.planId);
+  const preflightResult = preflight
+    ? params.preflightResultCollection?.results.find((item) =>
+      item.executionPlanId === plan.planId && item.preflightId === preflight.preflightId
+    )
+    : undefined;
+  const runtimeStart = params.runtimeStartCollection?.starts.find((item) => item.executionPlanId === plan.planId);
+  const runtimeStartResult = runtimeStart
+    ? params.runtimeStartResultCollection?.results.find((item) =>
+      item.executionPlanId === plan.planId && item.runtimeStartId === runtimeStart.runtimeStartId
+    )
+    : undefined;
+  const implementerRuntime = params.implementerRuntimeCollection?.runtimes.find(
+    (item) => item.executionPlanId === plan.planId,
+  );
+  const implementerRuntimeResult = implementerRuntime
+    ? params.implementerRuntimeResultCollection?.results.find((item) =>
+      item.executionPlanId === plan.planId && item.implementerRuntimeId === implementerRuntime.implementerRuntimeId
+    )
+    : undefined;
+  const reviewerRuntime = implementerRuntime
+    ? params.reviewerRuntimeCollection?.runtimes.find(
+      (item) => item.implementerRuntimeId === implementerRuntime.implementerRuntimeId,
+    )
+    : undefined;
+  const reviewerRuntimeResult = reviewerRuntime
+    ? params.reviewerRuntimeResultCollection?.results.find(
+      (item) => item.reviewerRuntimeId === reviewerRuntime.reviewerRuntimeId,
+    )
+    : undefined;
+
+  return {
+    projectId,
+    executionPlan: plan,
+    readiness,
+    readinessResult,
+    approval,
+    preflight,
+    preflightResult,
+    runtimeStart,
+    runtimeStartResult,
+    implementerRuntime,
+    implementerRuntimeResult,
+    reviewTarget: params.reviewTarget,
+    reviewerRuntime,
+    reviewerRuntimeResult,
+    existingPromotions: params.existingPromotions,
+    existingPromotionResults: params.existingPromotionResults,
+  };
 }

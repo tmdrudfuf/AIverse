@@ -1,48 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import type { ReviewerRuntimeResultCollection } from "../reviewer-runtime/ReviewerRuntimeTypes";
 import { createReviewDecisionDisplayRows } from "./ReviewDecisionView";
-import type { ReviewPromotion, ReviewPromotionCollection } from "./ReviewDecisionTypes";
+import type { ReviewDecisionClassification, ReviewPromotion, ReviewPromotionCollection } from "./ReviewDecisionTypes";
 
 const PROJECT_ID = "daily-proof";
 const WRAP_LENGTH = 78;
 const ROW_PREFIX = "[REVIEW DECISION] ";
 
-function createReviewerResults(
-  status: "Completed" | "TimedOut" | "Blocked" | "Failed" | undefined,
-  decision: "Approved" | "ChangesRequested" | "Unknown" = "Unknown",
+function createClassification(
+  state: ReviewDecisionClassification["state"],
   reviewerRuntimeId = "reviewer-runtime-1",
-): ReviewerRuntimeResultCollection | undefined {
-  if (!status) return undefined;
-  return {
-    projectId: PROJECT_ID,
-    results: [
-      {
-        id: "reviewer-result-1",
-        projectId: PROJECT_ID,
-        runtimeStartId: "runtime-start-1",
-        implementerRuntimeId: "implementer-runtime-1",
-        reviewerRuntimeId: status === "Completed" || status === "TimedOut" ? reviewerRuntimeId : undefined,
-        status,
-        decision,
-        blockingFindingCount: 0,
-        nonBlockingFindingCount: 0,
-        reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
-        started: status === "Completed" || status === "TimedOut",
-        duplicateActiveAttempt: false,
-        agentStarted: status === "Completed" || status === "TimedOut",
-        implementerStarted: true,
-        reviewerStarted: status === "Completed" || status === "TimedOut",
-        validationStarted: false,
-        repositoryMutationStarted: false,
-        githubMutationStarted: false,
-        resultAt: "2026-07-31T00:00:02.000Z",
-        rulesVersion: "codex-reviewer-v1",
-      },
-    ],
-    resultCount: 1,
-    rulesVersion: "codex-reviewer-v1",
-  };
+): ReviewDecisionClassification {
+  return state === "Unavailable" ? { state } : { state, reviewerRuntimeId };
 }
 
 function createPromotion(reviewerRuntimeId = "reviewer-runtime-1"): ReviewPromotion {
@@ -81,47 +50,53 @@ function createPromotions(promotion: ReviewPromotion): ReviewPromotionCollection
 }
 
 describe("createReviewDecisionDisplayRows", () => {
-  it("shows Unavailable when no Reviewer Runtime result exists", () => {
+  it("shows Unavailable when no classification exists", () => {
     const rows = createReviewDecisionDisplayRows(undefined, undefined);
     expect(rows.statusText).toContain("Unavailable");
     expect(rows.statusText).toContain("not promotable");
   });
 
-  it("shows Approved awaiting Promote when Completed+Approved with no promotion yet", () => {
-    const rows = createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved"), undefined);
+  it("shows Approved awaiting Promote when Approved with no promotion yet", () => {
+    const rows = createReviewDecisionDisplayRows(createClassification("Approved"), undefined);
     expect(rows.statusText).toContain("Approved");
     expect(rows.statusText).toContain("Promote (P)");
     expect(rows.statusText).not.toContain("Promoted by");
   });
 
   it("shows Changes Requested and not promotable", () => {
-    const rows = createReviewDecisionDisplayRows(createReviewerResults("Completed", "ChangesRequested"), undefined);
+    const rows = createReviewDecisionDisplayRows(createClassification("ChangesRequested"), undefined);
     expect(rows.statusText).toContain("Changes Requested");
     expect(rows.statusText).toContain("not promotable");
   });
 
   it("shows Blocked and not promotable", () => {
-    const rows = createReviewDecisionDisplayRows(createReviewerResults("Blocked"), undefined);
+    const rows = createReviewDecisionDisplayRows(createClassification("Blocked"), undefined);
     expect(rows.statusText).toContain("Blocked");
     expect(rows.statusText).toContain("not promotable");
   });
 
   it("shows Timed out and not promotable", () => {
-    const rows = createReviewDecisionDisplayRows(createReviewerResults("TimedOut"), undefined);
+    const rows = createReviewDecisionDisplayRows(createClassification("TimedOut"), undefined);
     expect(rows.statusText).toContain("Timed out");
     expect(rows.statusText).toContain("not promotable");
   });
 
   it("shows Failed and not promotable", () => {
-    const rows = createReviewDecisionDisplayRows(createReviewerResults("Failed"), undefined);
+    const rows = createReviewDecisionDisplayRows(createClassification("Failed"), undefined);
     expect(rows.statusText).toContain("Failed");
     expect(rows.statusText).toContain("not promotable");
   });
 
-  it("shows Promoted with the actor when the promotion still matches the current chain", () => {
+  it("shows Stale and not promotable when the upstream chain no longer matches, even with no promotion recorded", () => {
+    const rows = createReviewDecisionDisplayRows(createClassification("Stale"), undefined);
+    expect(rows.statusText).toContain("Stale");
+    expect(rows.statusText).toContain("not promotable");
+  });
+
+  it("shows Promoted with the actor when the promotion still matches the current classification", () => {
     const promotion = createPromotion("reviewer-runtime-1");
     const rows = createReviewDecisionDisplayRows(
-      createReviewerResults("Completed", "Approved", "reviewer-runtime-1"),
+      createClassification("Approved", "reviewer-runtime-1"),
       createPromotions(promotion),
     );
     expect(rows.statusText).toContain("Approved");
@@ -132,14 +107,24 @@ describe("createReviewDecisionDisplayRows", () => {
   it("shows the promotion as historical/not currently applicable once the chain has since changed", () => {
     const promotion = createPromotion("reviewer-runtime-1");
     const rows = createReviewDecisionDisplayRows(
-      createReviewerResults("Completed", "Approved", "reviewer-runtime-2"),
+      createClassification("Approved", "reviewer-runtime-2"),
       createPromotions(promotion),
     );
     expect(rows.statusText).toContain("historical");
     expect(rows.statusText).toContain("not currently applicable");
   });
 
-  it("shows the promotion as historical when the underlying Reviewer Runtime result is gone entirely", () => {
+  it("shows the promotion as historical when the current classification has since gone Stale", () => {
+    const promotion = createPromotion("reviewer-runtime-1");
+    const rows = createReviewDecisionDisplayRows(
+      createClassification("Stale", "reviewer-runtime-1"),
+      createPromotions(promotion),
+    );
+    expect(rows.statusText).toContain("historical");
+    expect(rows.statusText).toContain("not currently applicable");
+  });
+
+  it("shows the promotion as historical when the underlying classification is gone entirely", () => {
     const promotion = createPromotion("reviewer-runtime-1");
     const rows = createReviewDecisionDisplayRows(undefined, createPromotions(promotion));
     expect(rows.statusText).toContain("historical");
@@ -150,13 +135,14 @@ describe("createReviewDecisionDisplayRows", () => {
     const promotion = createPromotion("reviewer-runtime-1");
     const states = [
       createReviewDecisionDisplayRows(undefined, undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "ChangesRequested"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Blocked"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("TimedOut"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Failed"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved", "reviewer-runtime-1"), createPromotions(promotion)),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved", "reviewer-runtime-2"), createPromotions(promotion)),
+      createReviewDecisionDisplayRows(createClassification("Approved"), undefined),
+      createReviewDecisionDisplayRows(createClassification("ChangesRequested"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Blocked"), undefined),
+      createReviewDecisionDisplayRows(createClassification("TimedOut"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Failed"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Stale"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-1"), createPromotions(promotion)),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-2"), createPromotions(promotion)),
     ];
 
     for (const rows of states) {
@@ -168,13 +154,14 @@ describe("createReviewDecisionDisplayRows", () => {
     const promotion = createPromotion("reviewer-runtime-1");
     const states: Array<ReturnType<typeof createReviewDecisionDisplayRows>> = [
       createReviewDecisionDisplayRows(undefined, undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "ChangesRequested"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Blocked"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("TimedOut"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Failed"), undefined),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved", "reviewer-runtime-1"), createPromotions(promotion)),
-      createReviewDecisionDisplayRows(createReviewerResults("Completed", "Approved", "reviewer-runtime-2"), createPromotions(promotion)),
+      createReviewDecisionDisplayRows(createClassification("Approved"), undefined),
+      createReviewDecisionDisplayRows(createClassification("ChangesRequested"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Blocked"), undefined),
+      createReviewDecisionDisplayRows(createClassification("TimedOut"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Failed"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Stale"), undefined),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-1"), createPromotions(promotion)),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-2"), createPromotions(promotion)),
     ];
 
     for (const rows of states) {
