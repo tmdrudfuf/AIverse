@@ -3,7 +3,7 @@ import type { ExecutionReadinessCollection, ExecutionReadinessResultCollection }
 import type { HumanExecutionApprovalCollection } from "../human-execution-approvals/HumanExecutionApprovalTypes";
 import type { ImplementerRuntimeCollection, ImplementerRuntimeResultCollection } from "../implementer-runtime/ImplementerRuntimeTypes";
 import type { ReviewTarget } from "../reviewer-runtime/ReviewTarget";
-import type { ReviewerRuntimeCollection, ReviewerRuntimeResultCollection } from "../reviewer-runtime/ReviewerRuntimeTypes";
+import type { ReviewerRuntimeCollection, ReviewerRuntimeResult, ReviewerRuntimeResultCollection } from "../reviewer-runtime/ReviewerRuntimeTypes";
 import { RUNTIME_PREFLIGHT_RULES_VERSION, createRuntimePreflightId } from "../runtime-preflight/RuntimePreflightTypes";
 import type { RuntimePreflightCollection, RuntimePreflightResultCollection } from "../runtime-preflight/RuntimePreflightTypes";
 import { RUNTIME_START_RULES_VERSION, createRuntimeStartId } from "../runtime-start/RuntimeStartTypes";
@@ -32,7 +32,7 @@ import {
 export class ReviewDecisionService {
   classify(input: ReviewDecisionInput): ReviewDecisionClassification {
     const reviewerRuntime = input.reviewerRuntime;
-    if (!reviewerRuntime) return { state: "Unavailable" };
+    if (!reviewerRuntime) return classifyResultOnly(input.reviewerRuntimeResult);
 
     // "Stale" wins over the Reviewer Runtime's own status/decision whenever
     // the upstream chain no longer revalidates identically to what that
@@ -42,20 +42,7 @@ export class ReviewDecisionService {
       return { state: "Stale", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId };
     }
 
-    switch (reviewerRuntime.status) {
-      case "Blocked":
-        return { state: "Blocked", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId };
-      case "TimedOut":
-        return { state: "TimedOut", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId };
-      case "Failed":
-        return { state: "Failed", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId };
-      case "Completed":
-        return reviewerRuntime.decision === "Approved"
-          ? { state: "Approved", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId }
-          : { state: "ChangesRequested", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId };
-      default:
-        return { state: "ChangesRequested", reviewerRuntimeId: reviewerRuntime.reviewerRuntimeId };
-    }
+    return classifyStatusDecision(reviewerRuntime.status, reviewerRuntime.decision, reviewerRuntime.reviewerRuntimeId);
   }
 
   promote(input: ReviewDecisionInput, request: ReviewPromotionRequest): ReviewPromotionOutcome {
@@ -173,6 +160,51 @@ export class ReviewDecisionService {
       resultCollection: this.upsertResult(existingResults, result),
     };
   }
+}
+
+// Shared by both the Reviewer Runtime branch and the result-only branch of
+// classify() below, so the two paths can never diverge on what a given
+// status/decision pair truthfully means (see review.md, Round 7 P1-001).
+function classifyStatusDecision(
+  status: ReviewerRuntimeResult["status"],
+  decision: ReviewerRuntimeResult["decision"],
+  reviewerRuntimeId: string | undefined,
+): ReviewDecisionClassification {
+  switch (status) {
+    case "Blocked":
+      return { state: "Blocked", reviewerRuntimeId };
+    case "TimedOut":
+      return { state: "TimedOut", reviewerRuntimeId };
+    case "Failed":
+      return { state: "Failed", reviewerRuntimeId };
+    case "Completed":
+      return decision === "Approved"
+        ? { state: "Approved", reviewerRuntimeId }
+        : { state: "ChangesRequested", reviewerRuntimeId };
+    default:
+      return { state: "ChangesRequested", reviewerRuntimeId };
+  }
+}
+
+// A "result-only" Reviewer Runtime Result -- one with no reviewerRuntimeId
+// at all, meaning ReviewerRuntimeService.startReviewer never constructed a
+// matching Reviewer Runtime record (a pre-spawn Blocked/Failed validation
+// outcome) -- still carries a truthful terminal status/decision that must
+// not be hidden behind "Unavailable" (see review.md, Round 7 P1-001). A
+// result that references a reviewerRuntimeId but has no matching Reviewer
+// Runtime in the current chain is a dangling/inconsistent reference, not a
+// genuine result-only outcome, and remains Unavailable exactly as before.
+// A result-only outcome can never back an Approved promotion, since there
+// is no Reviewer Runtime to revalidate the chain against; an apparent
+// "Approved" result-only decision is therefore treated exactly like
+// ChangesRequested -- truthfully non-approved, never promotable. No
+// reviewerRuntimeId is ever attached, so promote()'s existing precondition 1
+// (classification.reviewerRuntimeId !== request.reviewerRuntimeId) already
+// blocks promotion for this branch without any further change.
+function classifyResultOnly(reviewerRuntimeResult: ReviewerRuntimeResult | undefined): ReviewDecisionClassification {
+  if (!reviewerRuntimeResult || reviewerRuntimeResult.reviewerRuntimeId) return { state: "Unavailable" };
+  const classification = classifyStatusDecision(reviewerRuntimeResult.status, reviewerRuntimeResult.decision, undefined);
+  return classification.state === "Approved" ? { state: "ChangesRequested" } : classification;
 }
 
 function reasonForNonApproved(state: ReviewDecisionClassification["state"]): ReviewPromotionReasonCode {
@@ -484,11 +516,25 @@ export function resolveReviewDecisionInput(params: {
       (item) => item.implementerRuntimeId === implementerRuntime.implementerRuntimeId,
     )
     : undefined;
+  // A "result-only" Reviewer Runtime Result (no ReviewerRuntime record was
+  // ever constructed -- malformed command, context/role/target validation
+  // failure, or a pre-spawn Blocked/Failed provider outcome) has no
+  // reviewerRuntimeId to look up by. Fall back to matching it directly
+  // against the current Implementer Runtime/Runtime Start chain so
+  // classify() can still surface its truthful status instead of treating it
+  // as Unavailable (see review.md, Round 7 P1-001).
   const reviewerRuntimeResult = reviewerRuntime
     ? params.reviewerRuntimeResultCollection?.results.find(
       (item) => item.reviewerRuntimeId === reviewerRuntime.reviewerRuntimeId,
     )
-    : undefined;
+    : implementerRuntime
+      ? params.reviewerRuntimeResultCollection?.results.find(
+        (item) =>
+          !item.reviewerRuntimeId &&
+          item.implementerRuntimeId === implementerRuntime.implementerRuntimeId &&
+          item.runtimeStartId === runtimeStart?.runtimeStartId,
+      )
+      : undefined;
 
   return {
     projectId,

@@ -722,6 +722,101 @@ describe("ReviewDecisionService.classify", () => {
       expect(classification.state).toBe("Stale");
     });
   });
+
+  // Round 7 P1-001: ReviewerRuntimeService's createBlockedOutcome/not-spawned
+  // paths (malformed command, context/role/target validation failure, or a
+  // pre-spawn Blocked/Failed provider outcome) produce a ReviewerRuntimeResult
+  // with no matching ReviewerRuntime at all -- reviewerRuntimeId is left
+  // undefined. classify() must surface that result's truthful status instead
+  // of collapsing it to Unavailable.
+  describe("result-only Reviewer Runtime Result (no ReviewerRuntime record)", () => {
+    function createResultOnlyResult(
+      chain: ReturnType<typeof createValidChain>,
+      overrides: Partial<ReviewerRuntimeResult> = {},
+    ): ReviewerRuntimeResult {
+      return { ...createReviewerRuntimeResult(chain.reviewerRuntime), reviewerRuntimeId: undefined, ...overrides };
+    }
+
+    it.each([
+      ["Blocked", "Unknown", "Blocked"],
+      ["Failed", "Unknown", "Failed"],
+      ["TimedOut", "Unknown", "TimedOut"],
+      ["Completed", "Unknown", "ChangesRequested"],
+      ["Completed", "ChangesRequested", "ChangesRequested"],
+      ["Completed", "Approved", "ChangesRequested"],
+    ] as const)(
+      "classifies a result-only status=%s/decision=%s truthfully as %s (never Approved) when no ReviewerRuntime exists",
+      (status, decision, expectedState) => {
+        const service = new ReviewDecisionService();
+        const chain = createValidChain();
+        const reviewerRuntimeResult = createResultOnlyResult(chain, { status, decision });
+        const classification = service.classify({ ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult });
+
+        expect(classification.state).toBe(expectedState);
+        expect(classification.reviewerRuntimeId).toBeUndefined();
+      },
+    );
+
+    it("still returns Unavailable for a dangling result reference (reviewerRuntimeId set, but no matching ReviewerRuntime) -- distinct from a genuine result-only record", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const classification = service.classify({ ...createInput(chain), reviewerRuntime: undefined });
+
+      expect(classification.state).toBe("Unavailable");
+    });
+
+    it("returns Unavailable when neither a ReviewerRuntime nor any Reviewer Runtime Result exists", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const classification = service.classify({ ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult: undefined });
+
+      expect(classification.state).toBe("Unavailable");
+    });
+
+    it.each(["Blocked", "Failed", "TimedOut"] as const)(
+      "cannot Promote a result-only %s outcome, and creates no ReviewPromotion record",
+      (status) => {
+        const service = new ReviewDecisionService();
+        const chain = createValidChain();
+        const reviewerRuntimeResult = createResultOnlyResult(chain, { status, decision: "Unknown" });
+
+        const outcome = service.promote(
+          { ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult },
+          createRequest(chain),
+        );
+
+        expect(outcome.result.granted).toBe(false);
+        expect(outcome.promotion).toBeUndefined();
+        expect(outcome.promotionCollection).toBeUndefined();
+      },
+    );
+
+    it("cannot Promote a result-only Approved outcome without a matching ReviewerRuntime, and creates no ReviewPromotion record", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const reviewerRuntimeResult = createResultOnlyResult(chain, { status: "Completed", decision: "Approved" });
+
+      const outcome = service.promote(
+        { ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult },
+        createRequest(chain),
+      );
+
+      expect(outcome.result.granted).toBe(false);
+      expect(outcome.promotion).toBeUndefined();
+      expect(outcome.promotionCollection).toBeUndefined();
+    });
+
+    it("does not mutate the source result-only Reviewer Runtime Result when Promote is blocked", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const reviewerRuntimeResult = createResultOnlyResult(chain, { status: "Blocked", decision: "Unknown" });
+      const snapshot = { ...reviewerRuntimeResult };
+
+      service.promote({ ...createInput(chain), reviewerRuntime: undefined, reviewerRuntimeResult }, createRequest(chain));
+
+      expect(reviewerRuntimeResult).toEqual(snapshot);
+    });
+  });
 });
 
 describe("ReviewDecisionService.promote", () => {

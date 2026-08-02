@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { ReviewerRuntimeOutcome } from "./reviewer-runtime/ReviewerRuntimeTypes";
+import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
+import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import {
   createInput,
   createSceneStub,
@@ -110,7 +111,65 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(internals.state.reviewerRuntimeResultCollections[PROJECT_ID]).toBeUndefined();
     expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions).toEqual([recordedPromotion]);
   });
+
+  // Round 7 P1-001: a pre-spawn Blocked/Failed Reviewer Runtime outcome
+  // never constructs a ReviewerRuntime record, only a "result-only"
+  // ReviewerRuntimeResult. Both the [REVIEW DECISION] dashboard row
+  // (OfficeProjectPortalView) and the Promote precondition
+  // (promoteReviewForPromotion) must read that outcome identically, since
+  // both call resolveReviewDecisionInput + ReviewDecisionService.classify
+  // against the same state.
+  it.each(["Blocked", "Failed"] as const)(
+    "surfaces a result-only %s Reviewer Runtime outcome identically to the dashboard classification, blocks Promote, and creates no ReviewPromotion",
+    async (status) => {
+      const controller = new OfficeProjectPortalController(createSceneStub());
+      const internals = getControllerInternals(controller);
+      await driveDailyProofToResultOnlyReviewer(controller, internals, status);
+
+      const classification = classifyCurrentReviewDecision(internals);
+      expect(classification.state).toBe(status);
+      expect(classification.reviewerRuntimeId).toBeUndefined();
+
+      controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+      expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions ?? []).toHaveLength(0);
+      const results = internals.state.reviewPromotionResultCollections?.[PROJECT_ID]?.results;
+      expect(results).toHaveLength(1);
+      expect(results![0].granted).toBe(false);
+    },
+  );
 });
+
+/**
+ * Classifies the project's current Review Decision the exact same way
+ * OfficeProjectPortalView.render does (resolveReviewDecisionInput +
+ * ReviewDecisionService.classify against the live controller state), so a
+ * test can assert the dashboard and the Promote precondition agree without
+ * duplicating ReviewDecisionService's own classify() unit tests here.
+ */
+function classifyCurrentReviewDecision(internals: ControllerInternals) {
+  const plan = internals.state.executionPlanCollections[PROJECT_ID]?.plans[0];
+  if (!plan) throw new Error("Test setup failed to reach an Execution Plan.");
+
+  return new ReviewDecisionService().classify(
+    resolveReviewDecisionInput({
+      projectId: PROJECT_ID,
+      plan,
+      readinessCollection: internals.state.executionReadinessCollections[PROJECT_ID],
+      readinessResultCollection: internals.state.executionReadinessResultCollections[PROJECT_ID],
+      approvalCollection: internals.state.humanExecutionApprovalCollections[PROJECT_ID],
+      preflightCollection: internals.state.runtimePreflightCollections[PROJECT_ID],
+      preflightResultCollection: internals.state.runtimePreflightResultCollections[PROJECT_ID],
+      runtimeStartCollection: internals.state.runtimeStartCollections[PROJECT_ID],
+      runtimeStartResultCollection: internals.state.runtimeStartResultCollections[PROJECT_ID],
+      implementerRuntimeCollection: internals.state.implementerRuntimeCollections[PROJECT_ID],
+      implementerRuntimeResultCollection: internals.state.implementerRuntimeResultCollections[PROJECT_ID],
+      reviewTarget: internals.state.reviewTargets?.[PROJECT_ID],
+      reviewerRuntimeCollection: internals.state.reviewerRuntimeCollections[PROJECT_ID],
+      reviewerRuntimeResultCollection: internals.state.reviewerRuntimeResultCollections[PROJECT_ID],
+    }),
+  );
+}
 
 /**
  * Drives a promoted Daily Proof candidate task all the way through a
@@ -184,6 +243,68 @@ async function driveDailyProofToApprovedReviewer(
   if (storedReviewTarget) {
     internals.state.reviewTargets![PROJECT_ID] = { ...storedReviewTarget, workingTreeState: "Clean" };
   }
+
+  return { promotedTaskId };
+}
+
+/**
+ * Drives a promoted Daily Proof candidate task through a Completed
+ * Implementer Runtime, then stubs a pre-spawn Blocked/Failed Reviewer
+ * Runtime outcome -- the real "result-only" shape ReviewerRuntimeService
+ * produces when it never constructs a ReviewerRuntime record (see
+ * createReviewerOutcomeForRuntime's !spawned branch below).
+ */
+async function driveDailyProofToResultOnlyReviewer(
+  controller: OfficeProjectPortalController,
+  internals: ControllerInternals,
+  status: "Blocked" | "Failed",
+): Promise<{ promotedTaskId: string }> {
+  const { promotedTaskId } = await driveDailyProofToRuntimeStart(controller, internals);
+
+  const plan = internals.state.executionPlanCollections[PROJECT_ID]?.plans[0];
+  const runtimeStart = internals.state.runtimeStartCollections[PROJECT_ID]?.starts[0];
+  if (!plan || !runtimeStart) {
+    throw new Error("Test setup failed to reach an Execution Plan and Runtime Start.");
+  }
+
+  internals.implementerRuntimeService = {
+    startImplementer: vi.fn(async () =>
+      createImplementerOutcomeForPlan(plan.planId, runtimeStart.runtimeStartId, plan.worktreePath, plan.branchName, plan.specPath, "Completed"),
+    ),
+    upsertResult: realUpsertResult(internals),
+  };
+  await internals.startImplementerRuntimeForPromotion(PROJECT_ID, promotedTaskId);
+
+  const implementerRuntime = internals.state.implementerRuntimeCollections[PROJECT_ID]?.runtimes[0];
+  if (!implementerRuntime || implementerRuntime.status !== "Completed") {
+    throw new Error("Test setup failed to reach a Completed Implementer Runtime.");
+  }
+
+  const reviewTarget = resolveReviewTarget(plan, runtimeStart, implementerRuntime);
+  internals.reviewerRuntimeService = {
+    startReviewer: vi.fn(async () =>
+      createReviewerOutcomeForRuntime(
+        runtimeStart.runtimeStartId,
+        implementerRuntime.implementerRuntimeId,
+        reviewTarget.reviewTargetId,
+        plan.worktreePath,
+        plan.branchName,
+        plan.specPath,
+        status,
+        "Unknown",
+      ),
+    ),
+    upsertResult: realUpsertReviewerResult(internals),
+  };
+  await internals.startReviewerRuntimeForPromotion(PROJECT_ID, promotedTaskId);
+
+  const reviewerResult = internals.state.reviewerRuntimeResultCollections[PROJECT_ID]?.results.at(-1);
+  if (reviewerResult?.status !== status || reviewerResult.reviewerRuntimeId !== undefined) {
+    throw new Error(
+      `Test setup failed to reach a result-only ${status} Reviewer Runtime Result (found status ${reviewerResult?.status}, reviewerRuntimeId ${reviewerResult?.reviewerRuntimeId}) -- fixture drifted from the real controller flow.`,
+    );
+  }
+  expect(internals.state.reviewerRuntimeCollections[PROJECT_ID]).toBeUndefined();
 
   return { promotedTaskId };
 }
