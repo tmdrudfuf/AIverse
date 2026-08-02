@@ -287,6 +287,24 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
     return "REVIEW_PROMOTION_START_STALE";
   }
   if (runtimeStart.repositoryId !== plan.repositoryId) return "REVIEW_PROMOTION_START_STALE";
+  if (
+    runtimeStart.executionPlanId !== plan.planId ||
+    runtimeStart.humanExecutionApprovalId !== approval.approvalId ||
+    runtimeStart.runtimePreflightId !== preflight.preflightId ||
+    runtimeStart.taskId !== plan.projectTaskId ||
+    runtimeStart.confirmedAssignmentId !== plan.confirmedAssignmentId ||
+    runtimeStart.preparedSessionId !== plan.preparedSessionId ||
+    runtimeStart.activeSessionId !== plan.activeSessionId ||
+    runtimeStart.employeeId !== plan.employeeId
+  ) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
+  if (runtimeStart.worktreePath !== plan.worktreePath || runtimeStart.repositoryRoot !== plan.repositoryPath) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
+  if (runtimeStart.branch !== plan.branchName || runtimeStart.specificationPath !== plan.specPath) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
 
   if (!implementerRuntime || !implementerRuntimeResult) return "REVIEW_PROMOTION_IMPLEMENTER_MISSING";
   if (implementerRuntime.projectId !== plan.projectId || implementerRuntimeResult.projectId !== plan.projectId) {
@@ -301,11 +319,20 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   if (implementerRuntime.repositoryId !== plan.repositoryId) {
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
+  if (implementerRuntime.worktreePath !== plan.worktreePath || implementerRuntime.branch !== plan.branchName) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  if (implementerRuntime.specificationPath !== plan.specPath) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
   if (
     implementerRuntimeResult.executionPlanId !== plan.planId ||
     implementerRuntimeResult.runtimeStartId !== runtimeStart.runtimeStartId ||
     implementerRuntimeResult.implementerRuntimeId !== implementerRuntime.implementerRuntimeId
   ) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  if (implementerRuntime.reviewerStarted || implementerRuntime.validationStarted || implementerRuntime.githubMutationStarted) {
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
 
@@ -335,6 +362,17 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   ) {
     return "REVIEW_PROMOTION_TARGET_MISMATCH";
   }
+  if (
+    reviewTarget.worktreePath !== plan.worktreePath ||
+    reviewTarget.featureBranch !== plan.branchName ||
+    reviewTarget.specificationPath !== plan.specPath
+  ) {
+    return "REVIEW_PROMOTION_TARGET_MISMATCH";
+  }
+  // A target the policy cannot honestly call committed and clean can never
+  // back an Approved promotion -- mirrors ReviewerRuntimeService.validateReviewTarget's
+  // clean-working-tree guard (see ReviewTarget.ts, "Exact-HEAD Gate").
+  if (reviewTarget.workingTreeState !== "Clean") return "REVIEW_PROMOTION_TARGET_MISMATCH";
 
   if (!reviewerRuntime) return "REVIEW_PROMOTION_REVIEWER_MISSING";
   if (

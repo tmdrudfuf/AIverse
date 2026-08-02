@@ -612,6 +612,15 @@ describe("ReviewDecisionService.classify", () => {
       expect(classification.state).toBe("Stale");
     });
 
+    it("is Stale when the Implementer Runtime's own reviewerStarted/validationStarted/githubMutationStarted flags are not all false", () => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const implementerRuntime = { ...chain.implementerRuntime, validationStarted: true as unknown as false };
+      const classification = service.classify({ ...createInput(chain), implementerRuntime });
+
+      expect(classification.state).toBe("Stale");
+    });
+
     it("is Stale when the Implementer Runtime is no longer Completed", () => {
       const service = new ReviewDecisionService();
       const chain = createValidChain();
@@ -670,6 +679,33 @@ describe("ReviewDecisionService.classify", () => {
       const chain = createValidChain();
       const reviewerRuntime = { ...chain.reviewerRuntime, worktreePath: "C:/some/other/worktree" };
       const classification = service.classify({ ...createInput(chain), reviewerRuntime });
+
+      expect(classification.state).toBe("Stale");
+    });
+
+    // Round 5/6 comprehensive parity audit (see .agent-workflow/spec-077-parity-audit.md):
+    // validateChain now mirrors ReviewerRuntimeService.validateContext/validateReviewTarget's
+    // worktree/branch/spec linkage and clean-working-tree checks for Runtime Start, Implementer
+    // Runtime, and Review Target -- table-driven so every field/record pairing gets one focused
+    // case.
+    it.each([
+      ["Runtime Start worktreePath", (c: ReturnType<typeof createValidChain>) => ({ runtimeStart: { ...c.runtimeStart, worktreePath: "C:/other/worktree" } })],
+      ["Runtime Start repositoryRoot", (c: ReturnType<typeof createValidChain>) => ({ runtimeStart: { ...c.runtimeStart, repositoryRoot: "C:/other/repo" } })],
+      ["Runtime Start branch", (c: ReturnType<typeof createValidChain>) => ({ runtimeStart: { ...c.runtimeStart, branch: "some-other-branch" } })],
+      ["Runtime Start specificationPath", (c: ReturnType<typeof createValidChain>) => ({ runtimeStart: { ...c.runtimeStart, specificationPath: "specs/other/spec.md" } })],
+      ["Runtime Start executionPlanId", (c: ReturnType<typeof createValidChain>) => ({ runtimeStart: { ...c.runtimeStart, executionPlanId: "a-different-plan-id" } })],
+      ["Implementer Runtime worktreePath", (c: ReturnType<typeof createValidChain>) => ({ implementerRuntime: { ...c.implementerRuntime, worktreePath: "C:/other/worktree" } })],
+      ["Implementer Runtime branch", (c: ReturnType<typeof createValidChain>) => ({ implementerRuntime: { ...c.implementerRuntime, branch: "some-other-branch" } })],
+      ["Implementer Runtime specificationPath", (c: ReturnType<typeof createValidChain>) => ({ implementerRuntime: { ...c.implementerRuntime, specificationPath: "specs/other/spec.md" } })],
+      ["Review Target worktreePath", (c: ReturnType<typeof createValidChain>) => ({ reviewTarget: { ...c.reviewTarget, worktreePath: "C:/other/worktree" } })],
+      ["Review Target featureBranch", (c: ReturnType<typeof createValidChain>) => ({ reviewTarget: { ...c.reviewTarget, featureBranch: "some-other-branch" } })],
+      ["Review Target specificationPath", (c: ReturnType<typeof createValidChain>) => ({ reviewTarget: { ...c.reviewTarget, specificationPath: "specs/other/spec.md" } })],
+      ["Review Target workingTreeState (dirty)", (c: ReturnType<typeof createValidChain>) => ({ reviewTarget: { ...c.reviewTarget, workingTreeState: "Uncommitted" as const } })],
+    ] as const)("is Stale when %s no longer matches the plan", (_label, buildOverride) => {
+      const service = new ReviewDecisionService();
+      const chain = createValidChain();
+      const override = buildOverride(chain);
+      const classification = service.classify({ ...createInput(chain), ...override });
 
       expect(classification.state).toBe("Stale");
     });
@@ -769,6 +805,66 @@ describe("ReviewDecisionService.promote", () => {
       expect(outcome.result.granted).toBe(false);
       expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_INVALID_ACTOR");
     }
+  });
+
+  it("blocks Promote when the Review Target's working tree is not Clean (comprehensive parity audit)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewTarget = { ...chain.reviewTarget, workingTreeState: "Uncommitted" as const };
+
+    const outcome = service.promote({ ...createInput(chain), reviewTarget }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
+  });
+
+  it("blocks Promote and records no promotion when the Runtime Start's branch no longer matches the plan (comprehensive parity audit)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const runtimeStart = { ...chain.runtimeStart, branch: "some-other-branch" };
+
+    const outcome = service.promote({ ...createInput(chain), runtimeStart }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
+    expect(outcome.promotionCollection).toBeUndefined();
+  });
+
+  it("does not mutate the source Reviewer Runtime/Result when a parity check blocks Promote", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewTarget = { ...chain.reviewTarget, workingTreeState: "Uncommitted" as const };
+    const reviewerRuntimeSnapshot = { ...chain.reviewerRuntime };
+    const reviewerRuntimeResultSnapshot = { ...chain.reviewerRuntimeResult };
+
+    service.promote({ ...createInput(chain), reviewTarget }, createRequest(chain));
+
+    expect(chain.reviewerRuntime).toEqual(reviewerRuntimeSnapshot);
+    expect(chain.reviewerRuntimeResult).toEqual(reviewerRuntimeResultSnapshot);
+  });
+
+  it("still grants Promote for a valid exact chain after the comprehensive parity checks were added", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+
+    const outcome = service.promote(createInput(chain), createRequest(chain));
+
+    expect(outcome.result.granted).toBe(true);
+    expect(outcome.promotion?.decision).toBe("Approved");
+  });
+
+  it("keeps project isolation: a chain for a different projectId never satisfies this project's plan check", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const plan = { ...chain.plan, projectId: "some-other-project" };
+
+    const outcome = service.promote({ ...createInput(chain), executionPlan: plan }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
   });
 
   it("keeps validationStarted/repositoryMutationStarted/githubMutationStarted false on every outcome result", () => {

@@ -77,6 +77,7 @@ export type ControllerInternals = {
     implementerRuntimeResultCollections: Record<string, ImplementerRuntimeResultCollection>;
     reviewerRuntimeCollections: Record<string, ReviewerRuntimeCollection>;
     reviewerRuntimeResultCollections: Record<string, ReviewerRuntimeResultCollection>;
+    reviewTargets?: ProjectPortalState["reviewTargets"];
     reviewPromotionCollections?: ProjectPortalState["reviewPromotionCollections"];
     reviewPromotionResultCollections?: ProjectPortalState["reviewPromotionResultCollections"];
     taskCollections: Record<string, TaskCollection>;

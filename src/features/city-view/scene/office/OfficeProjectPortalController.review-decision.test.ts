@@ -173,6 +173,18 @@ async function driveDailyProofToApprovedReviewer(
     );
   }
 
+  // The controller resolves its own Review Target internally (independent of
+  // the stubbed startReviewer above) via the real resolveReviewTarget, which
+  // always reports "Uncommitted" in this represented pipeline -- the same
+  // limitation OfficeProjectPortalController.reviewer-runtime.test.ts already
+  // documents and forces past. Promote's own chain revalidation now requires
+  // a Clean target (see ReviewDecisionService.validateChain), so this test's
+  // stored Review Target is forced Clean the same way.
+  const storedReviewTarget = internals.state.reviewTargets?.[PROJECT_ID];
+  if (storedReviewTarget) {
+    internals.state.reviewTargets![PROJECT_ID] = { ...storedReviewTarget, workingTreeState: "Clean" };
+  }
+
   return { promotedTaskId };
 }
 
