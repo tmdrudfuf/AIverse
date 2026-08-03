@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createImplementerRuntimeId, createImplementerRuntimeResultId } from "./implementer-runtime/ImplementerRuntimeTypes";
 import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
+import { createReviewerRuntimeId, createReviewerRuntimeResultId } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
@@ -374,11 +376,11 @@ function createImplementerOutcomeForPlan(
 ) {
   const spawned = status === "Completed" || status === "TimedOut";
   const result = {
-    id: `${PROJECT_ID}:implementer-runtime-result:${planId}:${status}`,
+    id: createImplementerRuntimeResultId(PROJECT_ID, runtimeStartId),
     projectId: PROJECT_ID,
     runtimeStartId,
     executionPlanId: planId,
-    implementerRuntimeId: spawned ? `${PROJECT_ID}:implementer-runtime:${runtimeStartId}:claude-implementer-v1` : undefined,
+    implementerRuntimeId: spawned ? createImplementerRuntimeId(PROJECT_ID, runtimeStartId) : undefined,
     status,
     reasonCodes: ["IMPLEMENTER_RUNTIME_STARTED" as const],
     started: spawned,
@@ -394,7 +396,7 @@ function createImplementerOutcomeForPlan(
   };
 
   const runtime = {
-    implementerRuntimeId: `${PROJECT_ID}:implementer-runtime:${runtimeStartId}:claude-implementer-v1`,
+    implementerRuntimeId: createImplementerRuntimeId(PROJECT_ID, runtimeStartId),
     projectId: PROJECT_ID,
     runtimeStartId,
     executionPlanId: planId,
@@ -462,9 +464,9 @@ function createReviewerOutcomeForRuntime(
   decision: "Approved" | "ChangesRequested" | "Unknown",
 ): ReviewerRuntimeOutcome {
   const spawned = status === "Completed" || status === "TimedOut";
-  const reviewerRuntimeId = `${PROJECT_ID}:reviewer-runtime:${runtimeStartId}:codex-reviewer-v1`;
+  const reviewerRuntimeId = createReviewerRuntimeId(PROJECT_ID, reviewTargetId);
   const result = {
-    id: `${PROJECT_ID}:reviewer-runtime-result:${runtimeStartId}:${status}`,
+    id: createReviewerRuntimeResultId(PROJECT_ID, reviewTargetId),
     projectId: PROJECT_ID,
     runtimeStartId,
     implementerRuntimeId,

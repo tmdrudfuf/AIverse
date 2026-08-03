@@ -1,0 +1,39 @@
+# Data Model: Review Runtime Chain Integrity Consolidation
+
+No new entities, no new persisted fields, no new reason codes. This spec adds one new pure function operating over the exact `ReviewDecisionInput` shape Spec 077 already defined. This document exists to carry the one artifact a reviewer needs that spec.md/plan.md don't already state as prose: the per-stage id-helper / rulesVersion table every check in `ReviewRuntimeChainIntegrityService.ts` is built from.
+
+## `validateReviewRuntimeChainIntegrity`
+
+```ts
+function validateReviewRuntimeChainIntegrity(
+  input: ReviewDecisionInput,
+): ReviewPromotionReasonCode | undefined
+```
+
+Pure function. Returns `undefined` when the entire chain is valid; otherwise the first-failing stage's existing `REVIEW_PROMOTION_*` reason code, stages checked in chain order (Execution Plan → Reviewer Runtime Result).
+
+## Per-stage id / rulesVersion / reason-code table
+
+| Stage | Deterministic id helper | Rules version constant | Reason code (shared across all checks in this stage) | Gap closed by this spec |
+|---|---|---|---|---|
+| 1. Execution Plan | `createExecutionPlanId(projectId, activeSessionId)` | `EXECUTION_PLAN_RULES_VERSION` | `REVIEW_PROMOTION_PLAN_INVALID` | none — already checked pre-078 |
+| 2. Execution Readiness | `createExecutionReadinessId(projectId, executionPlanId)` | `EXECUTION_READINESS_RULES_VERSION` | `REVIEW_PROMOTION_READINESS_NOT_READY` | id recompute, rulesVersion, `readinessResult.readinessId` linkage |
+| 3. Human Execution Approval | `createHumanExecutionApprovalId(projectId, executionPlanId)` | `HUMAN_EXECUTION_APPROVAL_RULES_VERSION` | `REVIEW_PROMOTION_APPROVAL_STALE` | id recompute, rulesVersion, `approval.readinessId` linkage |
+| 4. Runtime Preflight | `createRuntimePreflightId(projectId, executionPlanId)` | `RUNTIME_PREFLIGHT_RULES_VERSION` | `REVIEW_PROMOTION_PREFLIGHT_NOT_READY` | linkage only (`approvalId`, `preflightResult.preflightId`) — id/rulesVersion already checked pre-078 |
+| 5. Runtime Start | `createRuntimeStartId(projectId, executionPlanId)` | `RUNTIME_START_RULES_VERSION` | `REVIEW_PROMOTION_START_STALE` | `runtimeStartResult.runtimeStartId` linkage, `validationCommands`/`mutationScope` array equality — id/rulesVersion already checked pre-078 |
+| 6. Implementer Runtime | `createImplementerRuntimeId(projectId, runtimeStartId)` | `IMPLEMENTER_RUNTIME_RULES_VERSION` | `REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED` (existence: `REVIEW_PROMOTION_IMPLEMENTER_MISSING`) | id recompute, rulesVersion |
+| 7. Implementer Runtime Result | `createImplementerRuntimeResultId(projectId, runtimeStartId)` | `IMPLEMENTER_RUNTIME_RULES_VERSION` | `REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED` | id recompute, rulesVersion |
+| 8. Review Target | `createReviewTargetId(projectId, runtimeStartId, reviewTargetSha)` | `REVIEW_TARGET_RULES_VERSION` | `REVIEW_PROMOTION_TARGET_MISMATCH` | id recompute (transitively re-verifies `reviewTargetSha`), rulesVersion, `mergeBaseSha === baseSha` invariant |
+| 9. Reviewer Runtime | `createReviewerRuntimeId(projectId, reviewTargetId)` | `REVIEWER_RUNTIME_RULES_VERSION` | `REVIEW_PROMOTION_REVIEWER_STALE` (existence: `REVIEW_PROMOTION_REVIEWER_MISSING`) | id recompute, rulesVersion — **the reported Round-10 P1-001 gap** |
+| 10. Reviewer Runtime Result | `createReviewerRuntimeResultId(projectId, reviewTargetId)` | `REVIEWER_RUNTIME_RULES_VERSION` | `REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED` | id recompute, rulesVersion — **the reported Round-10 P1-001 gap** |
+| — Role binding (Implementer/Reviewer agent + `approvedImplementerAgent`/`approvedReviewerAgent`) | n/a (constant comparison, not an id) | n/a | `REVIEW_PROMOTION_ROLE_MISMATCH` | none — already checked pre-078 |
+| — Review Decision (derived) | n/a — no id, no rulesVersion | n/a | n/a | intentionally non-applicable (see spec.md Assumptions) |
+| — Review Promotion / Result | `createReviewPromotionId`/`createReviewPromotionResultId` | `REVIEW_PROMOTION_RULES_VERSION` | n/a (output, not a validated input) | intentionally out of scope — see plan.md Decision 5 |
+
+Full per-stage before/after narrative, including which checks already existed before this spec and the exact grep evidence each creation-site helper usage was confirmed against, is in `.agent-workflow/spec-078-chain-integrity-audit.md`.
+
+## Validation Rules (unchanged from Spec 077, restated for completeness)
+
+- Every stage's existing linkage checks (project match, upstream-id match, status/flag checks) are preserved verbatim — this spec adds id/rulesVersion checks alongside them, it does not remove or loosen any pre-existing check.
+- A record's id is always recomputed using the exact same canonical helper call shape its own creation service uses (same argument order, same default `rulesVersion` parameter) — never a duplicated inline template string.
+- A missing, unsupported, or mismatched `rulesVersion` blocks with the same reason code an id mismatch at that stage would produce — there is no separate "unsupported version" reason code family, since every existing `REVIEW_PROMOTION_*` code already means "this stage is not trustworthy," which a bad rules version equally is.

@@ -8,7 +8,11 @@ import {
   type ExecutionReadiness,
   type ExecutionReadinessResult,
 } from "../execution-readiness/ExecutionReadinessTypes";
-import { HUMAN_EXECUTION_APPROVAL_RULES_VERSION, type HumanExecutionApproval } from "../human-execution-approvals/HumanExecutionApprovalTypes";
+import {
+  HUMAN_EXECUTION_APPROVAL_RULES_VERSION,
+  createHumanExecutionApprovalId,
+  type HumanExecutionApproval,
+} from "../human-execution-approvals/HumanExecutionApprovalTypes";
 import {
   IMPLEMENTER_RUNTIME_RULES_VERSION,
   createImplementerRuntimeId,
@@ -117,7 +121,7 @@ function createReadinessResult(readiness: ExecutionReadiness, overrides: Partial
 
 function createApproval(plan: ExecutionPlan, readiness: ExecutionReadiness, overrides: Partial<HumanExecutionApproval> = {}): HumanExecutionApproval {
   return {
-    approvalId: `${plan.projectId}:approval:${plan.planId}:${HUMAN_EXECUTION_APPROVAL_RULES_VERSION}`,
+    approvalId: createHumanExecutionApprovalId(plan.projectId, plan.planId),
     projectId: plan.projectId,
     executionPlanId: plan.planId,
     readinessId: readiness.readinessId,
