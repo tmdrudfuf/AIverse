@@ -38,7 +38,7 @@ import {
   type ReviewerRuntime,
   type ReviewerRuntimeResult,
 } from "../reviewer-runtime/ReviewerRuntimeTypes";
-import { ReviewDecisionService } from "./ReviewDecisionService";
+import { ReviewDecisionService, findCurrentReviewPromotion } from "./ReviewDecisionService";
 import type { ReviewDecisionInput, ReviewPromotionRequest } from "./ReviewDecisionTypes";
 
 const PROJECT_ID = "daily-proof";
@@ -440,8 +440,8 @@ function createReviewerRuntimeResult(reviewerRuntime: ReviewerRuntime, overrides
   };
 }
 
-function createValidChain() {
-  const plan = createPlan();
+function createValidChain(planOverrides: Partial<ExecutionPlan> = {}) {
+  const plan = createPlan(planOverrides);
   const readiness = createReadiness(plan);
   const readinessResult = createReadinessResult(readiness);
   const approval = createApproval(plan, readiness);
@@ -1025,6 +1025,71 @@ describe("ReviewDecisionService.promote", () => {
     expect(outcome.result.validationStarted).toBe(false);
     expect(outcome.result.repositoryMutationStarted).toBe(false);
     expect(outcome.result.githubMutationStarted).toBe(false);
+  });
+});
+
+// Round 9 P1-001: a historical Review Promotion recorded for an older,
+// unrelated reviewerRuntimeId must never mask a newer, currently-Approved
+// reviewerRuntimeId -- neither for the dashboard's resolved display nor for
+// Promote's own idempotency check. findCurrentReviewPromotion is the single
+// shared resolver both callers use (see
+// .agent-workflow/spec-077-current-state-selection-audit.md and
+// ReviewDecisionView.ts/OfficeProjectPortalView.ts).
+describe("ReviewDecisionService findCurrentReviewPromotion (Round 9 P1-001 regression)", () => {
+  const SECOND_ACTIVE_SESSION_ID = "session-2";
+
+  function createSecondValidChain() {
+    return createValidChain({
+      activeSessionId: SECOND_ACTIVE_SESSION_ID,
+      planId: createExecutionPlanId(PROJECT_ID, SECOND_ACTIVE_SESSION_ID),
+    });
+  }
+
+  it("does not resolve a historical promotion for an older reviewerRuntimeId as current once a newer, unrelated Reviewer Runtime for the same project is Approved", () => {
+    const service = new ReviewDecisionService();
+    const historicalChain = createValidChain();
+    const historicalOutcome = service.promote(createInput(historicalChain), createRequest(historicalChain));
+    expect(historicalOutcome.result.granted).toBe(true);
+
+    const currentChain = createSecondValidChain();
+    const currentClassification = service.classify(createInput(currentChain));
+    expect(currentClassification.state).toBe("Approved");
+    expect(currentClassification.reviewerRuntimeId).not.toBe(historicalChain.reviewerRuntime.reviewerRuntimeId);
+
+    const resolved = findCurrentReviewPromotion(
+      currentChain.plan.projectId,
+      currentClassification,
+      historicalOutcome.promotionCollection,
+    );
+
+    expect(resolved).toBeUndefined();
+  });
+
+  it("still grants an independent Review Promotion for the newer reviewerRuntimeId via Promote, leaving the historical promotion byte-identical and untouched", () => {
+    const service = new ReviewDecisionService();
+    const historicalChain = createValidChain();
+    const historicalOutcome = service.promote(createInput(historicalChain), createRequest(historicalChain));
+    const historicalPromotionSnapshot = { ...historicalOutcome.promotion! };
+
+    const currentChain = createSecondValidChain();
+    const currentOutcome = service.promote(
+      {
+        ...createInput(currentChain),
+        existingPromotions: historicalOutcome.promotionCollection,
+        existingPromotionResults: historicalOutcome.resultCollection,
+      },
+      createRequest(currentChain),
+    );
+
+    expect(currentOutcome.result.granted).toBe(true);
+    expect(currentOutcome.promotion?.reviewerRuntimeId).toBe(currentChain.reviewerRuntime.reviewerRuntimeId);
+    expect(currentOutcome.promotion?.reviewPromotionId).not.toBe(historicalOutcome.promotion?.reviewPromotionId);
+    expect(currentOutcome.promotionCollection?.promotionCount).toBe(2);
+
+    const preservedHistorical = currentOutcome.promotionCollection?.promotions.find(
+      (promotion) => promotion.reviewPromotionId === historicalOutcome.promotion?.reviewPromotionId,
+    );
+    expect(preservedHistorical).toEqual(historicalPromotionSnapshot);
   });
 });
 

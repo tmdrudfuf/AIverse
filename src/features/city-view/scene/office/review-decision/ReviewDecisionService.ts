@@ -74,11 +74,12 @@ export class ReviewDecisionService {
     // Precondition 4: an existing Review Promotion for this exact
     // reviewerRuntimeId short-circuits to an idempotent read -- no new
     // record, no re-invocation of anything. The actor was already validated
-    // above, so this path is only reachable for a valid human actor.
+    // above, so this path is only reachable for a valid human actor. Shared
+    // with the dashboard render path via findCurrentReviewPromotion so both
+    // callers resolve "which promotion is current" identically (see
+    // review.md, Round 9 P1-001).
     const reviewPromotionId = createReviewPromotionId(request.projectId, request.reviewerRuntimeId);
-    const existingPromotion = existingPromotions?.promotions.find(
-      (promotion) => promotion.reviewPromotionId === reviewPromotionId,
-    );
+    const existingPromotion = findCurrentReviewPromotion(request.projectId, classification, existingPromotions);
     if (existingPromotion) {
       const result = createResult(request, existingPromotion, true, ["REVIEW_PROMOTION_ALREADY_PROMOTED"]);
       return {
@@ -471,6 +472,32 @@ function validateChain(input: ReviewDecisionInput): ReviewPromotionReasonCode | 
   }
 
   return undefined;
+}
+
+// Single shared resolver for "which Review Promotion, if any, is current" --
+// used by both promote()'s precondition 4 above and the dashboard render
+// (OfficeProjectPortalView.render), replacing two independent selectors (an
+// inline ID-only find here and a last-array-element pick in the view) with
+// one implementation (see review.md, Round 9 P1-001, and
+// .agent-workflow/spec-077-current-state-selection-audit.md). A promotion
+// only ever counts as current when the freshly computed classification is
+// exactly Approved for this exact reviewerRuntimeId; reviewPromotionId is
+// deterministic on (projectId, reviewerRuntimeId, rulesVersion) and
+// transitively encodes runtimeStartId/reviewTargetId/implementerRuntimeId as
+// well (see the audit's "Deterministic identity analysis"), so an exact-ID
+// match is already exact-context safe without a separate field-by-field
+// comparison. A historical promotion for a different reviewerRuntimeId, or
+// any promotion when the current classification is not Approved, is simply
+// not returned -- it remains in existingPromotions, untouched, per FR-011's
+// immutability requirement.
+export function findCurrentReviewPromotion(
+  projectId: string,
+  classification: ReviewDecisionClassification,
+  existingPromotions: ReviewPromotionCollection | undefined,
+): ReviewPromotion | undefined {
+  if (classification.state !== "Approved" || !classification.reviewerRuntimeId) return undefined;
+  const reviewPromotionId = createReviewPromotionId(projectId, classification.reviewerRuntimeId);
+  return existingPromotions?.promotions.find((promotion) => promotion.reviewPromotionId === reviewPromotionId);
 }
 
 // Single shared assembly of ReviewDecisionInput from raw per-project stage

@@ -19,7 +19,7 @@ import {
   createReviewerRuntimeDisplayRows,
   type ReviewerRuntimeDisplayRows,
 } from "./reviewer-runtime/ReviewerRuntimeView";
-import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
+import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import {
   createReviewDecisionDisplayRows,
   type ReviewDecisionDisplayRows,
@@ -363,28 +363,36 @@ export class OfficeProjectPortalView {
     // detect Stale the same way Promote does rather than trusting a leftover
     // Reviewer Runtime result alone.
     const latestReviewDecisionPlan = executionPlanCollection?.plans[executionPlanCollection.plans.length - 1];
-    const reviewDecisionClassification = dashboardProjectId && latestReviewDecisionPlan
-      ? new ReviewDecisionService().classify(
-        resolveReviewDecisionInput({
-          projectId: dashboardProjectId,
-          plan: latestReviewDecisionPlan,
-          readinessCollection: executionReadinessCollection,
-          readinessResultCollection: executionReadinessResultCollection,
-          approvalCollection: humanExecutionApprovalCollection,
-          preflightCollection: runtimePreflightCollection,
-          preflightResultCollection: runtimePreflightResultCollection,
-          runtimeStartCollection: runtimeStartCollection,
-          runtimeStartResultCollection: runtimeStartResultCollection,
-          implementerRuntimeCollection: state.implementerRuntimeCollections[dashboardProjectId],
-          implementerRuntimeResultCollection: implementerRuntimeResultCollection,
-          reviewTarget: state.reviewTargets[dashboardProjectId],
-          reviewerRuntimeCollection: state.reviewerRuntimeCollections[dashboardProjectId],
-          reviewerRuntimeResultCollection: reviewerRuntimeResultCollection,
-        }),
-      )
+    const reviewDecisionInput = dashboardProjectId && latestReviewDecisionPlan
+      ? resolveReviewDecisionInput({
+        projectId: dashboardProjectId,
+        plan: latestReviewDecisionPlan,
+        readinessCollection: executionReadinessCollection,
+        readinessResultCollection: executionReadinessResultCollection,
+        approvalCollection: humanExecutionApprovalCollection,
+        preflightCollection: runtimePreflightCollection,
+        preflightResultCollection: runtimePreflightResultCollection,
+        runtimeStartCollection: runtimeStartCollection,
+        runtimeStartResultCollection: runtimeStartResultCollection,
+        implementerRuntimeCollection: state.implementerRuntimeCollections[dashboardProjectId],
+        implementerRuntimeResultCollection: implementerRuntimeResultCollection,
+        reviewTarget: state.reviewTargets[dashboardProjectId],
+        reviewerRuntimeCollection: state.reviewerRuntimeCollections[dashboardProjectId],
+        reviewerRuntimeResultCollection: reviewerRuntimeResultCollection,
+        existingPromotions: reviewPromotionCollection,
+      })
+      : undefined;
+    const reviewDecisionClassification = reviewDecisionInput
+      ? new ReviewDecisionService().classify(reviewDecisionInput)
+      : undefined;
+    // Resolved via the same shared findCurrentReviewPromotion promote() uses
+    // for its precondition 4, so the dashboard and Promote can never diverge
+    // on which promotion is current (see review.md, Round 9 P1-001).
+    const currentReviewPromotion = dashboardProjectId && reviewDecisionClassification
+      ? findCurrentReviewPromotion(dashboardProjectId, reviewDecisionClassification, reviewDecisionInput?.existingPromotions)
       : undefined;
     const reviewDecisionRows = reviewerRuntimeResultCollection || reviewPromotionCollection
-      ? createReviewDecisionDisplayRows(reviewDecisionClassification, reviewPromotionCollection)
+      ? createReviewDecisionDisplayRows(reviewDecisionClassification, currentReviewPromotion)
       : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;

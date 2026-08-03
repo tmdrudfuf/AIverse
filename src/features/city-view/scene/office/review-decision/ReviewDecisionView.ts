@@ -1,4 +1,4 @@
-import type { ReviewDecisionClassification, ReviewPromotionCollection } from "./ReviewDecisionTypes";
+import type { ReviewDecisionClassification, ReviewPromotion } from "./ReviewDecisionTypes";
 
 export type ReviewDecisionDisplayRows = {
   statusText: string;
@@ -10,25 +10,26 @@ export type ReviewDecisionDisplayRows = {
  * resolveReviewDecisionInput), per contracts/review-decision-contract.md's
  * requirement that the dashboard and the Promote precondition read the same
  * single classification -- this view performs no chain re-validation of its
- * own. The one case classification alone cannot cover is a ReviewPromotion
- * whose chain has since been invalidated (the promotion itself is never
- * deleted, per spec.md Edge Cases); that is detected here by comparing the
- * promotion's reviewerRuntimeId against the current classification. Wording
- * never implies merge, PR, validation, or GitHub mutation.
+ * own. currentPromotion is likewise pre-resolved by the caller via
+ * ReviewDecisionService.findCurrentReviewPromotion, which already applies
+ * the same "is this promotion still current for the live classification"
+ * check the old inline logic here used to duplicate (and, per review.md
+ * Round 9 P1-001, could pick the wrong record for). A promotion that does
+ * not currently apply is simply not passed in at all -- it remains
+ * immutable in state, untouched, and this view falls through to the
+ * classification-driven state below (e.g. Approved with no current
+ * promotion still offers Promote; Stale/ChangesRequested/etc. remain
+ * truthfully not promotable) rather than rendering special-cased
+ * "historical" wording, satisfying spec.md's Edge Case that a historical
+ * promotion is never shown as currently applicable. Wording never implies
+ * merge, PR, validation, or GitHub mutation.
  */
 export function createReviewDecisionDisplayRows(
   classification: ReviewDecisionClassification | undefined,
-  promotions: ReviewPromotionCollection | undefined,
+  currentPromotion: ReviewPromotion | undefined,
 ): ReviewDecisionDisplayRows {
-  const latestPromotion = promotions?.promotions[promotions.promotions.length - 1];
-
-  if (latestPromotion) {
-    const stillApplies = classification?.state === "Approved"
-      && classification.reviewerRuntimeId === latestPromotion.reviewerRuntimeId;
-    if (stillApplies) {
-      return { statusText: `Approved; Promoted by ${latestPromotion.promotedBy}; no mutation` };
-    }
-    return { statusText: "Promoted (historical); not currently applicable; no mutation" };
+  if (currentPromotion) {
+    return { statusText: `Approved; Promoted by ${currentPromotion.promotedBy}; no mutation` };
   }
 
   if (!classification || classification.state === "Unavailable") {

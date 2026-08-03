@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createReviewDecisionDisplayRows } from "./ReviewDecisionView";
-import type { ReviewDecisionClassification, ReviewPromotion, ReviewPromotionCollection } from "./ReviewDecisionTypes";
+import type { ReviewDecisionClassification, ReviewPromotion } from "./ReviewDecisionTypes";
 
 const PROJECT_ID = "daily-proof";
 const WRAP_LENGTH = 78;
@@ -36,15 +36,6 @@ function createPromotion(reviewerRuntimeId = "reviewer-runtime-1"): ReviewPromot
     validationStarted: false,
     repositoryMutationStarted: false,
     githubMutationStarted: false,
-    rulesVersion: "review-promotion-v1",
-  };
-}
-
-function createPromotions(promotion: ReviewPromotion): ReviewPromotionCollection {
-  return {
-    projectId: PROJECT_ID,
-    promotions: [promotion],
-    promotionCount: 1,
     rulesVersion: "review-promotion-v1",
   };
 }
@@ -93,42 +84,46 @@ describe("createReviewDecisionDisplayRows", () => {
     expect(rows.statusText).toContain("not promotable");
   });
 
-  it("shows Promoted with the actor when the promotion still matches the current classification", () => {
+  it("shows Promoted with the actor when the caller resolves a current promotion", () => {
     const promotion = createPromotion("reviewer-runtime-1");
     const rows = createReviewDecisionDisplayRows(
       createClassification("Approved", "reviewer-runtime-1"),
-      createPromotions(promotion),
+      promotion,
     );
     expect(rows.statusText).toContain("Approved");
     expect(rows.statusText).toContain("Promoted by Local Human");
     expect(rows.statusText).not.toMatch(/merge|push|deploy/i);
   });
 
-  it("shows the promotion as historical/not currently applicable once the chain has since changed", () => {
-    const promotion = createPromotion("reviewer-runtime-1");
+  it("shows Approved awaiting Promote (never a stale Promoted row) when a newer reviewerRuntimeId is Approved and the caller resolves no current promotion for it -- regression for review.md Round 9 P1-001", () => {
+    // The caller (ReviewDecisionService.findCurrentReviewPromotion) is
+    // responsible for deciding a historical promotion for an older
+    // reviewerRuntimeId does not apply to a newer Approved classification;
+    // this view must never re-derive that decision or fall back to masking
+    // wording of its own once the caller has already resolved undefined.
     const rows = createReviewDecisionDisplayRows(
       createClassification("Approved", "reviewer-runtime-2"),
-      createPromotions(promotion),
+      undefined,
     );
-    expect(rows.statusText).toContain("historical");
-    expect(rows.statusText).toContain("not currently applicable");
+    expect(rows.statusText).toContain("Approved");
+    expect(rows.statusText).toContain("Promote (P)");
+    expect(rows.statusText).not.toContain("Promoted by");
   });
 
-  it("shows the promotion as historical when the current classification has since gone Stale", () => {
-    const promotion = createPromotion("reviewer-runtime-1");
+  it("shows Stale and not promotable (no historical Promoted wording) once the chain has since gone Stale and the caller resolves no current promotion", () => {
     const rows = createReviewDecisionDisplayRows(
       createClassification("Stale", "reviewer-runtime-1"),
-      createPromotions(promotion),
+      undefined,
     );
-    expect(rows.statusText).toContain("historical");
-    expect(rows.statusText).toContain("not currently applicable");
+    expect(rows.statusText).toContain("Stale");
+    expect(rows.statusText).toContain("not promotable");
+    expect(rows.statusText).not.toContain("Promoted by");
   });
 
-  it("shows the promotion as historical when the underlying classification is gone entirely", () => {
-    const promotion = createPromotion("reviewer-runtime-1");
-    const rows = createReviewDecisionDisplayRows(undefined, createPromotions(promotion));
-    expect(rows.statusText).toContain("historical");
-    expect(rows.statusText).toContain("not currently applicable");
+  it("shows Unavailable (no historical Promoted wording) when the underlying classification is gone entirely and the caller resolves no current promotion", () => {
+    const rows = createReviewDecisionDisplayRows(undefined, undefined);
+    expect(rows.statusText).toContain("Unavailable");
+    expect(rows.statusText).not.toContain("Promoted by");
   });
 
   it("never claims a merge, push, PR, validation pass, or repository mutation in any state", () => {
@@ -141,8 +136,8 @@ describe("createReviewDecisionDisplayRows", () => {
       createReviewDecisionDisplayRows(createClassification("TimedOut"), undefined),
       createReviewDecisionDisplayRows(createClassification("Failed"), undefined),
       createReviewDecisionDisplayRows(createClassification("Stale"), undefined),
-      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-1"), createPromotions(promotion)),
-      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-2"), createPromotions(promotion)),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-1"), promotion),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-2"), undefined),
     ];
 
     for (const rows of states) {
@@ -160,8 +155,8 @@ describe("createReviewDecisionDisplayRows", () => {
       createReviewDecisionDisplayRows(createClassification("TimedOut"), undefined),
       createReviewDecisionDisplayRows(createClassification("Failed"), undefined),
       createReviewDecisionDisplayRows(createClassification("Stale"), undefined),
-      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-1"), createPromotions(promotion)),
-      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-2"), createPromotions(promotion)),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-1"), promotion),
+      createReviewDecisionDisplayRows(createClassification("Approved", "reviewer-runtime-2"), undefined),
     ];
 
     for (const rows of states) {

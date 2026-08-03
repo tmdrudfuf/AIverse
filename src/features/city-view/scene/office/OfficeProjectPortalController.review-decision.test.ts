@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
-import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
+import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
 import {
   createInput,
@@ -187,7 +187,8 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
       // success row, because no promotion collection was ever produced.
       const classification = service.classify(input);
       expect(classification.state).toBe("Approved");
-      const rows = createReviewDecisionDisplayRows(classification, outcome.promotionCollection);
+      const currentPromotion = findCurrentReviewPromotion(PROJECT_ID, classification, outcome.promotionCollection);
+      const rows = createReviewDecisionDisplayRows(classification, currentPromotion);
       expect(rows.statusText).not.toContain("Promoted by");
       expect(rows.statusText).toContain("Promote (P)");
     },
