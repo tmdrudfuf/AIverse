@@ -90,6 +90,12 @@ function createReadiness(plan: ExecutionPlan, overrides: Partial<ExecutionReadin
     readinessId: createExecutionReadinessId(plan.projectId, plan.planId),
     projectId: plan.projectId,
     executionPlanId: plan.planId,
+    activeSessionId: plan.activeSessionId,
+    projectTaskId: plan.projectTaskId,
+    confirmedAssignmentId: plan.confirmedAssignmentId,
+    preparedSessionId: plan.preparedSessionId,
+    employeeId: plan.employeeId,
+    repositoryId: plan.repositoryId,
     status: "Ready",
     checks: [],
     evaluatedAt: "2026-08-01T00:00:00.000Z",
@@ -206,12 +212,12 @@ function createPreflightResult(preflight: RuntimePreflight, overrides: Partial<R
   };
 }
 
-function createRuntimeStart(plan: ExecutionPlan, approval: HumanExecutionApproval, preflight: RuntimePreflight, overrides: Partial<RuntimeStart> = {}): RuntimeStart {
+function createRuntimeStart(plan: ExecutionPlan, approval: HumanExecutionApproval, preflight: RuntimePreflight, readinessResult: ExecutionReadinessResult, overrides: Partial<RuntimeStart> = {}): RuntimeStart {
   return {
     runtimeStartId: createRuntimeStartId(plan.projectId, plan.planId),
     projectId: plan.projectId,
     executionPlanId: plan.planId,
-    executionReadinessResultId: "readiness-result-1",
+    executionReadinessResultId: readinessResult.id,
     humanExecutionApprovalId: approval.approvalId,
     runtimePreflightId: preflight.preflightId,
     taskId: plan.projectTaskId,
@@ -457,7 +463,7 @@ function createValidChain(planOverrides: Partial<ExecutionPlan> = {}) {
   const approval = createApproval(plan, readiness);
   const preflight = createPreflight(plan, approval, readiness);
   const preflightResult = createPreflightResult(preflight);
-  const runtimeStart = createRuntimeStart(plan, approval, preflight);
+  const runtimeStart = createRuntimeStart(plan, approval, preflight, readinessResult);
   const runtimeStartResult = createRuntimeStartResult(runtimeStart);
   const implementerRuntime = createImplementerRuntime(runtimeStart);
   const implementerRuntimeResult = createImplementerRuntimeResult(implementerRuntime);
@@ -533,6 +539,14 @@ describe("validateReviewRuntimeChainIntegrity", () => {
         "readinessResult.readinessId references a different readiness record",
         (c: Chain) => ({ readinessResult: { ...c.readinessResult, readinessId: "a-different-readiness-id" } }),
       ],
+      ["malformed readinessResult.id", (c: Chain) => ({ readinessResult: { ...c.readinessResult, id: "not-canonical" } })],
+      ["readinessResult unsupported rulesVersion", (c: Chain) => ({ readinessResult: { ...c.readinessResult, rulesVersion: "readiness-v0" } })],
+      ["activeSessionId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, activeSessionId: "a-different-session" } })],
+      ["projectTaskId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, projectTaskId: "a-different-task" } })],
+      ["confirmedAssignmentId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, confirmedAssignmentId: "a-different-assignment" } })],
+      ["preparedSessionId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, preparedSessionId: "a-different-prepared" } })],
+      ["employeeId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, employeeId: "a-different-employee" } })],
+      ["repositoryId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, repositoryId: "a-different-repo" } })],
     ] as const)("returns REVIEW_PROMOTION_READINESS_NOT_READY when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -550,6 +564,14 @@ describe("validateReviewRuntimeChainIntegrity", () => {
         "approval.readinessId references a different readiness record",
         (c: Chain) => ({ approval: { ...c.approval, readinessId: "a-different-readiness-id" } }),
       ],
+      ["activeSessionId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, activeSessionId: "a-different-session" } })],
+      ["projectTaskId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, projectTaskId: "a-different-task" } })],
+      ["confirmedAssignmentId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, confirmedAssignmentId: "a-different-assignment" } })],
+      ["preparedSessionId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, preparedSessionId: "a-different-prepared" } })],
+      ["employeeId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, employeeId: "a-different-employee" } })],
+      ["repositoryId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, repositoryId: "a-different-repo" } })],
+      ["validationCommands diverges from the plan's", (c: Chain) => ({ approval: { ...c.approval, validationCommands: ["npm test"] } })],
+      ["allowedMutationScope diverges from the plan's", (c: Chain) => ({ approval: { ...c.approval, allowedMutationScope: ["remote-write"] } })],
     ] as const)("returns REVIEW_PROMOTION_APPROVAL_STALE when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -579,6 +601,28 @@ describe("validateReviewRuntimeChainIntegrity", () => {
         "preflightResult.preflightId references a different preflight record",
         (c: Chain) => ({ preflightResult: { ...c.preflightResult, preflightId: "a-different-preflight-id" } }),
       ],
+      ["preflight.executionPlanId references a different plan", (c: Chain) => ({ preflight: { ...c.preflight, executionPlanId: "a-different-plan-id" } })],
+      ["preflightResult.executionPlanId references a different plan", (c: Chain) => ({ preflightResult: { ...c.preflightResult, executionPlanId: "a-different-plan-id" } })],
+      [
+        "preflight.readinessId references a different readiness record",
+        (c: Chain) => ({ preflight: { ...c.preflight, readinessId: "a-different-readiness-id" } }),
+      ],
+      ["activeSessionId no longer matches the plan", (c: Chain) => ({ preflight: { ...c.preflight, activeSessionId: "a-different-session" } })],
+      ["projectTaskId no longer matches the plan", (c: Chain) => ({ preflight: { ...c.preflight, projectTaskId: "a-different-task" } })],
+      ["confirmedAssignmentId no longer matches the plan", (c: Chain) => ({ preflight: { ...c.preflight, confirmedAssignmentId: "a-different-assignment" } })],
+      ["preparedSessionId no longer matches the plan", (c: Chain) => ({ preflight: { ...c.preflight, preparedSessionId: "a-different-prepared" } })],
+      ["employeeId no longer matches the plan", (c: Chain) => ({ preflight: { ...c.preflight, employeeId: "a-different-employee" } })],
+      ["repositoryId no longer matches the plan", (c: Chain) => ({ preflight: { ...c.preflight, repositoryId: "a-different-repo" } })],
+      [
+        "preflightResult.readinessId references a different readiness record",
+        (c: Chain) => ({ preflightResult: { ...c.preflightResult, readinessId: "a-different-readiness-id" } }),
+      ],
+      [
+        "preflightResult.approvalId references a different approval record",
+        (c: Chain) => ({ preflightResult: { ...c.preflightResult, approvalId: "a-different-approval-id" } }),
+      ],
+      ["malformed preflightResult.id", (c: Chain) => ({ preflightResult: { ...c.preflightResult, id: "not-canonical" } })],
+      ["preflightResult unsupported rulesVersion", (c: Chain) => ({ preflightResult: { ...c.preflightResult, rulesVersion: "preflight-v0" } })],
     ] as const)("returns REVIEW_PROMOTION_PREFLIGHT_NOT_READY when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -596,6 +640,26 @@ describe("validateReviewRuntimeChainIntegrity", () => {
         "runtimeStartResult.runtimeStartId references a different runtime-start record",
         (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, runtimeStartId: "a-different-runtime-start-id" } }),
       ],
+      ["runtimeStartResult.executionPlanId references a different plan", (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, executionPlanId: "a-different-plan-id" } })],
+      ["malformed runtimeStartResult.id", (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, id: "not-canonical" } })],
+      ["runtimeStartResult unsupported rulesVersion", (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, rulesVersion: "start-v0" } })],
+      [
+        "runtimeStartResult.runtimePreflightId references a different preflight",
+        (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, runtimePreflightId: "a-different-preflight-id" } }),
+      ],
+      [
+        "runtimeStartResult.approvalId references a different approval",
+        (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, approvalId: "a-different-approval-id" } }),
+      ],
+      [
+        "executionReadinessResultId references a different readiness result",
+        (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, executionReadinessResultId: "a-different-readiness-result-id" } }),
+      ],
+      ["taskId no longer matches the plan's projectTaskId", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, taskId: "a-different-task" } })],
+      ["confirmedAssignmentId no longer matches the plan", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, confirmedAssignmentId: "a-different-assignment" } })],
+      ["preparedSessionId no longer matches the plan", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, preparedSessionId: "a-different-prepared" } })],
+      ["activeSessionId no longer matches the plan", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, activeSessionId: "a-different-session" } })],
+      ["employeeId no longer matches the plan", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, employeeId: "a-different-employee" } })],
       ["repositoryId no longer matches the plan", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, repositoryId: "a-different-repo" } })],
       ["humanExecutionApprovalId references a different approval", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, humanExecutionApprovalId: "a-different-approval-id" } })],
       ["runtimePreflightId references a different preflight", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, runtimePreflightId: "a-different-preflight-id" } })],
@@ -633,6 +697,14 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["malformed implementerRuntimeId", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, implementerRuntimeId: "not-canonical" } })],
       ["unsupported rulesVersion", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, rulesVersion: "claude-implementer-v0" } })],
       ["status not Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, status: "Blocked" as const } })],
+      ["executionPlanId references a different plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, executionPlanId: "a-different-plan-id" } })],
+      ["humanExecutionApprovalId references a different approval", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, humanExecutionApprovalId: "a-different-approval-id" } })],
+      ["runtimePreflightId references a different preflight", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, runtimePreflightId: "a-different-preflight-id" } })],
+      ["taskId no longer matches the plan's projectTaskId", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, taskId: "a-different-task" } })],
+      ["confirmedAssignmentId no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, confirmedAssignmentId: "a-different-assignment" } })],
+      ["preparedSessionId no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, preparedSessionId: "a-different-prepared" } })],
+      ["activeSessionId no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, activeSessionId: "a-different-session" } })],
+      ["employeeId no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, employeeId: "a-different-employee" } })],
       ["repositoryId no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, repositoryId: "a-different-repo" } })],
       ["worktreePath no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, worktreePath: "C:/other/worktree" } })],
       ["branch no longer matches the plan", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, branch: "some-other-branch" } })],

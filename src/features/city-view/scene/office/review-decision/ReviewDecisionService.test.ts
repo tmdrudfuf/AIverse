@@ -84,6 +84,12 @@ function createReadiness(plan: ExecutionPlan, overrides: Partial<ExecutionReadin
     readinessId: createExecutionReadinessId(plan.projectId, plan.planId),
     projectId: plan.projectId,
     executionPlanId: plan.planId,
+    activeSessionId: plan.activeSessionId,
+    projectTaskId: plan.projectTaskId,
+    confirmedAssignmentId: plan.confirmedAssignmentId,
+    preparedSessionId: plan.preparedSessionId,
+    employeeId: plan.employeeId,
+    repositoryId: plan.repositoryId,
     status: "Ready",
     checks: [],
     evaluatedAt: "2026-08-01T00:00:00.000Z",
@@ -200,12 +206,12 @@ function createPreflightResult(preflight: RuntimePreflight, overrides: Partial<R
   };
 }
 
-function createRuntimeStart(plan: ExecutionPlan, approval: HumanExecutionApproval, preflight: RuntimePreflight, overrides: Partial<RuntimeStart> = {}): RuntimeStart {
+function createRuntimeStart(plan: ExecutionPlan, approval: HumanExecutionApproval, preflight: RuntimePreflight, readinessResult: ExecutionReadinessResult, overrides: Partial<RuntimeStart> = {}): RuntimeStart {
   return {
     runtimeStartId: createRuntimeStartId(plan.projectId, plan.planId),
     projectId: plan.projectId,
     executionPlanId: plan.planId,
-    executionReadinessResultId: "readiness-result-1",
+    executionReadinessResultId: readinessResult.id,
     humanExecutionApprovalId: approval.approvalId,
     runtimePreflightId: preflight.preflightId,
     taskId: plan.projectTaskId,
@@ -451,7 +457,7 @@ function createValidChain(planOverrides: Partial<ExecutionPlan> = {}) {
   const approval = createApproval(plan, readiness);
   const preflight = createPreflight(plan, approval, readiness);
   const preflightResult = createPreflightResult(preflight);
-  const runtimeStart = createRuntimeStart(plan, approval, preflight);
+  const runtimeStart = createRuntimeStart(plan, approval, preflight, readinessResult);
   const runtimeStartResult = createRuntimeStartResult(runtimeStart);
   const implementerRuntime = createImplementerRuntime(runtimeStart);
   const implementerRuntimeResult = createImplementerRuntimeResult(implementerRuntime);

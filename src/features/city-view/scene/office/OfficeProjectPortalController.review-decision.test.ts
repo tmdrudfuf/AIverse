@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createImplementerRuntimeId, createImplementerRuntimeResultId } from "./implementer-runtime/ImplementerRuntimeTypes";
+import type { RuntimeStart } from "./runtime-start/RuntimeStartTypes";
 import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { createReviewerRuntimeId, createReviewerRuntimeResultId } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
@@ -253,7 +255,7 @@ async function driveDailyProofToApprovedReviewer(
 
   internals.implementerRuntimeService = {
     startImplementer: vi.fn(async () =>
-      createImplementerOutcomeForPlan(plan.planId, runtimeStart.runtimeStartId, plan.worktreePath, plan.branchName, plan.specPath, "Completed"),
+      createImplementerOutcomeForPlan(plan, runtimeStart, plan.worktreePath, plan.branchName, plan.specPath, "Completed"),
     ),
     upsertResult: realUpsertResult(internals),
   };
@@ -326,7 +328,7 @@ async function driveDailyProofToResultOnlyReviewer(
 
   internals.implementerRuntimeService = {
     startImplementer: vi.fn(async () =>
-      createImplementerOutcomeForPlan(plan.planId, runtimeStart.runtimeStartId, plan.worktreePath, plan.branchName, plan.specPath, "Completed"),
+      createImplementerOutcomeForPlan(plan, runtimeStart, plan.worktreePath, plan.branchName, plan.specPath, "Completed"),
     ),
     upsertResult: realUpsertResult(internals),
   };
@@ -367,13 +369,15 @@ async function driveDailyProofToResultOnlyReviewer(
 }
 
 function createImplementerOutcomeForPlan(
-  planId: string,
-  runtimeStartId: string,
+  plan: ExecutionPlan,
+  runtimeStart: RuntimeStart,
   worktreePath: string,
   branch: string,
   specificationPath: string,
   status: "Completed" | "TimedOut" | "Blocked" | "Failed",
 ) {
+  const planId = plan.planId;
+  const runtimeStartId = runtimeStart.runtimeStartId;
   const spawned = status === "Completed" || status === "TimedOut";
   const result = {
     id: createImplementerRuntimeResultId(PROJECT_ID, runtimeStartId),
@@ -400,14 +404,14 @@ function createImplementerOutcomeForPlan(
     projectId: PROJECT_ID,
     runtimeStartId,
     executionPlanId: planId,
-    humanExecutionApprovalId: "test-approval",
-    runtimePreflightId: "test-preflight",
-    taskId: "test-task",
-    confirmedAssignmentId: "test-assignment",
-    preparedSessionId: "test-prepared",
-    activeSessionId: "test-session",
-    employeeId: "gpt-engineer",
-    repositoryId: "github:ai-verse/daily-proof",
+    humanExecutionApprovalId: runtimeStart.humanExecutionApprovalId,
+    runtimePreflightId: runtimeStart.runtimePreflightId,
+    taskId: plan.projectTaskId,
+    confirmedAssignmentId: plan.confirmedAssignmentId,
+    preparedSessionId: plan.preparedSessionId,
+    activeSessionId: plan.activeSessionId,
+    employeeId: plan.employeeId,
+    repositoryId: plan.repositoryId,
     worktreePath,
     branch,
     specificationPath,

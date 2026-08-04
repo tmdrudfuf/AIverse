@@ -1,5 +1,9 @@
 import { createExecutionPlanId, EXECUTION_PLAN_RULES_VERSION } from "../execution-plans/ExecutionPlanTypes";
-import { createExecutionReadinessId, EXECUTION_READINESS_RULES_VERSION } from "../execution-readiness/ExecutionReadinessTypes";
+import {
+  createExecutionReadinessId,
+  createExecutionReadinessResultId,
+  EXECUTION_READINESS_RULES_VERSION,
+} from "../execution-readiness/ExecutionReadinessTypes";
 import { createHumanExecutionApprovalId, HUMAN_EXECUTION_APPROVAL_RULES_VERSION } from "../human-execution-approvals/HumanExecutionApprovalTypes";
 import {
   createImplementerRuntimeId,
@@ -12,8 +16,16 @@ import {
   createReviewerRuntimeResultId,
   REVIEWER_RUNTIME_RULES_VERSION,
 } from "../reviewer-runtime/ReviewerRuntimeTypes";
-import { createRuntimePreflightId, RUNTIME_PREFLIGHT_RULES_VERSION } from "../runtime-preflight/RuntimePreflightTypes";
-import { createRuntimeStartId, RUNTIME_START_RULES_VERSION } from "../runtime-start/RuntimeStartTypes";
+import {
+  createRuntimePreflightId,
+  createRuntimePreflightResultId,
+  RUNTIME_PREFLIGHT_RULES_VERSION,
+} from "../runtime-preflight/RuntimePreflightTypes";
+import {
+  createRuntimeStartId,
+  createRuntimeStartResultId,
+  RUNTIME_START_RULES_VERSION,
+} from "../runtime-start/RuntimeStartTypes";
 import {
   REVIEW_PROMOTION_APPROVED_IMPLEMENTER_AGENT,
   REVIEW_PROMOTION_APPROVED_REVIEWER_AGENT,
@@ -94,6 +106,22 @@ function validateReadiness(input: ReviewDecisionInput): ReviewPromotionReasonCod
   if (readinessResult.readinessId !== readiness.readinessId) {
     return "REVIEW_PROMOTION_READINESS_NOT_READY";
   }
+  if (
+    readinessResult.id !== createExecutionReadinessResultId(plan.projectId, plan.planId) ||
+    readinessResult.rulesVersion !== EXECUTION_READINESS_RULES_VERSION
+  ) {
+    return "REVIEW_PROMOTION_READINESS_NOT_READY";
+  }
+  if (
+    readiness.activeSessionId !== plan.activeSessionId ||
+    readiness.projectTaskId !== plan.projectTaskId ||
+    readiness.confirmedAssignmentId !== plan.confirmedAssignmentId ||
+    readiness.preparedSessionId !== plan.preparedSessionId ||
+    readiness.employeeId !== plan.employeeId ||
+    readiness.repositoryId !== plan.repositoryId
+  ) {
+    return "REVIEW_PROMOTION_READINESS_NOT_READY";
+  }
   return undefined;
 }
 
@@ -112,12 +140,31 @@ function validateApproval(input: ReviewDecisionInput): ReviewPromotionReasonCode
     return "REVIEW_PROMOTION_APPROVAL_STALE";
   }
   if (approval.readinessId !== readiness.readinessId) return "REVIEW_PROMOTION_APPROVAL_STALE";
+  if (
+    approval.activeSessionId !== plan.activeSessionId ||
+    approval.projectTaskId !== plan.projectTaskId ||
+    approval.confirmedAssignmentId !== plan.confirmedAssignmentId ||
+    approval.preparedSessionId !== plan.preparedSessionId ||
+    approval.employeeId !== plan.employeeId ||
+    approval.repositoryId !== plan.repositoryId
+  ) {
+    return "REVIEW_PROMOTION_APPROVAL_STALE";
+  }
+  if (
+    approval.validationCommands.length !== plan.validationCommands.length ||
+    approval.validationCommands.some((command, index) => command !== plan.validationCommands[index]) ||
+    approval.allowedMutationScope.length !== plan.allowedMutationScope.length ||
+    approval.allowedMutationScope.some((scope, index) => scope !== plan.allowedMutationScope[index])
+  ) {
+    return "REVIEW_PROMOTION_APPROVAL_STALE";
+  }
   if (getActorBlockReason(approval.approvedBy)) return "REVIEW_PROMOTION_INVALID_ACTOR";
   return undefined;
 }
 
 function validatePreflight(input: ReviewDecisionInput): ReviewPromotionReasonCode | undefined {
   const plan = input.executionPlan!;
+  const readiness = input.readiness!;
   const approval = input.approval!;
   const preflight = input.preflight;
   const preflightResult = input.preflightResult;
@@ -125,6 +172,7 @@ function validatePreflight(input: ReviewDecisionInput): ReviewPromotionReasonCod
   if (
     !preflight || !preflightResult ||
     preflight.projectId !== plan.projectId || preflightResult.projectId !== plan.projectId ||
+    preflight.executionPlanId !== plan.planId || preflightResult.executionPlanId !== plan.planId ||
     preflight.preflightId !== createRuntimePreflightId(plan.projectId, plan.planId) ||
     preflight.rulesVersion !== RUNTIME_PREFLIGHT_RULES_VERSION ||
     preflight.status !== "Ready" || preflightResult.status !== "Ready" ||
@@ -132,8 +180,31 @@ function validatePreflight(input: ReviewDecisionInput): ReviewPromotionReasonCod
   ) {
     return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
   }
+  if (preflight.readinessId !== readiness.readinessId) return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
   if (preflight.approvalId !== approval.approvalId) return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
+  if (
+    preflight.activeSessionId !== plan.activeSessionId ||
+    preflight.projectTaskId !== plan.projectTaskId ||
+    preflight.confirmedAssignmentId !== plan.confirmedAssignmentId ||
+    preflight.preparedSessionId !== plan.preparedSessionId ||
+    preflight.employeeId !== plan.employeeId ||
+    preflight.repositoryId !== plan.repositoryId
+  ) {
+    return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
+  }
   if (preflightResult.preflightId !== preflight.preflightId) return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
+  if (
+    preflightResult.readinessId !== readiness.readinessId ||
+    preflightResult.approvalId !== approval.approvalId
+  ) {
+    return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
+  }
+  if (
+    preflightResult.id !== createRuntimePreflightResultId(plan.projectId, plan.planId) ||
+    preflightResult.rulesVersion !== RUNTIME_PREFLIGHT_RULES_VERSION
+  ) {
+    return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
+  }
   return undefined;
 }
 
@@ -141,6 +212,7 @@ function validateRuntimeStart(input: ReviewDecisionInput): ReviewPromotionReason
   const plan = input.executionPlan!;
   const approval = input.approval!;
   const preflight = input.preflight!;
+  const readinessResult = input.readinessResult!;
   const runtimeStart = input.runtimeStart;
   const runtimeStartResult = input.runtimeStartResult;
 
@@ -148,6 +220,7 @@ function validateRuntimeStart(input: ReviewDecisionInput): ReviewPromotionReason
   if (runtimeStart.projectId !== plan.projectId || runtimeStartResult.projectId !== plan.projectId) {
     return "REVIEW_PROMOTION_START_STALE";
   }
+  if (runtimeStartResult.executionPlanId !== plan.planId) return "REVIEW_PROMOTION_START_STALE";
   if (
     runtimeStart.runtimeStartId !== createRuntimeStartId(plan.projectId, plan.planId) ||
     runtimeStart.rulesVersion !== RUNTIME_START_RULES_VERSION ||
@@ -156,9 +229,22 @@ function validateRuntimeStart(input: ReviewDecisionInput): ReviewPromotionReason
     return "REVIEW_PROMOTION_START_STALE";
   }
   if (runtimeStartResult.runtimeStartId !== runtimeStart.runtimeStartId) return "REVIEW_PROMOTION_START_STALE";
+  if (
+    runtimeStartResult.id !== createRuntimeStartResultId(plan.projectId, plan.planId) ||
+    runtimeStartResult.rulesVersion !== RUNTIME_START_RULES_VERSION
+  ) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
+  if (
+    runtimeStartResult.runtimePreflightId !== preflight.preflightId ||
+    runtimeStartResult.approvalId !== approval.approvalId
+  ) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
   if (runtimeStart.repositoryId !== plan.repositoryId) return "REVIEW_PROMOTION_START_STALE";
   if (
     runtimeStart.executionPlanId !== plan.planId ||
+    runtimeStart.executionReadinessResultId !== readinessResult.id ||
     runtimeStart.humanExecutionApprovalId !== approval.approvalId ||
     runtimeStart.runtimePreflightId !== preflight.preflightId ||
     runtimeStart.taskId !== plan.projectTaskId ||
@@ -201,6 +287,18 @@ function validateImplementerRuntime(input: ReviewDecisionInput): ReviewPromotion
     return "REVIEW_PROMOTION_IMPLEMENTER_MISSING";
   }
   if (implementerRuntime.runtimeStartId !== runtimeStart.runtimeStartId) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  if (
+    implementerRuntime.executionPlanId !== plan.planId ||
+    implementerRuntime.humanExecutionApprovalId !== runtimeStart.humanExecutionApprovalId ||
+    implementerRuntime.runtimePreflightId !== runtimeStart.runtimePreflightId ||
+    implementerRuntime.taskId !== plan.projectTaskId ||
+    implementerRuntime.confirmedAssignmentId !== plan.confirmedAssignmentId ||
+    implementerRuntime.preparedSessionId !== plan.preparedSessionId ||
+    implementerRuntime.activeSessionId !== plan.activeSessionId ||
+    implementerRuntime.employeeId !== plan.employeeId
+  ) {
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
   if (
