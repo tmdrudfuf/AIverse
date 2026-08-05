@@ -34,7 +34,13 @@ import {
   type RuntimeStart,
   type RuntimeStartResult,
 } from "../runtime-start/RuntimeStartTypes";
-import { createReviewTargetId, REVIEW_TARGET_RULES_VERSION, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
+import {
+  computeReviewTargetBaseSha,
+  computeReviewTargetSha,
+  REVIEW_TARGET_BASE_BRANCH,
+  resolveReviewTarget,
+  type ReviewTarget,
+} from "../reviewer-runtime/ReviewTarget";
 import {
   REVIEWER_RUNTIME_RULES_VERSION,
   createReviewerRuntimeId,
@@ -354,24 +360,10 @@ function createImplementerRuntimeResult(implementerRuntime: ImplementerRuntime, 
 }
 
 function createReviewTarget(plan: ExecutionPlan, runtimeStart: RuntimeStart, implementerRuntime: ImplementerRuntime, overrides: Partial<ReviewTarget> = {}): ReviewTarget {
-  const reviewTargetSha = "a".repeat(40);
   return {
-    reviewTargetId: createReviewTargetId(plan.projectId, runtimeStart.runtimeStartId, reviewTargetSha),
-    projectId: plan.projectId,
-    runtimeStartId: runtimeStart.runtimeStartId,
-    implementerRuntimeId: implementerRuntime.implementerRuntimeId,
-    repositoryId: plan.repositoryId,
-    worktreePath: plan.worktreePath,
-    baseBranch: "main",
-    baseSha: "b".repeat(40),
-    featureBranch: plan.branchName,
-    reviewTargetSha,
-    mergeBaseSha: "b".repeat(40),
+    ...resolveReviewTarget(plan, runtimeStart, implementerRuntime),
     workingTreeState: "Clean",
     changedFiles: ["src/example.ts"],
-    specificationPath: plan.specPath,
-    resolvedAt: implementerRuntime.startedAt,
-    rulesVersion: REVIEW_TARGET_RULES_VERSION,
     ...overrides,
   };
 }
@@ -753,6 +745,71 @@ describe("validateReviewRuntimeChainIntegrity", () => {
     ] as const)("returns REVIEW_PROMOTION_TARGET_MISMATCH when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
+      expect(result).toBe("REVIEW_PROMOTION_TARGET_MISMATCH");
+    });
+  });
+
+  // A ReviewTarget must be bound to the exact plan/implementerRuntime context
+  // that created it -- baseBranch/baseSha/mergeBaseSha/reviewTargetSha are
+  // recomputed here against the same authoritative formula
+  // ReviewTarget.resolveReviewTarget used, not merely checked against each
+  // other, so a malformed target that changes baseSha and mergeBaseSha
+  // together can no longer stay internally self-consistent while no longer
+  // representing the approved comparison base (see review.md, combined round
+  // 2 P1-001).
+  describe("Review Target base-context binding (P1-001)", () => {
+    it("passes when baseBranch, baseSha, mergeBaseSha, and reviewTargetSha all match the authoritative formula for the exact current plan and implementerRuntime", () => {
+      const chain = createValidChain();
+      expect(chain.reviewTarget.baseBranch).toBe(REVIEW_TARGET_BASE_BRANCH);
+      const result = validateReviewRuntimeChainIntegrity(createInput(chain));
+      expect(result).toBeUndefined();
+    });
+
+    it("returns REVIEW_PROMOTION_TARGET_MISMATCH when baseBranch no longer matches the authoritative base branch", () => {
+      const chain = createValidChain();
+      const result = validateReviewRuntimeChainIntegrity({
+        ...createInput(chain),
+        reviewTarget: { ...chain.reviewTarget, baseBranch: "develop" },
+      });
+      expect(result).toBe("REVIEW_PROMOTION_TARGET_MISMATCH");
+    });
+
+    it("returns REVIEW_PROMOTION_TARGET_MISMATCH when baseSha and mergeBaseSha are changed together to a value that stays internally self-consistent but no longer matches the authoritative base", () => {
+      const chain = createValidChain();
+      const tamperedSha = "c".repeat(40);
+      const result = validateReviewRuntimeChainIntegrity({
+        ...createInput(chain),
+        reviewTarget: { ...chain.reviewTarget, baseSha: tamperedSha, mergeBaseSha: tamperedSha },
+      });
+      expect(result).toBe("REVIEW_PROMOTION_TARGET_MISMATCH");
+    });
+
+    it("returns REVIEW_PROMOTION_TARGET_MISMATCH when mergeBaseSha alone diverges from the authoritative merge base while baseSha remains correct", () => {
+      const chain = createValidChain();
+      const result = validateReviewRuntimeChainIntegrity({
+        ...createInput(chain),
+        reviewTarget: { ...chain.reviewTarget, mergeBaseSha: computeReviewTargetBaseSha(chain.plan.projectId, "a-different-plan-id") },
+      });
+      expect(result).toBe("REVIEW_PROMOTION_TARGET_MISMATCH");
+    });
+
+    it("returns REVIEW_PROMOTION_TARGET_MISMATCH when reviewTargetSha is copied in from a different feature/implementerRuntime context", () => {
+      const chain = createValidChain();
+      const foreignReviewTargetSha = computeReviewTargetSha("a-different-implementer-runtime-id");
+      const result = validateReviewRuntimeChainIntegrity({
+        ...createInput(chain),
+        reviewTarget: { ...chain.reviewTarget, reviewTargetSha: foreignReviewTargetSha },
+      });
+      expect(result).toBe("REVIEW_PROMOTION_TARGET_MISMATCH");
+    });
+
+    it("returns REVIEW_PROMOTION_TARGET_MISMATCH when baseSha/mergeBaseSha are copied in from a foreign project/base context", () => {
+      const chain = createValidChain();
+      const foreignBaseSha = computeReviewTargetBaseSha("another-project", "another-project:execution-plan:session-3:plan-v1");
+      const result = validateReviewRuntimeChainIntegrity({
+        ...createInput(chain),
+        reviewTarget: { ...chain.reviewTarget, baseSha: foreignBaseSha, mergeBaseSha: foreignBaseSha },
+      });
       expect(result).toBe("REVIEW_PROMOTION_TARGET_MISMATCH");
     });
   });

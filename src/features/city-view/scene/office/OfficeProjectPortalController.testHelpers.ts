@@ -56,6 +56,7 @@ export type ControllerInternals = {
     candidateTaskCollections: Record<string, CandidateTaskCollection>;
     candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
     candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
+    selectedCandidatePromotionIndex: number;
     candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
     candidateProjectTaskPromotionResultCollections: Record<string, CandidateProjectTaskPromotionResultCollection>;
     confirmedEmployeeAssignmentRecords: ProjectPortalState["confirmedEmployeeAssignmentRecords"];

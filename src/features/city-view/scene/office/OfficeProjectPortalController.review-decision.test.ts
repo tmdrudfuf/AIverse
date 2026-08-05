@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
+import { resolveCurrentExecutionPlan, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
+import { parsePromotedProjectTaskProvenance } from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
 import { createImplementerRuntimeId, createImplementerRuntimeResultId } from "./implementer-runtime/ImplementerRuntimeTypes";
 import type { RuntimeStart } from "./runtime-start/RuntimeStartTypes";
 import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
@@ -197,6 +198,84 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
       expect(rows.statusText).toContain("Promote (P)");
     },
   );
+
+  // P2-001: dashboard classification (OfficeProjectPortalView) resolved the
+  // latest Execution Plan by array position while Promote
+  // (promoteReviewForPromotion) resolved the first task/candidate match --
+  // with multiple plans for the same task, those two selections could
+  // diverge. Both now consume the one shared resolveCurrentExecutionPlan, so
+  // planting a stale, older decoy plan for the same task/candidate must
+  // neither change the dashboard's classification nor let Promote record a
+  // promotion against the decoy.
+  it("resolves the same current Execution Plan for the dashboard and Promote even when a stale, older plan exists for the same task/candidate", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToApprovedReviewer(controller, internals);
+
+    const planCollection = internals.state.executionPlanCollections[PROJECT_ID];
+    const currentPlan = planCollection?.plans[0];
+    if (!planCollection || !currentPlan) throw new Error("Test setup failed to reach an Execution Plan.");
+
+    const decoyPlan: ExecutionPlan = {
+      ...currentPlan,
+      planId: `${currentPlan.planId}:decoy`,
+      createdAt: "2020-01-01T00:00:00.000Z",
+    };
+    internals.state.executionPlanCollections[PROJECT_ID] = {
+      ...planCollection,
+      plans: [decoyPlan, currentPlan],
+      planCount: 2,
+    };
+
+    const classification = classifyCurrentReviewDecision(internals);
+    expect(classification.state).toBe("Approved");
+
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    const promotions = internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions;
+    expect(promotions).toHaveLength(1);
+    expect(promotions![0].planId).toBe(currentPlan.planId);
+    expect(promotions![0].planId).not.toBe(decoyPlan.planId);
+  });
+
+  // The decoy-plan case above only proves ordering is stable for the *same*
+  // task's plans. A shared resolver called with two different filters can
+  // still diverge across *different* tasks -- the dashboard must resolve the
+  // plan for the human's actual selected candidate/task, not merely "the
+  // project's newest plan overall", or it could silently classify a task the
+  // human never selected while Promote still acts on the selected one.
+  it("keeps the dashboard scoped to the selected candidate task even when a different task's plan is newer (cross-task isolation, combined round 2 P2-001)", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToApprovedReviewer(controller, internals);
+
+    const planCollection = internals.state.executionPlanCollections[PROJECT_ID];
+    const selectedPlan = planCollection?.plans[0];
+    if (!planCollection || !selectedPlan) throw new Error("Test setup failed to reach an Execution Plan.");
+
+    const otherTaskPlan: ExecutionPlan = {
+      ...selectedPlan,
+      planId: `${selectedPlan.planId}:other-task`,
+      projectTaskId: `${selectedPlan.projectTaskId}:other-task`,
+      candidateTaskId: `${selectedPlan.candidateTaskId}:other-task`,
+      createdAt: "2099-01-01T00:00:00.000Z",
+    };
+    internals.state.executionPlanCollections[PROJECT_ID] = {
+      ...planCollection,
+      plans: [selectedPlan, otherTaskPlan],
+      planCount: 2,
+    };
+
+    const classification = classifyCurrentReviewDecision(internals);
+    expect(classification.state).toBe("Approved");
+
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    const promotions = internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions;
+    expect(promotions).toHaveLength(1);
+    expect(promotions![0].planId).toBe(selectedPlan.planId);
+    expect(promotions![0].planId).not.toBe(otherTaskPlan.planId);
+  });
 });
 
 /**
@@ -207,7 +286,19 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
  * duplicating ReviewDecisionService's own classify() unit tests here.
  */
 function classifyCurrentReviewDecision(internals: ControllerInternals) {
-  const plan = internals.state.executionPlanCollections[PROJECT_ID]?.plans[0];
+  const selectedCandidatePromotionReview = internals.state.candidatePromotionReviewCollections[PROJECT_ID]
+    ?.reviews[internals.state.selectedCandidatePromotionIndex];
+  const selectedPromotedTask = selectedCandidatePromotionReview
+    ? internals.state.taskCollections[PROJECT_ID]?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === selectedCandidatePromotionReview.candidateTaskId
+    )
+    : undefined;
+  const plan = resolveCurrentExecutionPlan(
+    internals.state.executionPlanCollections[PROJECT_ID],
+    selectedPromotedTask
+      ? { projectTaskId: selectedPromotedTask.id, candidateTaskId: selectedCandidatePromotionReview!.candidateTaskId }
+      : undefined,
+  );
   if (!plan) throw new Error("Test setup failed to reach an Execution Plan.");
 
   return new ReviewDecisionService().classify(

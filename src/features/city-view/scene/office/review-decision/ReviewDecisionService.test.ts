@@ -34,7 +34,7 @@ import {
   type RuntimeStart,
   type RuntimeStartResult,
 } from "../runtime-start/RuntimeStartTypes";
-import { createReviewTargetId, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
+import { resolveReviewTarget, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
 import {
   REVIEWER_RUNTIME_RULES_VERSION,
   createReviewerRuntimeId,
@@ -348,24 +348,10 @@ function createImplementerRuntimeResult(implementerRuntime: ImplementerRuntime, 
 }
 
 function createReviewTarget(plan: ExecutionPlan, runtimeStart: RuntimeStart, implementerRuntime: ImplementerRuntime, overrides: Partial<ReviewTarget> = {}): ReviewTarget {
-  const reviewTargetSha = "a".repeat(40);
   return {
-    reviewTargetId: createReviewTargetId(plan.projectId, runtimeStart.runtimeStartId, reviewTargetSha),
-    projectId: plan.projectId,
-    runtimeStartId: runtimeStart.runtimeStartId,
-    implementerRuntimeId: implementerRuntime.implementerRuntimeId,
-    repositoryId: plan.repositoryId,
-    worktreePath: plan.worktreePath,
-    baseBranch: "main",
-    baseSha: "b".repeat(40),
-    featureBranch: plan.branchName,
-    reviewTargetSha,
-    mergeBaseSha: "b".repeat(40),
+    ...resolveReviewTarget(plan, runtimeStart, implementerRuntime),
     workingTreeState: "Clean",
     changedFiles: ["src/example.ts"],
-    specificationPath: plan.specPath,
-    resolvedAt: implementerRuntime.startedAt,
-    rulesVersion: "review-target-v1",
     ...overrides,
   };
 }
@@ -1012,6 +998,20 @@ describe("ReviewDecisionService.promote", () => {
 
     expect(outcome.result.granted).toBe(true);
     expect(outcome.promotion?.decision).toBe("Approved");
+  });
+
+  it("blocks Promote and creates no ReviewPromotion when the ReviewTarget's baseSha/mergeBaseSha are tampered together into a foreign base context (P1-001 regression)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const tamperedSha = "c".repeat(40);
+    const reviewTarget = { ...chain.reviewTarget, baseSha: tamperedSha, mergeBaseSha: tamperedSha };
+
+    const outcome = service.promote({ ...createInput(chain), reviewTarget }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
+    expect(outcome.promotionCollection).toBeUndefined();
   });
 
   it("keeps project isolation: a chain for a different projectId never satisfies this project's plan check", () => {

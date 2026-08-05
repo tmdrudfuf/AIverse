@@ -31,7 +31,7 @@ import { EmployeeSimulationService } from "./employees/EmployeeSimulationService
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
-import { createExecutionPlanCollection, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
+import { createExecutionPlanCollection, resolveCurrentExecutionPlan, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
 import { createExecutionReadinessCollection, createExecutionReadinessResultCollection } from "./execution-readiness/ExecutionReadinessTypes";
 import { HumanExecutionApprovalService } from "./human-execution-approvals/HumanExecutionApprovalService";
@@ -2256,11 +2256,14 @@ export class OfficeProjectPortalController {
     );
     if (!taskCollection || !promotedTask) return false;
 
-    const plan = this.state.executionPlanCollections[projectId]?.plans.find((item) =>
-      item.projectId === projectId &&
-      item.projectTaskId === promotedTask.id &&
-      item.candidateTaskId === candidateTaskId
-    );
+    // Resolved via the same resolveCurrentExecutionPlan the dashboard uses
+    // for reviewDecisionInput, so Promote can never act on a different plan
+    // than the one the dashboard's classification was computed from (see
+    // review.md, combined round 2 P2-001).
+    const plan = resolveCurrentExecutionPlan(this.state.executionPlanCollections[projectId], {
+      projectTaskId: promotedTask.id,
+      candidateTaskId,
+    });
     if (!plan) return false;
 
     const existingPromotions = this.state.reviewPromotionCollections[projectId]

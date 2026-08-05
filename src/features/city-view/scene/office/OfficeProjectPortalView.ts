@@ -5,7 +5,9 @@ import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTa
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
+import { parsePromotedProjectTaskProvenance } from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
+import { resolveCurrentExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
 import { createHumanExecutionApprovalDisplayRows, type HumanExecutionApprovalDisplayRows } from "./human-execution-approvals/HumanExecutionApprovalView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
@@ -362,7 +364,25 @@ export class OfficeProjectPortalView {
     // precondition must read the same single classification, so this must
     // detect Stale the same way Promote does rather than trusting a leftover
     // Reviewer Runtime result alone.
-    const latestReviewDecisionPlan = executionPlanCollection?.plans[executionPlanCollection.plans.length - 1];
+    // Filtered by the same selected candidate/project task
+    // promoteReviewForPromotion resolves its plan by, so the dashboard's
+    // classification and Promote can never read two different Execution
+    // Plans for the same selection (see review.md, combined round 2
+    // P2-001). Falls back to the unfiltered "project's latest plan" only
+    // when nothing is selected yet, matching prior dashboard behavior for
+    // that case.
+    const selectedCandidatePromotionReview = candidatePromotionCollection?.reviews[state.selectedCandidatePromotionIndex];
+    const selectedPromotedTask = selectedCandidatePromotionReview && dashboardProjectId
+      ? state.taskCollections[dashboardProjectId]?.tasks.find((task) =>
+        parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === selectedCandidatePromotionReview.candidateTaskId
+      )
+      : undefined;
+    const latestReviewDecisionPlan = resolveCurrentExecutionPlan(
+      executionPlanCollection,
+      selectedPromotedTask
+        ? { projectTaskId: selectedPromotedTask.id, candidateTaskId: selectedCandidatePromotionReview!.candidateTaskId }
+        : undefined,
+    );
     const reviewDecisionInput = dashboardProjectId && latestReviewDecisionPlan
       ? resolveReviewDecisionInput({
         projectId: dashboardProjectId,
