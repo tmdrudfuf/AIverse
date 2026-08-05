@@ -722,6 +722,12 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["implementerRuntime.implementer diverges from the plan's", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, implementer: "SomeoneElse" } })],
       ["approvedImplementerAgent is not the canonical claude constant", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, approvedImplementerAgent: "gemini" } })],
       ["approvedReviewerAgent is not the canonical codex constant", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, approvedReviewerAgent: "gemini" } })],
+      // P1-002: the provider evidence a runtime actually produced must match
+      // the approved chain context, not merely be internally self-consistent.
+      ["evidence.providerId is not the canonical claude constant", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, providerId: "gemini" } } })],
+      ["evidence.agentId is not Claude", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, agentId: "SomeoneElse" } } })],
+      ["evidence.role is not Implementer", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, role: "Reviewer" as unknown as "Implementer" } } })],
+      ["evidence.workingDirectory no longer matches the plan's worktreePath", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, workingDirectory: "C:/other/worktree" } } })],
     ] as const)("returns REVIEW_PROMOTION_ROLE_MISMATCH when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -841,6 +847,14 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["reviewerRuntime.reviewer diverges from the plan's", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, reviewer: "SomeoneElse" } })],
       ["approvedImplementerAgent is not the canonical claude constant", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, approvedImplementerAgent: "gemini" } })],
       ["approvedReviewerAgent is not the canonical codex constant", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, approvedReviewerAgent: "gemini" } })],
+      // P1-002: the provider evidence a runtime actually produced -- including
+      // the exact SHA it reviewed -- must match the approved chain context,
+      // not merely be internally self-consistent.
+      ["evidence.providerId is not the canonical codex constant", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, providerId: "gemini" } } })],
+      ["evidence.agentId is not Codex", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, agentId: "SomeoneElse" } } })],
+      ["evidence.role is not Reviewer", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, role: "Implementer" as unknown as "Reviewer" } } })],
+      ["evidence.workingDirectory no longer matches the plan's worktreePath", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, workingDirectory: "C:/other/worktree" } } })],
+      ["evidence.reviewTargetSha diverges from the exact ReviewTarget's reviewTargetSha", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, reviewTargetSha: "f".repeat(40) } } })],
     ] as const)("returns REVIEW_PROMOTION_ROLE_MISMATCH when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });

@@ -1014,6 +1014,19 @@ describe("ReviewDecisionService.promote", () => {
     expect(outcome.promotionCollection).toBeUndefined();
   });
 
+  it("blocks Promote and creates no ReviewPromotion when the Reviewer Runtime's evidence.reviewTargetSha diverges from the exact ReviewTarget it is bound to (P1-002 regression)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewerRuntime = { ...chain.reviewerRuntime, evidence: { ...chain.reviewerRuntime.evidence, reviewTargetSha: "f".repeat(40) } };
+
+    const outcome = service.promote({ ...createInput(chain), reviewerRuntime }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
+    expect(outcome.promotionCollection).toBeUndefined();
+  });
+
   it("keeps project isolation: a chain for a different projectId never satisfies this project's plan check", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();

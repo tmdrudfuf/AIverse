@@ -57,6 +57,20 @@
 
 - [x] T022 The combined publication candidate (`codex/077-078-review-promotion-integrity-combined`, stacking Spec 077 + Spec 078) received its own independent round 2 review, distinct from this spec's own Approved review recorded above, and returned Changes Requested with two blocking findings against this spec's `ReviewRuntimeChainIntegrityService.ts`/`ExecutionPlanTypes.ts`: P1-001 (Review Target `baseBranch`/`baseSha`/`mergeBaseSha`/`reviewTargetSha` checked only against each other, not against an authoritative recomputation) and P2-001 (dashboard and Promote selected the current Execution Plan via two different, position-dependent rules). Both were fixed on the combined branch, with regression tests, in the same consolidated commit. Full finding text, fix description, and test list recorded in `specs/077-078-combined-review-note.md` rather than duplicated here, per the standing instruction to record combined-branch evidence there; `data-model.md` row 8 and `plan.md` Decision 4 updated in place to point at that note rather than left describing the now-superseded `mergeBaseSha === baseSha`-only check.
 
+## Phase 13: Combined-Branch Round 3 Fix Cycle (evidence, not this spec's own review)
+
+- [x] T023 The combined publication candidate's own round 3 review (distinct from this spec's Approved
+  review recorded above) returned Changes Requested with one blocking finding against this spec's
+  `ReviewRuntimeChainIntegrityService.ts`: P1-002 (`validateImplementerRuntime`/`validateReviewerRuntime`
+  never checked the runtime's own `evidence` sub-object, so an internally self-consistent but stale or
+  foreign Implementer/Reviewer Runtime evidence record — wrong provider/agent/role/working directory, or,
+  for the Reviewer, a `reviewTargetSha` copied in from a different review target — could still authorize
+  promotion). Fixed on the combined branch, with regression tests, reusing the existing
+  `REVIEW_PROMOTION_ROLE_MISMATCH` reason code and only fields already present on
+  `ImplementerRuntimeEvidence`/`ReviewerRuntimeEvidence`. Full finding text, fix description, and test list
+  recorded in `specs/077-078-combined-review-note.md` rather than duplicated here; `data-model.md` rows 6/9
+  and the "Role binding" row updated in place to point at that note.
+
 ## Human-Gated Follow-Up Actions (not executable tasks)
 
 - `git push` of the feature branch.

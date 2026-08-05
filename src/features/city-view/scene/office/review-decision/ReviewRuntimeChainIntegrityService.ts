@@ -358,6 +358,18 @@ function validateImplementerRuntime(input: ReviewDecisionInput): ReviewPromotion
   ) {
     return "REVIEW_PROMOTION_ROLE_MISMATCH";
   }
+  // The runtime evidence a provider actually produced must describe the same
+  // Implementer context the chain approved -- not merely be internally
+  // self-consistent -- otherwise a stale or foreign Implementer Runtime could
+  // still authorize promotion (P1-002).
+  if (
+    implementerRuntime.evidence.providerId !== REVIEW_PROMOTION_APPROVED_IMPLEMENTER_AGENT ||
+    implementerRuntime.evidence.agentId !== "Claude" ||
+    implementerRuntime.evidence.role !== "Implementer" ||
+    implementerRuntime.evidence.workingDirectory !== plan.worktreePath
+  ) {
+    return "REVIEW_PROMOTION_ROLE_MISMATCH";
+  }
   return undefined;
 }
 
@@ -445,6 +457,20 @@ function validateReviewerRuntime(input: ReviewDecisionInput): ReviewPromotionRea
     reviewerRuntime.reviewer !== plan.reviewerAgent ||
     reviewerRuntime.approvedImplementerAgent !== REVIEW_PROMOTION_APPROVED_IMPLEMENTER_AGENT ||
     reviewerRuntime.approvedReviewerAgent !== REVIEW_PROMOTION_APPROVED_REVIEWER_AGENT
+  ) {
+    return "REVIEW_PROMOTION_ROLE_MISMATCH";
+  }
+  // Mirrors the Implementer Runtime evidence-parity check above -- the
+  // Reviewer Runtime's own provider evidence, including the exact SHA it
+  // reviewed, must match the current approved chain context, not merely be
+  // internally self-consistent, or a Reviewer Runtime that reviewed another
+  // SHA/worktree/branch/target could still authorize promotion (P1-002).
+  if (
+    reviewerRuntime.evidence.providerId !== REVIEW_PROMOTION_APPROVED_REVIEWER_AGENT ||
+    reviewerRuntime.evidence.agentId !== "Codex" ||
+    reviewerRuntime.evidence.role !== "Reviewer" ||
+    reviewerRuntime.evidence.workingDirectory !== plan.worktreePath ||
+    reviewerRuntime.evidence.reviewTargetSha !== reviewTarget.reviewTargetSha
   ) {
     return "REVIEW_PROMOTION_ROLE_MISMATCH";
   }

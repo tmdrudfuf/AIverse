@@ -85,3 +85,54 @@ publication of this stack.
   `OfficeProjectPortalController.review-decision.test.ts` (dashboard/Promote parity with a stale
   same-task decoy plan, plus cross-task isolation when a *different* task has a newer plan),
   `ExecutionPlanTypes.test.ts` (`resolveCurrentExecutionPlan`, 8 cases).
+
+- **Round 3** (independent re-review of the Round 2 fix commit
+  `e41743cf653ff3e7adcf456f1a50cd9c1eaaa8d3`) returned `Changes Requested` again, with one new
+  blocking finding:
+  - **P1-002** (`ReviewRuntimeChainIntegrityService.ts` 285-361 and 417-480): neither
+    `validateImplementerRuntime` nor `validateReviewerRuntime` ever inspected the runtime's own
+    `evidence` sub-object (the record the Claude/Codex provider actually produced) — an
+    internally self-consistent but stale or foreign Implementer/Reviewer Runtime evidence record
+    (wrong `providerId`/`agentId`/`role`/`workingDirectory`, or, for the Reviewer, a
+    `reviewTargetSha` copied in from a different review target) could still authorize promotion.
+
+### Round 3 fix (this fix cycle)
+
+- **Runtime evidence parity policy**: `validateImplementerRuntime` now also checks
+  `implementerRuntime.evidence.providerId` against the existing canonical
+  `REVIEW_PROMOTION_APPROVED_IMPLEMENTER_AGENT` constant, `evidence.agentId === "Claude"`,
+  `evidence.role === "Implementer"`, and `evidence.workingDirectory === plan.worktreePath`.
+  `validateReviewerRuntime` now also checks `reviewerRuntime.evidence.providerId` against
+  `REVIEW_PROMOTION_APPROVED_REVIEWER_AGENT`, `evidence.agentId === "Codex"`,
+  `evidence.role === "Reviewer"`, `evidence.workingDirectory === plan.worktreePath`, and —
+  the field named directly in the finding — `evidence.reviewTargetSha === reviewTarget.reviewTargetSha`.
+  Both blocks reuse the existing `REVIEW_PROMOTION_ROLE_MISMATCH` reason code (no new reason code
+  introduced), consistent with the adjacent pre-existing role/approved-agent checks in the same
+  functions. No new evidence field was added to either type: every field checked
+  (`providerId`, `agentId`, `role`, `workingDirectory`, `reviewTargetSha`) already existed on
+  `ImplementerRuntimeEvidence`/`ReviewerRuntimeEvidence` before this fix, confirmed by reading
+  `ImplementerRuntimeTypes.ts`/`ReviewerRuntimeTypes.ts` and the two providers'
+  (`ClaudeImplementerRuntimeProvider.ts`/`CodexReviewerRuntimeProvider.ts`) `createEvidence()`
+  functions before editing. `ImplementerRuntimeEvidence` has no SHA field of any kind, so the
+  "target-SHA evidence mismatch" case is not applicable on the Implementer side and was not
+  fabricated. `ImplementerRuntimeResult`/`ReviewerRuntimeResult` have no `evidence` field at all
+  (only the parent Runtime records do) — the "Result belongs to another runtime" invariant was
+  already covered by the pre-existing `implementerRuntimeResult.implementerRuntimeId`/
+  `reviewerRuntimeResult.reviewerRuntimeId` linkage checks. `evidence.commandDisplay` is a
+  free-form diagnostic string built from the provider's own command/argument list, not a stable
+  identity value with an authoritative expected value the domain validator can recompute without
+  duplicating the provider's command-construction logic — left unchecked as not representable
+  without inventing new validator logic beyond what the finding requires.
+- **Test fixture correction**: `OfficeProjectPortalController.review-decision.test.ts`'s
+  `createImplementerOutcomeForPlan`/`createReviewerOutcomeForRuntime` fixtures had hardcoded
+  `evidence.workingDirectory` to a stale literal path (`.../AIverse-spec-077`, left over from an
+  earlier worktree) and `evidence.reviewTargetSha` to a placeholder all-zero SHA, instead of the
+  real `worktreePath`/`reviewTarget.reviewTargetSha` values already in scope — the new P1-002
+  checks correctly caught both as mismatches on the previously-passing valid-chain fixtures.
+  Corrected to thread the real values through (a `reviewTargetSha` parameter was added to
+  `createReviewerOutcomeForRuntime`, threaded from both call sites' already-resolved
+  `reviewTarget.reviewTargetSha`).
+- **Tests added**: `ReviewRuntimeChainIntegrityService.test.ts` (4 new Implementer Runtime evidence
+  cases, 5 new Reviewer Runtime evidence cases, all under the existing `REVIEW_PROMOTION_ROLE_MISMATCH`
+  `it.each` blocks), `ReviewDecisionService.test.ts` (one promote-level regression: a tampered
+  `reviewerRuntime.evidence.reviewTargetSha` blocks Promote and creates no `ReviewPromotion`).
