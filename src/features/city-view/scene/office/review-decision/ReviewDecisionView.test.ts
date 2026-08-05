@@ -90,9 +90,16 @@ describe("createReviewDecisionDisplayRows", () => {
       createClassification("Approved", "reviewer-runtime-1"),
       promotion,
     );
-    expect(rows.statusText).toContain("Approved");
     expect(rows.statusText).toContain("Promoted by Local Human");
-    expect(rows.statusText).not.toMatch(/merge|push|deploy/i);
+  });
+
+  it("explicitly states the no-action boundary once promoted -- regression for round-1 combined review P2-001", () => {
+    const promotion = createPromotion("reviewer-runtime-1");
+    const rows = createReviewDecisionDisplayRows(
+      createClassification("Approved", "reviewer-runtime-1"),
+      promotion,
+    );
+    expect(rows.statusText).toMatch(/no push\/PR\/merge\/validation\/deploy/);
   });
 
   it("shows Approved awaiting Promote (never a stale Promoted row) when a newer reviewerRuntimeId is Approved and the caller resolves no current promotion for it -- regression for review.md Round 9 P1-001", () => {

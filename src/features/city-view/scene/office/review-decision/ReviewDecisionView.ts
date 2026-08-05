@@ -29,7 +29,9 @@ export function createReviewDecisionDisplayRows(
   currentPromotion: ReviewPromotion | undefined,
 ): ReviewDecisionDisplayRows {
   if (currentPromotion) {
-    return { statusText: `Approved; Promoted by ${currentPromotion.promotedBy}; no mutation` };
+    return {
+      statusText: `Promoted by ${currentPromotion.promotedBy}; no push/PR/merge/validation/deploy`,
+    };
   }
 
   if (!classification || classification.state === "Unavailable") {
