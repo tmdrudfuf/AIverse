@@ -18,6 +18,9 @@ const START_REVIEWER_KEY_CODE = "KeyR";
 // the one and only input that can record a Review Promotion, and it must
 // never share a keypress with any existing pipeline-action key.
 const PROMOTE_REVIEW_KEY_CODE = "KeyP";
+// Distinct from promotion and runtime keys: this records a human request for
+// fixes after a concrete ChangesRequested review, without starting fixes.
+const REQUEST_REVIEW_FIX_KEY_CODE = "KeyF";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -28,6 +31,7 @@ export class OfficeActionInputController {
   private pendingStartImplementer = false;
   private pendingStartReviewer = false;
   private pendingPromoteReview = false;
+  private pendingRequestReviewFix = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -76,6 +80,12 @@ export class OfficeActionInputController {
     if (event.code === PROMOTE_REVIEW_KEY_CODE) {
       event.preventDefault();
       this.pendingPromoteReview = true;
+      return;
+    }
+
+    if (event.code === REQUEST_REVIEW_FIX_KEY_CODE) {
+      event.preventDefault();
+      this.pendingRequestReviewFix = true;
     }
   };
 
@@ -136,6 +146,12 @@ export class OfficeActionInputController {
     return promoteReviewPressed;
   }
 
+  consumeRequestReviewFixPressed() {
+    const requestReviewFixPressed = this.pendingRequestReviewFix;
+    this.pendingRequestReviewFix = false;
+    return requestReviewFixPressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -151,5 +167,6 @@ export class OfficeActionInputController {
     this.pendingStartImplementer = false;
     this.pendingStartReviewer = false;
     this.pendingPromoteReview = false;
+    this.pendingRequestReviewFix = false;
   }
 }

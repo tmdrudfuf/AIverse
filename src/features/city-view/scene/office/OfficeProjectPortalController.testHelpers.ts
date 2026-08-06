@@ -81,6 +81,8 @@ export type ControllerInternals = {
     reviewTargets?: ProjectPortalState["reviewTargets"];
     reviewPromotionCollections?: ProjectPortalState["reviewPromotionCollections"];
     reviewPromotionResultCollections?: ProjectPortalState["reviewPromotionResultCollections"];
+    reviewFixRequestCollections?: ProjectPortalState["reviewFixRequestCollections"];
+    reviewFixRequestResultCollections?: ProjectPortalState["reviewFixRequestResultCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
@@ -155,6 +157,7 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     startImplementerPressed: false,
     startReviewerPressed: false,
     promoteReviewPressed: false,
+    requestReviewFixPressed: false,
     ...overrides,
   };
 }
