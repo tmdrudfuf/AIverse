@@ -40,7 +40,7 @@
 
 - [x] T017 Run focused tests and record counts.
 - [x] T018 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`.
-- [ ] T019 Commit local implementation.
-- [ ] T020 Run independent Claude review against exact HEAD.
-- [ ] T021 Fix blocking findings, revalidate, recommit, and re-review until Approved.
-- [ ] T022 Verify exact-head gate: approved review SHA equals validated SHA equals current HEAD, with clean working tree.
+- [x] T019 Commit local implementation.
+- [x] T020 Run independent Claude review against exact HEAD.
+- [x] T021 Fix blocking findings, revalidate, recommit, and re-review until Approved.
+- [x] T022 Verify exact-head gate: approved review SHA equals validated SHA equals current HEAD, with clean working tree.
