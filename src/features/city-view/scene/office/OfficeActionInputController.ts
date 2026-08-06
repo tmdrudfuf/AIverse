@@ -143,7 +143,6 @@ export class OfficeActionInputController {
   consumePromoteReviewPressed() {
     const promoteReviewPressed = this.pendingPromoteReview;
     this.pendingPromoteReview = false;
-    this.pendingRequestReviewFix = false;
     return promoteReviewPressed;
   }
 
