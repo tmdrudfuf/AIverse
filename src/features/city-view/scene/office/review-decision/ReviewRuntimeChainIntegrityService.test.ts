@@ -513,6 +513,11 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["malformed planId", (c: Chain) => ({ executionPlan: { ...c.plan, planId: "not-a-canonical-plan-id" } })],
       ["unsupported rulesVersion", (c: Chain) => ({ executionPlan: { ...c.plan, rulesVersion: "plan-v0" } })],
       ["missing plan", () => ({ executionPlan: undefined })],
+      // Unsafe mutation flags (P1-001, lifecycle-and-safety pass): a plan
+      // that already claims repository/GitHub mutation activity is
+      // internally contradictory before any downstream stage exists.
+      ["repositoryMutationStarted true on a record claiming nothing has started", (c: Chain) => ({ executionPlan: { ...c.plan, repositoryMutationStarted: true as unknown as false } })],
+      ["githubMutationStarted true on a record claiming nothing has started", (c: Chain) => ({ executionPlan: { ...c.plan, githubMutationStarted: true as unknown as false } })],
     ] as const)("returns REVIEW_PROMOTION_PLAN_INVALID when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -539,6 +544,9 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["preparedSessionId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, preparedSessionId: "a-different-prepared" } })],
       ["employeeId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, employeeId: "a-different-employee" } })],
       ["repositoryId no longer matches the plan", (c: Chain) => ({ readiness: { ...c.readiness, repositoryId: "a-different-repo" } })],
+      // Stage-order flags (P1-001): Readiness only evaluates whether
+      // execution *could* start -- it cannot itself claim execution started.
+      ["executionStarted true on a record claiming not-yet-started", (c: Chain) => ({ readiness: { ...c.readiness, executionStarted: true as unknown as false } })],
     ] as const)("returns REVIEW_PROMOTION_READINESS_NOT_READY when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -564,6 +572,9 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["repositoryId no longer matches the plan", (c: Chain) => ({ approval: { ...c.approval, repositoryId: "a-different-repo" } })],
       ["validationCommands diverges from the plan's", (c: Chain) => ({ approval: { ...c.approval, validationCommands: ["npm test"] } })],
       ["allowedMutationScope diverges from the plan's", (c: Chain) => ({ approval: { ...c.approval, allowedMutationScope: ["remote-write"] } })],
+      // Stage-order flags (P1-001): approval only grants permission to
+      // start -- it cannot itself be the record of having started.
+      ["agentStarted true on an approval that only grants permission to start", (c: Chain) => ({ approval: { ...c.approval, agentStarted: true as unknown as false } })],
     ] as const)("returns REVIEW_PROMOTION_APPROVAL_STALE when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -615,6 +626,10 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ],
       ["malformed preflightResult.id", (c: Chain) => ({ preflightResult: { ...c.preflightResult, id: "not-canonical" } })],
       ["preflightResult unsupported rulesVersion", (c: Chain) => ({ preflightResult: { ...c.preflightResult, rulesVersion: "preflight-v0" } })],
+      // Stage-order flags (P1-001): Preflight runs only after human approval,
+      // so a Preflight record that no longer carries executionApproved
+      // through as true is internally contradictory.
+      ["executionApproved false despite Preflight only running after human approval", (c: Chain) => ({ preflight: { ...c.preflight, executionApproved: false } })],
     ] as const)("returns REVIEW_PROMOTION_PREFLIGHT_NOT_READY when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -667,6 +682,11 @@ describe("validateReviewRuntimeChainIntegrity", () => {
         "mutationScope diverges from the plan's",
         (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, mutationScope: ["remote-write"] } }),
       ],
+      // Stage-order flags (P1-001): Runtime Start records that the runtime
+      // itself started, but no downstream stage may have started yet.
+      ["implementerStarted true before any Implementer Runtime exists", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, implementerStarted: true as unknown as false } })],
+      ["reviewerStarted true before any Reviewer Runtime exists", (c: Chain) => ({ runtimeStart: { ...c.runtimeStart, reviewerStarted: true as unknown as false } })],
+      ["runtimeStartResult.validationStarted true before any Validation stage exists", (c: Chain) => ({ runtimeStartResult: { ...c.runtimeStartResult, validationStarted: true as unknown as false } })],
     ] as const)("returns REVIEW_PROMOTION_START_STALE when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -709,6 +729,19 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["reviewerStarted true on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, reviewerStarted: true as unknown as false } })],
       ["validationStarted true on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, validationStarted: true as unknown as false } })],
       ["githubMutationStarted true on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, githubMutationStarted: true as unknown as false } })],
+      // Unsafe mutation flags (the reported P1-001 gap: this exact field was
+      // omitted from the pre-existing check above it).
+      ["repositoryMutationStarted true on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, repositoryMutationStarted: true as unknown as false } })],
+      // Provider evidence coherence (P1-001): a Completed record's own
+      // evidence must agree with the Completed status it is attached to.
+      ["evidence.started false on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, started: false } } })],
+      ["evidence.timedOut true on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, timedOut: true } } })],
+      ["evidence.cancelled true on a record claiming Completed", (c: Chain) => ({ implementerRuntime: { ...c.implementerRuntime, evidence: { ...c.implementerRuntime.evidence, cancelled: true } } })],
+      // Cross-record consistency (P1-001): the Result must mirror the
+      // Runtime's own started-flags exactly, and must not itself claim
+      // mutation activity.
+      ["implementerRuntimeResult.started diverges from implementerRuntime.agentStarted", (c: Chain) => ({ implementerRuntimeResult: { ...c.implementerRuntimeResult, started: false } })],
+      ["implementerRuntimeResult.repositoryMutationStarted true", (c: Chain) => ({ implementerRuntimeResult: { ...c.implementerRuntimeResult, repositoryMutationStarted: true as unknown as false } })],
     ] as const)("returns REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -836,6 +869,15 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["specificationPath no longer matches the plan", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, specificationPath: "specs/other/spec.md" } })],
       ["malformed reviewerRuntimeId (the reported Round-10 P1-001 gap)", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, reviewerRuntimeId: "not-canonical" } })],
       ["unsupported rulesVersion", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, rulesVersion: "codex-reviewer-v0" } })],
+      // Unsafe mutation flags (lifecycle-and-safety pass P1-001): zero prior
+      // lifecycle coverage on this record before this pass.
+      ["repositoryMutationStarted true on a record whose Result claims no mutation started", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, repositoryMutationStarted: true as unknown as false } })],
+      // Provider evidence coherence: a Completed record's own evidence must
+      // agree with the Completed status it is attached to, and
+      // agentStarted must agree with the spawned formula the service uses.
+      ["evidence.completed false on a record claiming Completed", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, completed: false } } })],
+      ["evidence.timedOut true on a record claiming Completed", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, evidence: { ...c.reviewerRuntime.evidence, timedOut: true } } })],
+      ["agentStarted false on a record claiming Completed", (c: Chain) => ({ reviewerRuntime: { ...c.reviewerRuntime, agentStarted: false } })],
     ] as const)("returns REVIEW_PROMOTION_REVIEWER_STALE when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });
@@ -870,6 +912,12 @@ describe("validateReviewRuntimeChainIntegrity", () => {
       ["reviewerRuntimeResult.implementerRuntimeId references a different implementer-runtime record", (c: Chain) => ({ reviewerRuntimeResult: { ...c.reviewerRuntimeResult, implementerRuntimeId: "a-different-implementer-runtime-id" } })],
       ["malformed reviewerRuntimeResult.id", (c: Chain) => ({ reviewerRuntimeResult: { ...c.reviewerRuntimeResult, id: "not-canonical" } })],
       ["reviewerRuntimeResult unsupported rulesVersion (the reported Round-10 P1-001 gap)", (c: Chain) => ({ reviewerRuntimeResult: { ...c.reviewerRuntimeResult, rulesVersion: "codex-reviewer-v0" } })],
+      // Cross-record consistency (lifecycle-and-safety pass P1-001): the
+      // Result must mirror the Runtime's own started-flags exactly, and
+      // must not itself claim mutation activity.
+      ["reviewerRuntimeResult.agentStarted diverges from reviewerRuntime.agentStarted", (c: Chain) => ({ reviewerRuntimeResult: { ...c.reviewerRuntimeResult, agentStarted: false } })],
+      ["reviewerRuntimeResult.implementerStarted false", (c: Chain) => ({ reviewerRuntimeResult: { ...c.reviewerRuntimeResult, implementerStarted: false as unknown as true } })],
+      ["reviewerRuntimeResult.githubMutationStarted true", (c: Chain) => ({ reviewerRuntimeResult: { ...c.reviewerRuntimeResult, githubMutationStarted: true as unknown as false } })],
     ] as const)("returns REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED when %s", (_label, mutate: Mutate) => {
       const chain = createValidChain();
       const result = validateReviewRuntimeChainIntegrity({ ...createInput(chain), ...mutate(chain) });

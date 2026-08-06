@@ -528,8 +528,19 @@ describe("ReviewDecisionService.classify", () => {
   it("returns Blocked when the Reviewer Runtime status is Blocked", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
-    const reviewerRuntime = { ...chain.reviewerRuntime, status: "Blocked" as const };
-    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status: "Blocked" as const };
+    const reviewerRuntime = {
+      ...chain.reviewerRuntime,
+      status: "Blocked" as const,
+      agentStarted: false,
+      reviewerStarted: false,
+      evidence: { ...chain.reviewerRuntime.evidence, started: false, completed: false, timedOut: false },
+    };
+    const reviewerRuntimeResult = {
+      ...chain.reviewerRuntimeResult,
+      status: "Blocked" as const,
+      agentStarted: false,
+      reviewerStarted: false,
+    };
     const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
     expect(classification.state).toBe("Blocked");
@@ -538,7 +549,11 @@ describe("ReviewDecisionService.classify", () => {
   it("returns TimedOut when the Reviewer Runtime status is TimedOut", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
-    const reviewerRuntime = { ...chain.reviewerRuntime, status: "TimedOut" as const };
+    const reviewerRuntime = {
+      ...chain.reviewerRuntime,
+      status: "TimedOut" as const,
+      evidence: { ...chain.reviewerRuntime.evidence, started: true, completed: false, timedOut: true },
+    };
     const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status: "TimedOut" as const };
     const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
@@ -548,8 +563,19 @@ describe("ReviewDecisionService.classify", () => {
   it("returns Failed when the Reviewer Runtime status is Failed", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
-    const reviewerRuntime = { ...chain.reviewerRuntime, status: "Failed" as const };
-    const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status: "Failed" as const };
+    const reviewerRuntime = {
+      ...chain.reviewerRuntime,
+      status: "Failed" as const,
+      agentStarted: false,
+      reviewerStarted: false,
+      evidence: { ...chain.reviewerRuntime.evidence, started: true, completed: false, timedOut: false },
+    };
+    const reviewerRuntimeResult = {
+      ...chain.reviewerRuntimeResult,
+      status: "Failed" as const,
+      agentStarted: false,
+      reviewerStarted: false,
+    };
     const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
 
     expect(classification.state).toBe("Failed");
@@ -1027,6 +1053,38 @@ describe("ReviewDecisionService.promote", () => {
     expect(outcome.promotionCollection).toBeUndefined();
   });
 
+  it("blocks Promote and creates no ReviewPromotion when the Implementer Runtime claims repository mutation already started (P1-001 lifecycle-and-safety regression, the reported gap)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const implementerRuntime = { ...chain.implementerRuntime, repositoryMutationStarted: true as unknown as false };
+
+    const classification = service.classify({ ...createInput(chain), implementerRuntime });
+    expect(classification.state).toBe("Stale");
+
+    const outcome = service.promote({ ...createInput(chain), implementerRuntime }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
+    expect(outcome.promotionCollection).toBeUndefined();
+  });
+
+  it("blocks Promote and creates no ReviewPromotion when a Completed Reviewer Runtime's own evidence claims it never completed (P1-001 lifecycle-and-safety regression)", () => {
+    const service = new ReviewDecisionService();
+    const chain = createValidChain();
+    const reviewerRuntime = { ...chain.reviewerRuntime, evidence: { ...chain.reviewerRuntime.evidence, completed: false } };
+
+    const classification = service.classify({ ...createInput(chain), reviewerRuntime });
+    expect(classification.state).toBe("Stale");
+
+    const outcome = service.promote({ ...createInput(chain), reviewerRuntime }, createRequest(chain));
+
+    expect(outcome.result.granted).toBe(false);
+    expect(outcome.result.reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+    expect(outcome.promotion).toBeUndefined();
+    expect(outcome.promotionCollection).toBeUndefined();
+  });
+
   it("keeps project isolation: a chain for a different projectId never satisfies this project's plan check", () => {
     const service = new ReviewDecisionService();
     const chain = createValidChain();
@@ -1131,8 +1189,34 @@ describe("ReviewDecisionService.promote reason-code fidelity for a full Reviewer
     (status, expectedReason, decision) => {
       const service = new ReviewDecisionService();
       const chain = createValidChain();
-      const reviewerRuntime = { ...chain.reviewerRuntime, status, ...(decision ? { decision } : {}) };
-      const reviewerRuntimeResult = { ...chain.reviewerRuntimeResult, status, ...(decision ? { decision } : {}) };
+      // agentStarted/reviewerStarted and the provider evidence's own
+      // started/completed/timedOut fields must match what
+      // ReviewerRuntimeService.ts/CodexReviewerRuntimeProvider.ts actually
+      // produce for each status, or the chain-integrity validator's own
+      // lifecycle coherence check (not this test's concern) rejects the
+      // fixture before promote()'s status-specific reason-code logic runs.
+      const spawned = status === "Completed" || status === "TimedOut";
+      const evidence = {
+        ...chain.reviewerRuntime.evidence,
+        started: status !== "Blocked",
+        completed: status === "Completed",
+        timedOut: status === "TimedOut",
+      };
+      const reviewerRuntime = {
+        ...chain.reviewerRuntime,
+        status,
+        agentStarted: spawned,
+        reviewerStarted: spawned,
+        evidence,
+        ...(decision ? { decision } : {}),
+      };
+      const reviewerRuntimeResult = {
+        ...chain.reviewerRuntimeResult,
+        status,
+        agentStarted: spawned,
+        reviewerStarted: spawned,
+        ...(decision ? { decision } : {}),
+      };
 
       const classification = service.classify({ ...createInput(chain), reviewerRuntime, reviewerRuntimeResult });
       expect(classification.state).not.toBe("Approved");

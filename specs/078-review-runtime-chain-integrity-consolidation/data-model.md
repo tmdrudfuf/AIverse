@@ -32,6 +32,26 @@ Pure function. Returns `undefined` when the entire chain is valid; otherwise the
 
 Full per-stage before/after narrative, including which checks already existed before this spec and the exact grep evidence each creation-site helper usage was confirmed against, is in `.agent-workflow/spec-078-chain-integrity-audit.md`.
 
+## Lifecycle / mutation-safety matrix (combined branch round 4, P1-001)
+
+Every id/rulesVersion/linkage check above assumes a record is well-formed *if it exists*; it does not
+check whether a record's own lifecycle and mutation-safety flags are internally coherent with the
+stage it represents. **Combined branch round 4** added that layer: at every stage from Execution Plan
+through Reviewer Runtime Result, the canonical `false`-until-started fields (`executionStarted`,
+`agentStarted`, `implementerStarted`, `reviewerStarted`, `validationStarted`,
+`repositoryMutationStarted`, `githubMutationStarted`), the stage-specific `true`-once-approved fields
+(`executionApproved`, `runtimePreflightPassed`), and — on Implementer/Reviewer Runtime — the provider
+`evidence` sub-object's own `started`/`completed`/`timedOut`/`cancelled` fields are now checked against
+the exact value each record's own creation service (`RuntimeStartService.ts`,
+`ImplementerRuntimeService.ts`/`ClaudeImplementerRuntimeProvider.ts`,
+`ReviewerRuntimeService.ts`/`CodexReviewerRuntimeProvider.ts`) actually produces for that record's own
+claimed `status`, not merely a fixed literal. Full field-by-field derivation is in
+`.agent-workflow/spec-077-078-lifecycle-safety-audit.md` (gitignored); the reason codes reused are the
+same per-stage codes already listed in the table above — no new reason code was introduced. This is
+internal coherence only: the Approved/ChangesRequested/Blocked/TimedOut/Failed outcome distinction
+remains `ReviewDecisionService.classify()`'s sole responsibility (see
+`specs/077-078-combined-review-note.md`, Round 4).
+
 ## Validation Rules (unchanged from Spec 077, restated for completeness)
 
 - Every stage's existing linkage checks (project match, upstream-id match, status/flag checks) are preserved verbatim — this spec adds id/rulesVersion checks alongside them, it does not remove or loosen any pre-existing check.

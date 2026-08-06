@@ -136,3 +136,58 @@ publication of this stack.
   cases, 5 new Reviewer Runtime evidence cases, all under the existing `REVIEW_PROMOTION_ROLE_MISMATCH`
   `it.each` blocks), `ReviewDecisionService.test.ts` (one promote-level regression: a tampered
   `reviewerRuntime.evidence.reviewTargetSha` blocks Promote and creates no `ReviewPromotion`).
+
+- **Round 4** (independent re-review of the Round 3 fix commit
+  `a2c32941164f5eee6b24dfbbdfa49aa3ea774e6e`) returned `Changes Requested` again, with one new
+  blocking finding:
+  - **P1-001** (`ReviewRuntimeChainIntegrityService.ts` 80-507): the validator checked ids, rules
+    versions, and upstream linkage for every chain record, but never checked canonical
+    lifecycle/mutation-safety flags (`executionStarted`, `agentStarted`, `implementerStarted`,
+    `reviewerStarted`, `repositoryMutationStarted`, `githubMutationStarted`, etc.) on most records
+    or their Result records -- a record could claim validation or repository/GitHub mutation
+    already started and still support an Approved classification/promotion.
+
+### Round 4 fix (this fix cycle)
+
+- **Lifecycle-and-safety invariant policy**: `ReviewRuntimeChainIntegrityService.ts` now checks the
+  canonical lifecycle/mutation-safety fields at every stage from `ExecutionPlan` through
+  `ReviewerRuntimeResult`, derived from each record's own creation service (never invented -- see
+  `.agent-workflow/spec-077-078-lifecycle-safety-audit.md`, gitignored, for the full field-by-field
+  inventory). This includes the finding's own named example, `repositoryMutationStarted` on
+  Implementer Runtime, which was the one flag missing from the pre-existing `reviewerStarted`/
+  `validationStarted`/`githubMutationStarted` check at that line. Reviewer Runtime, which had zero
+  prior lifecycle coverage, gained the largest addition: `executionStarted`/`implementerStarted`
+  literal-true checks, mutation-flag literal-false checks, and coherence between `agentStarted`/
+  `reviewerStarted`/the provider evidence's own `started`/`completed`/`timedOut` fields and the
+  record's own claimed `status`. `classify()`/`promote()`'s existing Completed+Approved outcome gate
+  (`ReviewDecisionService.ts`'s `reasonForNonApproved`) was deliberately left as the single owner of
+  the Approved/ChangesRequested/Blocked/TimedOut/Failed distinction -- this pass adds internal
+  coherence checks only, not a second outcome gate, per the "single shared validator boundary"
+  constraint.
+- **Formula correction found during implementation**: `evidence.started` does not follow the same
+  `spawned` formula (`status==="Completed"||"TimedOut"`) as `agentStarted`/`reviewerStarted`.
+  `CodexReviewerRuntimeProvider.ts` also sets `evidence.started: true` on its `Failed` branches (the
+  process was actually spawned, just exited non-zero or could not be parsed) -- only the `Blocked`
+  branches (rejected before spawn) leave it `false`. The validator was corrected to
+  `evidence.started === (status !== "Blocked")`.
+- **Test fixture correction**: two pre-existing `ReviewDecisionService.test.ts` blocks (`classify`'s
+  Blocked/TimedOut/Failed status rows, and the `Round 8 P2-001` reason-code-fidelity `it.each`)
+  constructed non-Completed `reviewerRuntime`/`reviewerRuntimeResult` fixtures by spreading the
+  Completed-shaped valid chain and overriding only `status` (and `decision`), leaving
+  `agentStarted`/`reviewerStarted`/`evidence.*` at their Completed values -- a shape
+  `ReviewerRuntimeService.ts`/`CodexReviewerRuntimeProvider.ts` can never actually produce for
+  `Blocked`/`TimedOut`/`Failed`. The new coherence checks correctly caught both as internally
+  contradictory. Corrected to set the coherent per-status values the real services produce, so the
+  tests still prove their original intent (a genuine Blocked/TimedOut/Failed chain reaches
+  `promote()`'s truthful, status-specific reason code, not a generic Stale/`REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED`
+  fallback).
+- **Tests added**: `ReviewRuntimeChainIntegrityService.test.ts` (21 new `it.each` rows across the
+  existing Execution Plan, Execution Readiness, Human Execution Approval, Runtime Preflight, Runtime
+  Start, Implementer Runtime, and Reviewer Runtime blocks, spanning unsafe-mutation-flag,
+  stage-order-flag, provider-evidence-coherence, and cross-record-consistency cases -- each a
+  single-field mutation off the already-proven-valid baseline chain, so it is attributable to the
+  one new branch it targets). `ReviewDecisionService.test.ts` (two new promote()-level regressions:
+  Implementer Runtime `repositoryMutationStarted` true, and Reviewer Runtime `evidence.completed`
+  false on a Completed record -- both block Promote, create no `ReviewPromotion`, and report the
+  generic `REVIEW_PROMOTION_REVIEWER_STALE` code, consistent with how every other chain-integrity
+  failure already surfaces through `classify()`'s "Stale" state).

@@ -86,6 +86,19 @@ function validatePlan(input: ReviewDecisionInput): ReviewPromotionReasonCode | u
   ) {
     return "REVIEW_PROMOTION_PLAN_INVALID";
   }
+  // A malformed plan that already claims execution/subprocess/mutation activity
+  // cannot back an Approved promotion -- the root record's own literal-false
+  // lifecycle fields must still hold true at runtime, not merely at the type
+  // level (see .agent-workflow/spec-077-078-lifecycle-safety-audit.md, #1).
+  if (
+    plan.executionStarted !== false ||
+    plan.runtimeStarted !== false ||
+    plan.subprocessStarted !== false ||
+    plan.repositoryMutationStarted !== false ||
+    plan.githubMutationStarted !== false
+  ) {
+    return "REVIEW_PROMOTION_PLAN_INVALID";
+  }
   return undefined;
 }
 
@@ -128,6 +141,24 @@ function validateReadiness(input: ReviewDecisionInput): ReviewPromotionReasonCod
   ) {
     return "REVIEW_PROMOTION_READINESS_NOT_READY";
   }
+  // Neither the Readiness record nor its Result may claim execution/agent/
+  // mutation activity already started -- both carry the same literal-false
+  // contract RuntimeStartService's own precondition re-derives independently
+  // (see audit #2).
+  if (
+    readiness.executionApproved !== false ||
+    readiness.executionStarted !== false ||
+    readiness.agentStarted !== false ||
+    readiness.repositoryMutationStarted !== false ||
+    readiness.githubMutationStarted !== false ||
+    readinessResult.executionApproved !== false ||
+    readinessResult.executionStarted !== false ||
+    readinessResult.agentStarted !== false ||
+    readinessResult.repositoryMutationStarted !== false ||
+    readinessResult.githubMutationStarted !== false
+  ) {
+    return "REVIEW_PROMOTION_READINESS_NOT_READY";
+  }
   return undefined;
 }
 
@@ -165,6 +196,17 @@ function validateApproval(input: ReviewDecisionInput): ReviewPromotionReasonCode
     return "REVIEW_PROMOTION_APPROVAL_STALE";
   }
   if (getActorBlockReason(approval.approvedBy)) return "REVIEW_PROMOTION_INVALID_ACTOR";
+  // An approval that claims execution/agent/mutation activity already started
+  // is internally contradictory -- approval only grants permission to start,
+  // it cannot itself be the record of having started (audit #3).
+  if (
+    approval.executionStarted !== false ||
+    approval.agentStarted !== false ||
+    approval.repositoryMutationStarted !== false ||
+    approval.githubMutationStarted !== false
+  ) {
+    return "REVIEW_PROMOTION_APPROVAL_STALE";
+  }
   return undefined;
 }
 
@@ -208,6 +250,24 @@ function validatePreflight(input: ReviewDecisionInput): ReviewPromotionReasonCod
   if (
     preflightResult.id !== createRuntimePreflightResultId(plan.projectId, plan.planId) ||
     preflightResult.rulesVersion !== RUNTIME_PREFLIGHT_RULES_VERSION
+  ) {
+    return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
+  }
+  // executionApproved must be carried through as true (Preflight runs only
+  // after human approval); execution/agent/mutation activity must not have
+  // started yet on either record -- same literal-false contract
+  // RuntimeStartService's own precondition re-derives independently (audit #4).
+  if (
+    preflight.executionApproved !== true ||
+    preflight.executionStarted !== false ||
+    preflight.agentStarted !== false ||
+    preflight.repositoryMutationStarted !== false ||
+    preflight.githubMutationStarted !== false ||
+    preflightResult.executionApproved !== true ||
+    preflightResult.executionStarted !== false ||
+    preflightResult.agentStarted !== false ||
+    preflightResult.repositoryMutationStarted !== false ||
+    preflightResult.githubMutationStarted !== false
   ) {
     return "REVIEW_PROMOTION_PREFLIGHT_NOT_READY";
   }
@@ -279,6 +339,47 @@ function validateRuntimeStart(input: ReviewDecisionInput): ReviewPromotionReason
   ) {
     return "REVIEW_PROMOTION_START_STALE";
   }
+  // Runtime Start's own lifecycle contract (RuntimeStartService.ts's internal
+  // invariant predicate): executionApproved/runtimePreflightPassed/
+  // executionStarted must be true, and no downstream stage (agent, Implementer,
+  // Reviewer, dedicated Validation, repository/GitHub mutation) may have
+  // started yet (audit #5).
+  if (
+    runtimeStart.executionApproved !== true ||
+    runtimeStart.runtimePreflightPassed !== true ||
+    runtimeStart.executionStarted !== true ||
+    runtimeStart.agentStarted !== false ||
+    runtimeStart.implementerStarted !== false ||
+    runtimeStart.reviewerStarted !== false ||
+    runtimeStart.validationStarted !== false ||
+    runtimeStart.repositoryMutationStarted !== false ||
+    runtimeStart.githubMutationStarted !== false
+  ) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
+  // The Result must coherently report the same "started" outcome across all
+  // of its own started/approved/preflight-passed fields, and duplicateExistingStart
+  // must match the status it is reporting (RuntimeStartService.ts createResult).
+  const runtimeStartResultStarted = runtimeStartResult.status === "Started" || runtimeStartResult.status === "AlreadyStarted";
+  if (
+    runtimeStartResult.started !== runtimeStartResultStarted ||
+    runtimeStartResult.executionApproved !== runtimeStartResultStarted ||
+    runtimeStartResult.runtimePreflightPassed !== runtimeStartResultStarted ||
+    runtimeStartResult.executionStarted !== runtimeStartResultStarted ||
+    runtimeStartResult.duplicateExistingStart !== (runtimeStartResult.status === "AlreadyStarted")
+  ) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
+  if (
+    runtimeStartResult.agentStarted !== false ||
+    runtimeStartResult.implementerStarted !== false ||
+    runtimeStartResult.reviewerStarted !== false ||
+    runtimeStartResult.validationStarted !== false ||
+    runtimeStartResult.repositoryMutationStarted !== false ||
+    runtimeStartResult.githubMutationStarted !== false
+  ) {
+    return "REVIEW_PROMOTION_START_STALE";
+  }
   return undefined;
 }
 
@@ -338,7 +439,48 @@ function validateImplementerRuntime(input: ReviewDecisionInput): ReviewPromotion
   ) {
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
-  if (implementerRuntime.reviewerStarted || implementerRuntime.validationStarted || implementerRuntime.githubMutationStarted) {
+  if (
+    implementerRuntime.reviewerStarted ||
+    implementerRuntime.validationStarted ||
+    implementerRuntime.repositoryMutationStarted ||
+    implementerRuntime.githubMutationStarted
+  ) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  // A Completed Implementer Runtime must truthfully report that execution and
+  // the agent itself started (ImplementerRuntimeService.ts: `spawned` is only
+  // true for Completed/TimedOut, and both agentStarted/implementerStarted are
+  // set to `spawned`) -- a record claiming Completed while agentStarted is
+  // false is an impossible lifecycle state (audit #6).
+  if (!implementerRuntime.executionStarted || !implementerRuntime.agentStarted || !implementerRuntime.implementerStarted) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  // The provider evidence's own process-lifecycle fields must agree with the
+  // Completed status they are attached to (ClaudeImplementerRuntimeProvider.ts's
+  // Completed branch always writes started/completed true, timedOut/cancelled
+  // false) -- an internally inconsistent evidence record cannot back an
+  // Approved promotion even though it is self-consistent with everything else.
+  if (
+    !implementerRuntime.evidence.started ||
+    !implementerRuntime.evidence.completed ||
+    implementerRuntime.evidence.timedOut ||
+    implementerRuntime.evidence.cancelled
+  ) {
+    return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
+  }
+  // The Result record must mirror the Runtime's own started-flags exactly
+  // (ImplementerRuntimeService.ts's Result construction always copies
+  // runtime.agentStarted/implementerStarted verbatim) and must not itself
+  // claim any later-stage activity.
+  if (
+    implementerRuntimeResult.started !== implementerRuntime.agentStarted ||
+    implementerRuntimeResult.agentStarted !== implementerRuntime.agentStarted ||
+    implementerRuntimeResult.implementerStarted !== implementerRuntime.implementerStarted ||
+    implementerRuntimeResult.reviewerStarted ||
+    implementerRuntimeResult.validationStarted ||
+    implementerRuntimeResult.repositoryMutationStarted ||
+    implementerRuntimeResult.githubMutationStarted
+  ) {
     return "REVIEW_PROMOTION_IMPLEMENTER_NOT_COMPLETED";
   }
 
@@ -474,6 +616,40 @@ function validateReviewerRuntime(input: ReviewDecisionInput): ReviewPromotionRea
   ) {
     return "REVIEW_PROMOTION_ROLE_MISMATCH";
   }
+  // executionStarted and implementerStarted are literal-true on this record --
+  // Reviewer Runtime can only exist once Implementer Runtime already
+  // Completed -- and no dedicated Validation Runtime or repository/GitHub
+  // mutation may have started (ReviewerRuntimeService.ts's own construction
+  // writes false for all three unconditionally) (audit #8, the finding's
+  // second named example: zero prior lifecycle coverage on this record).
+  if (!reviewerRuntime.executionStarted || !reviewerRuntime.implementerStarted) {
+    return "REVIEW_PROMOTION_REVIEWER_STALE";
+  }
+  if (reviewerRuntime.validationStarted || reviewerRuntime.repositoryMutationStarted || reviewerRuntime.githubMutationStarted) {
+    return "REVIEW_PROMOTION_REVIEWER_STALE";
+  }
+  // agentStarted/reviewerStarted must cohere with the record's own status --
+  // spawned is true only for Completed/TimedOut (ReviewerRuntimeService.ts).
+  // evidence.started follows a separate, wider rule: the provider sets it
+  // true whenever the process was actually spawned, which includes Failed
+  // (e.g. a non-zero exit or a process that could not be parsed after
+  // starting), not only Completed/TimedOut -- only Blocked (rejected before
+  // spawn) leaves it false (CodexReviewerRuntimeProvider.ts). This blocks
+  // e.g. a Completed record with evidence.completed false, or a TimedOut
+  // record whose evidence still claims a completed success, regardless of
+  // what decision it reached -- classify()/promote() already own the
+  // Completed+Approved outcome gate one layer up, this is coherence only.
+  const reviewerSpawned = reviewerRuntime.status === "Completed" || reviewerRuntime.status === "TimedOut";
+  if (reviewerRuntime.agentStarted !== reviewerSpawned || reviewerRuntime.reviewerStarted !== reviewerSpawned) {
+    return "REVIEW_PROMOTION_REVIEWER_STALE";
+  }
+  if (
+    reviewerRuntime.evidence.started !== (reviewerRuntime.status !== "Blocked") ||
+    reviewerRuntime.evidence.completed !== (reviewerRuntime.status === "Completed") ||
+    reviewerRuntime.evidence.timedOut !== (reviewerRuntime.status === "TimedOut")
+  ) {
+    return "REVIEW_PROMOTION_REVIEWER_STALE";
+  }
   if (
     !reviewerRuntimeResult ||
     reviewerRuntimeResult.reviewerRuntimeId !== reviewerRuntime.reviewerRuntimeId ||
@@ -501,6 +677,20 @@ function validateReviewerRuntime(input: ReviewDecisionInput): ReviewPromotionRea
     // Round 10 P1-001: a malformed reviewerRuntimeResult.id or an unsupported
     // rulesVersion must block promotion even when every linkage field above
     // matches (see .agent-workflow/spec-078-chain-integrity-audit.md, stage 9).
+    return "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED";
+  }
+  // The Result must mirror the Runtime's own started-flags exactly
+  // (ReviewerRuntimeService.ts's Result construction always copies
+  // runtime.agentStarted/reviewerStarted verbatim and writes implementerStarted
+  // literal true) and must not itself claim any later-stage activity.
+  if (
+    reviewerRuntimeResult.implementerStarted !== true ||
+    reviewerRuntimeResult.agentStarted !== reviewerRuntime.agentStarted ||
+    reviewerRuntimeResult.reviewerStarted !== reviewerRuntime.reviewerStarted ||
+    reviewerRuntimeResult.validationStarted ||
+    reviewerRuntimeResult.repositoryMutationStarted ||
+    reviewerRuntimeResult.githubMutationStarted
+  ) {
     return "REVIEW_PROMOTION_REVIEWER_NOT_COMPLETED";
   }
   return undefined;

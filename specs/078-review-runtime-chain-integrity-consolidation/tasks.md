@@ -71,6 +71,23 @@
   recorded in `specs/077-078-combined-review-note.md` rather than duplicated here; `data-model.md` rows 6/9
   and the "Role binding" row updated in place to point at that note.
 
+## Phase 14: Combined-Branch Round 4 Fix Cycle (evidence, not this spec's own review)
+
+- [x] T024 The combined publication candidate's own round 4 review (distinct from this spec's
+  Approved review recorded above) returned Changes Requested with one blocking finding against this
+  spec's `ReviewRuntimeChainIntegrityService.ts`: P1-001 (malformed lifecycle and mutation-safety
+  flags — e.g. `executionStarted`, `agentStarted`, `implementerStarted`, `reviewerStarted`,
+  `repositoryMutationStarted`, `githubMutationStarted` — were not checked at most stages or their
+  Result records, so a record could claim validation or repository/GitHub mutation already started
+  and still support an Approved classification/promotion). Fixed on the combined branch: every
+  canonical lifecycle/mutation-safety field at every stage from Execution Plan through Reviewer
+  Runtime Result is now checked against the exact value each record's own creation service produces
+  for its own claimed status, with regression tests, reusing the same per-stage `REVIEW_PROMOTION_*`
+  reason codes (no new reason code introduced). Full finding text, fix description, formula
+  correction (`evidence.started` does not follow the `agentStarted`/`reviewerStarted` `spawned`
+  formula), and test list recorded in `specs/077-078-combined-review-note.md` rather than duplicated
+  here; `data-model.md`'s new "Lifecycle / mutation-safety matrix" section documents the closed gap.
+
 ## Human-Gated Follow-Up Actions (not executable tasks)
 
 - `git push` of the feature branch.
