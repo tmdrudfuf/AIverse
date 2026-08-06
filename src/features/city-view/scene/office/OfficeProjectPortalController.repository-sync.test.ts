@@ -162,6 +162,7 @@ function createInput(overrides: Partial<OfficeProjectPortalInput>): OfficeProjec
     startImplementerPressed: false,
     startReviewerPressed: false,
     promoteReviewPressed: false,
+    requestReviewFixPressed: false,
     ...overrides,
   };
 }

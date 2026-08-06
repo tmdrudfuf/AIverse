@@ -207,6 +207,98 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
   // planting a stale, older decoy plan for the same task/candidate must
   // neither change the dashboard's classification nor let Promote record a
   // promotion against the decoy.
+  it("records exactly one immutable Review Fix Request when the human presses Request Fixes against a Completed+ChangesRequested chain", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+
+    const requests = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests;
+    expect(requests).toHaveLength(1);
+    const request = requests![0];
+    expect(request.decision).toBe("ChangesRequested");
+    expect(request.requestedBy).toBe("Local Human");
+    expect(request.fixExecutionStarted).toBe(false);
+    expect(request.validationRuntimeStarted).toBe(false);
+    expect(request.codexStarted).toBe(false);
+    expect(request.claudeStarted).toBe(false);
+    expect(request.subprocessStarted).toBe(false);
+    expect(request.validationStarted).toBe(false);
+    expect(request.repositoryMutationStarted).toBe(false);
+    expect(request.githubMutationStarted).toBe(false);
+
+    const results = internals.state.reviewFixRequestResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0].status).toBe("Requested");
+    expect(results![0].requested).toBe(true);
+  });
+
+  it("does not record a Review Fix Request from render, navigation, Enter, or Promote inputs", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ downPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    expect(internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests ?? []).toHaveLength(0);
+    expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions ?? []).toHaveLength(0);
+  });
+
+  it("is idempotent: repeated Request Fixes creates no duplicate and returns AlreadyRequested after revalidation", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    const firstRequest = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests[0];
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+
+    const requests = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests;
+    expect(requests).toHaveLength(1);
+    expect(requests![0]).toEqual(firstRequest);
+    const results = internals.state.reviewFixRequestResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0].status).toBe("AlreadyRequested");
+    expect(results![0].reasonCodes).toContain("REVIEW_FIX_REQUEST_ALREADY_REQUESTED");
+  });
+
+  it("blocks Request Fixes for an Approved reviewer decision and creates no fix request", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToApprovedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+
+    expect(internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests ?? []).toHaveLength(0);
+    const results = internals.state.reviewFixRequestResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0].status).toBe("Blocked");
+    expect(results![0].reasonCodes).toContain("REVIEW_FIX_REQUEST_DECISION_APPROVED");
+  });
+
+  it("does not return AlreadyRequested for a stale repeated fix request", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    const firstRequest = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests[0];
+    const approval = internals.state.humanExecutionApprovalCollections[PROJECT_ID]?.approvals[0];
+    if (!approval) throw new Error("Test setup failed to reach a Human Execution Approval.");
+    approval.executionPlanId = "stale-plan";
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+
+    expect(internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests).toEqual([firstRequest]);
+    const results = internals.state.reviewFixRequestResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0].status).toBe("Blocked");
+    expect(results![0].reasonCodes).toContain("REVIEW_FIX_REQUEST_REVIEWER_STALE");
+  });
   it("resolves the same current Execution Plan for the dashboard and Promote even when a stale, older plan exists for the same task/candidate", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
@@ -398,6 +490,18 @@ async function driveDailyProofToApprovedReviewer(
   return { promotedTaskId };
 }
 
+async function driveDailyProofToChangesRequestedReviewer(
+  controller: OfficeProjectPortalController,
+  internals: ControllerInternals,
+): Promise<{ promotedTaskId: string }> {
+  const result = await driveDailyProofToApprovedReviewer(controller, internals);
+  const runtime = internals.state.reviewerRuntimeCollections[PROJECT_ID]?.runtimes[0];
+  const reviewerResult = internals.state.reviewerRuntimeResultCollections[PROJECT_ID]?.results[0];
+  if (!runtime || !reviewerResult) throw new Error("Test setup failed to reach Reviewer Runtime.");
+  runtime.decision = "ChangesRequested";
+  reviewerResult.decision = "ChangesRequested";
+  return result;
+}
 /**
  * Drives a promoted Daily Proof candidate task through a Completed
  * Implementer Runtime, then stubs a pre-spawn Blocked/Failed Reviewer

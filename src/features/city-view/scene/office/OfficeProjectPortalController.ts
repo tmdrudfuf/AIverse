@@ -74,6 +74,12 @@ import {
   createReviewPromotionResultCollection,
   REVIEW_PROMOTION_RULES_VERSION,
 } from "./review-decision/ReviewDecisionTypes";
+import { ReviewFixRequestService } from "./review-fix-requests/ReviewFixRequestService";
+import {
+  REVIEW_FIX_REQUEST_RULES_VERSION,
+  createReviewFixRequestCollection,
+  createReviewFixRequestResultCollection,
+} from "./review-fix-requests/ReviewFixRequestTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -171,6 +177,11 @@ export type OfficeProjectPortalInput = {
   // human Promote action on an already-Approved Reviewer Runtime -- it never
   // starts or re-runs any agent (see specs/077-review-decision-human-promotion-gate).
   promoteReviewPressed: boolean;
+  // Distinct from Promote and runtime-start inputs: this records a human
+  // request for fixes on a ChangesRequested Reviewer Runtime only. It never
+  // invokes Codex, Claude, Validation Runtime, subprocesses, repository
+  // mutation, or GitHub mutation (see specs/079-review-fix-request-foundation).
+  requestReviewFixPressed: boolean;
 };
 
 export class OfficeProjectPortalController {
@@ -198,6 +209,7 @@ export class OfficeProjectPortalController {
   private reviewerRuntimeService: ReviewerRuntimeService;
   private readonly activeReviewerRuntimeKeys = new Set<string>();
   private readonly reviewDecisionService: ReviewDecisionService;
+  private readonly reviewFixRequestService: ReviewFixRequestService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -257,6 +269,7 @@ export class OfficeProjectPortalController {
     this.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
     this.reviewerRuntimeService = new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
     this.reviewDecisionService = new ReviewDecisionService();
+    this.reviewFixRequestService = new ReviewFixRequestService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -785,6 +798,18 @@ export class OfficeProjectPortalController {
     // Promotion, and it never starts or re-runs any agent.
     if (input.promoteReviewPressed && selectedPromotion?.promotionStatus === "Approved") {
       const handled = this.promoteReviewForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (handled) this.view.render(this.state);
+      return;
+    }
+
+    // Separate from Promote and from Enter: this records a fix request only
+    // for a freshly revalidated ChangesRequested review decision. It is not
+    // a Validation Runtime start and it cannot share an input event with one.
+    if (input.requestReviewFixPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const handled = this.requestReviewFixForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
       );
@@ -2302,6 +2327,67 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+
+  /**
+   * Human-triggered only: records a request to fix a concrete
+   * ChangesRequested Reviewer Runtime. This mirrors Promote's resolver and
+   * delegates all eligibility/idempotency checks to ReviewFixRequestService;
+   * it never starts Validation Runtime, Codex, Claude, subprocesses,
+   * repository mutation, or GitHub mutation.
+   */
+  private requestReviewFixForPromotion(projectId: string, candidateTaskId: string): boolean {
+    this.state.reviewFixRequestCollections ??= {};
+    this.state.reviewFixRequestResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const plan = resolveCurrentExecutionPlan(this.state.executionPlanCollections[projectId], {
+      projectTaskId: promotedTask.id,
+      candidateTaskId,
+    });
+    if (!plan) return false;
+
+    const existingFixRequests = this.state.reviewFixRequestCollections[projectId]
+      ?? createReviewFixRequestCollection({ projectId, requests: [], rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION });
+    const existingFixRequestResults = this.state.reviewFixRequestResultCollections[projectId]
+      ?? createReviewFixRequestResultCollection({ projectId, results: [], rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION });
+
+    const input = {
+      ...resolveReviewDecisionInput({
+        projectId,
+        plan,
+        readinessCollection: this.state.executionReadinessCollections[projectId],
+        readinessResultCollection: this.state.executionReadinessResultCollections[projectId],
+        approvalCollection: this.state.humanExecutionApprovalCollections[projectId],
+        preflightCollection: this.state.runtimePreflightCollections[projectId],
+        preflightResultCollection: this.state.runtimePreflightResultCollections[projectId],
+        runtimeStartCollection: this.state.runtimeStartCollections[projectId],
+        runtimeStartResultCollection: this.state.runtimeStartResultCollections[projectId],
+        implementerRuntimeCollection: this.state.implementerRuntimeCollections[projectId],
+        implementerRuntimeResultCollection: this.state.implementerRuntimeResultCollections[projectId],
+        reviewTarget: this.state.reviewTargets[projectId],
+        reviewerRuntimeCollection: this.state.reviewerRuntimeCollections[projectId],
+        reviewerRuntimeResultCollection: this.state.reviewerRuntimeResultCollections[projectId],
+      }),
+      existingFixRequests,
+      existingFixRequestResults,
+    };
+
+    const outcome = this.reviewFixRequestService.requestFix(input, {
+      projectId,
+      reviewerRuntimeId: input.reviewerRuntime?.reviewerRuntimeId ?? "",
+      actor: "Local Human",
+      requestedAt: new Date().toISOString(),
+    });
+
+    this.state.reviewFixRequestCollections[projectId] = outcome.requestCollection ?? existingFixRequests;
+    this.state.reviewFixRequestResultCollections[projectId] = outcome.resultCollection ?? existingFixRequestResults;
+    return true;
+  }
   private clearRuntimePreflightForProject(projectId: string) {
     if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
     if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
