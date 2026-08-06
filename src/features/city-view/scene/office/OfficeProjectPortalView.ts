@@ -26,7 +26,7 @@ import {
   createReviewDecisionDisplayRows,
   type ReviewDecisionDisplayRows,
 } from "./review-decision/ReviewDecisionView";
-import { findCurrentReviewFixRequest } from "./review-fix-requests/ReviewFixRequestService";
+import { findCurrentReviewFixRequest, findCurrentReviewFixRequestResult } from "./review-fix-requests/ReviewFixRequestService";
 import {
   createReviewFixRequestDisplayRows,
   type ReviewFixRequestDisplayRows,
@@ -429,7 +429,11 @@ export class OfficeProjectPortalView {
       ? createReviewDecisionDisplayRows(reviewDecisionClassification, currentReviewPromotion)
       : undefined;
     const currentReviewFixRequest = findCurrentReviewFixRequest(reviewFixRequestInput, reviewDecisionClassification);
-    const latestReviewFixRequestResult = reviewFixRequestResultCollection?.results.at(-1);
+    const latestReviewFixRequestResult = findCurrentReviewFixRequestResult(
+      dashboardProjectId,
+      reviewDecisionClassification,
+      reviewFixRequestResultCollection,
+    );
     const reviewFixRequestRows = reviewerRuntimeResultCollection || reviewFixRequestCollection || reviewFixRequestResultCollection
       ? createReviewFixRequestDisplayRows(reviewDecisionClassification, currentReviewFixRequest, latestReviewFixRequestResult)
       : undefined;

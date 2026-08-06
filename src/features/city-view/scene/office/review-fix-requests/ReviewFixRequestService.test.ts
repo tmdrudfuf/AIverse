@@ -12,7 +12,7 @@ import {
   getControllerInternals,
   type ControllerInternals,
 } from "../OfficeProjectPortalController.testHelpers";
-import { ReviewFixRequestService } from "./ReviewFixRequestService";
+import { ReviewFixRequestService, findCurrentReviewFixRequestResult } from "./ReviewFixRequestService";
 import {
   REVIEW_FIX_REQUEST_RULES_VERSION,
   createReviewFixRequestCollection,
@@ -92,6 +92,40 @@ describe("ReviewFixRequestService", () => {
     expect(blocked.request).toBeUndefined();
   });
 
+
+  it("scopes dashboard results by the current reviewerRuntimeId instead of the project-wide last result", () => {
+    const resultCollection = createReviewFixRequestResultCollection({
+      projectId: PROJECT_ID,
+      results: [{
+        id: "daily-proof:review-fix-request-result:other-reviewer:review-fix-request-v1",
+        projectId: PROJECT_ID,
+        reviewerRuntimeId: "other-reviewer",
+        status: "Blocked",
+        requested: false,
+        alreadyRequested: false,
+        reasonCodes: ["REVIEW_FIX_REQUEST_REVIEWER_STALE"],
+        fixExecutionStarted: false,
+        validationRuntimeStarted: false,
+        codexStarted: false,
+        claudeStarted: false,
+        subprocessStarted: false,
+        validationStarted: false,
+        repositoryMutationStarted: false,
+        githubMutationStarted: false,
+        resultAt: "2026-08-05T00:00:00.000Z",
+        rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION,
+      }],
+      rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION,
+    });
+
+    const scoped = findCurrentReviewFixRequestResult(PROJECT_ID, {
+      state: "ChangesRequested",
+      reviewerRuntimeId: "current-reviewer",
+      decision: "ChangesRequested",
+    }, resultCollection);
+
+    expect(scoped).toBeUndefined();
+  });
   it("blocks stale repeated requests instead of returning AlreadyRequested", async () => {
     const { input } = await createChangesRequestedInput();
     const service = new ReviewFixRequestService();

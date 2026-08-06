@@ -117,6 +117,16 @@ export function findCurrentReviewFixRequest(
   return snapshot && requestMatchesSnapshot(existingRequest, snapshot) ? copyReviewFixRequest(existingRequest) : undefined;
 }
 
+export function findCurrentReviewFixRequestResult(
+  projectId: string | undefined,
+  classification: ReviewDecisionClassification | undefined,
+  resultCollection: ReviewFixRequestInput["existingFixRequestResults"],
+): ReviewFixRequestResult | undefined {
+  if (!projectId || !classification?.reviewerRuntimeId) return undefined;
+  const resultId = createReviewFixRequestResultId(projectId, classification.reviewerRuntimeId);
+  const result = resultCollection?.results.find((item) => item.id === resultId);
+  return result ? { ...result, reasonCodes: [...result.reasonCodes] } : undefined;
+}
 function getRequestBlockReason(
   classification: ReviewDecisionClassification,
   command: ReviewFixRequestCommand,

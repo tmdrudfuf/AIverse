@@ -1,8 +1,8 @@
 # Feature Specification: Review Fix Request Foundation
 
-**Feature Branch**: `codex/079-review-fix-request-foundation`  
-**Created**: 2026-08-05  
-**Status**: Draft  
+**Feature Branch**: `codex/079-review-fix-request-foundation`
+**Created**: 2026-08-05
+**Status**: Draft
 **Input**: User description: "Review Fix Request Foundation"
 
 ## User Scenarios and Testing

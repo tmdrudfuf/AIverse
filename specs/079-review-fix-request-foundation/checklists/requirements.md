@@ -1,7 +1,7 @@
 # Specification Quality Checklist: Review Fix Request Foundation
 
-**Purpose**: Validate specification quality before planning  
-**Created**: 2026-08-05  
+**Purpose**: Validate specification quality before planning
+**Created**: 2026-08-05
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
