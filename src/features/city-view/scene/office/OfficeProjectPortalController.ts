@@ -31,7 +31,7 @@ import { EmployeeSimulationService } from "./employees/EmployeeSimulationService
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
-import { createExecutionPlanCollection, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
+import { createExecutionPlanCollection, resolveCurrentExecutionPlan, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
 import { createExecutionReadinessCollection, createExecutionReadinessResultCollection } from "./execution-readiness/ExecutionReadinessTypes";
 import { HumanExecutionApprovalService } from "./human-execution-approvals/HumanExecutionApprovalService";
@@ -68,6 +68,12 @@ import {
   createReviewerRuntimeResultCollection,
 } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
+import { ReviewDecisionService, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
+import {
+  createReviewPromotionCollection,
+  createReviewPromotionResultCollection,
+  REVIEW_PROMOTION_RULES_VERSION,
+} from "./review-decision/ReviewDecisionTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -161,6 +167,10 @@ export type OfficeProjectPortalInput = {
   // Reviewer Runtime attempt, gated separately so the same keypress can
   // never satisfy both starts (see specs/076-codex-reviewer-runtime-foundation).
   startReviewerPressed: boolean;
+  // Distinct from startReviewerPressed by design: this requests the explicit
+  // human Promote action on an already-Approved Reviewer Runtime -- it never
+  // starts or re-runs any agent (see specs/077-review-decision-human-promotion-gate).
+  promoteReviewPressed: boolean;
 };
 
 export class OfficeProjectPortalController {
@@ -187,6 +197,7 @@ export class OfficeProjectPortalController {
   private readonly activeImplementerRuntimeKeys = new Set<string>();
   private reviewerRuntimeService: ReviewerRuntimeService;
   private readonly activeReviewerRuntimeKeys = new Set<string>();
+  private readonly reviewDecisionService: ReviewDecisionService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -245,6 +256,7 @@ export class OfficeProjectPortalController {
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
     this.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
     this.reviewerRuntimeService = new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
+    this.reviewDecisionService = new ReviewDecisionService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -765,6 +777,18 @@ export class OfficeProjectPortalController {
       ).then((handled) => {
         if (handled) this.view.render(this.state);
       });
+      return;
+    }
+
+    // Entirely separate from startImplementerPressed/startReviewerPressed
+    // above: this is the one and only path that can record a Review
+    // Promotion, and it never starts or re-runs any agent.
+    if (input.promoteReviewPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const handled = this.promoteReviewForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (handled) this.view.render(this.state);
       return;
     }
 
@@ -2215,6 +2239,69 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+  /**
+   * Human-triggered only: reads the current chain and calls
+   * ReviewDecisionService.promote, which itself revalidates the full chain
+   * before writing a Review Promotion. Never invokes an Implementer/Reviewer
+   * provider and never re-runs startReviewerRuntimeForPromotion -- Promote is
+   * a decision recording action, not a re-review.
+   */
+  private promoteReviewForPromotion(projectId: string, candidateTaskId: string): boolean {
+    this.state.reviewPromotionCollections ??= {};
+    this.state.reviewPromotionResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    // Resolved via the same resolveCurrentExecutionPlan the dashboard uses
+    // for reviewDecisionInput, so Promote can never act on a different plan
+    // than the one the dashboard's classification was computed from (see
+    // review.md, combined round 2 P2-001).
+    const plan = resolveCurrentExecutionPlan(this.state.executionPlanCollections[projectId], {
+      projectTaskId: promotedTask.id,
+      candidateTaskId,
+    });
+    if (!plan) return false;
+
+    const existingPromotions = this.state.reviewPromotionCollections[projectId]
+      ?? createReviewPromotionCollection({ projectId, promotions: [], rulesVersion: REVIEW_PROMOTION_RULES_VERSION });
+    const existingPromotionResults = this.state.reviewPromotionResultCollections[projectId]
+      ?? createReviewPromotionResultCollection({ projectId, results: [], rulesVersion: REVIEW_PROMOTION_RULES_VERSION });
+
+    const input = resolveReviewDecisionInput({
+      projectId,
+      plan,
+      readinessCollection: this.state.executionReadinessCollections[projectId],
+      readinessResultCollection: this.state.executionReadinessResultCollections[projectId],
+      approvalCollection: this.state.humanExecutionApprovalCollections[projectId],
+      preflightCollection: this.state.runtimePreflightCollections[projectId],
+      preflightResultCollection: this.state.runtimePreflightResultCollections[projectId],
+      runtimeStartCollection: this.state.runtimeStartCollections[projectId],
+      runtimeStartResultCollection: this.state.runtimeStartResultCollections[projectId],
+      implementerRuntimeCollection: this.state.implementerRuntimeCollections[projectId],
+      implementerRuntimeResultCollection: this.state.implementerRuntimeResultCollections[projectId],
+      reviewTarget: this.state.reviewTargets[projectId],
+      reviewerRuntimeCollection: this.state.reviewerRuntimeCollections[projectId],
+      reviewerRuntimeResultCollection: this.state.reviewerRuntimeResultCollections[projectId],
+      existingPromotions,
+      existingPromotionResults,
+    });
+
+    const outcome = this.reviewDecisionService.promote(input, {
+      projectId,
+      reviewerRuntimeId: input.reviewerRuntime?.reviewerRuntimeId ?? "",
+      actor: "Local Human",
+      requestedAt: new Date().toISOString(),
+    });
+
+    this.state.reviewPromotionCollections[projectId] = outcome.promotionCollection ?? existingPromotions;
+    this.state.reviewPromotionResultCollections[projectId] = outcome.resultCollection ?? existingPromotionResults;
+    return true;
+  }
+
   private clearRuntimePreflightForProject(projectId: string) {
     if (this.state.runtimePreflightCollections) delete this.state.runtimePreflightCollections[projectId];
     if (this.state.runtimePreflightResultCollections) delete this.state.runtimePreflightResultCollections[projectId];
@@ -2225,6 +2312,10 @@ export class OfficeProjectPortalController {
     if (this.state.reviewTargets) delete this.state.reviewTargets[projectId];
     if (this.state.reviewerRuntimeCollections) delete this.state.reviewerRuntimeCollections[projectId];
     if (this.state.reviewerRuntimeResultCollections) delete this.state.reviewerRuntimeResultCollections[projectId];
+    // Per spec.md FR-011: revalidation invalidates the derived chain above,
+    // but a recorded Review Promotion is an immutable historical decision
+    // record and must never be deleted by upstream invalidation. Staleness
+    // is expressed instead via ReviewDecisionService.classify -> "Stale".
   }
 
   private revalidateExecutionPlanForPromotion(projectId: string, projectTaskId: string, activeSessionId: string) {

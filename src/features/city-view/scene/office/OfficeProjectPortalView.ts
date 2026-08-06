@@ -5,7 +5,9 @@ import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTa
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
+import { parsePromotedProjectTaskProvenance } from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
+import { resolveCurrentExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
 import { createHumanExecutionApprovalDisplayRows, type HumanExecutionApprovalDisplayRows } from "./human-execution-approvals/HumanExecutionApprovalView";
 import { createPreparedWorkSessionDisplayRows, type PreparedWorkSessionDisplayRows } from "./prepared-work-sessions/PreparedWorkSessionView";
@@ -19,6 +21,11 @@ import {
   createReviewerRuntimeDisplayRows,
   type ReviewerRuntimeDisplayRows,
 } from "./reviewer-runtime/ReviewerRuntimeView";
+import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
+import {
+  createReviewDecisionDisplayRows,
+  type ReviewDecisionDisplayRows,
+} from "./review-decision/ReviewDecisionView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -341,6 +348,72 @@ export class OfficeProjectPortalView {
     // createReviewerRuntimeDisplayRows itself renders the required "Codex
     // unavailable" state when the Implementer Runtime hasn't Completed yet.
     const reviewerRuntimeRows = createReviewerRuntimeDisplayRows(implementerRuntimeResultCollection, reviewerRuntimeResultCollection);
+    const reviewPromotionCollection = dashboardProjectId ? state.reviewPromotionCollections[dashboardProjectId] : undefined;
+    // Gated on reviewerRuntimeResultCollection/reviewPromotionCollection
+    // existing, unlike ImplementerRuntimeRows/ReviewerRuntimeRows above --
+    // this stage is one step further downstream of the always-visible
+    // Reviewer Runtime row, which already reports "unavailable" until a
+    // result exists, so repeating that here would be redundant. This matches
+    // the majority gated pattern (Execution Plan/Readiness/Approval/
+    // Preflight/Start) rather than the Implementer/Reviewer Runtime exception.
+    //
+    // The classification itself is computed fresh here via
+    // ReviewDecisionService.classify/resolveReviewDecisionInput, not derived
+    // only from reviewerRuntimeResultCollection -- per
+    // contracts/review-decision-contract.md, the dashboard and the Promote
+    // precondition must read the same single classification, so this must
+    // detect Stale the same way Promote does rather than trusting a leftover
+    // Reviewer Runtime result alone.
+    // Filtered by the same selected candidate/project task
+    // promoteReviewForPromotion resolves its plan by, so the dashboard's
+    // classification and Promote can never read two different Execution
+    // Plans for the same selection (see review.md, combined round 2
+    // P2-001). Falls back to the unfiltered "project's latest plan" only
+    // when nothing is selected yet, matching prior dashboard behavior for
+    // that case.
+    const selectedCandidatePromotionReview = candidatePromotionCollection?.reviews[state.selectedCandidatePromotionIndex];
+    const selectedPromotedTask = selectedCandidatePromotionReview && dashboardProjectId
+      ? state.taskCollections[dashboardProjectId]?.tasks.find((task) =>
+        parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === selectedCandidatePromotionReview.candidateTaskId
+      )
+      : undefined;
+    const latestReviewDecisionPlan = resolveCurrentExecutionPlan(
+      executionPlanCollection,
+      selectedPromotedTask
+        ? { projectTaskId: selectedPromotedTask.id, candidateTaskId: selectedCandidatePromotionReview!.candidateTaskId }
+        : undefined,
+    );
+    const reviewDecisionInput = dashboardProjectId && latestReviewDecisionPlan
+      ? resolveReviewDecisionInput({
+        projectId: dashboardProjectId,
+        plan: latestReviewDecisionPlan,
+        readinessCollection: executionReadinessCollection,
+        readinessResultCollection: executionReadinessResultCollection,
+        approvalCollection: humanExecutionApprovalCollection,
+        preflightCollection: runtimePreflightCollection,
+        preflightResultCollection: runtimePreflightResultCollection,
+        runtimeStartCollection: runtimeStartCollection,
+        runtimeStartResultCollection: runtimeStartResultCollection,
+        implementerRuntimeCollection: state.implementerRuntimeCollections[dashboardProjectId],
+        implementerRuntimeResultCollection: implementerRuntimeResultCollection,
+        reviewTarget: state.reviewTargets[dashboardProjectId],
+        reviewerRuntimeCollection: state.reviewerRuntimeCollections[dashboardProjectId],
+        reviewerRuntimeResultCollection: reviewerRuntimeResultCollection,
+        existingPromotions: reviewPromotionCollection,
+      })
+      : undefined;
+    const reviewDecisionClassification = reviewDecisionInput
+      ? new ReviewDecisionService().classify(reviewDecisionInput)
+      : undefined;
+    // Resolved via the same shared findCurrentReviewPromotion promote() uses
+    // for its precondition 4, so the dashboard and Promote can never diverge
+    // on which promotion is current (see review.md, Round 9 P1-001).
+    const currentReviewPromotion = dashboardProjectId && reviewDecisionClassification
+      ? findCurrentReviewPromotion(dashboardProjectId, reviewDecisionClassification, reviewDecisionInput?.existingPromotions)
+      : undefined;
+    const reviewDecisionRows = reviewerRuntimeResultCollection || reviewPromotionCollection
+      ? createReviewDecisionDisplayRows(reviewDecisionClassification, currentReviewPromotion)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -356,6 +429,7 @@ export class OfficeProjectPortalView {
         runtimeStartRows,
         implementerRuntimeRows,
         reviewerRuntimeRows,
+        reviewDecisionRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -705,6 +779,7 @@ function createProjectDashboardLowerRows(
   runtimeStartRows?: RuntimeStartDisplayRows,
   implementerRuntimeRows?: ImplementerRuntimeDisplayRows,
   reviewerRuntimeRows?: ReviewerRuntimeDisplayRows,
+  reviewDecisionRows?: ReviewDecisionDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -830,6 +905,15 @@ function createProjectDashboardLowerRows(
       text: `[REVIEWER RUNTIME] ${reviewerRuntimeRows.statusText}`,
       maxLines: 1,
       dropPriority: 16,
+      usePriorityFit: true,
+    });
+  }
+
+  if (reviewDecisionRows) {
+    lowerRows.push({
+      text: `[REVIEW DECISION] ${reviewDecisionRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 17,
       usePriorityFit: true,
     });
   }

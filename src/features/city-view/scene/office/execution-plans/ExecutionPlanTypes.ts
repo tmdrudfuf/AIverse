@@ -194,6 +194,38 @@ export function createExecutionPlanResultCollection(input: Omit<
   };
 }
 
+export type ExecutionPlanSelectionFilter = {
+  projectTaskId?: string;
+  candidateTaskId?: string;
+};
+
+/**
+ * The one deterministic "current Execution Plan" policy -- dashboard
+ * classification and the Promote action must resolve the exact same plan
+ * for the same collection and filter, so both consume this instead of each
+ * picking their own array position (see review.md, combined round 2
+ * P2-001). "Current" means the latest by createdAt (explicit domain data,
+ * not array order), tie-broken by planId for full determinism.
+ */
+export function resolveCurrentExecutionPlan(
+  planCollection: ExecutionPlanCollection | undefined,
+  filter?: ExecutionPlanSelectionFilter,
+): ExecutionPlan | undefined {
+  const plans = planCollection?.plans ?? [];
+  const candidates = filter
+    ? plans.filter((plan) =>
+      (filter.projectTaskId === undefined || plan.projectTaskId === filter.projectTaskId) &&
+      (filter.candidateTaskId === undefined || plan.candidateTaskId === filter.candidateTaskId)
+    )
+    : plans;
+  return candidates.reduce<ExecutionPlan | undefined>((latest, plan) => {
+    if (!latest) return plan;
+    if (plan.createdAt > latest.createdAt) return plan;
+    if (plan.createdAt === latest.createdAt && plan.planId > latest.planId) return plan;
+    return latest;
+  }, undefined);
+}
+
 export function copyExecutionPlan(plan: ExecutionPlan): ExecutionPlan {
   return {
     ...plan,

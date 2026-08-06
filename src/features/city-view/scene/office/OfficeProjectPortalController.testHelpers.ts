@@ -56,6 +56,7 @@ export type ControllerInternals = {
     candidateTaskCollections: Record<string, CandidateTaskCollection>;
     candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
     candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
+    selectedCandidatePromotionIndex: number;
     candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
     candidateProjectTaskPromotionResultCollections: Record<string, CandidateProjectTaskPromotionResultCollection>;
     confirmedEmployeeAssignmentRecords: ProjectPortalState["confirmedEmployeeAssignmentRecords"];
@@ -77,6 +78,9 @@ export type ControllerInternals = {
     implementerRuntimeResultCollections: Record<string, ImplementerRuntimeResultCollection>;
     reviewerRuntimeCollections: Record<string, ReviewerRuntimeCollection>;
     reviewerRuntimeResultCollections: Record<string, ReviewerRuntimeResultCollection>;
+    reviewTargets?: ProjectPortalState["reviewTargets"];
+    reviewPromotionCollections?: ProjectPortalState["reviewPromotionCollections"];
+    reviewPromotionResultCollections?: ProjectPortalState["reviewPromotionResultCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
@@ -150,6 +154,7 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     enterPressed: false,
     startImplementerPressed: false,
     startReviewerPressed: false,
+    promoteReviewPressed: false,
     ...overrides,
   };
 }

@@ -4,6 +4,22 @@ import type { RuntimeStart } from "../runtime-start/RuntimeStartTypes";
 
 export const REVIEW_TARGET_RULES_VERSION = "review-target-v1";
 
+// The one base branch every represented target is resolved against, and the
+// canonical formulas for its baseSha and reviewTargetSha -- exported so
+// ReviewRuntimeChainIntegrityService can recompute the exact authoritative
+// value a ReviewTarget must carry from the current plan/implementerRuntime
+// context, rather than only checking the record's fields against each other
+// (see review.md, combined round 2 P1-001).
+export const REVIEW_TARGET_BASE_BRANCH = "main";
+
+export function computeReviewTargetBaseSha(projectId: string, planId: string) {
+  return representedSha(`${projectId}:${planId}:base`);
+}
+
+export function computeReviewTargetSha(implementerRuntimeId: string) {
+  return representedSha(implementerRuntimeId);
+}
+
 export type ReviewTargetWorkingTreeState = "Clean" | "Uncommitted";
 
 export type ReviewTarget = {
@@ -57,8 +73,8 @@ export function resolveReviewTarget(
   runtimeStart: RuntimeStart,
   implementerRuntime: ImplementerRuntime,
 ): ReviewTarget {
-  const reviewTargetSha = representedSha(implementerRuntime.implementerRuntimeId);
-  const baseSha = representedSha(`${plan.projectId}:${plan.planId}:base`);
+  const reviewTargetSha = computeReviewTargetSha(implementerRuntime.implementerRuntimeId);
+  const baseSha = computeReviewTargetBaseSha(plan.projectId, plan.planId);
   return {
     reviewTargetId: createReviewTargetId(plan.projectId, runtimeStart.runtimeStartId, reviewTargetSha),
     projectId: plan.projectId,
@@ -66,7 +82,7 @@ export function resolveReviewTarget(
     implementerRuntimeId: implementerRuntime.implementerRuntimeId,
     repositoryId: plan.repositoryId,
     worktreePath: plan.worktreePath,
-    baseBranch: "main",
+    baseBranch: REVIEW_TARGET_BASE_BRANCH,
     baseSha,
     featureBranch: plan.branchName,
     reviewTargetSha,
