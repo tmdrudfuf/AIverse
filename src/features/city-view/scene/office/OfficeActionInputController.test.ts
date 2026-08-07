@@ -32,4 +32,20 @@ describe("OfficeActionInputController", () => {
     expect(input.consumePlanReviewFixPressed()).toBe(true);
     expect(input.consumePlanReviewFixPressed()).toBe(false);
   });
+
+  it("keeps Start Review Fix Runtime pending separate from Plan Review Fix", () => {
+    const input = new OfficeActionInputController() as unknown as {
+      pendingPlanReviewFix: boolean;
+      pendingStartReviewFixRuntime: boolean;
+      consumePlanReviewFixPressed: () => boolean;
+      consumeStartReviewFixRuntimePressed: () => boolean;
+    };
+    input.pendingPlanReviewFix = true;
+    input.pendingStartReviewFixRuntime = true;
+
+    expect(input.consumePlanReviewFixPressed()).toBe(true);
+    expect(input.consumePlanReviewFixPressed()).toBe(false);
+    expect(input.consumeStartReviewFixRuntimePressed()).toBe(true);
+    expect(input.consumeStartReviewFixRuntimePressed()).toBe(false);
+  });
 });

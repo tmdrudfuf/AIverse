@@ -32,6 +32,7 @@ import type {
   ReviewerRuntimeOutcome,
   ReviewerRuntimeResultCollection,
 } from "./reviewer-runtime/ReviewerRuntimeTypes";
+import type { ReviewFixRuntimeInput, ReviewFixRuntimeOutcome } from "./review-fix-runtime/ReviewFixRuntimeTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import type {
   PreparedWorkSessionRecord,
@@ -85,6 +86,8 @@ export type ControllerInternals = {
     reviewFixRequestResultCollections?: ProjectPortalState["reviewFixRequestResultCollections"];
     reviewFixPlanCollections?: ProjectPortalState["reviewFixPlanCollections"];
     reviewFixPlanResultCollections?: ProjectPortalState["reviewFixPlanResultCollections"];
+    reviewFixRuntimeCollections?: ProjectPortalState["reviewFixRuntimeCollections"];
+    reviewFixRuntimeResultCollections?: ProjectPortalState["reviewFixRuntimeResultCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
@@ -106,9 +109,16 @@ export type ControllerInternals = {
       result: ReviewerRuntimeResultCollection["results"][number],
     ) => ReviewerRuntimeResultCollection;
   };
+  reviewFixRuntimeService: {
+    startFixRuntime: (
+      input: ReviewFixRuntimeInput,
+      command: { projectId: string; reviewFixPlanId: string; actor: string; startedAt: string },
+    ) => Promise<ReviewFixRuntimeOutcome>;
+  };
   syncIssueSnapshots: (projectId: string) => Promise<void>;
   startImplementerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
+  startReviewFixRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
 };
 
 export function getControllerInternals(controller: OfficeProjectPortalController): ControllerInternals {
@@ -161,6 +171,7 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     promoteReviewPressed: false,
     requestReviewFixPressed: false,
     planReviewFixPressed: false,
+    startReviewFixRuntimePressed: false,
     ...overrides,
   };
 }

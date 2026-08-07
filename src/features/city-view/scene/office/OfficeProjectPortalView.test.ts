@@ -1889,6 +1889,8 @@ function createPortalState(options: {
     reviewFixRequestResultCollections: {},
     reviewFixPlanCollections: {},
     reviewFixPlanResultCollections: {},
+    reviewFixRuntimeCollections: {},
+    reviewFixRuntimeResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
