@@ -16,4 +16,20 @@ describe("OfficeActionInputController", () => {
     expect(input.consumePromoteReviewPressed()).toBe(false);
     expect(input.consumeRequestReviewFixPressed()).toBe(true);
   });
+
+  it("keeps Plan Review Fix pending separate from Request Review Fix", () => {
+    const input = new OfficeActionInputController() as unknown as {
+      pendingRequestReviewFix: boolean;
+      pendingPlanReviewFix: boolean;
+      consumeRequestReviewFixPressed: () => boolean;
+      consumePlanReviewFixPressed: () => boolean;
+    };
+    input.pendingRequestReviewFix = true;
+    input.pendingPlanReviewFix = true;
+
+    expect(input.consumeRequestReviewFixPressed()).toBe(true);
+    expect(input.consumeRequestReviewFixPressed()).toBe(false);
+    expect(input.consumePlanReviewFixPressed()).toBe(true);
+    expect(input.consumePlanReviewFixPressed()).toBe(false);
+  });
 });

@@ -122,6 +122,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const startReviewerPressed = this.officeActionInputController?.consumeStartReviewerPressed() ?? false;
       const promoteReviewPressed = this.officeActionInputController?.consumePromoteReviewPressed() ?? false;
       const requestReviewFixPressed = this.officeActionInputController?.consumeRequestReviewFixPressed() ?? false;
+      const planReviewFixPressed = this.officeActionInputController?.consumePlanReviewFixPressed() ?? false;
 
       if (this.officeProjectPortalController?.isOpen()) {
         this.officeProjectPortalController.updateInput({
@@ -134,6 +135,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           startReviewerPressed,
           promoteReviewPressed,
           requestReviewFixPressed,
+          planReviewFixPressed,
         });
         this.refreshEmployeeNpcRenderer();
         this.refreshEmployeeInsightOverlay({ isBlockingOverlayOpen: true });

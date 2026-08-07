@@ -138,6 +138,8 @@ export function createProjectPortalState(): ProjectPortalState {
     reviewPromotionResultCollections: {},
     reviewFixRequestCollections: {},
     reviewFixRequestResultCollections: {},
+    reviewFixPlanCollections: {},
+    reviewFixPlanResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

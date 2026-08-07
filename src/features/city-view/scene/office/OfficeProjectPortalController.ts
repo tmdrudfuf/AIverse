@@ -74,12 +74,18 @@ import {
   createReviewPromotionResultCollection,
   REVIEW_PROMOTION_RULES_VERSION,
 } from "./review-decision/ReviewDecisionTypes";
-import { ReviewFixRequestService } from "./review-fix-requests/ReviewFixRequestService";
+import { ReviewFixRequestService, findCurrentReviewFixRequest } from "./review-fix-requests/ReviewFixRequestService";
 import {
   REVIEW_FIX_REQUEST_RULES_VERSION,
   createReviewFixRequestCollection,
   createReviewFixRequestResultCollection,
 } from "./review-fix-requests/ReviewFixRequestTypes";
+import { ReviewFixPlanService } from "./review-fix-plans/ReviewFixPlanService";
+import {
+  REVIEW_FIX_PLAN_RULES_VERSION,
+  createReviewFixPlanCollection,
+  createReviewFixPlanResultCollection,
+} from "./review-fix-plans/ReviewFixPlanTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -182,6 +188,10 @@ export type OfficeProjectPortalInput = {
   // invokes Codex, Claude, Validation Runtime, subprocesses, repository
   // mutation, or GitHub mutation (see specs/079-review-fix-request-foundation).
   requestReviewFixPressed: boolean;
+  // Distinct from requestReviewFixPressed: this records a provider-neutral
+  // Review Fix Plan for an already-current Review Fix Request. It never
+  // starts fix execution or Validation Runtime (see specs/080-review-fix-plan-foundation).
+  planReviewFixPressed: boolean;
 };
 
 export class OfficeProjectPortalController {
@@ -210,6 +220,7 @@ export class OfficeProjectPortalController {
   private readonly activeReviewerRuntimeKeys = new Set<string>();
   private readonly reviewDecisionService: ReviewDecisionService;
   private readonly reviewFixRequestService: ReviewFixRequestService;
+  private readonly reviewFixPlanService: ReviewFixPlanService;
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -270,6 +281,7 @@ export class OfficeProjectPortalController {
     this.reviewerRuntimeService = new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
     this.reviewDecisionService = new ReviewDecisionService();
     this.reviewFixRequestService = new ReviewFixRequestService();
+    this.reviewFixPlanService = new ReviewFixPlanService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -810,6 +822,18 @@ export class OfficeProjectPortalController {
     // a Validation Runtime start and it cannot share an input event with one.
     if (input.requestReviewFixPressed && selectedPromotion?.promotionStatus === "Approved") {
       const handled = this.requestReviewFixForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (handled) this.view.render(this.state);
+      return;
+    }
+
+    // Separate from Request Review Fix: this records a fix plan only after a
+    // current Review Fix Request revalidates. It is not a Validation Runtime
+    // start and it cannot share an input event with the request action.
+    if (input.planReviewFixPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const handled = this.planReviewFixForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
       );
@@ -2386,6 +2410,75 @@ export class OfficeProjectPortalController {
 
     this.state.reviewFixRequestCollections[projectId] = outcome.requestCollection ?? existingFixRequests;
     this.state.reviewFixRequestResultCollections[projectId] = outcome.resultCollection ?? existingFixRequestResults;
+    return true;
+  }
+
+  /**
+   * Human-triggered only: records a provider-neutral plan for a current
+   * Review Fix Request. It reuses the same Review Decision resolver as
+   * requestReviewFixForPromotion and delegates command-time request
+   * revalidation/idempotency to ReviewFixPlanService.
+   */
+  private planReviewFixForPromotion(projectId: string, candidateTaskId: string): boolean {
+    this.state.reviewFixPlanCollections ??= {};
+    this.state.reviewFixPlanResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return false;
+
+    const plan = resolveCurrentExecutionPlan(this.state.executionPlanCollections[projectId], {
+      projectTaskId: promotedTask.id,
+      candidateTaskId,
+    });
+    if (!plan) return false;
+
+    const existingFixRequests = this.state.reviewFixRequestCollections[projectId]
+      ?? createReviewFixRequestCollection({ projectId, requests: [], rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION });
+    const existingFixRequestResults = this.state.reviewFixRequestResultCollections[projectId]
+      ?? createReviewFixRequestResultCollection({ projectId, results: [], rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION });
+    const existingFixPlans = this.state.reviewFixPlanCollections[projectId]
+      ?? createReviewFixPlanCollection({ projectId, plans: [], rulesVersion: REVIEW_FIX_PLAN_RULES_VERSION });
+    const existingFixPlanResults = this.state.reviewFixPlanResultCollections[projectId]
+      ?? createReviewFixPlanResultCollection({ projectId, results: [], rulesVersion: REVIEW_FIX_PLAN_RULES_VERSION });
+
+    const reviewDecisionInput = resolveReviewDecisionInput({
+      projectId,
+      plan,
+      readinessCollection: this.state.executionReadinessCollections[projectId],
+      readinessResultCollection: this.state.executionReadinessResultCollections[projectId],
+      approvalCollection: this.state.humanExecutionApprovalCollections[projectId],
+      preflightCollection: this.state.runtimePreflightCollections[projectId],
+      preflightResultCollection: this.state.runtimePreflightResultCollections[projectId],
+      runtimeStartCollection: this.state.runtimeStartCollections[projectId],
+      runtimeStartResultCollection: this.state.runtimeStartResultCollections[projectId],
+      implementerRuntimeCollection: this.state.implementerRuntimeCollections[projectId],
+      implementerRuntimeResultCollection: this.state.implementerRuntimeResultCollections[projectId],
+      reviewTarget: this.state.reviewTargets[projectId],
+      reviewerRuntimeCollection: this.state.reviewerRuntimeCollections[projectId],
+      reviewerRuntimeResultCollection: this.state.reviewerRuntimeResultCollections[projectId],
+    });
+    const input = {
+      ...reviewDecisionInput,
+      existingFixRequests,
+      existingFixRequestResults,
+      existingFixPlans,
+      existingFixPlanResults,
+    };
+    const classification = this.reviewDecisionService.classify(input);
+    const currentRequest = findCurrentReviewFixRequest(input, classification);
+
+    const outcome = this.reviewFixPlanService.planFix(input, {
+      projectId,
+      reviewFixRequestId: currentRequest?.reviewFixRequestId ?? "",
+      actor: "Local Human",
+      plannedAt: new Date().toISOString(),
+    });
+
+    this.state.reviewFixPlanCollections[projectId] = outcome.planCollection ?? existingFixPlans;
+    this.state.reviewFixPlanResultCollections[projectId] = outcome.resultCollection ?? existingFixPlanResults;
     return true;
   }
   private clearRuntimePreflightForProject(projectId: string) {
