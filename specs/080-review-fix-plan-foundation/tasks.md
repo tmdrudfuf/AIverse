@@ -53,7 +53,7 @@
 - [x] T018 Update Spec Kit docs and task checklist with implementation evidence.
 - [x] T019 Run focused tests for Review Fix Plan, input, controller, and view behavior.
 - [x] T020 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`.
-- [ ] T021 Commit the complete local implementation.
+- [x] T021 Commit the complete local implementation.
 - [ ] T022 Run independent Claude review against exact committed HEAD.
 - [ ] T023 Fix all blocking review findings, revalidate, recommit, and re-review until Approved.
 - [ ] T024 Verify exact-HEAD gate: approved review SHA, validated SHA, and current HEAD are identical with clean working tree.
@@ -86,3 +86,4 @@
 - TypeScript validation: `npx tsc --noEmit` passed.
 - Build validation: `npm run build` passed.
 - Diff checks: `git diff --check` and `git diff --cached --check` passed.
+- Implementation commit: `2e4fc84b60e7057dea0518797eb269aa6c53abb6`.
