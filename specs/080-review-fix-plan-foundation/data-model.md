@@ -22,23 +22,33 @@ Immutable plan snapshot.
 | reviewFixRequestId | string | Current request ID. |
 | planId | string | Execution Plan ID. |
 | readinessId | string | Execution Readiness ID. |
+| readinessResultId | string | Execution Readiness Result ID. |
 | approvalId | string | Human Execution Approval ID. |
 | preflightId | string | Runtime Preflight ID. |
+| preflightResultId | string | Runtime Preflight Result ID. |
 | runtimeStartId | string | Runtime Start ID. |
+| runtimeStartResultId | string | Runtime Start Result ID. |
 | implementerRuntimeId | string | Implementer Runtime ID. |
+| implementerRuntimeResultId | string | Implementer Runtime Result ID. |
 | reviewerRuntimeId | string | Reviewer Runtime ID. |
 | reviewerRuntimeResultId | string | Reviewer Runtime Result ID. |
 | reviewTargetId | string | Review Target ID. |
 | projectTaskId | string | Existing ProjectTask ID. |
+| candidateTaskId | string? | Existing Candidate Task ID when available. |
 | employeeId | string | Existing employee ID. |
 | repositoryId | string | Repository metadata from plan/request. |
 | worktreePath | string | Snapshot from request. |
 | branch | string | Snapshot from request. |
+| specificationPath | string | Snapshot of the Spec Kit path from request. |
 | implementer | string | Plan implementer label. |
 | reviewer | string | Plan reviewer label. |
+| approvedImplementerAgent | string | Approved implementer agent label from the review runtime chain. |
+| approvedReviewerAgent | string | Approved reviewer agent label from the review runtime chain. |
 | validationCommands | string[] | Defensive copy from request. |
 | mutationScope | string[] | Defensive copy from request. |
 | decision | `ChangesRequested` | Only concrete plannable decision. |
+| blockingFindingCount | number | Snapshot from Reviewer Runtime Result. |
+| nonBlockingFindingCount | number | Snapshot from Reviewer Runtime Result. |
 | plannedBy | string | Human actor label. |
 | plannedAt | string | Audit timestamp. |
 | fixExecutionStarted | false | Fixed safety flag. |
