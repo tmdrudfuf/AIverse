@@ -62,6 +62,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.navigationMovementResolver = new NavigationMovementResolver(cityCollisionMap);
       validateBuildingInteractionZones(CITY_BUILDINGS, cityCollisionMap);
 
+      // Keep scene extensions composed here so layers, entities, and interaction controllers stay separate.
       const graphics = this.add.graphics();
       createCityBuildingLayer(this, graphics);
       createCityDecorationLayer(this, graphics);
