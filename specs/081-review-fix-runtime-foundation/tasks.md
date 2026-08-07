@@ -44,7 +44,7 @@
 
 - [x] T023 Run focused tests for Review Fix Runtime, input, controller, review decision, fix request, and fix plan regressions.
 - [x] T024 Run full validation: `npm test`, `npx tsc --noEmit`, `npm run build`, `git diff --check`, `git diff --cached --check`.
-- [ ] T025 Commit the validated implementation locally.
+- [x] T025 Commit the validated implementation locally.
 - [ ] T026 Run independent Claude review of the exact validated HEAD.
 - [ ] T027 If required, fix blocking findings, rerun validation, commit, and request Claude re-review.
 - [ ] T028 Verify exact-head gate and stop at human approval boundary.
