@@ -10,6 +10,7 @@ import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
+import { createReviewFixPlanId } from "./review-fix-plans/ReviewFixPlanTypes";
 import {
   createInput,
   createSceneStub,
@@ -298,6 +299,94 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(results).toHaveLength(1);
     expect(results![0].status).toBe("Blocked");
     expect(results![0].reasonCodes).toContain("REVIEW_FIX_REQUEST_REVIEWER_STALE");
+  });
+
+  it("records exactly one immutable Review Fix Plan only after a separate Plan Fixes input", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    const request = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests[0];
+    expect(request).toBeDefined();
+
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+
+    const plans = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans;
+    expect(plans).toHaveLength(1);
+    const plan = plans![0];
+    expect(plan.reviewFixPlanId).toBe(createReviewFixPlanId(PROJECT_ID, request!.reviewFixRequestId));
+    expect(plan.reviewFixRequestId).toBe(request!.reviewFixRequestId);
+    expect(plan.decision).toBe("ChangesRequested");
+    expect(plan.plannedBy).toBe("Local Human");
+    expect(plan.fixExecutionStarted).toBe(false);
+    expect(plan.validationRuntimeStarted).toBe(false);
+    expect(plan.codexStarted).toBe(false);
+    expect(plan.claudeStarted).toBe(false);
+    expect(plan.subprocessStarted).toBe(false);
+    expect(plan.validationStarted).toBe(false);
+    expect(plan.repositoryMutationStarted).toBe(false);
+    expect(plan.githubMutationStarted).toBe(false);
+
+    const results = internals.state.reviewFixPlanResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0].status).toBe("Planned");
+    expect(results![0].planned).toBe(true);
+  });
+
+  it("does not create a Review Fix Plan from render, navigation, Enter, Promote, or Request Fixes inputs alone", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ downPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+
+    expect(internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests).toHaveLength(1);
+    expect(internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans ?? []).toHaveLength(0);
+  });
+
+  it("is idempotent: repeated Plan Fixes creates no duplicate and returns AlreadyPlanned after revalidation", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+    const firstPlan = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans[0];
+
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+
+    const plans = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans;
+    expect(plans).toHaveLength(1);
+    expect(plans![0]).toEqual(firstPlan);
+    const results = internals.state.reviewFixPlanResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0].status).toBe("AlreadyPlanned");
+    expect(results![0].reasonCodes).toContain("REVIEW_FIX_PLAN_ALREADY_PLANNED");
+  });
+
+  it("blocks stale repeated Review Fix Plans instead of returning AlreadyPlanned", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+    const firstPlan = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans[0];
+    const approval = internals.state.humanExecutionApprovalCollections[PROJECT_ID]?.approvals[0];
+    if (!approval) throw new Error("Test setup failed to reach a Human Execution Approval.");
+    approval.executionPlanId = "stale-plan";
+
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+
+    expect(internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans).toEqual([firstPlan]);
+    const results = internals.state.reviewFixPlanResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(2);
+    expect(results!.at(-1)?.status).toBe("Blocked");
+    expect(results!.at(-1)?.reasonCodes).toContain("REVIEW_FIX_PLAN_REQUEST_MISSING");
   });
   it("resolves the same current Execution Plan for the dashboard and Promote even when a stale, older plan exists for the same task/candidate", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());

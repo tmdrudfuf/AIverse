@@ -31,6 +31,11 @@ import {
   createReviewFixRequestDisplayRows,
   type ReviewFixRequestDisplayRows,
 } from "./review-fix-requests/ReviewFixRequestView";
+import { findCurrentReviewFixPlan, findCurrentReviewFixPlanResult } from "./review-fix-plans/ReviewFixPlanService";
+import {
+  createReviewFixPlanDisplayRows,
+  type ReviewFixPlanDisplayRows,
+} from "./review-fix-plans/ReviewFixPlanView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -356,6 +361,8 @@ export class OfficeProjectPortalView {
     const reviewPromotionCollection = dashboardProjectId ? state.reviewPromotionCollections[dashboardProjectId] : undefined;
     const reviewFixRequestCollection = dashboardProjectId ? state.reviewFixRequestCollections[dashboardProjectId] : undefined;
     const reviewFixRequestResultCollection = dashboardProjectId ? state.reviewFixRequestResultCollections[dashboardProjectId] : undefined;
+    const reviewFixPlanCollection = dashboardProjectId ? state.reviewFixPlanCollections[dashboardProjectId] : undefined;
+    const reviewFixPlanResultCollection = dashboardProjectId ? state.reviewFixPlanResultCollections[dashboardProjectId] : undefined;
     // Gated on reviewerRuntimeResultCollection/reviewPromotionCollection
     // existing, unlike ImplementerRuntimeRows/ReviewerRuntimeRows above --
     // this stage is one step further downstream of the always-visible
@@ -437,6 +444,23 @@ export class OfficeProjectPortalView {
     const reviewFixRequestRows = reviewerRuntimeResultCollection || reviewFixRequestCollection || reviewFixRequestResultCollection
       ? createReviewFixRequestDisplayRows(reviewDecisionClassification, currentReviewFixRequest, latestReviewFixRequestResult)
       : undefined;
+    const reviewFixPlanInput = reviewFixRequestInput
+      ? {
+        ...reviewFixRequestInput,
+        latestFixRequestResult: latestReviewFixRequestResult,
+        existingFixPlans: reviewFixPlanCollection,
+        existingFixPlanResults: reviewFixPlanResultCollection,
+      }
+      : undefined;
+    const currentReviewFixPlan = findCurrentReviewFixPlan(reviewFixPlanInput, currentReviewFixRequest);
+    const latestReviewFixPlanResult = findCurrentReviewFixPlanResult(
+      dashboardProjectId,
+      currentReviewFixRequest,
+      reviewFixPlanResultCollection,
+    );
+    const reviewFixPlanRows = reviewFixRequestCollection || reviewFixPlanCollection || reviewFixPlanResultCollection
+      ? createReviewFixPlanDisplayRows(currentReviewFixRequest, currentReviewFixPlan, latestReviewFixPlanResult)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -454,6 +478,7 @@ export class OfficeProjectPortalView {
         reviewerRuntimeRows,
         reviewDecisionRows,
         reviewFixRequestRows,
+        reviewFixPlanRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -805,6 +830,7 @@ function createProjectDashboardLowerRows(
   reviewerRuntimeRows?: ReviewerRuntimeDisplayRows,
   reviewDecisionRows?: ReviewDecisionDisplayRows,
   reviewFixRequestRows?: ReviewFixRequestDisplayRows,
+  reviewFixPlanRows?: ReviewFixPlanDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -948,6 +974,15 @@ function createProjectDashboardLowerRows(
       text: `[REVIEW FIX REQUEST] ${reviewFixRequestRows.statusText}`,
       maxLines: 1,
       dropPriority: 18,
+      usePriorityFit: true,
+    });
+  }
+
+  if (reviewFixPlanRows) {
+    lowerRows.push({
+      text: `[REVIEW FIX PLAN] ${reviewFixPlanRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 19,
       usePriorityFit: true,
     });
   }
