@@ -172,7 +172,7 @@ Each task uses this format:
   - Files likely affected: `package.json`, `src/app/`, `src/features/city-view/`
   - Acceptance criteria: Production build completes; client-only Phaser import boundaries remain valid.
 
-- [ ] T029 Create manual navigation test checklist in `specs/001-city-navigation/checklists/manual-test.md`
+- [X] T029 Create manual navigation test checklist in `specs/001-city-navigation/checklists/manual-test.md`
   - Files likely affected: `specs/001-city-navigation/checklists/manual-test.md`
   - Acceptance criteria: Checklist covers WASD, arrow keys, diagonal movement, opposite-key behavior, smooth held movement, camera bounds, zoom in, zoom out, zoom limits, movement while zooming, page-scroll prevention, and explicit absence of Founder/building entry/NPC/AI integration.
 
