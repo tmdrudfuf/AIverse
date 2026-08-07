@@ -2,9 +2,9 @@
 
 ## Round 1
 
-**Reviewed SHA**: `04f369f3a8fd5ce01aa5e05f7bbf0bebe4ddc0e8`  
-**Reviewer**: Claude CLI  
-**Decision**: Approved  
+**Reviewed SHA**: `04f369f3a8fd5ce01aa5e05f7bbf0bebe4ddc0e8`
+**Reviewer**: Claude CLI
+**Decision**: Approved
 **Blocking Findings**: 0
 
 ### Non-Blocking Findings
