@@ -32,6 +32,12 @@ const START_REVIEW_FIX_RUNTIME_KEY_CODE = "KeyX";
 // Distinct from every review-fix key: this is the one explicit human input
 // that can start Validation Runtime for a completed Review Fix Runtime.
 const START_VALIDATION_RUNTIME_KEY_CODE = "KeyV";
+// Distinct from Validation Runtime: prepares the post-validation review
+// target only. It must never start the reviewer.
+const PREPARE_POST_VALIDATION_REVIEW_TARGET_KEY_CODE = "KeyY";
+// Distinct from target preparation: starts the independent re-review only
+// after a fresh post-validation target exists.
+const START_POST_VALIDATION_REVIEW_KEY_CODE = "KeyU";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -46,6 +52,8 @@ export class OfficeActionInputController {
   private pendingPlanReviewFix = false;
   private pendingStartReviewFixRuntime = false;
   private pendingStartValidationRuntime = false;
+  private pendingPreparePostValidationReviewTarget = false;
+  private pendingStartPostValidationReview = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -118,6 +126,18 @@ export class OfficeActionInputController {
     if (event.code === START_VALIDATION_RUNTIME_KEY_CODE) {
       event.preventDefault();
       this.pendingStartValidationRuntime = true;
+      return;
+    }
+
+    if (event.code === PREPARE_POST_VALIDATION_REVIEW_TARGET_KEY_CODE) {
+      event.preventDefault();
+      this.pendingPreparePostValidationReviewTarget = true;
+      return;
+    }
+
+    if (event.code === START_POST_VALIDATION_REVIEW_KEY_CODE) {
+      event.preventDefault();
+      this.pendingStartPostValidationReview = true;
     }
   };
 
@@ -202,6 +222,18 @@ export class OfficeActionInputController {
     return startValidationRuntimePressed;
   }
 
+  consumePreparePostValidationReviewTargetPressed() {
+    const pressed = this.pendingPreparePostValidationReviewTarget;
+    this.pendingPreparePostValidationReviewTarget = false;
+    return pressed;
+  }
+
+  consumeStartPostValidationReviewPressed() {
+    const pressed = this.pendingStartPostValidationReview;
+    this.pendingStartPostValidationReview = false;
+    return pressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -221,5 +253,7 @@ export class OfficeActionInputController {
     this.pendingPlanReviewFix = false;
     this.pendingStartReviewFixRuntime = false;
     this.pendingStartValidationRuntime = false;
+    this.pendingPreparePostValidationReviewTarget = false;
+    this.pendingStartPostValidationReview = false;
   }
 }

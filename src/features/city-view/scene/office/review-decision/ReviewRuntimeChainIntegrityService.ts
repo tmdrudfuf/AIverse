@@ -557,6 +557,25 @@ function validateReviewTarget(input: ReviewDecisionInput): ReviewPromotionReason
   // authoritative formula here (rather than only comparing them to one
   // another) closes that gap (see review.md, combined round 2 P1-001).
   const expectedBaseSha = computeReviewTargetBaseSha(plan.projectId, plan.planId);
+  if (reviewTarget.source === "PostValidation") {
+    if (
+      !reviewTarget.validationRuntimeId ||
+      !reviewTarget.validationRuntimeResultId ||
+      !reviewTarget.reviewFixRuntimeId ||
+      !reviewTarget.reviewFixRuntimeResultId ||
+      !reviewTarget.reviewFixPlanId ||
+      !reviewTarget.reviewFixRequestId ||
+      reviewTarget.validationEvidenceExpectedHead !== reviewTarget.reviewTargetSha ||
+      reviewTarget.validationEvidenceCommandCount !== reviewTarget.validationCommands?.length ||
+      reviewTarget.validationEvidenceCompletedCommandCount !== reviewTarget.validationCommands?.length ||
+      reviewTarget.baseBranch !== REVIEW_TARGET_BASE_BRANCH ||
+      reviewTarget.baseSha !== expectedBaseSha ||
+      reviewTarget.mergeBaseSha !== expectedBaseSha
+    ) {
+      return "REVIEW_PROMOTION_TARGET_MISMATCH";
+    }
+    return undefined;
+  }
   if (
     reviewTarget.baseBranch !== REVIEW_TARGET_BASE_BRANCH ||
     reviewTarget.baseSha !== expectedBaseSha ||

@@ -1893,6 +1893,8 @@ function createPortalState(options: {
     reviewFixRuntimeResultCollections: {},
     validationRuntimeCollections: {},
     validationRuntimeResultCollections: {},
+    postValidationReviewTargetCollections: {},
+    postValidationReviewTargetResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

@@ -392,6 +392,8 @@ function createInput(overrides: Partial<OfficeProjectPortalInput>): OfficeProjec
     planReviewFixPressed: false,
     startReviewFixRuntimePressed: false,
     startValidationRuntimePressed: false,
+    preparePostValidationReviewTargetPressed: false,
+    startPostValidationReviewPressed: false,
     ...overrides,
   };
 }

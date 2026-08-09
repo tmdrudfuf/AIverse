@@ -94,12 +94,18 @@ import {
   createReviewFixRuntimeResultCollection,
 } from "./review-fix-runtime/ReviewFixRuntimeTypes";
 import { LocalValidationRuntimeProvider } from "./validation-runtime/ValidationRuntimeProvider";
-import { ValidationRuntimeService } from "./validation-runtime/ValidationRuntimeService";
+import { ValidationRuntimeService, findCurrentValidationRuntime } from "./validation-runtime/ValidationRuntimeService";
 import {
   VALIDATION_RUNTIME_RULES_VERSION,
   createValidationRuntimeCollection,
   createValidationRuntimeResultCollection,
 } from "./validation-runtime/ValidationRuntimeTypes";
+import { PostValidationReviewTargetService, findCurrentPostValidationReviewTarget } from "./post-validation-review-target/PostValidationReviewTargetService";
+import {
+  POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+  createPostValidationReviewTargetCollection,
+  createPostValidationReviewTargetResultCollection,
+} from "./post-validation-review-target/PostValidationReviewTargetTypes";
 import { CachedGitHubRepositoryProvider } from "./github/CachedGitHubRepositoryProvider";
 import { GitHubPublicRepositoryProvider } from "./github/GitHubPublicRepositoryProvider";
 import { createRepositoryReferenceResolver } from "./github/GitHubRepositoryReferenceResolver";
@@ -214,6 +220,8 @@ export type OfficeProjectPortalInput = {
   // Runtime for a completed Review Fix Runtime only. It never starts review,
   // promotion, or GitHub/remote mutation.
   startValidationRuntimePressed: boolean;
+  preparePostValidationReviewTargetPressed: boolean;
+  startPostValidationReviewPressed: boolean;
 };
 
 export class OfficeProjectPortalController {
@@ -247,6 +255,8 @@ export class OfficeProjectPortalController {
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
   private readonly activeValidationRuntimeKeys = new Set<string>();
+  private postValidationReviewTargetService: PostValidationReviewTargetService;
+  private readonly activePostValidationReviewKeys = new Set<string>();
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
   private readonly employeeSimulationService: EmployeeSimulationService;
@@ -312,6 +322,7 @@ export class OfficeProjectPortalController {
       new ImplementerReviewFixRuntimeProvider(new ClaudeImplementerRuntimeProvider()),
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
+    this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
     this.employeeSimulationService = new EmployeeSimulationService();
@@ -883,6 +894,25 @@ export class OfficeProjectPortalController {
 
     if (input.startValidationRuntimePressed && selectedPromotion?.promotionStatus === "Approved") {
       void this.startValidationRuntimeForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      ).then((handled) => {
+        if (handled) this.view.render(this.state);
+      });
+      return;
+    }
+
+    if (input.preparePostValidationReviewTargetPressed && selectedPromotion?.promotionStatus === "Approved") {
+      const handled = this.preparePostValidationReviewTargetForPromotion(
+        selectedPromotion.projectId,
+        selectedPromotion.candidateTaskId,
+      );
+      if (handled) this.view.render(this.state);
+      return;
+    }
+
+    if (input.startPostValidationReviewPressed && selectedPromotion?.promotionStatus === "Approved") {
+      void this.startPostValidationReviewForPromotion(
         selectedPromotion.projectId,
         selectedPromotion.candidateTaskId,
       ).then((handled) => {
@@ -2701,6 +2731,160 @@ export class OfficeProjectPortalController {
     } finally {
       this.activeValidationRuntimeKeys.delete(activeKey);
     }
+  }
+
+  private preparePostValidationReviewTargetForPromotion(projectId: string, candidateTaskId: string): boolean {
+    const context = this.resolvePostValidationContext(projectId, candidateTaskId);
+    if (!context) return false;
+    const { input, existingPostValidationReviewTargets, existingPostValidationReviewTargetResults, currentValidationRuntime } = context;
+    const outcome = this.postValidationReviewTargetService.prepareTarget(input, {
+      projectId,
+      validationRuntimeId: currentValidationRuntime?.validationRuntimeId ?? "",
+      actor: "Local Human",
+      requestedAt: new Date().toISOString(),
+    });
+    this.state.postValidationReviewTargetCollections[projectId] =
+      outcome.targetCollection ?? existingPostValidationReviewTargets;
+    this.state.postValidationReviewTargetResultCollections[projectId] =
+      outcome.resultCollection ?? existingPostValidationReviewTargetResults;
+    if (outcome.reviewTarget) this.state.reviewTargets[projectId] = outcome.reviewTarget;
+    return true;
+  }
+
+  private async startPostValidationReviewForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
+    const context = this.resolvePostValidationContext(projectId, candidateTaskId);
+    if (!context) return false;
+    const currentTarget = findCurrentPostValidationReviewTarget(
+      context.input.existingPostValidationReviewTargets,
+      context.currentValidationRuntime,
+    );
+    if (!currentTarget) return false;
+    const activeKey = currentTarget.reviewTargetId;
+    if (this.activePostValidationReviewKeys.has(activeKey)) return false;
+
+    const existingReviewerRuntimes = this.state.reviewerRuntimeCollections[projectId]
+      ?? createReviewerRuntimeCollection({ projectId, runtimes: [], rulesVersion: REVIEWER_RUNTIME_RULES_VERSION });
+    const existingReviewerResults = this.state.reviewerRuntimeResultCollections[projectId]
+      ?? createReviewerRuntimeResultCollection({ projectId, results: [], rulesVersion: REVIEWER_RUNTIME_RULES_VERSION });
+
+    this.activePostValidationReviewKeys.add(activeKey);
+    try {
+      const outcome = await this.reviewerRuntimeService.startReviewer({
+        command: {
+          projectId,
+          runtimeStartId: context.plan.runtimeStartId,
+          executionPlanId: context.plan.planId,
+          approvedImplementerAgent: REVIEWER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
+          approvedReviewerAgent: REVIEWER_RUNTIME_APPROVED_REVIEWER_AGENT,
+          startedBy: "Local Human",
+          requestedAt: new Date().toISOString(),
+        },
+        executionPlan: context.executionPlan,
+        readiness: context.reviewDecisionInput.readiness,
+        readinessResult: context.reviewDecisionInput.readinessResult,
+        approval: context.reviewDecisionInput.approval,
+        preflight: context.reviewDecisionInput.preflight,
+        preflightResult: context.reviewDecisionInput.preflightResult,
+        runtimeStart: context.reviewDecisionInput.runtimeStart,
+        runtimeStartResult: context.reviewDecisionInput.runtimeStartResult,
+        implementerRuntime: context.reviewDecisionInput.implementerRuntime,
+        implementerRuntimeResult: context.reviewDecisionInput.implementerRuntimeResult,
+        reviewTarget: currentTarget,
+        existingRuntimes: existingReviewerRuntimes,
+        existingResults: existingReviewerResults,
+      });
+      this.state.reviewTargets[projectId] = currentTarget;
+      this.state.reviewerRuntimeCollections[projectId] = outcome.runtimeCollection ?? existingReviewerRuntimes;
+      this.state.reviewerRuntimeResultCollections[projectId] = outcome.resultCollection ?? existingReviewerResults;
+      return true;
+    } finally {
+      this.activePostValidationReviewKeys.delete(activeKey);
+    }
+  }
+
+  private resolvePostValidationContext(projectId: string, candidateTaskId: string) {
+    this.state.reviewTargets ??= {};
+    this.state.postValidationReviewTargetCollections ??= {};
+    this.state.postValidationReviewTargetResultCollections ??= {};
+
+    const taskCollection = this.state.taskCollections[projectId];
+    const promotedTask = taskCollection?.tasks.find((task) =>
+      parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTaskId
+    );
+    if (!taskCollection || !promotedTask) return undefined;
+
+    const executionPlan = resolveCurrentExecutionPlan(this.state.executionPlanCollections[projectId], {
+      projectTaskId: promotedTask.id,
+      candidateTaskId,
+    });
+    if (!executionPlan) return undefined;
+
+    const existingFixRequests = this.state.reviewFixRequestCollections[projectId]
+      ?? createReviewFixRequestCollection({ projectId, requests: [], rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION });
+    const existingFixRequestResults = this.state.reviewFixRequestResultCollections[projectId]
+      ?? createReviewFixRequestResultCollection({ projectId, results: [], rulesVersion: REVIEW_FIX_REQUEST_RULES_VERSION });
+    const existingFixPlans = this.state.reviewFixPlanCollections[projectId]
+      ?? createReviewFixPlanCollection({ projectId, plans: [], rulesVersion: REVIEW_FIX_PLAN_RULES_VERSION });
+    const existingFixPlanResults = this.state.reviewFixPlanResultCollections[projectId]
+      ?? createReviewFixPlanResultCollection({ projectId, results: [], rulesVersion: REVIEW_FIX_PLAN_RULES_VERSION });
+    const existingFixRuntimes = this.state.reviewFixRuntimeCollections[projectId]
+      ?? createReviewFixRuntimeCollection({ projectId, runtimes: [], rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION });
+    const existingFixRuntimeResults = this.state.reviewFixRuntimeResultCollections[projectId]
+      ?? createReviewFixRuntimeResultCollection({ projectId, results: [], rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION });
+    const existingValidationRuntimes = this.state.validationRuntimeCollections[projectId]
+      ?? createValidationRuntimeCollection({ projectId, runtimes: [], rulesVersion: VALIDATION_RUNTIME_RULES_VERSION });
+    const existingValidationRuntimeResults = this.state.validationRuntimeResultCollections[projectId]
+      ?? createValidationRuntimeResultCollection({ projectId, results: [], rulesVersion: VALIDATION_RUNTIME_RULES_VERSION });
+    const existingPostValidationReviewTargets = this.state.postValidationReviewTargetCollections[projectId]
+      ?? createPostValidationReviewTargetCollection({ projectId, targets: [], rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION });
+    const existingPostValidationReviewTargetResults = this.state.postValidationReviewTargetResultCollections[projectId]
+      ?? createPostValidationReviewTargetResultCollection({ projectId, results: [], rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION });
+
+    const reviewDecisionInput = resolveReviewDecisionInput({
+      projectId,
+      plan: executionPlan,
+      readinessCollection: this.state.executionReadinessCollections[projectId],
+      readinessResultCollection: this.state.executionReadinessResultCollections[projectId],
+      approvalCollection: this.state.humanExecutionApprovalCollections[projectId],
+      preflightCollection: this.state.runtimePreflightCollections[projectId],
+      preflightResultCollection: this.state.runtimePreflightResultCollections[projectId],
+      runtimeStartCollection: this.state.runtimeStartCollections[projectId],
+      runtimeStartResultCollection: this.state.runtimeStartResultCollections[projectId],
+      implementerRuntimeCollection: this.state.implementerRuntimeCollections[projectId],
+      implementerRuntimeResultCollection: this.state.implementerRuntimeResultCollections[projectId],
+      reviewTarget: this.state.reviewTargets[projectId],
+      reviewerRuntimeCollection: this.state.reviewerRuntimeCollections[projectId],
+      reviewerRuntimeResultCollection: this.state.reviewerRuntimeResultCollections[projectId],
+    });
+    const input = {
+      ...reviewDecisionInput,
+      existingFixRequests,
+      existingFixRequestResults,
+      existingFixPlans,
+      existingFixPlanResults,
+      existingFixRuntimes,
+      existingFixRuntimeResults,
+      existingValidationRuntimes,
+      existingValidationRuntimeResults,
+      existingPostValidationReviewTargets,
+      existingPostValidationReviewTargetResults,
+    };
+    const classification = this.reviewDecisionService.classify(input);
+    const currentRequest = findCurrentReviewFixRequest(input, classification);
+    const currentPlan = findCurrentReviewFixPlan(input, currentRequest);
+    const currentRuntime = findCurrentReviewFixRuntime(input, currentPlan);
+    const currentValidationRuntime = findCurrentValidationRuntime(input, currentRuntime);
+    if (!currentPlan || !currentRuntime || !currentValidationRuntime) return undefined;
+
+    return {
+      executionPlan,
+      plan: currentPlan,
+      input,
+      reviewDecisionInput,
+      currentValidationRuntime,
+      existingPostValidationReviewTargets,
+      existingPostValidationReviewTargetResults,
+    };
   }
 
   private clearRuntimePreflightForProject(projectId: string) {
