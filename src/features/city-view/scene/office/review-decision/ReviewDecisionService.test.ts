@@ -34,7 +34,7 @@ import {
   type RuntimeStart,
   type RuntimeStartResult,
 } from "../runtime-start/RuntimeStartTypes";
-import { resolveReviewTarget, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
+import { createPostValidationReviewTargetId, resolveReviewTarget, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
 import {
   REVIEWER_RUNTIME_RULES_VERSION,
   createReviewerRuntimeId,
@@ -520,14 +520,26 @@ describe("ReviewDecisionService.classify", () => {
   it("resolves the Reviewer Runtime bound to the current Review Target, not an older target for the same Implementer Runtime", () => {
     const service = new ReviewDecisionService();
     const historicalChain = createValidChain();
+    const validationRuntimeId = "daily-proof:validation-runtime:post-validation";
+    const currentSha = "f".repeat(40);
     const currentReviewTarget = createReviewTarget(
       historicalChain.plan,
       historicalChain.runtimeStart,
       historicalChain.implementerRuntime,
       {
-        reviewTargetId: "daily-proof:post-validation-review-target:current",
+        reviewTargetId: createPostValidationReviewTargetId(PROJECT_ID, validationRuntimeId, currentSha),
         source: "PostValidation",
-        reviewTargetSha: "f".repeat(40),
+        reviewFixRequestId: "review-fix-request-1",
+        reviewFixPlanId: "review-fix-plan-1",
+        reviewFixRuntimeId: "review-fix-runtime-1",
+        reviewFixRuntimeResultId: "review-fix-runtime-result-1",
+        validationRuntimeId,
+        validationRuntimeResultId: "validation-runtime-result-1",
+        reviewTargetSha: currentSha,
+        validationCommands: ["npm test"],
+        validationEvidenceCommandCount: 1,
+        validationEvidenceCompletedCommandCount: 1,
+        validationEvidenceExpectedHead: currentSha,
       },
     );
     const currentReviewerRuntime = createReviewerRuntime(
@@ -561,8 +573,12 @@ describe("ReviewDecisionService.classify", () => {
 
     expect(resolved.reviewerRuntime?.reviewTargetId).toBe(currentReviewTarget.reviewTargetId);
     expect(resolved.reviewerRuntimeResult?.reviewerRuntimeId).toBe(currentReviewerRuntime.reviewerRuntimeId);
-    expect(service.classify({ ...createInput(historicalChain), reviewTarget: currentReviewTarget, reviewerRuntime: resolved.reviewerRuntime, reviewerRuntimeResult: resolved.reviewerRuntimeResult }).reviewerRuntimeId)
-      .toBe(currentReviewerRuntime.reviewerRuntimeId);
+    expect(service.classify({
+      ...createInput(historicalChain),
+      reviewTarget: currentReviewTarget,
+      reviewerRuntime: resolved.reviewerRuntime,
+      reviewerRuntimeResult: resolved.reviewerRuntimeResult,
+    })).toEqual({ state: "Approved", reviewerRuntimeId: currentReviewerRuntime.reviewerRuntimeId });
   });
 
   it("returns ChangesRequested when the Reviewer Runtime is Completed/ChangesRequested", () => {
