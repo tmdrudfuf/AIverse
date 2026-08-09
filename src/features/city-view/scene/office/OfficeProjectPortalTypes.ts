@@ -59,6 +59,10 @@ import type {
   ReviewFixRuntimeCollection,
   ReviewFixRuntimeResultCollection,
 } from "./review-fix-runtime/ReviewFixRuntimeTypes";
+import type {
+  ValidationRuntimeCollection,
+  ValidationRuntimeResultCollection,
+} from "./validation-runtime/ValidationRuntimeTypes";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -192,6 +196,8 @@ export type ProjectPortalState = {
   reviewFixPlanResultCollections: Record<string, ReviewFixPlanResultCollection>;
   reviewFixRuntimeCollections: Record<string, ReviewFixRuntimeCollection>;
   reviewFixRuntimeResultCollections: Record<string, ReviewFixRuntimeResultCollection>;
+  validationRuntimeCollections: Record<string, ValidationRuntimeCollection>;
+  validationRuntimeResultCollections: Record<string, ValidationRuntimeResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

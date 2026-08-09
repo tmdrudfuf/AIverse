@@ -48,4 +48,20 @@ describe("OfficeActionInputController", () => {
     expect(input.consumeStartReviewFixRuntimePressed()).toBe(true);
     expect(input.consumeStartReviewFixRuntimePressed()).toBe(false);
   });
+
+  it("keeps Validation Runtime pending separate from Review Fix Runtime", () => {
+    const input = new OfficeActionInputController() as unknown as {
+      pendingStartReviewFixRuntime: boolean;
+      pendingStartValidationRuntime: boolean;
+      consumeStartReviewFixRuntimePressed: () => boolean;
+      consumeStartValidationRuntimePressed: () => boolean;
+    };
+    input.pendingStartReviewFixRuntime = true;
+    input.pendingStartValidationRuntime = true;
+
+    expect(input.consumeStartReviewFixRuntimePressed()).toBe(true);
+    expect(input.consumeStartReviewFixRuntimePressed()).toBe(false);
+    expect(input.consumeStartValidationRuntimePressed()).toBe(true);
+    expect(input.consumeStartValidationRuntimePressed()).toBe(false);
+  });
 });
