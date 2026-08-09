@@ -2747,7 +2747,6 @@ export class OfficeProjectPortalController {
       outcome.targetCollection ?? existingPostValidationReviewTargets;
     this.state.postValidationReviewTargetResultCollections[projectId] =
       outcome.resultCollection ?? existingPostValidationReviewTargetResults;
-    if (outcome.reviewTarget) this.state.reviewTargets[projectId] = outcome.reviewTarget;
     return true;
   }
 
@@ -2870,7 +2869,10 @@ export class OfficeProjectPortalController {
       existingPostValidationReviewTargetResults,
     };
     const classification = this.reviewDecisionService.classify(input);
-    const currentRequest = findCurrentReviewFixRequest(input, classification);
+    const currentRequest = findCurrentReviewFixRequest(input, classification)
+      ?? existingFixRequests.requests.find((request) =>
+        request.projectId === projectId && request.candidateTaskId === candidateTaskId
+      );
     const currentPlan = findCurrentReviewFixPlan(input, currentRequest);
     const currentRuntime = findCurrentReviewFixRuntime(input, currentPlan);
     const currentValidationRuntime = findCurrentValidationRuntime(input, currentRuntime);

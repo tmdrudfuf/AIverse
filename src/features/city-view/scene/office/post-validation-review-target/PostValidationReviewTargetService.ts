@@ -51,11 +51,12 @@ export class PostValidationReviewTargetService {
   ) {}
 
   prepareTarget(input: PostValidationReviewTargetInput, command: PostValidationReviewTargetCommand): PostValidationReviewTargetOutcome {
+    const existingResults = input.existingPostValidationReviewTargetResults;
     if (!command.projectId || !command.validationRuntimeId || !command.actor || !command.requestedAt) {
-      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_MALFORMED", "Failed");
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_MALFORMED", existingResults, "Failed");
     }
     if (getActorBlockReason(command.actor)) {
-      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_INVALID_ACTOR");
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_INVALID_ACTOR", existingResults);
     }
 
     const classification = this.reviewDecisionService.classify(input);
@@ -72,10 +73,10 @@ export class PostValidationReviewTargetService {
     const currentValidationResult = findCurrentValidationRuntimeResult(input, currentValidationRuntime);
 
     if (!currentRequest || !currentPlan || !currentFixRuntime || !currentFixRuntimeResult || !currentValidationRuntime || !currentValidationResult) {
-      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_VALIDATION_MISSING");
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_VALIDATION_MISSING", existingResults);
     }
     if (currentValidationRuntime.validationRuntimeId !== command.validationRuntimeId) {
-      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_CONTEXT_MISMATCH");
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_CONTEXT_MISMATCH", existingResults);
     }
 
     const validationReason = validateCompletedValidation(
@@ -85,7 +86,7 @@ export class PostValidationReviewTargetService {
       currentValidationRuntime,
       currentValidationResult,
     );
-    if (validationReason) return this.blockedOutcome(command, validationReason);
+    if (validationReason) return this.blockedOutcome(command, validationReason, existingResults);
 
     const revalidatedPlan = this.reviewFixPlanService.planFix(input, {
       projectId: command.projectId,
@@ -98,7 +99,7 @@ export class PostValidationReviewTargetService {
       !revalidatedPlan.plan ||
       !planStillMatches(currentPlan, revalidatedPlan.plan)
     ) {
-      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_VALIDATION_STALE");
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_VALIDATION_STALE", existingResults);
     }
 
     const inspection = this.provider.inspect({
@@ -108,7 +109,7 @@ export class PostValidationReviewTargetService {
       expectedHead: currentValidationRuntime.expectedHead,
     });
     if (!inspection.available || !inspection.clean || !inspection.exactHeadMatch || inspection.workingTreeState !== "Clean") {
-      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_HEAD_CHANGED");
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_HEAD_CHANGED", existingResults);
     }
 
     const reviewTarget = createTarget(
@@ -125,7 +126,7 @@ export class PostValidationReviewTargetService {
     );
     if (existingTarget) {
       if (!targetsMatch(existingTarget, reviewTarget)) {
-        return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_EXISTING_TARGET_MISMATCH");
+        return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_EXISTING_TARGET_MISMATCH", existingResults);
       }
       const result = createResult(command, existingTarget, "AlreadyReady", ["POST_VALIDATION_REVIEW_TARGET_ALREADY_READY"]);
       return {
@@ -177,10 +178,11 @@ export class PostValidationReviewTargetService {
   private blockedOutcome(
     command: PostValidationReviewTargetCommand,
     reason: PostValidationReviewTargetReasonCode,
+    existingResults: PostValidationReviewTargetInput["existingPostValidationReviewTargetResults"],
     status: "Blocked" | "Failed" = "Blocked",
   ): PostValidationReviewTargetOutcome {
     const result = createResult(command, undefined, status, [reason]);
-    return { result, resultCollection: this.upsertResult(undefined, result) };
+    return { result, resultCollection: this.upsertResult(existingResults, result) };
   }
 }
 

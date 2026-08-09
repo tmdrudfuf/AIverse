@@ -6,7 +6,7 @@ import { createImplementerRuntimeId, createImplementerRuntimeResultId } from "./
 import type { RuntimeStart } from "./runtime-start/RuntimeStartTypes";
 import type { ReviewerRuntimeOutcome, ReviewerRuntimeDecision, ReviewerRuntimeStatus } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import { createReviewerRuntimeId, createReviewerRuntimeResultId } from "./reviewer-runtime/ReviewerRuntimeTypes";
-import { resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
+import { createPostValidationReviewTargetId, resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
@@ -21,9 +21,19 @@ import {
 } from "./review-fix-runtime/ReviewFixRuntimeTypes";
 import {
   VALIDATION_RUNTIME_RULES_VERSION,
+  createValidationRuntimeCollection,
   createValidationRuntimeId,
+  createValidationRuntimeResultId,
   createValidationRuntimeResultCollection,
+  type ValidationRuntime,
+  type ValidationRuntimeResult,
 } from "./validation-runtime/ValidationRuntimeTypes";
+import {
+  POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+  createPostValidationReviewTargetCollection,
+  createPostValidationReviewTargetResultCollection,
+  createPostValidationReviewTargetResultId,
+} from "./post-validation-review-target/PostValidationReviewTargetTypes";
 import {
   createInput,
   createSceneStub,
@@ -576,6 +586,173 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(internals.state.validationRuntimeResultCollections?.[PROJECT_ID]?.results[0]?.githubMutationStarted).toBe(false);
   });
 
+  it("starts post-validation re-review only from the distinct U input after a fresh target is prepared", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    const { promotedTaskId } = await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    internals.reviewFixRuntimeService = {
+      startFixRuntime: vi.fn(async (_input, command) => {
+        const plan = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans.find((item) =>
+          item.reviewFixPlanId === command.reviewFixPlanId
+        );
+        if (!plan) throw new Error("Test setup failed to create Review Fix Plan.");
+        const runtime = createCompletedReviewFixRuntime(plan, command.startedAt);
+        const result = createCompletedReviewFixRuntimeResult(plan, runtime, command.startedAt);
+        return {
+          result,
+          runtime,
+          runtimeCollection: createReviewFixRuntimeCollection({
+            projectId: PROJECT_ID,
+            runtimes: [runtime],
+            rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+          }),
+          resultCollection: createReviewFixRuntimeResultCollection({
+            projectId: PROJECT_ID,
+            results: [result],
+            rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+          }),
+        };
+      }),
+    };
+    internals.validationRuntimeService = {
+      startValidation: vi.fn(async (_input, command) => {
+        const runtime = internals.state.reviewFixRuntimeCollections?.[PROJECT_ID]?.runtimes.find((item) =>
+          item.reviewFixRuntimeId === command.reviewFixRuntimeId
+        );
+        const fixResult = internals.state.reviewFixRuntimeResultCollections?.[PROJECT_ID]?.results.find((item) =>
+          item.reviewFixRuntimeId === command.reviewFixRuntimeId
+        );
+        if (!runtime || !fixResult) throw new Error("Test setup failed to reach Review Fix Runtime.");
+        const validationRuntime = createCompletedValidationRuntime(runtime, fixResult.id, command.startedAt);
+        const result = createCompletedValidationRuntimeResult(validationRuntime, command.startedAt);
+        return {
+          result,
+          runtime: validationRuntime,
+          runtimeCollection: createValidationRuntimeCollection({
+            projectId: PROJECT_ID,
+            runtimes: [validationRuntime],
+            rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+          }),
+          resultCollection: createValidationRuntimeResultCollection({
+            projectId: PROJECT_ID,
+            results: [result],
+            rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+          }),
+        };
+      }),
+    };
+    internals.postValidationReviewTargetService = {
+      prepareTarget: vi.fn((input, command) => {
+        const plan = input.existingFixPlans?.plans[0];
+        const fixRuntime = input.existingFixRuntimes?.runtimes[0];
+        const fixResult = input.existingFixRuntimeResults?.results[0];
+        const validationRuntime = input.existingValidationRuntimes?.runtimes[0];
+        const validationResult = input.existingValidationRuntimeResults?.results[0];
+        if (!plan || !fixRuntime || !fixResult || !validationRuntime || !validationResult || !input.executionPlan || !input.runtimeStart || !input.implementerRuntime) {
+          throw new Error("Test setup failed to reach post-validation context.");
+        }
+        const baseTarget = resolveReviewTarget(input.executionPlan, input.runtimeStart, input.implementerRuntime);
+        const reviewTarget = {
+          ...baseTarget,
+          reviewTargetId: createPostValidationReviewTargetId(PROJECT_ID, validationRuntime.validationRuntimeId, validationRuntime.expectedHead),
+          source: "PostValidation" as const,
+          reviewFixRequestId: plan.reviewFixRequestId,
+          reviewFixPlanId: plan.reviewFixPlanId,
+          reviewFixRuntimeId: fixRuntime.reviewFixRuntimeId,
+          reviewFixRuntimeResultId: fixResult.id,
+          validationRuntimeId: validationRuntime.validationRuntimeId,
+          validationRuntimeResultId: validationResult.id,
+          reviewTargetSha: validationRuntime.expectedHead,
+          workingTreeState: "Clean" as const,
+          changedFiles: [],
+          validationCommands: [...validationRuntime.validationCommands],
+          validationEvidenceCommandCount: validationRuntime.evidence.commandCount,
+          validationEvidenceCompletedCommandCount: validationRuntime.evidence.completedCommandCount,
+          validationEvidenceExpectedHead: validationRuntime.evidence.expectedHead,
+          validationRuntimeRulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+        };
+        const result = {
+          id: createPostValidationReviewTargetResultId(PROJECT_ID, command.validationRuntimeId),
+          projectId: PROJECT_ID,
+          validationRuntimeId: command.validationRuntimeId,
+          reviewTargetId: reviewTarget.reviewTargetId,
+          status: "Ready" as const,
+          reasonCodes: ["POST_VALIDATION_REVIEW_TARGET_READY" as const],
+          targetReady: true,
+          alreadyReady: false,
+          reviewerStarted: false as const,
+          promotionStarted: false as const,
+          repositoryMutationStarted: false as const,
+          githubMutationStarted: false as const,
+          pushStarted: false as const,
+          prStarted: false as const,
+          readyForReviewStarted: false as const,
+          mergeStarted: false as const,
+          deployStarted: false as const,
+          resultAt: command.requestedAt,
+          rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+        };
+        return {
+          result,
+          reviewTarget,
+          targetCollection: createPostValidationReviewTargetCollection({
+            projectId: PROJECT_ID,
+            targets: [reviewTarget],
+            rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+          }),
+          resultCollection: createPostValidationReviewTargetResultCollection({
+            projectId: PROJECT_ID,
+            results: [result],
+            rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+          }),
+        };
+      }),
+    };
+    internals.reviewerRuntimeService = {
+      startReviewer: vi.fn(async (input) => {
+        if (!input.reviewTarget || !input.runtimeStart || !input.implementerRuntime || !input.executionPlan) {
+          throw new Error("Test setup failed to construct post-validation Reviewer Runtime input.");
+        }
+        return createReviewerOutcomeForRuntime(
+          input.runtimeStart.runtimeStartId,
+          input.implementerRuntime.implementerRuntimeId,
+          input.reviewTarget.reviewTargetId,
+          input.reviewTarget.reviewTargetSha,
+          input.executionPlan.worktreePath,
+          input.executionPlan.branchName,
+          input.executionPlan.specPath,
+          "Completed",
+          "Approved",
+        );
+      }),
+      upsertResult: realUpsertReviewerResult(internals),
+    };
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+    controller.updateInput(createInput({ startReviewFixRuntimePressed: true }));
+    await flushPromises();
+    controller.updateInput(createInput({ startValidationRuntimePressed: true }));
+    await flushPromises();
+
+    controller.updateInput(createInput({ preparePostValidationReviewTargetPressed: true }));
+    expect(internals.reviewerRuntimeService.startReviewer).not.toHaveBeenCalled();
+
+    controller.updateInput(createInput({ startPostValidationReviewPressed: true }));
+    await flushPromises();
+
+    const freshTarget = internals.state.postValidationReviewTargetCollections?.[PROJECT_ID]?.targets[0];
+    expect(freshTarget?.source).toBe("PostValidation");
+    expect(internals.reviewerRuntimeService.startReviewer).toHaveBeenCalledTimes(1);
+    const reviewerInput = vi.mocked(internals.reviewerRuntimeService.startReviewer).mock.calls[0]![0];
+    expect(reviewerInput.reviewTarget?.reviewTargetId).toBe(freshTarget?.reviewTargetId);
+    expect(reviewerInput.reviewTarget?.reviewTargetSha).toBe(freshTarget?.reviewTargetSha);
+    expect(internals.state.reviewerRuntimeResultCollections[PROJECT_ID]?.results.at(-1)?.githubMutationStarted).toBe(false);
+
+    void promotedTaskId;
+  });
+
   it("blocks stale repeated Review Fix Plans instead of returning AlreadyPlanned", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
@@ -1116,6 +1293,156 @@ function createCompletedReviewFixRuntime(
       outputTruncated: false,
     },
     rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+  };
+}
+
+function createCompletedReviewFixRuntimeResult(
+  plan: NonNullable<ControllerInternals["state"]["reviewFixPlanCollections"]>[string]["plans"][number],
+  runtime: ReviewFixRuntime,
+  resultAt: string,
+) {
+  return {
+    id: createReviewFixRuntimeResultId(PROJECT_ID, runtime.reviewFixRuntimeId),
+    projectId: PROJECT_ID,
+    reviewFixPlanId: plan.reviewFixPlanId,
+    reviewFixRuntimeId: runtime.reviewFixRuntimeId,
+    status: "Completed" as const,
+    reasonCodes: ["REVIEW_FIX_RUNTIME_STARTED" as const],
+    started: true,
+    alreadyCompleted: false,
+    duplicateActiveAttempt: false,
+    agentStarted: true,
+    implementerStarted: true,
+    reviewerStarted: false as const,
+    validationRuntimeStarted: false as const,
+    validationStarted: false as const,
+    repositoryMutationStarted: false as const,
+    githubMutationStarted: false as const,
+    pushStarted: false as const,
+    prStarted: false as const,
+    readyForReviewStarted: false as const,
+    mergeStarted: false as const,
+    deployStarted: false as const,
+    branchDeletionStarted: false as const,
+    resultAt,
+    rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+  };
+}
+
+function createCompletedValidationRuntime(
+  runtime: ReviewFixRuntime,
+  reviewFixRuntimeResultId: string,
+  startedAt: string,
+): ValidationRuntime {
+  const expectedHead = "b".repeat(40);
+  return {
+    validationRuntimeId: createValidationRuntimeId(PROJECT_ID, runtime.reviewFixRuntimeId),
+    projectId: PROJECT_ID,
+    reviewFixRequestId: runtime.reviewFixRequestId,
+    reviewFixPlanId: runtime.reviewFixPlanId,
+    reviewFixRuntimeId: runtime.reviewFixRuntimeId,
+    reviewFixRuntimeResultId,
+    planId: runtime.planId,
+    readinessId: runtime.readinessId,
+    readinessResultId: runtime.readinessResultId,
+    approvalId: runtime.approvalId,
+    preflightId: runtime.preflightId,
+    preflightResultId: runtime.preflightResultId,
+    runtimeStartId: runtime.runtimeStartId,
+    runtimeStartResultId: runtime.runtimeStartResultId,
+    implementerRuntimeId: runtime.implementerRuntimeId,
+    implementerRuntimeResultId: runtime.implementerRuntimeResultId,
+    reviewerRuntimeId: runtime.reviewerRuntimeId,
+    reviewerRuntimeResultId: runtime.reviewerRuntimeResultId,
+    reviewTargetId: runtime.reviewTargetId,
+    projectTaskId: runtime.projectTaskId,
+    candidateTaskId: runtime.candidateTaskId,
+    employeeId: runtime.employeeId,
+    repositoryId: runtime.repositoryId,
+    worktreePath: runtime.worktreePath,
+    branch: runtime.branch,
+    expectedHead,
+    specificationPath: runtime.specificationPath,
+    implementer: runtime.implementer,
+    reviewer: runtime.reviewer,
+    validationCommands: [...runtime.validationCommands],
+    mutationScope: [...runtime.mutationScope],
+    reviewFixRuntimeRulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+    status: "Completed",
+    startedBy: "Local Human",
+    startedAt,
+    validationRuntimeStarted: true,
+    validationStarted: true,
+    commandExecutionStarted: true,
+    reviewerStarted: false,
+    reviewTargetCreated: false,
+    promotionStarted: false,
+    repositoryMutationStarted: false,
+    githubMutationStarted: false,
+    pushStarted: false,
+    prStarted: false,
+    readyForReviewStarted: false,
+    mergeStarted: false,
+    deployStarted: false,
+    branchDeletionStarted: false,
+    evidence: {
+      providerId: "validation",
+      role: "ValidationRuntime",
+      workingDirectory: runtime.worktreePath,
+      expectedHead,
+      commandCount: runtime.validationCommands.length,
+      completedCommandCount: runtime.validationCommands.length,
+      failedCommandCount: 0,
+      timedOutCommandCount: 0,
+      commands: runtime.validationCommands.map((command) => ({
+        commandDisplay: command,
+        started: true,
+        completed: true,
+        timedOut: false,
+        exitCode: 0,
+        durationMs: 1,
+        stdoutSummary: "",
+        stderrSummary: "",
+        outputTruncated: false,
+      })),
+    },
+    rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+  };
+}
+
+function createCompletedValidationRuntimeResult(
+  runtime: ValidationRuntime,
+  resultAt: string,
+): ValidationRuntimeResult {
+  return {
+    id: createValidationRuntimeResultId(PROJECT_ID, runtime.validationRuntimeId),
+    projectId: PROJECT_ID,
+    reviewFixRuntimeId: runtime.reviewFixRuntimeId,
+    validationRuntimeId: runtime.validationRuntimeId,
+    status: "Completed",
+    reasonCodes: ["VALIDATION_RUNTIME_STARTED"],
+    started: true,
+    alreadyCompleted: false,
+    commandCount: runtime.evidence.commandCount,
+    completedCommandCount: runtime.evidence.completedCommandCount,
+    failedCommandCount: 0,
+    timedOutCommandCount: 0,
+    validationRuntimeStarted: true,
+    validationStarted: true,
+    commandExecutionStarted: true,
+    reviewerStarted: false,
+    reviewTargetCreated: false,
+    promotionStarted: false,
+    repositoryMutationStarted: false,
+    githubMutationStarted: false,
+    pushStarted: false,
+    prStarted: false,
+    readyForReviewStarted: false,
+    mergeStarted: false,
+    deployStarted: false,
+    branchDeletionStarted: false,
+    resultAt,
+    rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
   };
 }
 

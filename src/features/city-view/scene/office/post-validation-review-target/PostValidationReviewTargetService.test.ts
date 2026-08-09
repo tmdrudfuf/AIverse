@@ -7,7 +7,7 @@ import { VALIDATION_RUNTIME_RULES_VERSION, createValidationRuntimeCollection, cr
 import { createPostValidationReviewTargetId } from "../reviewer-runtime/ReviewTarget";
 import { PostValidationReviewTargetService, findCurrentPostValidationReviewTarget } from "./PostValidationReviewTargetService";
 import { UnavailablePostValidationReviewTargetProvider, type PostValidationReviewTargetProvider } from "./PostValidationReviewTargetProvider";
-import { POST_VALIDATION_REVIEW_TARGET_RULES_VERSION, createPostValidationReviewTargetCollection, type PostValidationReviewTargetInput } from "./PostValidationReviewTargetTypes";
+import { POST_VALIDATION_REVIEW_TARGET_RULES_VERSION, createPostValidationReviewTargetCollection, createPostValidationReviewTargetResultCollection, createPostValidationReviewTargetResultId, type PostValidationReviewTargetInput } from "./PostValidationReviewTargetTypes";
 
 const PROJECT_ID = "daily-proof";
 const REVIEWER_RUNTIME_ID = "reviewer-1";
@@ -50,6 +50,51 @@ describe("PostValidationReviewTargetService", () => {
     expect(outcome.result.status).toBe("Blocked");
     expect(outcome.result.reasonCodes).toContain("POST_VALIDATION_REVIEW_TARGET_HEAD_CHANGED");
     expect(outcome.reviewTarget).toBeUndefined();
+  });
+
+  it("preserves existing post-validation result history when a blocked prepare result is recorded", () => {
+    const context = createContext();
+    const service = createService(context.plan, new UnavailablePostValidationReviewTargetProvider());
+    const historicalResult = {
+      id: createPostValidationReviewTargetResultId(PROJECT_ID, "historical-validation-runtime"),
+      projectId: PROJECT_ID,
+      validationRuntimeId: "historical-validation-runtime",
+      reviewTargetId: "historical-target",
+      status: "Ready" as const,
+      reasonCodes: ["POST_VALIDATION_REVIEW_TARGET_READY" as const],
+      targetReady: true,
+      alreadyReady: false,
+      reviewerStarted: false as const,
+      promotionStarted: false as const,
+      repositoryMutationStarted: false as const,
+      githubMutationStarted: false as const,
+      pushStarted: false as const,
+      prStarted: false as const,
+      readyForReviewStarted: false as const,
+      mergeStarted: false as const,
+      deployStarted: false as const,
+      resultAt: "2026-08-07T00:00:00.000Z",
+      rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+    };
+
+    const outcome = service.prepareTarget({
+      ...context.input,
+      existingPostValidationReviewTargetResults: createPostValidationReviewTargetResultCollection({
+        projectId: PROJECT_ID,
+        results: [historicalResult],
+        rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+      }),
+    }, {
+      projectId: PROJECT_ID,
+      validationRuntimeId: context.validationRuntime.validationRuntimeId,
+      actor: "Local Human",
+      requestedAt: "2026-08-08T00:00:00.000Z",
+    });
+
+    expect(outcome.result.status).toBe("Blocked");
+    expect(outcome.resultCollection?.results.map((result) => result.id)).toContain(historicalResult.id);
+    expect(outcome.resultCollection?.results.map((result) => result.id)).toContain(outcome.result.id);
+    expect(outcome.resultCollection?.resultCount).toBe(2);
   });
 
   it.each([
