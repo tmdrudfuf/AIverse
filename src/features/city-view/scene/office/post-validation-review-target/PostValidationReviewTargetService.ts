@@ -36,10 +36,19 @@ import {
   type PostValidationReviewTargetResult,
   type PostValidationReviewTargetStatus,
 } from "./PostValidationReviewTargetTypes";
+import {
+  UnavailablePostValidationReviewTargetProvider,
+  type PostValidationReviewTargetInspection,
+  type PostValidationReviewTargetProvider,
+} from "./PostValidationReviewTargetProvider";
 
 export class PostValidationReviewTargetService {
   private readonly reviewDecisionService = new ReviewDecisionService();
   private readonly reviewFixPlanService = new ReviewFixPlanService();
+
+  constructor(
+    private readonly provider: PostValidationReviewTargetProvider = new UnavailablePostValidationReviewTargetProvider(),
+  ) {}
 
   prepareTarget(input: PostValidationReviewTargetInput, command: PostValidationReviewTargetCommand): PostValidationReviewTargetOutcome {
     if (!command.projectId || !command.validationRuntimeId || !command.actor || !command.requestedAt) {
@@ -92,7 +101,25 @@ export class PostValidationReviewTargetService {
       return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_VALIDATION_STALE");
     }
 
-    const reviewTarget = createTarget(currentPlan, currentFixRuntime, currentFixRuntimeResult, currentValidationRuntime, currentValidationResult, command.requestedAt);
+    const inspection = this.provider.inspect({
+      repositoryId: currentPlan.repositoryId,
+      worktreePath: currentPlan.worktreePath,
+      branch: currentPlan.branch,
+      expectedHead: currentValidationRuntime.expectedHead,
+    });
+    if (!inspection.available || !inspection.clean || !inspection.exactHeadMatch || inspection.workingTreeState !== "Clean") {
+      return this.blockedOutcome(command, "POST_VALIDATION_REVIEW_TARGET_HEAD_CHANGED");
+    }
+
+    const reviewTarget = createTarget(
+      currentPlan,
+      currentFixRuntime,
+      currentFixRuntimeResult,
+      currentValidationRuntime,
+      currentValidationResult,
+      inspection,
+      command.requestedAt,
+    );
     const existingTarget = input.existingPostValidationReviewTargets?.targets.find((target) =>
       target.reviewTargetId === reviewTarget.reviewTargetId
     );
@@ -176,6 +203,7 @@ function createTarget(
   fixRuntimeResult: ReviewFixRuntimeResult,
   validationRuntime: ValidationRuntime,
   validationResult: ValidationRuntimeResult,
+  inspection: PostValidationReviewTargetInspection,
   resolvedAt: string,
 ): ReviewTarget {
   const reviewTargetSha = validationRuntime.expectedHead;
@@ -199,7 +227,7 @@ function createTarget(
     featureBranch: plan.branch,
     reviewTargetSha,
     mergeBaseSha: baseSha,
-    workingTreeState: "Clean",
+    workingTreeState: inspection.workingTreeState,
     changedFiles: [],
     validationCommands: [...validationRuntime.validationCommands],
     validationEvidenceCommandCount: validationRuntime.evidence.commandCount,

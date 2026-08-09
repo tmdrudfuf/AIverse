@@ -6,6 +6,7 @@ import { REVIEW_FIX_RUNTIME_RULES_VERSION, createReviewFixRuntimeCollection, cre
 import { VALIDATION_RUNTIME_RULES_VERSION, createValidationRuntimeCollection, createValidationRuntimeId, createValidationRuntimeResultCollection, createValidationRuntimeResultId, type ValidationRuntime, type ValidationRuntimeResult } from "../validation-runtime/ValidationRuntimeTypes";
 import { createPostValidationReviewTargetId } from "../reviewer-runtime/ReviewTarget";
 import { PostValidationReviewTargetService, findCurrentPostValidationReviewTarget } from "./PostValidationReviewTargetService";
+import { UnavailablePostValidationReviewTargetProvider, type PostValidationReviewTargetProvider } from "./PostValidationReviewTargetProvider";
 import { POST_VALIDATION_REVIEW_TARGET_RULES_VERSION, createPostValidationReviewTargetCollection, type PostValidationReviewTargetInput } from "./PostValidationReviewTargetTypes";
 
 const PROJECT_ID = "daily-proof";
@@ -33,6 +34,22 @@ describe("PostValidationReviewTargetService", () => {
     expect(outcome.reviewTarget?.reviewTargetId).not.toContain(":review-target:");
     expect(outcome.result.reviewerStarted).toBe(false);
     expect(outcome.result.githubMutationStarted).toBe(false);
+  });
+
+  it("blocks by default when no provider can prove the current worktree is clean and still at the validated HEAD", () => {
+    const context = createContext();
+    const service = createService(context.plan, new UnavailablePostValidationReviewTargetProvider());
+
+    const outcome = service.prepareTarget(context.input, {
+      projectId: PROJECT_ID,
+      validationRuntimeId: context.validationRuntime.validationRuntimeId,
+      actor: "Local Human",
+      requestedAt: "2026-08-08T00:00:00.000Z",
+    });
+
+    expect(outcome.result.status).toBe("Blocked");
+    expect(outcome.result.reasonCodes).toContain("POST_VALIDATION_REVIEW_TARGET_HEAD_CHANGED");
+    expect(outcome.reviewTarget).toBeUndefined();
   });
 
   it.each([
@@ -120,8 +137,8 @@ describe("PostValidationReviewTargetService", () => {
   });
 });
 
-function createService(revalidatedPlan: ReviewFixPlan | undefined) {
-  const service = new PostValidationReviewTargetService();
+function createService(revalidatedPlan: ReviewFixPlan | undefined, provider: PostValidationReviewTargetProvider = createCleanProvider()) {
+  const service = new PostValidationReviewTargetService(provider);
   const internals = service as unknown as {
     reviewDecisionService: { classify: ReturnType<typeof vi.fn> };
     reviewFixPlanService: { planFix: ReturnType<typeof vi.fn> };
@@ -133,6 +150,21 @@ function createService(revalidatedPlan: ReviewFixPlan | undefined) {
     planFix: vi.fn(() => ({ result: { status: "AlreadyPlanned" }, plan: revalidatedPlan })),
   };
   return service;
+}
+
+function createCleanProvider(): PostValidationReviewTargetProvider {
+  return {
+    providerId: "test-post-validation-target",
+    inspect: (request) => ({
+      providerId: "test-post-validation-target",
+      workingTreeState: "Clean",
+      currentHead: request.expectedHead,
+      branch: request.branch,
+      clean: true,
+      exactHeadMatch: true,
+      available: true,
+    }),
+  };
 }
 
 function createContext(
