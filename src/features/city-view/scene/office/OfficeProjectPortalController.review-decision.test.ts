@@ -11,10 +11,12 @@ import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
 import { createReviewFixPlanId } from "./review-fix-plans/ReviewFixPlanTypes";
+import { createReviewFixRuntimeId } from "./review-fix-runtime/ReviewFixRuntimeTypes";
 import {
   createInput,
   createSceneStub,
   driveDailyProofToRuntimeStart,
+  flushPromises,
   getControllerInternals,
   realUpsertResult,
   type ControllerInternals,
@@ -366,6 +368,57 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(results).toHaveLength(1);
     expect(results![0].status).toBe("AlreadyPlanned");
     expect(results![0].reasonCodes).toContain("REVIEW_FIX_PLAN_ALREADY_PLANNED");
+  });
+
+  it("starts Review Fix Runtime only from the distinct X input after a plan exists", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+    internals.reviewFixRuntimeService = {
+      startFixRuntime: vi.fn(async (_input, command) => ({
+        result: {
+          id: `${PROJECT_ID}:review-fix-runtime-result:${command.reviewFixPlanId}:review-fix-runtime-v1`,
+          projectId: PROJECT_ID,
+          reviewFixPlanId: command.reviewFixPlanId,
+          reviewFixRuntimeId: createReviewFixRuntimeId(PROJECT_ID, command.reviewFixPlanId),
+          status: "Completed" as const,
+          reasonCodes: ["REVIEW_FIX_RUNTIME_STARTED" as const],
+          started: true,
+          alreadyCompleted: false,
+          duplicateActiveAttempt: false,
+          agentStarted: true,
+          implementerStarted: true,
+          reviewerStarted: false as const,
+          validationRuntimeStarted: false as const,
+          validationStarted: false as const,
+          repositoryMutationStarted: false as const,
+          githubMutationStarted: false as const,
+          pushStarted: false as const,
+          prStarted: false as const,
+          readyForReviewStarted: false as const,
+          mergeStarted: false as const,
+          deployStarted: false as const,
+          branchDeletionStarted: false as const,
+          resultAt: command.startedAt,
+          rulesVersion: "review-fix-runtime-v1",
+        },
+      })),
+    };
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+    controller.updateInput(createInput({ downPressed: true }));
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+    await flushPromises();
+    expect(internals.reviewFixRuntimeService.startFixRuntime).not.toHaveBeenCalled();
+
+    controller.updateInput(createInput({ startReviewFixRuntimePressed: true }));
+    await flushPromises();
+
+    expect(internals.reviewFixRuntimeService.startFixRuntime).toHaveBeenCalledTimes(1);
+    const command = vi.mocked(internals.reviewFixRuntimeService.startFixRuntime).mock.calls[0]![1];
+    expect(command.actor).toBe("Local Human");
+    expect(command.reviewFixPlanId).toBeDefined();
   });
 
   it("blocks stale repeated Review Fix Plans instead of returning AlreadyPlanned", async () => {

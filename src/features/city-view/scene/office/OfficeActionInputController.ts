@@ -25,6 +25,10 @@ const REQUEST_REVIEW_FIX_KEY_CODE = "KeyF";
 // already-requested fixes, without starting fixes, Validation Runtime, or
 // either agent.
 const PLAN_REVIEW_FIX_KEY_CODE = "KeyG";
+// Distinct from Plan Review Fix: this explicitly starts the bounded Review
+// Fix Runtime for the current plan. It must never share a keypress with any
+// prior review/request/plan transition.
+const START_REVIEW_FIX_RUNTIME_KEY_CODE = "KeyX";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -37,6 +41,7 @@ export class OfficeActionInputController {
   private pendingPromoteReview = false;
   private pendingRequestReviewFix = false;
   private pendingPlanReviewFix = false;
+  private pendingStartReviewFixRuntime = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -97,6 +102,12 @@ export class OfficeActionInputController {
     if (event.code === PLAN_REVIEW_FIX_KEY_CODE) {
       event.preventDefault();
       this.pendingPlanReviewFix = true;
+      return;
+    }
+
+    if (event.code === START_REVIEW_FIX_RUNTIME_KEY_CODE) {
+      event.preventDefault();
+      this.pendingStartReviewFixRuntime = true;
     }
   };
 
@@ -169,6 +180,12 @@ export class OfficeActionInputController {
     return planReviewFixPressed;
   }
 
+  consumeStartReviewFixRuntimePressed() {
+    const startReviewFixRuntimePressed = this.pendingStartReviewFixRuntime;
+    this.pendingStartReviewFixRuntime = false;
+    return startReviewFixRuntimePressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -186,5 +203,6 @@ export class OfficeActionInputController {
     this.pendingPromoteReview = false;
     this.pendingRequestReviewFix = false;
     this.pendingPlanReviewFix = false;
+    this.pendingStartReviewFixRuntime = false;
   }
 }
