@@ -345,7 +345,9 @@ export function resolveReviewDecisionInput(params: {
     : undefined;
   const reviewerRuntime = implementerRuntime
     ? params.reviewerRuntimeCollection?.runtimes.find(
-      (item) => item.implementerRuntimeId === implementerRuntime.implementerRuntimeId,
+      (item) =>
+        item.implementerRuntimeId === implementerRuntime.implementerRuntimeId &&
+        (!params.reviewTarget || item.reviewTargetId === params.reviewTarget.reviewTargetId),
     )
     : undefined;
   // A "result-only" Reviewer Runtime Result (no ReviewerRuntime record was

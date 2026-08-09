@@ -21,12 +21,20 @@ export function computeReviewTargetSha(implementerRuntimeId: string) {
 }
 
 export type ReviewTargetWorkingTreeState = "Clean" | "Uncommitted";
+export type ReviewTargetSource = "ImplementerRuntime" | "PostValidation";
 
 export type ReviewTarget = {
   reviewTargetId: string;
   projectId: string;
+  source?: ReviewTargetSource;
   runtimeStartId: string;
   implementerRuntimeId: string;
+  reviewFixRequestId?: string;
+  reviewFixPlanId?: string;
+  reviewFixRuntimeId?: string;
+  reviewFixRuntimeResultId?: string;
+  validationRuntimeId?: string;
+  validationRuntimeResultId?: string;
   repositoryId: string;
   worktreePath: string;
   baseBranch: string;
@@ -36,6 +44,11 @@ export type ReviewTarget = {
   mergeBaseSha: string;
   workingTreeState: ReviewTargetWorkingTreeState;
   changedFiles: ReadonlyArray<string>;
+  validationCommands?: ReadonlyArray<string>;
+  validationEvidenceCommandCount?: number;
+  validationEvidenceCompletedCommandCount?: number;
+  validationEvidenceExpectedHead?: string;
+  validationRuntimeRulesVersion?: string;
   specificationPath: string;
   resolvedAt: string;
   rulesVersion: string;
@@ -50,8 +63,21 @@ export function createReviewTargetId(
   return `${projectId}:review-target:${runtimeStartId}:${reviewTargetSha}:${rulesVersion}`;
 }
 
+export function createPostValidationReviewTargetId(
+  projectId: string,
+  validationRuntimeId: string,
+  reviewTargetSha: string,
+  rulesVersion = REVIEW_TARGET_RULES_VERSION,
+) {
+  return `${projectId}:post-validation-review-target:${validationRuntimeId}:${reviewTargetSha}:${rulesVersion}`;
+}
+
 export function copyReviewTarget(target: ReviewTarget): ReviewTarget {
-  return { ...target, changedFiles: [...target.changedFiles] };
+  return {
+    ...target,
+    changedFiles: [...target.changedFiles],
+    validationCommands: target.validationCommands ? [...target.validationCommands] : undefined,
+  };
 }
 
 /**
@@ -78,6 +104,7 @@ export function resolveReviewTarget(
   return {
     reviewTargetId: createReviewTargetId(plan.projectId, runtimeStart.runtimeStartId, reviewTargetSha),
     projectId: plan.projectId,
+    source: "ImplementerRuntime",
     runtimeStartId: runtimeStart.runtimeStartId,
     implementerRuntimeId: implementerRuntime.implementerRuntimeId,
     repositoryId: plan.repositoryId,

@@ -13,6 +13,7 @@ import {
 import {
   computeReviewTargetBaseSha,
   computeReviewTargetSha,
+  createPostValidationReviewTargetId,
   createReviewTargetId,
   REVIEW_TARGET_BASE_BRANCH,
   REVIEW_TARGET_RULES_VERSION,
@@ -541,13 +542,7 @@ function validateReviewTarget(input: ReviewDecisionInput): ReviewPromotionReason
   // back an Approved promotion -- mirrors ReviewerRuntimeService.validateReviewTarget's
   // clean-working-tree guard (see ReviewTarget.ts, "Exact-HEAD Gate").
   if (reviewTarget.workingTreeState !== "Clean") return "REVIEW_PROMOTION_TARGET_MISMATCH";
-  if (
-    reviewTarget.reviewTargetId !==
-      createReviewTargetId(plan.projectId, runtimeStart.runtimeStartId, reviewTarget.reviewTargetSha) ||
-    reviewTarget.rulesVersion !== REVIEW_TARGET_RULES_VERSION
-  ) {
-    return "REVIEW_PROMOTION_TARGET_MISMATCH";
-  }
+  if (reviewTarget.rulesVersion !== REVIEW_TARGET_RULES_VERSION) return "REVIEW_PROMOTION_TARGET_MISMATCH";
   // baseBranch, baseSha, mergeBaseSha, and reviewTargetSha must each match the
   // one canonical formula ReviewTarget.resolveReviewTarget uses to derive
   // them from the exact current plan/implementerRuntime context -- not
@@ -557,10 +552,33 @@ function validateReviewTarget(input: ReviewDecisionInput): ReviewPromotionReason
   // authoritative formula here (rather than only comparing them to one
   // another) closes that gap (see review.md, combined round 2 P1-001).
   const expectedBaseSha = computeReviewTargetBaseSha(plan.projectId, plan.planId);
+  if (reviewTarget.source === "PostValidation") {
+    if (
+      reviewTarget.reviewTargetId !==
+        createPostValidationReviewTargetId(plan.projectId, reviewTarget.validationRuntimeId ?? "", reviewTarget.reviewTargetSha) ||
+      !reviewTarget.validationRuntimeId ||
+      !reviewTarget.validationRuntimeResultId ||
+      !reviewTarget.reviewFixRuntimeId ||
+      !reviewTarget.reviewFixRuntimeResultId ||
+      !reviewTarget.reviewFixPlanId ||
+      !reviewTarget.reviewFixRequestId ||
+      reviewTarget.validationEvidenceExpectedHead !== reviewTarget.reviewTargetSha ||
+      reviewTarget.validationEvidenceCommandCount !== reviewTarget.validationCommands?.length ||
+      reviewTarget.validationEvidenceCompletedCommandCount !== reviewTarget.validationCommands?.length ||
+      reviewTarget.baseBranch !== REVIEW_TARGET_BASE_BRANCH ||
+      reviewTarget.baseSha !== expectedBaseSha ||
+      reviewTarget.mergeBaseSha !== expectedBaseSha
+    ) {
+      return "REVIEW_PROMOTION_TARGET_MISMATCH";
+    }
+    return undefined;
+  }
   if (
     reviewTarget.baseBranch !== REVIEW_TARGET_BASE_BRANCH ||
     reviewTarget.baseSha !== expectedBaseSha ||
     reviewTarget.mergeBaseSha !== expectedBaseSha ||
+    reviewTarget.reviewTargetId !==
+      createReviewTargetId(plan.projectId, runtimeStart.runtimeStartId, reviewTarget.reviewTargetSha) ||
     reviewTarget.reviewTargetSha !== computeReviewTargetSha(implementerRuntime.implementerRuntimeId)
   ) {
     return "REVIEW_PROMOTION_TARGET_MISMATCH";

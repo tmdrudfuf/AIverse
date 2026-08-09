@@ -63,6 +63,10 @@ import type {
   ValidationRuntimeCollection,
   ValidationRuntimeResultCollection,
 } from "./validation-runtime/ValidationRuntimeTypes";
+import type {
+  PostValidationReviewTargetCollection,
+  PostValidationReviewTargetResultCollection,
+} from "./post-validation-review-target/PostValidationReviewTargetTypes";
 import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
@@ -198,6 +202,8 @@ export type ProjectPortalState = {
   reviewFixRuntimeResultCollections: Record<string, ReviewFixRuntimeResultCollection>;
   validationRuntimeCollections: Record<string, ValidationRuntimeCollection>;
   validationRuntimeResultCollections: Record<string, ValidationRuntimeResultCollection>;
+  postValidationReviewTargetCollections: Record<string, PostValidationReviewTargetCollection>;
+  postValidationReviewTargetResultCollections: Record<string, PostValidationReviewTargetResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

@@ -34,15 +34,17 @@ import {
   type RuntimeStart,
   type RuntimeStartResult,
 } from "../runtime-start/RuntimeStartTypes";
-import { resolveReviewTarget, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
+import { createPostValidationReviewTargetId, resolveReviewTarget, type ReviewTarget } from "../reviewer-runtime/ReviewTarget";
 import {
   REVIEWER_RUNTIME_RULES_VERSION,
   createReviewerRuntimeId,
+  createReviewerRuntimeCollection,
   createReviewerRuntimeResultId,
+  createReviewerRuntimeResultCollection,
   type ReviewerRuntime,
   type ReviewerRuntimeResult,
 } from "../reviewer-runtime/ReviewerRuntimeTypes";
-import { ReviewDecisionService, findCurrentReviewPromotion } from "./ReviewDecisionService";
+import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./ReviewDecisionService";
 import type { ReviewDecisionInput, ReviewPromotionRequest } from "./ReviewDecisionTypes";
 
 const PROJECT_ID = "daily-proof";
@@ -513,6 +515,70 @@ describe("ReviewDecisionService.classify", () => {
 
     expect(classification.state).toBe("Approved");
     expect(classification.reviewerRuntimeId).toBe(chain.reviewerRuntime.reviewerRuntimeId);
+  });
+
+  it("resolves the Reviewer Runtime bound to the current Review Target, not an older target for the same Implementer Runtime", () => {
+    const service = new ReviewDecisionService();
+    const historicalChain = createValidChain();
+    const validationRuntimeId = "daily-proof:validation-runtime:post-validation";
+    const currentSha = "f".repeat(40);
+    const currentReviewTarget = createReviewTarget(
+      historicalChain.plan,
+      historicalChain.runtimeStart,
+      historicalChain.implementerRuntime,
+      {
+        reviewTargetId: createPostValidationReviewTargetId(PROJECT_ID, validationRuntimeId, currentSha),
+        source: "PostValidation",
+        reviewFixRequestId: "review-fix-request-1",
+        reviewFixPlanId: "review-fix-plan-1",
+        reviewFixRuntimeId: "review-fix-runtime-1",
+        reviewFixRuntimeResultId: "review-fix-runtime-result-1",
+        validationRuntimeId,
+        validationRuntimeResultId: "validation-runtime-result-1",
+        reviewTargetSha: currentSha,
+        validationCommands: ["npm test"],
+        validationEvidenceCommandCount: 1,
+        validationEvidenceCompletedCommandCount: 1,
+        validationEvidenceExpectedHead: currentSha,
+      },
+    );
+    const currentReviewerRuntime = createReviewerRuntime(
+      historicalChain.plan,
+      historicalChain.runtimeStart,
+      historicalChain.implementerRuntime,
+      currentReviewTarget,
+      { reviewerRuntimeId: createReviewerRuntimeId(PROJECT_ID, currentReviewTarget.reviewTargetId) },
+    );
+    const currentReviewerRuntimeResult = createReviewerRuntimeResult(currentReviewerRuntime);
+
+    const resolved = resolveReviewDecisionInput({
+      projectId: PROJECT_ID,
+      plan: historicalChain.plan,
+      runtimeStartCollection: { projectId: PROJECT_ID, starts: [historicalChain.runtimeStart], startCount: 1, rulesVersion: RUNTIME_START_RULES_VERSION },
+      runtimeStartResultCollection: { projectId: PROJECT_ID, results: [historicalChain.runtimeStartResult], resultCount: 1, rulesVersion: RUNTIME_START_RULES_VERSION },
+      implementerRuntimeCollection: { projectId: PROJECT_ID, runtimes: [historicalChain.implementerRuntime], runtimeCount: 1, rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION },
+      implementerRuntimeResultCollection: { projectId: PROJECT_ID, results: [historicalChain.implementerRuntimeResult], resultCount: 1, rulesVersion: IMPLEMENTER_RUNTIME_RULES_VERSION },
+      reviewTarget: currentReviewTarget,
+      reviewerRuntimeCollection: createReviewerRuntimeCollection({
+        projectId: PROJECT_ID,
+        runtimes: [historicalChain.reviewerRuntime, currentReviewerRuntime],
+        rulesVersion: REVIEWER_RUNTIME_RULES_VERSION,
+      }),
+      reviewerRuntimeResultCollection: createReviewerRuntimeResultCollection({
+        projectId: PROJECT_ID,
+        results: [historicalChain.reviewerRuntimeResult, currentReviewerRuntimeResult],
+        rulesVersion: REVIEWER_RUNTIME_RULES_VERSION,
+      }),
+    });
+
+    expect(resolved.reviewerRuntime?.reviewTargetId).toBe(currentReviewTarget.reviewTargetId);
+    expect(resolved.reviewerRuntimeResult?.reviewerRuntimeId).toBe(currentReviewerRuntime.reviewerRuntimeId);
+    expect(service.classify({
+      ...createInput(historicalChain),
+      reviewTarget: currentReviewTarget,
+      reviewerRuntime: resolved.reviewerRuntime,
+      reviewerRuntimeResult: resolved.reviewerRuntimeResult,
+    })).toEqual({ state: "Approved", reviewerRuntimeId: currentReviewerRuntime.reviewerRuntimeId });
   });
 
   it("returns ChangesRequested when the Reviewer Runtime is Completed/ChangesRequested", () => {

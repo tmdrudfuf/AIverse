@@ -64,4 +64,23 @@ describe("OfficeActionInputController", () => {
     expect(input.consumeStartValidationRuntimePressed()).toBe(true);
     expect(input.consumeStartValidationRuntimePressed()).toBe(false);
   });
+
+  it("keeps post-validation target and re-review inputs separate from validation", () => {
+    const input = new OfficeActionInputController() as unknown as {
+      pendingStartValidationRuntime: boolean;
+      pendingPreparePostValidationReviewTarget: boolean;
+      pendingStartPostValidationReview: boolean;
+      consumeStartValidationRuntimePressed: () => boolean;
+      consumePreparePostValidationReviewTargetPressed: () => boolean;
+      consumeStartPostValidationReviewPressed: () => boolean;
+    };
+    input.pendingStartValidationRuntime = true;
+    input.pendingPreparePostValidationReviewTarget = true;
+    input.pendingStartPostValidationReview = true;
+
+    expect(input.consumeStartValidationRuntimePressed()).toBe(true);
+    expect(input.consumePreparePostValidationReviewTargetPressed()).toBe(true);
+    expect(input.consumeStartPostValidationReviewPressed()).toBe(true);
+    expect(input.consumeStartPostValidationReviewPressed()).toBe(false);
+  });
 });

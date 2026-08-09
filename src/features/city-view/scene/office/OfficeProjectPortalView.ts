@@ -49,6 +49,11 @@ import {
   createValidationRuntimeDisplayRows,
   type ValidationRuntimeDisplayRows,
 } from "./validation-runtime/ValidationRuntimeView";
+import { findCurrentPostValidationReviewTarget } from "./post-validation-review-target/PostValidationReviewTargetService";
+import {
+  createPostValidationReviewTargetDisplayRows,
+  type PostValidationReviewTargetDisplayRows,
+} from "./post-validation-review-target/PostValidationReviewTargetView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -380,6 +385,8 @@ export class OfficeProjectPortalView {
     const reviewFixRuntimeResultCollection = dashboardProjectId ? state.reviewFixRuntimeResultCollections[dashboardProjectId] : undefined;
     const validationRuntimeCollection = dashboardProjectId ? state.validationRuntimeCollections[dashboardProjectId] : undefined;
     const validationRuntimeResultCollection = dashboardProjectId ? state.validationRuntimeResultCollections[dashboardProjectId] : undefined;
+    const postValidationReviewTargetCollection = dashboardProjectId ? state.postValidationReviewTargetCollections[dashboardProjectId] : undefined;
+    const postValidationReviewTargetResultCollection = dashboardProjectId ? state.postValidationReviewTargetResultCollections[dashboardProjectId] : undefined;
     // Gated on reviewerRuntimeResultCollection/reviewPromotionCollection
     // existing, unlike ImplementerRuntimeRows/ReviewerRuntimeRows above --
     // this stage is one step further downstream of the always-visible
@@ -515,6 +522,21 @@ export class OfficeProjectPortalView {
         latestValidationRuntimeResult,
       )
       : undefined;
+    const currentPostValidationReviewTarget = findCurrentPostValidationReviewTarget(
+      postValidationReviewTargetCollection,
+      currentValidationRuntime,
+    );
+    const latestPostValidationReviewTargetResult = postValidationReviewTargetResultCollection?.results.find((result) =>
+      result.validationRuntimeId === currentValidationRuntime?.validationRuntimeId
+    );
+    const postValidationReviewTargetRows = validationRuntimeCollection || postValidationReviewTargetCollection || postValidationReviewTargetResultCollection
+      ? createPostValidationReviewTargetDisplayRows(
+        currentValidationRuntime,
+        latestValidationRuntimeResult,
+        currentPostValidationReviewTarget,
+        latestPostValidationReviewTargetResult,
+      )
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -535,6 +557,7 @@ export class OfficeProjectPortalView {
         reviewFixPlanRows,
         reviewFixRuntimeRows,
         validationRuntimeRows,
+        postValidationReviewTargetRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -889,6 +912,7 @@ function createProjectDashboardLowerRows(
   reviewFixPlanRows?: ReviewFixPlanDisplayRows,
   reviewFixRuntimeRows?: ReviewFixRuntimeDisplayRows,
   validationRuntimeRows?: ValidationRuntimeDisplayRows,
+  postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -1063,10 +1087,19 @@ function createProjectDashboardLowerRows(
     });
   }
 
+  if (postValidationReviewTargetRows) {
+    lowerRows.push({
+      text: `[RE-REVIEW] ${postValidationReviewTargetRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 22,
+      usePriorityFit: true,
+    });
+  }
+
   if (candidateTaskRows) {
-    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 22 });
+    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 23 });
     if (candidateTaskRows.topTaskText) {
-      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 22 });
+      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 23 });
     }
   }
 

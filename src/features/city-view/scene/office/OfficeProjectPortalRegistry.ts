@@ -144,6 +144,8 @@ export function createProjectPortalState(): ProjectPortalState {
     reviewFixRuntimeResultCollections: {},
     validationRuntimeCollections: {},
     validationRuntimeResultCollections: {},
+    postValidationReviewTargetCollections: {},
+    postValidationReviewTargetResultCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
