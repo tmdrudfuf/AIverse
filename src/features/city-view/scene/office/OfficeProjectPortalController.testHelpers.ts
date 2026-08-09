@@ -33,6 +33,7 @@ import type {
   ReviewerRuntimeResultCollection,
 } from "./reviewer-runtime/ReviewerRuntimeTypes";
 import type { ReviewFixRuntimeInput, ReviewFixRuntimeOutcome } from "./review-fix-runtime/ReviewFixRuntimeTypes";
+import type { ValidationRuntimeInput, ValidationRuntimeOutcome } from "./validation-runtime/ValidationRuntimeTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import type {
   PreparedWorkSessionRecord,
@@ -88,6 +89,8 @@ export type ControllerInternals = {
     reviewFixPlanResultCollections?: ProjectPortalState["reviewFixPlanResultCollections"];
     reviewFixRuntimeCollections?: ProjectPortalState["reviewFixRuntimeCollections"];
     reviewFixRuntimeResultCollections?: ProjectPortalState["reviewFixRuntimeResultCollections"];
+    validationRuntimeCollections?: ProjectPortalState["validationRuntimeCollections"];
+    validationRuntimeResultCollections?: ProjectPortalState["validationRuntimeResultCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
@@ -115,10 +118,17 @@ export type ControllerInternals = {
       command: { projectId: string; reviewFixPlanId: string; actor: string; startedAt: string },
     ) => Promise<ReviewFixRuntimeOutcome>;
   };
+  validationRuntimeService: {
+    startValidation: (
+      input: ValidationRuntimeInput,
+      command: { projectId: string; reviewFixRuntimeId: string; actor: string; startedAt: string },
+    ) => Promise<ValidationRuntimeOutcome>;
+  };
   syncIssueSnapshots: (projectId: string) => Promise<void>;
   startImplementerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewFixRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
+  startValidationRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
 };
 
 export function getControllerInternals(controller: OfficeProjectPortalController): ControllerInternals {
@@ -172,6 +182,7 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     requestReviewFixPressed: false,
     planReviewFixPressed: false,
     startReviewFixRuntimePressed: false,
+    startValidationRuntimePressed: false,
     ...overrides,
   };
 }

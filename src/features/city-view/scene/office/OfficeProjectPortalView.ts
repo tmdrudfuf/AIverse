@@ -44,6 +44,11 @@ import {
   createReviewFixRuntimeDisplayRows,
   type ReviewFixRuntimeDisplayRows,
 } from "./review-fix-runtime/ReviewFixRuntimeView";
+import { findCurrentValidationRuntime } from "./validation-runtime/ValidationRuntimeService";
+import {
+  createValidationRuntimeDisplayRows,
+  type ValidationRuntimeDisplayRows,
+} from "./validation-runtime/ValidationRuntimeView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -373,6 +378,8 @@ export class OfficeProjectPortalView {
     const reviewFixPlanResultCollection = dashboardProjectId ? state.reviewFixPlanResultCollections[dashboardProjectId] : undefined;
     const reviewFixRuntimeCollection = dashboardProjectId ? state.reviewFixRuntimeCollections[dashboardProjectId] : undefined;
     const reviewFixRuntimeResultCollection = dashboardProjectId ? state.reviewFixRuntimeResultCollections[dashboardProjectId] : undefined;
+    const validationRuntimeCollection = dashboardProjectId ? state.validationRuntimeCollections[dashboardProjectId] : undefined;
+    const validationRuntimeResultCollection = dashboardProjectId ? state.validationRuntimeResultCollections[dashboardProjectId] : undefined;
     // Gated on reviewerRuntimeResultCollection/reviewPromotionCollection
     // existing, unlike ImplementerRuntimeRows/ReviewerRuntimeRows above --
     // this stage is one step further downstream of the always-visible
@@ -488,6 +495,26 @@ export class OfficeProjectPortalView {
     const reviewFixRuntimeRows = reviewFixPlanCollection || reviewFixRuntimeCollection || reviewFixRuntimeResultCollection
       ? createReviewFixRuntimeDisplayRows(currentReviewFixPlan, currentReviewFixRuntime, latestReviewFixRuntimeResult)
       : undefined;
+    const validationRuntimeInput = reviewFixRuntimeInput
+      ? {
+        ...reviewFixRuntimeInput,
+        latestFixRuntimeResult: latestReviewFixRuntimeResult,
+        existingValidationRuntimes: validationRuntimeCollection,
+        existingValidationRuntimeResults: validationRuntimeResultCollection,
+      }
+      : undefined;
+    const currentValidationRuntime = findCurrentValidationRuntime(validationRuntimeInput, currentReviewFixRuntime);
+    const latestValidationRuntimeResult = validationRuntimeResultCollection?.results.find((result) =>
+      result.reviewFixRuntimeId === currentReviewFixRuntime?.reviewFixRuntimeId
+    );
+    const validationRuntimeRows = reviewFixRuntimeCollection || validationRuntimeCollection || validationRuntimeResultCollection
+      ? createValidationRuntimeDisplayRows(
+        currentReviewFixRuntime,
+        latestReviewFixRuntimeResult,
+        currentValidationRuntime,
+        latestValidationRuntimeResult,
+      )
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -507,6 +534,7 @@ export class OfficeProjectPortalView {
         reviewFixRequestRows,
         reviewFixPlanRows,
         reviewFixRuntimeRows,
+        validationRuntimeRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -860,6 +888,7 @@ function createProjectDashboardLowerRows(
   reviewFixRequestRows?: ReviewFixRequestDisplayRows,
   reviewFixPlanRows?: ReviewFixPlanDisplayRows,
   reviewFixRuntimeRows?: ReviewFixRuntimeDisplayRows,
+  validationRuntimeRows?: ValidationRuntimeDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -1025,10 +1054,19 @@ function createProjectDashboardLowerRows(
     });
   }
 
+  if (validationRuntimeRows) {
+    lowerRows.push({
+      text: `[VALIDATION RUNTIME] ${validationRuntimeRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 21,
+      usePriorityFit: true,
+    });
+  }
+
   if (candidateTaskRows) {
-    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 21 });
+    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 22 });
     if (candidateTaskRows.topTaskText) {
-      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 21 });
+      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 22 });
     }
   }
 

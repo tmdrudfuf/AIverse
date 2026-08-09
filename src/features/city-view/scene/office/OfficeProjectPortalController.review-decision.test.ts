@@ -11,7 +11,19 @@ import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
 import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
 import { createReviewFixPlanId } from "./review-fix-plans/ReviewFixPlanTypes";
-import { createReviewFixRuntimeId } from "./review-fix-runtime/ReviewFixRuntimeTypes";
+import {
+  REVIEW_FIX_RUNTIME_RULES_VERSION,
+  createReviewFixRuntimeCollection,
+  createReviewFixRuntimeId,
+  createReviewFixRuntimeResultCollection,
+  createReviewFixRuntimeResultId,
+  type ReviewFixRuntime,
+} from "./review-fix-runtime/ReviewFixRuntimeTypes";
+import {
+  VALIDATION_RUNTIME_RULES_VERSION,
+  createValidationRuntimeId,
+  createValidationRuntimeResultCollection,
+} from "./validation-runtime/ValidationRuntimeTypes";
 import {
   createInput,
   createSceneStub,
@@ -419,6 +431,149 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     const command = vi.mocked(internals.reviewFixRuntimeService.startFixRuntime).mock.calls[0]![1];
     expect(command.actor).toBe("Local Human");
     expect(command.reviewFixPlanId).toBeDefined();
+  });
+
+  it("starts Validation Runtime only from the distinct V input after Review Fix Runtime completes", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+    internals.reviewFixRuntimeService = {
+      startFixRuntime: vi.fn(async (_input, command) => {
+        const plan = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans.find((item) =>
+          item.reviewFixPlanId === command.reviewFixPlanId
+        );
+        if (!plan) throw new Error("Test setup failed to create Review Fix Plan.");
+        const runtime = createCompletedReviewFixRuntime(plan, command.startedAt);
+        const result = {
+          id: createReviewFixRuntimeResultId(PROJECT_ID, runtime.reviewFixRuntimeId),
+          projectId: PROJECT_ID,
+          reviewFixPlanId: plan.reviewFixPlanId,
+          reviewFixRuntimeId: runtime.reviewFixRuntimeId,
+          status: "Completed" as const,
+          reasonCodes: ["REVIEW_FIX_RUNTIME_STARTED" as const],
+          started: true,
+          alreadyCompleted: false,
+          duplicateActiveAttempt: false,
+          agentStarted: true,
+          implementerStarted: true,
+          reviewerStarted: false as const,
+          validationRuntimeStarted: false as const,
+          validationStarted: false as const,
+          repositoryMutationStarted: false as const,
+          githubMutationStarted: false as const,
+          pushStarted: false as const,
+          prStarted: false as const,
+          readyForReviewStarted: false as const,
+          mergeStarted: false as const,
+          deployStarted: false as const,
+          branchDeletionStarted: false as const,
+          resultAt: command.startedAt,
+          rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+        };
+        return {
+          result,
+          runtime,
+          runtimeCollection: createReviewFixRuntimeCollection({
+            projectId: PROJECT_ID,
+            runtimes: [runtime],
+            rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+          }),
+          resultCollection: createReviewFixRuntimeResultCollection({
+            projectId: PROJECT_ID,
+            results: [result],
+            rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+          }),
+        };
+      }),
+    };
+    internals.validationRuntimeService = {
+      startValidation: vi.fn(async (_input, command) => ({
+        result: {
+          id: `${PROJECT_ID}:validation-runtime-result:${createValidationRuntimeId(PROJECT_ID, command.reviewFixRuntimeId)}:validation-runtime-v1`,
+          projectId: PROJECT_ID,
+          reviewFixRuntimeId: command.reviewFixRuntimeId,
+          validationRuntimeId: createValidationRuntimeId(PROJECT_ID, command.reviewFixRuntimeId),
+          status: "Completed" as const,
+          reasonCodes: ["VALIDATION_RUNTIME_STARTED" as const],
+          started: true,
+          alreadyCompleted: false,
+          commandCount: 1,
+          completedCommandCount: 1,
+          failedCommandCount: 0,
+          timedOutCommandCount: 0,
+          validationRuntimeStarted: true,
+          validationStarted: true,
+          commandExecutionStarted: true,
+          reviewerStarted: false as const,
+          reviewTargetCreated: false as const,
+          promotionStarted: false as const,
+          repositoryMutationStarted: false as const,
+          githubMutationStarted: false as const,
+          pushStarted: false as const,
+          prStarted: false as const,
+          readyForReviewStarted: false as const,
+          mergeStarted: false as const,
+          deployStarted: false as const,
+          branchDeletionStarted: false as const,
+          resultAt: command.startedAt,
+          rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+        },
+        resultCollection: createValidationRuntimeResultCollection({
+          projectId: PROJECT_ID,
+          results: [{
+            id: `${PROJECT_ID}:validation-runtime-result:${createValidationRuntimeId(PROJECT_ID, command.reviewFixRuntimeId)}:validation-runtime-v1`,
+            projectId: PROJECT_ID,
+            reviewFixRuntimeId: command.reviewFixRuntimeId,
+            validationRuntimeId: createValidationRuntimeId(PROJECT_ID, command.reviewFixRuntimeId),
+            status: "Completed" as const,
+            reasonCodes: ["VALIDATION_RUNTIME_STARTED" as const],
+            started: true,
+            alreadyCompleted: false,
+            commandCount: 1,
+            completedCommandCount: 1,
+            failedCommandCount: 0,
+            timedOutCommandCount: 0,
+            validationRuntimeStarted: true,
+            validationStarted: true,
+            commandExecutionStarted: true,
+            reviewerStarted: false as const,
+            reviewTargetCreated: false as const,
+            promotionStarted: false as const,
+            repositoryMutationStarted: false as const,
+            githubMutationStarted: false as const,
+            pushStarted: false as const,
+            prStarted: false as const,
+            readyForReviewStarted: false as const,
+            mergeStarted: false as const,
+            deployStarted: false as const,
+            branchDeletionStarted: false as const,
+            resultAt: command.startedAt,
+            rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+          }],
+          rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+        }),
+      })),
+    };
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+    controller.updateInput(createInput({ planReviewFixPressed: true }));
+    controller.updateInput(createInput({ startReviewFixRuntimePressed: true }));
+    await flushPromises();
+
+    controller.updateInput(createInput({ startReviewFixRuntimePressed: true }));
+    await flushPromises();
+    expect(internals.validationRuntimeService.startValidation).not.toHaveBeenCalled();
+
+    controller.updateInput(createInput({ startValidationRuntimePressed: true }));
+    await flushPromises();
+
+    expect(internals.validationRuntimeService.startValidation).toHaveBeenCalledTimes(1);
+    const command = vi.mocked(internals.validationRuntimeService.startValidation).mock.calls[0]![1];
+    expect(command.actor).toBe("Local Human");
+    expect(command.reviewFixRuntimeId).toBe(createReviewFixRuntimeId(PROJECT_ID, internals.state.reviewFixPlanCollections![PROJECT_ID]!.plans[0]!.reviewFixPlanId));
+    expect(internals.state.validationRuntimeResultCollections?.[PROJECT_ID]?.results[0]?.status).toBe("Completed");
+    expect(internals.state.validationRuntimeResultCollections?.[PROJECT_ID]?.results[0]?.githubMutationStarted).toBe(false);
   });
 
   it("blocks stale repeated Review Fix Plans instead of returning AlreadyPlanned", async () => {
@@ -885,6 +1040,82 @@ function createReviewerOutcomeForRuntime(
     runtime,
     resultCollection: { projectId: PROJECT_ID, results: [result], resultCount: 1, rulesVersion: "codex-reviewer-v1" },
     runtimeCollection: { projectId: PROJECT_ID, runtimes: [runtime], runtimeCount: 1, rulesVersion: "codex-reviewer-v1" },
+  };
+}
+
+function createCompletedReviewFixRuntime(
+  plan: NonNullable<ControllerInternals["state"]["reviewFixPlanCollections"]>[string]["plans"][number],
+  startedAt: string,
+): ReviewFixRuntime {
+  return {
+    reviewFixRuntimeId: createReviewFixRuntimeId(PROJECT_ID, plan.reviewFixPlanId),
+    projectId: plan.projectId,
+    reviewFixPlanId: plan.reviewFixPlanId,
+    reviewFixRequestId: plan.reviewFixRequestId,
+    planId: plan.planId,
+    readinessId: plan.readinessId,
+    readinessResultId: plan.readinessResultId,
+    approvalId: plan.approvalId,
+    preflightId: plan.preflightId,
+    preflightResultId: plan.preflightResultId,
+    runtimeStartId: plan.runtimeStartId,
+    runtimeStartResultId: plan.runtimeStartResultId,
+    implementerRuntimeId: plan.implementerRuntimeId,
+    implementerRuntimeResultId: plan.implementerRuntimeResultId,
+    reviewerRuntimeId: plan.reviewerRuntimeId,
+    reviewerRuntimeResultId: plan.reviewerRuntimeResultId,
+    reviewTargetId: plan.reviewTargetId,
+    projectTaskId: plan.projectTaskId,
+    candidateTaskId: plan.candidateTaskId,
+    employeeId: plan.employeeId,
+    repositoryId: plan.repositoryId,
+    worktreePath: plan.worktreePath,
+    branch: plan.branch,
+    specificationPath: plan.specificationPath,
+    implementer: plan.implementer,
+    reviewer: plan.reviewer,
+    approvedImplementerAgent: plan.approvedImplementerAgent,
+    approvedReviewerAgent: plan.approvedReviewerAgent,
+    validationCommands: [...plan.validationCommands],
+    mutationScope: [...plan.mutationScope],
+    decision: "ChangesRequested",
+    blockingFindingCount: plan.blockingFindingCount,
+    nonBlockingFindingCount: plan.nonBlockingFindingCount,
+    promptId: `${PROJECT_ID}:review-fix-runtime-prompt:${plan.reviewFixPlanId}:review-fix-runtime-v1`,
+    status: "Completed",
+    startedBy: "Local Human",
+    startedAt,
+    fixExecutionStarted: true,
+    agentStarted: true,
+    implementerStarted: true,
+    reviewerStarted: false,
+    validationRuntimeStarted: false,
+    validationStarted: false,
+    repositoryMutationStarted: false,
+    githubMutationStarted: false,
+    pushStarted: false,
+    prStarted: false,
+    readyForReviewStarted: false,
+    mergeStarted: false,
+    deployStarted: false,
+    branchDeletionStarted: false,
+    evidence: {
+      providerId: "test-provider",
+      agentId: "claude",
+      role: "ReviewFixRuntime",
+      commandDisplay: "claude -p",
+      workingDirectory: plan.worktreePath,
+      started: true,
+      completed: true,
+      timedOut: false,
+      cancelled: false,
+      exitCode: 0,
+      durationMs: 1,
+      stdoutSummary: "fixed",
+      stderrSummary: "",
+      outputTruncated: false,
+    },
+    rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
   };
 }
 
