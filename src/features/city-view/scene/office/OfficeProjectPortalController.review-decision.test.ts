@@ -753,6 +753,53 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     void promotedTaskId;
   });
 
+  it("promotes the post-validation Reviewer Runtime after an Approved re-review without auto-promoting on re-review completion", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToPostValidationReReview(controller, internals, "Approved");
+
+    const freshTarget = internals.state.postValidationReviewTargetCollections?.[PROJECT_ID]?.targets[0];
+    const freshReviewerRuntime = internals.state.reviewerRuntimeCollections[PROJECT_ID]?.runtimes.at(-1);
+    expect(freshTarget?.source).toBe("PostValidation");
+    expect(freshReviewerRuntime?.reviewTargetId).toBe(freshTarget?.reviewTargetId);
+    expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions ?? []).toHaveLength(0);
+
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    const promotions = internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions;
+    expect(promotions).toHaveLength(1);
+    expect(promotions![0].reviewerRuntimeId).toBe(freshReviewerRuntime?.reviewerRuntimeId);
+    expect(promotions![0].reviewTargetId).toBe(freshTarget?.reviewTargetId);
+    expect(promotions![0].validationStarted).toBe(false);
+    expect(promotions![0].repositoryMutationStarted).toBe(false);
+    expect(promotions![0].githubMutationStarted).toBe(false);
+  });
+
+  it("records a new fix request for a ChangesRequested post-validation re-review while preserving the original request", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToPostValidationReReview(controller, internals, "ChangesRequested");
+
+    const freshTarget = internals.state.postValidationReviewTargetCollections?.[PROJECT_ID]?.targets[0];
+    const freshReviewerRuntime = internals.state.reviewerRuntimeCollections[PROJECT_ID]?.runtimes.at(-1);
+    const originalRequest = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests[0];
+    expect(freshTarget?.source).toBe("PostValidation");
+    expect(freshReviewerRuntime?.decision).toBe("ChangesRequested");
+    expect(originalRequest?.reviewerRuntimeId).not.toBe(freshReviewerRuntime?.reviewerRuntimeId);
+    expect(internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests).toHaveLength(1);
+
+    controller.updateInput(createInput({ requestReviewFixPressed: true }));
+
+    const requests = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requests;
+    expect(requests).toHaveLength(2);
+    expect(requests![0]).toEqual(originalRequest);
+    expect(requests![1].reviewerRuntimeId).toBe(freshReviewerRuntime?.reviewerRuntimeId);
+    expect(requests![1].reviewTargetId).toBe(freshTarget?.reviewTargetId);
+    expect(requests![1].validationStarted).toBe(false);
+    expect(requests![1].repositoryMutationStarted).toBe(false);
+    expect(requests![1].githubMutationStarted).toBe(false);
+  });
+
   it("blocks stale repeated Review Fix Plans instead of returning AlreadyPlanned", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
@@ -975,6 +1022,175 @@ async function driveDailyProofToChangesRequestedReviewer(
   runtime.decision = "ChangesRequested";
   reviewerResult.decision = "ChangesRequested";
   return result;
+}
+
+async function driveDailyProofToPostValidationReReview(
+  controller: OfficeProjectPortalController,
+  internals: ControllerInternals,
+  decision: "Approved" | "ChangesRequested",
+): Promise<void> {
+  await driveDailyProofToChangesRequestedReviewer(controller, internals);
+
+  internals.reviewFixRuntimeService = {
+    startFixRuntime: vi.fn(async (_input, command) => {
+      const plan = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.plans.find((item) =>
+        item.reviewFixPlanId === command.reviewFixPlanId
+      );
+      if (!plan) throw new Error("Test setup failed to create Review Fix Plan.");
+      const runtime = createCompletedReviewFixRuntime(plan, command.startedAt);
+      const result = createCompletedReviewFixRuntimeResult(plan, runtime, command.startedAt);
+      return {
+        result,
+        runtime,
+        runtimeCollection: createReviewFixRuntimeCollection({
+          projectId: PROJECT_ID,
+          runtimes: [runtime],
+          rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+        }),
+        resultCollection: createReviewFixRuntimeResultCollection({
+          projectId: PROJECT_ID,
+          results: [result],
+          rulesVersion: REVIEW_FIX_RUNTIME_RULES_VERSION,
+        }),
+      };
+    }),
+  };
+  internals.validationRuntimeService = {
+    startValidation: vi.fn(async (_input, command) => {
+      const runtime = internals.state.reviewFixRuntimeCollections?.[PROJECT_ID]?.runtimes.find((item) =>
+        item.reviewFixRuntimeId === command.reviewFixRuntimeId
+      );
+      const fixResult = internals.state.reviewFixRuntimeResultCollections?.[PROJECT_ID]?.results.find((item) =>
+        item.reviewFixRuntimeId === command.reviewFixRuntimeId
+      );
+      if (!runtime || !fixResult) throw new Error("Test setup failed to reach Review Fix Runtime.");
+      const validationRuntime = createCompletedValidationRuntime(runtime, fixResult.id, command.startedAt);
+      const result = createCompletedValidationRuntimeResult(validationRuntime, command.startedAt);
+      return {
+        result,
+        runtime: validationRuntime,
+        runtimeCollection: createValidationRuntimeCollection({
+          projectId: PROJECT_ID,
+          runtimes: [validationRuntime],
+          rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+        }),
+        resultCollection: createValidationRuntimeResultCollection({
+          projectId: PROJECT_ID,
+          results: [result],
+          rulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+        }),
+      };
+    }),
+  };
+  internals.postValidationReviewTargetService = {
+    prepareTarget: vi.fn((input, command) => {
+      const plan = input.existingFixPlans?.plans[0];
+      const fixRuntime = input.existingFixRuntimes?.runtimes[0];
+      const fixResult = input.existingFixRuntimeResults?.results[0];
+      const validationRuntime = input.existingValidationRuntimes?.runtimes[0];
+      const validationResult = input.existingValidationRuntimeResults?.results[0];
+      if (
+        !plan ||
+        !fixRuntime ||
+        !fixResult ||
+        !validationRuntime ||
+        !validationResult ||
+        !input.executionPlan ||
+        !input.runtimeStart ||
+        !input.implementerRuntime
+      ) {
+        throw new Error("Test setup failed to reach post-validation context.");
+      }
+      const baseTarget = resolveReviewTarget(input.executionPlan, input.runtimeStart, input.implementerRuntime);
+      const reviewTarget = {
+        ...baseTarget,
+        reviewTargetId: createPostValidationReviewTargetId(
+          PROJECT_ID,
+          validationRuntime.validationRuntimeId,
+          validationRuntime.expectedHead,
+        ),
+        source: "PostValidation" as const,
+        reviewFixRequestId: plan.reviewFixRequestId,
+        reviewFixPlanId: plan.reviewFixPlanId,
+        reviewFixRuntimeId: fixRuntime.reviewFixRuntimeId,
+        reviewFixRuntimeResultId: fixResult.id,
+        validationRuntimeId: validationRuntime.validationRuntimeId,
+        validationRuntimeResultId: validationResult.id,
+        reviewTargetSha: validationRuntime.expectedHead,
+        workingTreeState: "Clean" as const,
+        changedFiles: [],
+        validationCommands: [...validationRuntime.validationCommands],
+        validationEvidenceCommandCount: validationRuntime.evidence.commandCount,
+        validationEvidenceCompletedCommandCount: validationRuntime.evidence.completedCommandCount,
+        validationEvidenceExpectedHead: validationRuntime.evidence.expectedHead,
+        validationRuntimeRulesVersion: VALIDATION_RUNTIME_RULES_VERSION,
+      };
+      const result = {
+        id: createPostValidationReviewTargetResultId(PROJECT_ID, command.validationRuntimeId),
+        projectId: PROJECT_ID,
+        validationRuntimeId: command.validationRuntimeId,
+        reviewTargetId: reviewTarget.reviewTargetId,
+        status: "Ready" as const,
+        reasonCodes: ["POST_VALIDATION_REVIEW_TARGET_READY" as const],
+        targetReady: true,
+        alreadyReady: false,
+        reviewerStarted: false as const,
+        promotionStarted: false as const,
+        repositoryMutationStarted: false as const,
+        githubMutationStarted: false as const,
+        pushStarted: false as const,
+        prStarted: false as const,
+        readyForReviewStarted: false as const,
+        mergeStarted: false as const,
+        deployStarted: false as const,
+        resultAt: command.requestedAt,
+        rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+      };
+      return {
+        result,
+        reviewTarget,
+        targetCollection: createPostValidationReviewTargetCollection({
+          projectId: PROJECT_ID,
+          targets: [reviewTarget],
+          rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+        }),
+        resultCollection: createPostValidationReviewTargetResultCollection({
+          projectId: PROJECT_ID,
+          results: [result],
+          rulesVersion: POST_VALIDATION_REVIEW_TARGET_RULES_VERSION,
+        }),
+      };
+    }),
+  };
+  internals.reviewerRuntimeService = {
+    startReviewer: vi.fn(async (input) => {
+      if (!input.reviewTarget || !input.runtimeStart || !input.implementerRuntime || !input.executionPlan) {
+        throw new Error("Test setup failed to construct post-validation Reviewer Runtime input.");
+      }
+      return createReviewerOutcomeForRuntime(
+        input.runtimeStart.runtimeStartId,
+        input.implementerRuntime.implementerRuntimeId,
+        input.reviewTarget.reviewTargetId,
+        input.reviewTarget.reviewTargetSha,
+        input.executionPlan.worktreePath,
+        input.executionPlan.branchName,
+        input.executionPlan.specPath,
+        "Completed",
+        decision,
+      );
+    }),
+    upsertResult: realUpsertReviewerResult(internals),
+  };
+
+  controller.updateInput(createInput({ requestReviewFixPressed: true }));
+  controller.updateInput(createInput({ planReviewFixPressed: true }));
+  controller.updateInput(createInput({ startReviewFixRuntimePressed: true }));
+  await flushPromises();
+  controller.updateInput(createInput({ startValidationRuntimePressed: true }));
+  await flushPromises();
+  controller.updateInput(createInput({ preparePostValidationReviewTargetPressed: true }));
+  controller.updateInput(createInput({ startPostValidationReviewPressed: true }));
+  await flushPromises();
 }
 /**
  * Drives a promoted Daily Proof candidate task through a Completed
