@@ -811,7 +811,11 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
       rulesVersion: "review-promotion-v1",
     };
     const historicalPromotionSnapshot = { ...historicalPromotion };
-    internals.state.reviewPromotionCollections[PROJECT_ID] = {
+    const reviewPromotionCollections = internals.state.reviewPromotionCollections;
+    if (!reviewPromotionCollections) {
+      throw new Error("Test setup failed to initialize review promotion collections.");
+    }
+    reviewPromotionCollections[PROJECT_ID] = {
       projectId: PROJECT_ID,
       promotions: [historicalPromotion],
       promotionCount: 1,
@@ -824,7 +828,7 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     const currentPromotion = findCurrentReviewPromotion(
       PROJECT_ID,
       classification,
-      internals.state.reviewPromotionCollections[PROJECT_ID],
+      reviewPromotionCollections[PROJECT_ID],
     );
     expect(currentPromotion).toBeUndefined();
     const rows = createReviewDecisionDisplayRows(classification, currentPromotion);
@@ -833,14 +837,14 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
 
     controller.updateInput(createInput({ promoteReviewPressed: true }));
 
-    const promotions = internals.state.reviewPromotionCollections[PROJECT_ID]?.promotions;
+    const promotions = reviewPromotionCollections[PROJECT_ID]?.promotions;
     expect(promotions).toHaveLength(2);
-    expect(promotions![0]).toEqual(historicalPromotionSnapshot);
-    expect(promotions![1].reviewerRuntimeId).toBe(freshReviewerRuntime.reviewerRuntimeId);
-    expect(promotions![1].reviewTargetId).toBe(freshTarget.reviewTargetId);
-    expect(promotions![1].validationStarted).toBe(false);
-    expect(promotions![1].repositoryMutationStarted).toBe(false);
-    expect(promotions![1].githubMutationStarted).toBe(false);
+    expect(promotions?.[0]).toEqual(historicalPromotionSnapshot);
+    expect(promotions?.[1]?.reviewerRuntimeId).toBe(freshReviewerRuntime.reviewerRuntimeId);
+    expect(promotions?.[1]?.reviewTargetId).toBe(freshTarget.reviewTargetId);
+    expect(promotions?.[1]?.validationStarted).toBe(false);
+    expect(promotions?.[1]?.repositoryMutationStarted).toBe(false);
+    expect(promotions?.[1]?.githubMutationStarted).toBe(false);
   });
 
   it("records a new fix request for a ChangesRequested post-validation re-review while preserving the original request", async () => {
