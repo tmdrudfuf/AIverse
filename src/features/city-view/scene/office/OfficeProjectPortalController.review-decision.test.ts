@@ -775,6 +775,78 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(promotions![0].githubMutationStarted).toBe(false);
   });
 
+  it("keeps an Approved post-validation re-review promotable when only a historical promotion exists for an older reviewer runtime", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    await driveDailyProofToPostValidationReReview(controller, internals, "Approved");
+
+    const plan = internals.state.executionPlanCollections[PROJECT_ID]?.plans[0];
+    const freshTarget = internals.state.postValidationReviewTargetCollections?.[PROJECT_ID]?.targets[0];
+    const freshReviewerRuntime = internals.state.reviewerRuntimeCollections[PROJECT_ID]?.runtimes.at(-1);
+    if (!plan || !freshTarget || !freshReviewerRuntime) {
+      throw new Error("Test setup failed to reach an Approved post-validation Reviewer Runtime.");
+    }
+
+    const historicalPromotion = {
+      reviewPromotionId: `${PROJECT_ID}:review-promotion:historical-reviewer-runtime:review-promotion-v1`,
+      projectId: PROJECT_ID,
+      planId: plan.planId,
+      runtimeStartId: freshReviewerRuntime.runtimeStartId,
+      implementerRuntimeId: freshReviewerRuntime.implementerRuntimeId,
+      reviewerRuntimeId: "historical-reviewer-runtime",
+      reviewTargetId: "historical-review-target",
+      worktreePath: plan.worktreePath,
+      branch: plan.branchName,
+      repositoryId: plan.repositoryId,
+      implementer: plan.implementerAgent,
+      reviewer: plan.reviewerAgent,
+      approvedImplementerAgent: "claude",
+      approvedReviewerAgent: "codex",
+      decision: "Approved" as const,
+      promotedBy: "Local Human",
+      promotedAt: "2026-08-09T00:00:00.000Z",
+      validationStarted: false as const,
+      repositoryMutationStarted: false as const,
+      githubMutationStarted: false as const,
+      rulesVersion: "review-promotion-v1",
+    };
+    const historicalPromotionSnapshot = { ...historicalPromotion };
+    const reviewPromotionCollections = internals.state.reviewPromotionCollections;
+    if (!reviewPromotionCollections) {
+      throw new Error("Test setup failed to initialize review promotion collections.");
+    }
+    reviewPromotionCollections[PROJECT_ID] = {
+      projectId: PROJECT_ID,
+      promotions: [historicalPromotion],
+      promotionCount: 1,
+      rulesVersion: "review-promotion-v1",
+    };
+
+    const classification = classifyCurrentReviewDecision(internals);
+    expect(classification.state).toBe("Approved");
+    expect(classification.reviewerRuntimeId).toBe(freshReviewerRuntime.reviewerRuntimeId);
+    const currentPromotion = findCurrentReviewPromotion(
+      PROJECT_ID,
+      classification,
+      reviewPromotionCollections[PROJECT_ID],
+    );
+    expect(currentPromotion).toBeUndefined();
+    const rows = createReviewDecisionDisplayRows(classification, currentPromotion);
+    expect(rows.statusText).toContain("Promote (P)");
+    expect(rows.statusText).not.toContain("Promoted by");
+
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    const promotions = reviewPromotionCollections[PROJECT_ID]?.promotions;
+    expect(promotions).toHaveLength(2);
+    expect(promotions?.[0]).toEqual(historicalPromotionSnapshot);
+    expect(promotions?.[1]?.reviewerRuntimeId).toBe(freshReviewerRuntime.reviewerRuntimeId);
+    expect(promotions?.[1]?.reviewTargetId).toBe(freshTarget.reviewTargetId);
+    expect(promotions?.[1]?.validationStarted).toBe(false);
+    expect(promotions?.[1]?.repositoryMutationStarted).toBe(false);
+    expect(promotions?.[1]?.githubMutationStarted).toBe(false);
+  });
+
   it("records a new fix request for a ChangesRequested post-validation re-review while preserving the original request", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
