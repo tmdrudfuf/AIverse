@@ -763,6 +763,14 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(freshTarget?.source).toBe("PostValidation");
     expect(freshReviewerRuntime?.reviewTargetId).toBe(freshTarget?.reviewTargetId);
     expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions ?? []).toHaveLength(0);
+    const reviewerStartCallsBeforePromote = vi.mocked(internals.reviewerRuntimeService.startReviewer).mock.calls.length;
+    const implementerRuntimeCountBeforePromote = internals.state.implementerRuntimeCollections[PROJECT_ID]?.runtimeCount;
+    const reviewerRuntimeCountBeforePromote = internals.state.reviewerRuntimeCollections[PROJECT_ID]?.runtimeCount;
+    const reviewFixRequestCountBeforePromote = internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requestCount;
+    const reviewFixPlanCountBeforePromote = internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.planCount;
+    const reviewFixRuntimeCountBeforePromote = internals.state.reviewFixRuntimeCollections?.[PROJECT_ID]?.runtimeCount;
+    const validationRuntimeCountBeforePromote = internals.state.validationRuntimeCollections?.[PROJECT_ID]?.runtimeCount;
+    const postValidationTargetCountBeforePromote = internals.state.postValidationReviewTargetCollections?.[PROJECT_ID]?.targetCount;
 
     controller.updateInput(createInput({ promoteReviewPressed: true }));
 
@@ -773,6 +781,38 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(promotions![0].validationStarted).toBe(false);
     expect(promotions![0].repositoryMutationStarted).toBe(false);
     expect(promotions![0].githubMutationStarted).toBe(false);
+
+    const results = internals.state.reviewPromotionResultCollections?.[PROJECT_ID]?.results;
+    expect(results).toHaveLength(1);
+    expect(results![0]).toMatchObject({
+      reviewerRuntimeId: freshReviewerRuntime?.reviewerRuntimeId,
+      reviewPromotionId: promotions![0].reviewPromotionId,
+      granted: true,
+      alreadyPromoted: false,
+      validationStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(results![0].reasonCodes).toContain("REVIEW_PROMOTION_GRANTED");
+
+    expect(vi.mocked(internals.reviewerRuntimeService.startReviewer).mock.calls).toHaveLength(reviewerStartCallsBeforePromote);
+    expect(internals.state.implementerRuntimeCollections[PROJECT_ID]?.runtimeCount).toBe(implementerRuntimeCountBeforePromote);
+    expect(internals.state.reviewerRuntimeCollections[PROJECT_ID]?.runtimeCount).toBe(reviewerRuntimeCountBeforePromote);
+    expect(internals.state.reviewFixRequestCollections?.[PROJECT_ID]?.requestCount).toBe(reviewFixRequestCountBeforePromote);
+    expect(internals.state.reviewFixPlanCollections?.[PROJECT_ID]?.planCount).toBe(reviewFixPlanCountBeforePromote);
+    expect(internals.state.reviewFixRuntimeCollections?.[PROJECT_ID]?.runtimeCount).toBe(reviewFixRuntimeCountBeforePromote);
+    expect(internals.state.validationRuntimeCollections?.[PROJECT_ID]?.runtimeCount).toBe(validationRuntimeCountBeforePromote);
+    expect(internals.state.postValidationReviewTargetCollections?.[PROJECT_ID]?.targetCount).toBe(postValidationTargetCountBeforePromote);
+
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions).toHaveLength(1);
+    expect(internals.state.reviewPromotionCollections?.[PROJECT_ID]?.promotions[0]).toEqual(promotions![0]);
+    const repeatedResults = internals.state.reviewPromotionResultCollections?.[PROJECT_ID]?.results;
+    expect(repeatedResults).toHaveLength(1);
+    expect(repeatedResults![0].alreadyPromoted).toBe(true);
+    expect(repeatedResults![0].reasonCodes).toContain("REVIEW_PROMOTION_ALREADY_PROMOTED");
+    expect(vi.mocked(internals.reviewerRuntimeService.startReviewer).mock.calls).toHaveLength(reviewerStartCallsBeforePromote);
   });
 
   it("keeps an Approved post-validation re-review promotable when only a historical promotion exists for an older reviewer runtime", async () => {
