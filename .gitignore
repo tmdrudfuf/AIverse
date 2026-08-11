@@ -1,7 +1,11 @@
 node_modules/
 .next/
 out/
+dist/
+build/
 .env*.local
+.env*
 npm-debug.log*
+*.log
 *.tsbuildinfo
 .agent-workflow/
