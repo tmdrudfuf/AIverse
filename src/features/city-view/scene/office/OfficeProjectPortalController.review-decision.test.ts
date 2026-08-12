@@ -9,7 +9,9 @@ import { createReviewerRuntimeId, createReviewerRuntimeResultId } from "./review
 import { createPostValidationReviewTargetId, resolveReviewTarget } from "./reviewer-runtime/ReviewTarget";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { ReviewDecisionService, findCurrentReviewPromotion, resolveReviewDecisionInput } from "./review-decision/ReviewDecisionService";
+import { createReviewPromotionTimeline } from "./review-decision/ReviewDecisionTypes";
 import { createReviewDecisionDisplayRows } from "./review-decision/ReviewDecisionView";
+import { createReviewPromotionTimelineDisplayRows } from "./review-decision/ReviewPromotionTimelineView";
 import { createReviewFixPlanId } from "./review-fix-plans/ReviewFixPlanTypes";
 import {
   REVIEW_FIX_RUNTIME_RULES_VERSION,
@@ -117,6 +119,21 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(results).toHaveLength(1);
     expect(results![0].granted).toBe(false);
     expect(results![0].reasonCodes).toContain("REVIEW_PROMOTION_REVIEWER_STALE");
+
+    const timeline = createReviewPromotionTimeline({
+      projectId: PROJECT_ID,
+      promotions: internals.state.reviewPromotionCollections?.[PROJECT_ID],
+      results: internals.state.reviewPromotionResultCollections?.[PROJECT_ID],
+      currentPromotion: undefined,
+    });
+    expect(timeline.events).toHaveLength(1);
+    expect(timeline.events[0]).toMatchObject({
+      status: "Blocked",
+      current: false,
+      historical: false,
+      reviewPromotionId: undefined,
+    });
+    expect(createReviewPromotionTimelineDisplayRows(timeline).statusText).toContain("1 blocked");
   });
 
   it("keeps a previously recorded Review Promotion after a later, unrelated upstream invalidation clears the current Reviewer Runtime chain", async () => {
@@ -885,6 +902,39 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     expect(promotions?.[1]?.validationStarted).toBe(false);
     expect(promotions?.[1]?.repositoryMutationStarted).toBe(false);
     expect(promotions?.[1]?.githubMutationStarted).toBe(false);
+
+    const promotedClassification = classifyCurrentReviewDecision(internals);
+    const promotedCurrentPromotion = findCurrentReviewPromotion(
+      PROJECT_ID,
+      promotedClassification,
+      reviewPromotionCollections[PROJECT_ID],
+    );
+    const timeline = createReviewPromotionTimeline({
+      projectId: PROJECT_ID,
+      promotions: reviewPromotionCollections[PROJECT_ID],
+      results: internals.state.reviewPromotionResultCollections[PROJECT_ID],
+      currentPromotion: promotedCurrentPromotion,
+    });
+    expect(timeline.eventCount).toBe(2);
+    expect(timeline.events.filter((event) => event.historical)).toHaveLength(1);
+    expect(timeline.events.filter((event) => event.current)).toHaveLength(1);
+    expect(timeline.events.find((event) => event.current)?.reviewerRuntimeId).toBe(freshReviewerRuntime.reviewerRuntimeId);
+    expect(timeline.events.every((event) => (
+      !event.validationStarted && !event.repositoryMutationStarted && !event.githubMutationStarted
+    ))).toBe(true);
+    expect(createReviewPromotionTimelineDisplayRows(timeline).statusText).toContain("1 historical");
+
+    controller.updateInput(createInput({ promoteReviewPressed: true }));
+
+    const repeatedTimeline = createReviewPromotionTimeline({
+      projectId: PROJECT_ID,
+      promotions: reviewPromotionCollections[PROJECT_ID],
+      results: internals.state.reviewPromotionResultCollections[PROJECT_ID],
+      currentPromotion: promotedCurrentPromotion,
+    });
+    expect(repeatedTimeline.eventCount).toBe(2);
+    expect(repeatedTimeline.events.find((event) => event.current)?.status).toBe("AlreadyPromoted");
+    expect(createReviewPromotionTimelineDisplayRows(repeatedTimeline).statusText).toContain("current already promoted");
   });
 
   it("records a new fix request for a ChangesRequested post-validation re-review while preserving the original request", async () => {
