@@ -1164,7 +1164,7 @@ function createProjectDashboardLowerRows(
       ? compactPreparationResultText(preparedWorkSessionRows.resultText)
       : "";
     const statusText = resultText || preparedWorkSessionRows.statusText;
-    lowerRows.push({ text: `[WORK SESSION PREPARATION] ${statusText}`, maxLines: 1, dropPriority: 30 });
+    lowerRows.push({ text: `[WORK SESSION PREPARATION] ${statusText}`, maxLines: 1, dropPriority: 29 });
   }
 
   return lowerRows;
