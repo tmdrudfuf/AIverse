@@ -126,6 +126,32 @@ export type ReviewPromotionResultCollection = {
   rulesVersion: string;
 };
 
+export type ReviewPromotionTimelineEventStatus = "Granted" | "AlreadyPromoted" | "Blocked";
+
+export type ReviewPromotionTimelineEvent = {
+  id: string;
+  projectId: string;
+  reviewerRuntimeId?: string;
+  reviewPromotionId?: string;
+  occurredAt: string;
+  status: ReviewPromotionTimelineEventStatus;
+  reasonCodes: ReviewPromotionReasonCode[];
+  current: boolean;
+  historical: boolean;
+  validationStarted: false;
+  repositoryMutationStarted: false;
+  githubMutationStarted: false;
+};
+
+export type ReviewPromotionTimeline = {
+  projectId: string;
+  events: ReviewPromotionTimelineEvent[];
+  eventCount: number;
+  currentReviewPromotionId?: string;
+  generatedAt?: string;
+  rulesVersion: string;
+};
+
 // Bundled read context for both classify() and promote(), mirroring
 // ReviewerRuntimeInput's shape one stage later: the Reviewer Runtime and its
 // result are now upstream, already-produced facts to revalidate rather than
@@ -198,4 +224,109 @@ export function copyReviewPromotion(promotion: ReviewPromotion): ReviewPromotion
 
 export function copyReviewPromotionResult(result: ReviewPromotionResult): ReviewPromotionResult {
   return { ...result, reasonCodes: [...result.reasonCodes] };
+}
+
+export function createReviewPromotionTimeline(input: {
+  projectId: string;
+  promotions?: ReviewPromotionCollection;
+  results?: ReviewPromotionResultCollection;
+  currentPromotion?: ReviewPromotion;
+}): ReviewPromotionTimeline {
+  const promotionById = new Map(
+    (input.promotions?.promotions ?? []).map((promotion) => [promotion.reviewPromotionId, promotion]),
+  );
+  const resultByPromotionId = new Map<string, ReviewPromotionResult>();
+  const resultOnlyEvents: ReviewPromotionTimelineEvent[] = [];
+
+  for (const result of input.results?.results ?? []) {
+    if (result.reviewPromotionId) {
+      resultByPromotionId.set(result.reviewPromotionId, result);
+      continue;
+    }
+    resultOnlyEvents.push(createTimelineEventFromResult(input.projectId, result));
+  }
+
+  const promotionEvents = (input.promotions?.promotions ?? []).map((promotion) => {
+    const result = resultByPromotionId.get(promotion.reviewPromotionId);
+    return createTimelineEventFromPromotion(input.projectId, promotion, result, input.currentPromotion);
+  });
+
+  const missingPromotionResultEvents = Array.from(resultByPromotionId.entries())
+    .filter(([promotionId]) => !promotionById.has(promotionId))
+    .map(([_promotionId, result]) => createTimelineEventFromResult(input.projectId, result));
+
+  const events = [...promotionEvents, ...resultOnlyEvents, ...missingPromotionResultEvents]
+    .sort(comparePromotionTimelineEvents)
+    .map(copyReviewPromotionTimelineEvent);
+  const generatedAt = latestTimelineTimestamp(events, input.promotions?.generatedAt, input.results?.generatedAt);
+
+  return {
+    projectId: input.projectId,
+    events,
+    eventCount: events.length,
+    currentReviewPromotionId: input.currentPromotion?.reviewPromotionId,
+    generatedAt,
+    rulesVersion: REVIEW_PROMOTION_RULES_VERSION,
+  };
+}
+
+export function copyReviewPromotionTimelineEvent(event: ReviewPromotionTimelineEvent): ReviewPromotionTimelineEvent {
+  return { ...event, reasonCodes: [...event.reasonCodes] };
+}
+
+function createTimelineEventFromPromotion(
+  projectId: string,
+  promotion: ReviewPromotion,
+  result: ReviewPromotionResult | undefined,
+  currentPromotion: ReviewPromotion | undefined,
+): ReviewPromotionTimelineEvent {
+  const current = currentPromotion?.reviewPromotionId === promotion.reviewPromotionId;
+  return {
+    id: promotion.reviewPromotionId,
+    projectId,
+    reviewerRuntimeId: promotion.reviewerRuntimeId,
+    reviewPromotionId: promotion.reviewPromotionId,
+    occurredAt: result?.resultAt ?? promotion.promotedAt,
+    status: result?.alreadyPromoted ? "AlreadyPromoted" : "Granted",
+    reasonCodes: result?.reasonCodes ?? ["REVIEW_PROMOTION_GRANTED"],
+    current,
+    historical: !current,
+    validationStarted: false,
+    repositoryMutationStarted: false,
+    githubMutationStarted: false,
+  };
+}
+
+function createTimelineEventFromResult(projectId: string, result: ReviewPromotionResult): ReviewPromotionTimelineEvent {
+  return {
+    id: result.id,
+    projectId,
+    reviewerRuntimeId: result.reviewerRuntimeId,
+    reviewPromotionId: result.reviewPromotionId,
+    occurredAt: result.resultAt,
+    status: result.granted
+      ? (result.alreadyPromoted ? "AlreadyPromoted" : "Granted")
+      : "Blocked",
+    reasonCodes: [...result.reasonCodes],
+    current: false,
+    historical: false,
+    validationStarted: false,
+    repositoryMutationStarted: false,
+    githubMutationStarted: false,
+  };
+}
+
+function comparePromotionTimelineEvents(left: ReviewPromotionTimelineEvent, right: ReviewPromotionTimelineEvent) {
+  const timeDiff = Date.parse(left.occurredAt) - Date.parse(right.occurredAt);
+  if (Number.isFinite(timeDiff) && timeDiff !== 0) return timeDiff;
+  return left.id.localeCompare(right.id);
+}
+
+function latestTimelineTimestamp(events: ReviewPromotionTimelineEvent[], ...fallbacks: Array<string | undefined>) {
+  return [...events.map((event) => event.occurredAt), ...fallbacks]
+    .filter((timestamp): timestamp is string => Boolean(timestamp))
+    .sort((left, right) => {
+      const diff = Date.parse(right) - Date.parse(left);
+      return Number.isFinite(diff) && diff !== 0 ? diff : right.localeCompare(left);
+    })[0];
 }

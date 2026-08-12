@@ -26,6 +26,11 @@ import {
   createReviewDecisionDisplayRows,
   type ReviewDecisionDisplayRows,
 } from "./review-decision/ReviewDecisionView";
+import { createReviewPromotionTimeline } from "./review-decision/ReviewDecisionTypes";
+import {
+  createReviewPromotionTimelineDisplayRows,
+  type ReviewPromotionTimelineDisplayRows,
+} from "./review-decision/ReviewPromotionTimelineView";
 import { findCurrentReviewFixRequest, findCurrentReviewFixRequestResult } from "./review-fix-requests/ReviewFixRequestService";
 import {
   createReviewFixRequestDisplayRows,
@@ -377,6 +382,7 @@ export class OfficeProjectPortalView {
     // unavailable" state when the Implementer Runtime hasn't Completed yet.
     const reviewerRuntimeRows = createReviewerRuntimeDisplayRows(implementerRuntimeResultCollection, reviewerRuntimeResultCollection);
     const reviewPromotionCollection = dashboardProjectId ? state.reviewPromotionCollections[dashboardProjectId] : undefined;
+    const reviewPromotionResultCollection = dashboardProjectId ? state.reviewPromotionResultCollections[dashboardProjectId] : undefined;
     const reviewFixRequestCollection = dashboardProjectId ? state.reviewFixRequestCollections[dashboardProjectId] : undefined;
     const reviewFixRequestResultCollection = dashboardProjectId ? state.reviewFixRequestResultCollections[dashboardProjectId] : undefined;
     const reviewFixPlanCollection = dashboardProjectId ? state.reviewFixPlanCollections[dashboardProjectId] : undefined;
@@ -458,6 +464,17 @@ export class OfficeProjectPortalView {
       : undefined;
     const reviewDecisionRows = reviewerRuntimeResultCollection || reviewPromotionCollection
       ? createReviewDecisionDisplayRows(reviewDecisionClassification, currentReviewPromotion)
+      : undefined;
+    const reviewPromotionTimeline = dashboardProjectId && (reviewPromotionCollection || reviewPromotionResultCollection)
+      ? createReviewPromotionTimeline({
+        projectId: dashboardProjectId,
+        promotions: reviewPromotionCollection,
+        results: reviewPromotionResultCollection,
+        currentPromotion: currentReviewPromotion,
+      })
+      : undefined;
+    const reviewPromotionTimelineRows = reviewPromotionTimeline
+      ? createReviewPromotionTimelineDisplayRows(reviewPromotionTimeline)
       : undefined;
     const currentReviewFixRequest = findCurrentReviewFixRequest(reviewFixRequestInput, reviewDecisionClassification);
     const latestReviewFixRequestResult = findCurrentReviewFixRequestResult(
@@ -553,6 +570,7 @@ export class OfficeProjectPortalView {
         implementerRuntimeRows,
         reviewerRuntimeRows,
         reviewDecisionRows,
+        reviewPromotionTimelineRows,
         reviewFixRequestRows,
         reviewFixPlanRows,
         reviewFixRuntimeRows,
@@ -908,6 +926,7 @@ function createProjectDashboardLowerRows(
   implementerRuntimeRows?: ImplementerRuntimeDisplayRows,
   reviewerRuntimeRows?: ReviewerRuntimeDisplayRows,
   reviewDecisionRows?: ReviewDecisionDisplayRows,
+  reviewPromotionTimelineRows?: ReviewPromotionTimelineDisplayRows,
   reviewFixRequestRows?: ReviewFixRequestDisplayRows,
   reviewFixPlanRows?: ReviewFixPlanDisplayRows,
   reviewFixRuntimeRows?: ReviewFixRuntimeDisplayRows,
@@ -1051,11 +1070,20 @@ function createProjectDashboardLowerRows(
     });
   }
 
+  if (reviewPromotionTimelineRows) {
+    lowerRows.push({
+      text: `[PROMOTION HISTORY] ${reviewPromotionTimelineRows.statusText}`,
+      maxLines: 1,
+      dropPriority: 18,
+      usePriorityFit: true,
+    });
+  }
+
   if (reviewFixRequestRows) {
     lowerRows.push({
       text: `[REVIEW FIX REQUEST] ${reviewFixRequestRows.statusText}`,
       maxLines: 1,
-      dropPriority: 18,
+      dropPriority: 19,
       usePriorityFit: true,
     });
   }
@@ -1064,7 +1092,7 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[REVIEW FIX PLAN] ${reviewFixPlanRows.statusText}`,
       maxLines: 1,
-      dropPriority: 19,
+      dropPriority: 20,
       usePriorityFit: true,
     });
   }
@@ -1073,7 +1101,7 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[REVIEW FIX RUNTIME] ${reviewFixRuntimeRows.statusText}`,
       maxLines: 1,
-      dropPriority: 20,
+      dropPriority: 21,
       usePriorityFit: true,
     });
   }
@@ -1082,7 +1110,7 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[VALIDATION RUNTIME] ${validationRuntimeRows.statusText}`,
       maxLines: 1,
-      dropPriority: 21,
+      dropPriority: 22,
       usePriorityFit: true,
     });
   }
@@ -1091,15 +1119,15 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[RE-REVIEW] ${postValidationReviewTargetRows.statusText}`,
       maxLines: 1,
-      dropPriority: 22,
+      dropPriority: 23,
       usePriorityFit: true,
     });
   }
 
   if (candidateTaskRows) {
-    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 23 });
+    lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 24 });
     if (candidateTaskRows.topTaskText) {
-      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 23 });
+      lowerRows.push({ text: `[CANDIDATE TOP] ${candidateTaskRows.topTaskText}`, maxLines: 1, dropPriority: 24 });
     }
   }
 
@@ -1107,28 +1135,28 @@ function createProjectDashboardLowerRows(
     const topText = candidateAssignmentRows.topRecommendationText
       ? `; ${candidateAssignmentRows.topRecommendationText}`
       : "";
-    lowerRows.push({ text: `[ASSIGNMENT RECOMMENDATIONS] ${candidateAssignmentRows.statusText}${topText}`, maxLines: 1, dropPriority: 25 });
+    lowerRows.push({ text: `[ASSIGNMENT RECOMMENDATIONS] ${candidateAssignmentRows.statusText}${topText}`, maxLines: 1, dropPriority: 26 });
   }
 
   if (candidatePromotionRows) {
     const reviewText = candidatePromotionRows.reviewText
       ? `; ${candidatePromotionRows.reviewText}`
       : "";
-    lowerRows.push({ text: `[PROMOTION REVIEW] ${candidatePromotionRows.statusText}${reviewText}`, maxLines: 1, dropPriority: 26 });
+    lowerRows.push({ text: `[PROMOTION REVIEW] ${candidatePromotionRows.statusText}${reviewText}`, maxLines: 1, dropPriority: 27 });
   }
 
   if (candidateProjectTaskPromotionRows) {
     const resultText = candidateProjectTaskPromotionRows.resultText
       ? `; ${candidateProjectTaskPromotionRows.resultText}`
       : "";
-    lowerRows.push({ text: `[PROMOTION RESULT] ${candidateProjectTaskPromotionRows.statusText}${resultText}`, maxLines: 1, dropPriority: 27 });
+    lowerRows.push({ text: `[PROMOTION RESULT] ${candidateProjectTaskPromotionRows.statusText}${resultText}`, maxLines: 1, dropPriority: 28 });
   }
 
   if (confirmedEmployeeAssignmentRows) {
     const resultText = confirmedEmployeeAssignmentRows.resultText
       ? `; ${confirmedEmployeeAssignmentRows.resultText}`
       : "";
-    lowerRows.push({ text: `[CONFIRMED ASSIGNMENT] ${confirmedEmployeeAssignmentRows.statusText}${resultText}`, maxLines: 1, dropPriority: 28 });
+    lowerRows.push({ text: `[CONFIRMED ASSIGNMENT] ${confirmedEmployeeAssignmentRows.statusText}${resultText}`, maxLines: 1, dropPriority: 29 });
   }
 
   if (preparedWorkSessionRows) {
