@@ -21,6 +21,8 @@ import type { Point } from "./shared/geometry";
 import type { PhaserRuntime } from "./shared/phaserTypes";
 import { CityCollisionMap } from "./tilemap/CityCollisionMap";
 import { createCityTilemapLayer, loadCityTilemapAssets } from "./tilemap/CityTilemapLayer";
+import type { WorldStateSnapshot } from "./world-state/WorldStateTypes";
+import { AI_CITY_WORLD_ID, CITY_WORLD_SPACE_ID, WorldStateSynchronizer } from "./world-state/WorldStateSynchronizer";
 
 export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
   return class CityWorldScene extends PhaserRuntime.Scene {
@@ -33,6 +35,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
     private buildingInteractionController?: BuildingInteractionController;
     private buildingInteractionPrompt?: BuildingInteractionPrompt;
     private buildingTransitionController?: BuildingTransitionController;
+    private worldStateSynchronizer?: WorldStateSynchronizer;
     private returnPayload?: CityReturnPayload;
 
     constructor() {
@@ -47,8 +50,13 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       loadCityTilemapAssets(this);
     }
 
+    getWorldStateSnapshot(): WorldStateSnapshot | undefined {
+      return this.worldStateSynchronizer?.getSnapshot();
+    }
+
     create() {
       this.cameras.main.setBackgroundColor(CITY_COLORS.grass);
+      this.worldStateSynchronizer = new WorldStateSynchronizer();
 
       this.navigationState = createNavigationState(CITY_NAVIGATION_BOUNDS, INITIAL_ZOOM);
       this.navigationInputController = new NavigationInputController();
@@ -79,6 +87,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
 
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController.update(0, this.navigationState.currentIntent);
+      this.synchronizeWorldState();
     }
 
     update(_: number, delta: number) {
@@ -105,6 +114,18 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
 
       this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController?.update(delta, intent);
+      this.synchronizeWorldState();
+    }
+
+    private synchronizeWorldState() {
+      this.worldStateSynchronizer?.synchronize({
+        worldId: AI_CITY_WORLD_ID,
+        activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+        sceneKey: CITY_WORLD_SCENE_KEY,
+        bounds: CITY_NAVIGATION_BOUNDS,
+        buildings: CITY_BUILDINGS,
+        founderState: this.founderEntity?.state,
+      });
     }
 
     private destroyNavigationControllers() {
@@ -114,6 +135,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionController?.destroy(this);
       this.buildingInteractionPrompt?.destroy();
       this.buildingTransitionController?.destroy();
+      this.worldStateSynchronizer = undefined;
       this.navigationInputController = undefined;
       this.cameraController = undefined;
       this.navigationMovementResolver = undefined;
