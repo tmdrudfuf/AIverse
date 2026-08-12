@@ -251,7 +251,7 @@ export function createReviewPromotionTimeline(input: {
     return createTimelineEventFromPromotion(input.projectId, promotion, result, input.currentPromotion);
   });
 
-  const missingPromotionResultEvents = [...resultByPromotionId.entries()]
+  const missingPromotionResultEvents = Array.from(resultByPromotionId.entries())
     .filter(([promotionId]) => !promotionById.has(promotionId))
     .map(([_promotionId, result]) => createTimelineEventFromResult(input.projectId, result));
 

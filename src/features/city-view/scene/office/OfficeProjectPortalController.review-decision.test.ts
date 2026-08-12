@@ -912,7 +912,7 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     const timeline = createReviewPromotionTimeline({
       projectId: PROJECT_ID,
       promotions: reviewPromotionCollections[PROJECT_ID],
-      results: internals.state.reviewPromotionResultCollections[PROJECT_ID],
+      results: internals.state.reviewPromotionResultCollections?.[PROJECT_ID],
       currentPromotion: promotedCurrentPromotion,
     });
     expect(timeline.eventCount).toBe(2);
@@ -929,7 +929,7 @@ describe("OfficeProjectPortalController Review Decision human promotion gate", (
     const repeatedTimeline = createReviewPromotionTimeline({
       projectId: PROJECT_ID,
       promotions: reviewPromotionCollections[PROJECT_ID],
-      results: internals.state.reviewPromotionResultCollections[PROJECT_ID],
+      results: internals.state.reviewPromotionResultCollections?.[PROJECT_ID],
       currentPromotion: promotedCurrentPromotion,
     });
     expect(repeatedTimeline.eventCount).toBe(2);
