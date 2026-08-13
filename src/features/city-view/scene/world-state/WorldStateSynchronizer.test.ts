@@ -180,6 +180,71 @@ describe("WorldStateSynchronizer", () => {
     expect(stored.buildings[0].position.x).not.toBe(1);
     expect(stored.actors[0].position.x).not.toBe(1);
   });
+
+  it("stores copied world effects in successful snapshots", () => {
+    const synchronizer = new WorldStateSynchronizer();
+    const effects = [createWorldEffect(2)];
+    const result = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      effects,
+      syncedAt: "2026-08-12T10:00:00.000Z",
+    });
+
+    expect(result.snapshot.effects).toEqual(effects);
+
+    effects[0].unlockedOfficeZones[0] = "storage";
+    result.snapshot.effects[0].milestoneIds[0] = "mutated";
+
+    const stored = synchronizer.getSnapshot();
+
+    expect(stored.effects[0].unlockedOfficeZones).toEqual(["entrance", "workspace", "reception"]);
+    expect(stored.effects[0].milestoneIds).toEqual(["complete-first-client-project"]);
+  });
+
+  it("uses world effects in semantic synchronization comparison", () => {
+    const synchronizer = new WorldStateSynchronizer();
+    const first = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      effects: [createWorldEffect(2)],
+      syncedAt: "2026-08-12T10:00:00.000Z",
+    });
+    const unchanged = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      effects: [createWorldEffect(2)],
+      syncedAt: "2026-08-12T10:05:00.000Z",
+    });
+    const changed = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      effects: [createWorldEffect(3)],
+      syncedAt: "2026-08-12T10:06:00.000Z",
+    });
+
+    expect(first.changed).toBe(true);
+    expect(unchanged.changed).toBe(false);
+    expect(unchanged.snapshot.lastSuccessfulSyncAt).toBe("2026-08-12T10:00:00.000Z");
+    expect(changed.changed).toBe(true);
+    expect(changed.snapshot.effects[0].toLevel).toBe(3);
+  });
 });
 
 function createFounder(): FounderState {
@@ -232,4 +297,21 @@ function createBuildings(): CityBuildingDefinition[] {
       },
     },
   ];
+}
+
+function createWorldEffect(toLevel: number) {
+  return {
+    effectId: `company-level-${toLevel}-reached:world-effect`,
+    effectType: "company_progression_level_reached" as const,
+    source: "company_progression" as const,
+    triggerId: `company-level-${toLevel}-reached`,
+    fromLevel: 1,
+    toLevel,
+    companyStage: toLevel >= 3 ? "growingCompany" : "smallOffice",
+    layoutId: toLevel >= 3 ? "growing-company-level-3" : "small-office-level-2",
+    floorCount: 1,
+    maxEmployees: toLevel >= 3 ? 18 : 10,
+    unlockedOfficeZones: ["entrance", "workspace", "reception"],
+    milestoneIds: ["complete-first-client-project"],
+  };
 }

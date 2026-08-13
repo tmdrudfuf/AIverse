@@ -134,7 +134,7 @@ import type {
 } from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
-import type { CompanyProgressionSnapshot, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
+import type { CompanyProgressionSnapshot, CompanyProgressionTrigger, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
 import { GitHubIssueSyncProvider } from "./issue-sync/GitHubIssueSyncProvider";
 import { IssueSyncService } from "./issue-sync/IssueSyncService";
 import { LocalIssueSyncProvider } from "./issue-sync/LocalIssueSyncProvider";
@@ -623,6 +623,10 @@ export class OfficeProjectPortalController {
       }),
       companyFocus: this.getCompanyFocusSummary(),
     };
+  }
+
+  getCompanyProgressionTriggers(): CompanyProgressionTrigger[] {
+    return this.state.companyProgressionTriggers.map(copyCompanyProgressionTrigger);
   }
 
   getCompanyFocusOptions() {
@@ -3882,6 +3886,14 @@ type ResolvedEmployeeConversationPlayerPosition = {
 
 function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"]): ProjectTask[] {
   return Object.values(taskCollections).flatMap((collection) => collection.tasks);
+}
+
+function copyCompanyProgressionTrigger(trigger: CompanyProgressionTrigger): CompanyProgressionTrigger {
+  return {
+    ...trigger,
+    unlockedOfficeZones: [...trigger.unlockedOfficeZones],
+    milestones: trigger.milestones.map((milestone) => ({ ...milestone })),
+  };
 }
 
 function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {

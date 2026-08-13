@@ -2,9 +2,11 @@ import type { CityBuildingDefinition } from "../buildings/buildingTypes";
 import type { FounderState } from "../founder/founderTypes";
 import type { WorldBounds } from "../shared/geometry";
 import {
+  copyWorldEffectState,
   copyWorldStateSnapshot,
   type WorldActorState,
   type WorldBuildingState,
+  type WorldEffectState,
   type WorldStateSnapshot,
   type WorldStateSyncResult,
   type WorldStateSyncStatus,
@@ -20,6 +22,7 @@ export type WorldStateSynchronizationInput = {
   bounds: WorldBounds;
   buildings: ReadonlyArray<CityBuildingDefinition>;
   founderState?: FounderState;
+  effects?: ReadonlyArray<WorldEffectState>;
   syncedAt?: string;
 };
 
@@ -74,6 +77,7 @@ export function createSucceededWorldStateSnapshot(input: WorldStateSynchronizati
     bounds: { ...input.bounds },
     buildings: input.buildings.map(createWorldBuildingState),
     actors: createWorldActorStates(input.founderState),
+    effects: (input.effects ?? []).map(copyWorldEffectState),
     syncStatus: "Succeeded",
     lastSuccessfulSyncAt: syncedAt,
   };
@@ -87,6 +91,7 @@ export function createNotStartedWorldStateSnapshot(): WorldStateSnapshot {
     bounds: { x: 0, y: 0, width: 0, height: 0 },
     buildings: [],
     actors: [],
+    effects: [],
     syncStatus: "NotStarted",
   };
 }
@@ -111,6 +116,11 @@ function createStatusSnapshot(
       ? createWorldActorStates(input.founderState)
       : previous
         ? previous.actors.map((actor) => ({ ...actor, position: { ...actor.position } }))
+        : [],
+    effects: input?.effects
+      ? input.effects.map(copyWorldEffectState)
+      : previous
+        ? previous.effects.map(copyWorldEffectState)
         : [],
     syncStatus: status,
     lastSuccessfulSyncAt: previous?.lastSuccessfulSyncAt,
@@ -159,5 +169,6 @@ function createSemanticComparisonState(snapshot: WorldStateSnapshot) {
     bounds: snapshot.bounds,
     buildings: snapshot.buildings,
     actors: snapshot.actors,
+    effects: snapshot.effects,
   };
 }

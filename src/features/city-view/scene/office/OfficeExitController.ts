@@ -2,6 +2,7 @@ import type { CityReturnPayload, OfficeDefinition, OfficeSpawnRequest } from "./
 import type { FounderFacingDirection } from "../founder/founderTypes";
 import type { Point } from "../shared/geometry";
 import type { PhaserScene } from "../shared/phaserTypes";
+import { copyWorldEffectState, type WorldEffectState } from "../world-state/WorldStateTypes";
 
 export class OfficeExitController {
   private readonly prompt: Phaser.GameObjects.Text;
@@ -34,13 +35,18 @@ export class OfficeExitController {
     return this.isFounderInExitZone;
   }
 
-  createReturnPayload(currentFacing?: FounderFacingDirection): CityReturnPayload | undefined {
+  createReturnPayload(
+    currentFacing?: FounderFacingDirection,
+    worldEffects: ReadonlyArray<WorldEffectState> = [],
+  ): CityReturnPayload | undefined {
     if (!this.isFounderInExitZone) return undefined;
+    const copiedWorldEffects = worldEffects.map(copyWorldEffectState);
 
     return {
       buildingId: this.spawnRequest.buildingId,
       returnPosition: { ...this.spawnRequest.returnPosition },
       returnFacing: currentFacing ?? this.spawnRequest.returnFacing,
+      ...(copiedWorldEffects.length > 0 ? { worldEffects: copiedWorldEffects } : {}),
     };
   }
 
