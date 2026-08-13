@@ -231,6 +231,31 @@ describe("WorldStateSynchronizer", () => {
     expect(stored.rewards[0].milestoneIds).toEqual(["complete-first-client-project"]);
   });
 
+  it("stores copied event feed entries in successful snapshots", () => {
+    const synchronizer = new WorldStateSynchronizer();
+    const eventFeed = [createFeedEvent(2)];
+    const result = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      eventFeed,
+      syncedAt: "2026-08-12T10:00:00.000Z",
+    });
+
+    expect(result.snapshot.eventFeed).toEqual(eventFeed);
+
+    eventFeed[0].unlockedOfficeZones[0] = "storage";
+    result.snapshot.eventFeed[0].milestoneIds[0] = "mutated";
+
+    const stored = synchronizer.getSnapshot();
+
+    expect(stored.eventFeed[0].unlockedOfficeZones).toEqual(["entrance", "workspace", "reception"]);
+    expect(stored.eventFeed[0].milestoneIds).toEqual(["complete-first-client-project"]);
+  });
+
   it("uses world effects in semantic synchronization comparison", () => {
     const synchronizer = new WorldStateSynchronizer();
     const first = synchronizer.synchronize({
@@ -310,6 +335,46 @@ describe("WorldStateSynchronizer", () => {
     expect(changed.changed).toBe(true);
     expect(changed.snapshot.rewards[0].toLevel).toBe(3);
   });
+
+  it("uses event feed entries in semantic synchronization comparison", () => {
+    const synchronizer = new WorldStateSynchronizer();
+    const first = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      eventFeed: [createFeedEvent(2)],
+      syncedAt: "2026-08-12T10:00:00.000Z",
+    });
+    const unchanged = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      eventFeed: [createFeedEvent(2)],
+      syncedAt: "2026-08-12T10:05:00.000Z",
+    });
+    const changed = synchronizer.synchronize({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      founderState: createFounder(),
+      eventFeed: [createFeedEvent(3)],
+      syncedAt: "2026-08-12T10:06:00.000Z",
+    });
+
+    expect(first.changed).toBe(true);
+    expect(unchanged.changed).toBe(false);
+    expect(unchanged.snapshot.lastSuccessfulSyncAt).toBe("2026-08-12T10:00:00.000Z");
+    expect(changed.changed).toBe(true);
+    expect(changed.snapshot.eventFeed[0].toLevel).toBe(3);
+  });
 });
 
 function createFounder(): FounderState {
@@ -386,6 +451,25 @@ function createReward(toLevel: number) {
     rewardId: `company-level-${toLevel}-reached:world-effect:reward`,
     rewardType: "company_progression_reward_granted" as const,
     source: "company_progression" as const,
+    effectId: `company-level-${toLevel}-reached:world-effect`,
+    triggerId: `company-level-${toLevel}-reached`,
+    fromLevel: 1,
+    toLevel,
+    companyStage: toLevel >= 3 ? "growingCompany" : "smallOffice",
+    layoutId: toLevel >= 3 ? "growing-company-level-3" : "small-office-level-2",
+    floorCount: 1,
+    maxEmployees: toLevel >= 3 ? 18 : 10,
+    unlockedOfficeZones: ["entrance", "workspace", "reception"],
+    milestoneIds: ["complete-first-client-project"],
+  };
+}
+
+function createFeedEvent(toLevel: number) {
+  return {
+    eventId: `company-level-${toLevel}-reached:world-effect:reward:feed-event`,
+    eventType: "company_progression_feed_event" as const,
+    source: "company_progression" as const,
+    rewardId: `company-level-${toLevel}-reached:world-effect:reward`,
     effectId: `company-level-${toLevel}-reached:world-effect`,
     triggerId: `company-level-${toLevel}-reached`,
     fromLevel: 1,

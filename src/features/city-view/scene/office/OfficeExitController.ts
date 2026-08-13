@@ -4,8 +4,10 @@ import type { Point } from "../shared/geometry";
 import type { PhaserScene } from "../shared/phaserTypes";
 import {
   copyCompanyProgressionReward,
+  copyWorldEventFeedState,
   copyWorldEffectState,
   type WorldEffectState,
+  type WorldEventFeedState,
   type WorldRewardState,
 } from "../world-state/WorldStateTypes";
 
@@ -44,10 +46,12 @@ export class OfficeExitController {
     currentFacing?: FounderFacingDirection,
     worldEffects: ReadonlyArray<WorldEffectState> = [],
     rewards: ReadonlyArray<WorldRewardState> = [],
+    eventFeed: ReadonlyArray<WorldEventFeedState> = [],
   ): CityReturnPayload | undefined {
     if (!this.isFounderInExitZone) return undefined;
     const copiedWorldEffects = worldEffects.map(copyWorldEffectState);
     const copiedRewards = rewards.map(copyCompanyProgressionReward);
+    const copiedEventFeed = eventFeed.map(copyWorldEventFeedState);
 
     return {
       buildingId: this.spawnRequest.buildingId,
@@ -55,6 +59,7 @@ export class OfficeExitController {
       returnFacing: currentFacing ?? this.spawnRequest.returnFacing,
       ...(copiedWorldEffects.length > 0 ? { worldEffects: copiedWorldEffects } : {}),
       ...(copiedRewards.length > 0 ? { rewards: copiedRewards } : {}),
+      ...(copiedEventFeed.length > 0 ? { eventFeed: copiedEventFeed } : {}),
     };
   }
 
