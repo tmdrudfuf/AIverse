@@ -335,13 +335,13 @@ function classifyReviewOutcome(result, outputText, options = {}) {
 
 function previewIndependentReview(state, options = {}) {
   const cwd = options.cwd || process.cwd();
+  const { implementerConfig, reviewerConfig, roleSource } = resolveReviewRoles(state, options);
+  assertSafeCommand(reviewerConfig);
   const gitContext = collectGitContext({
     cwd,
     baseBranch: options.baseBranch || state.baseBranch,
     gitAdapter: options.gitAdapter,
   });
-  const { implementerConfig, reviewerConfig, roleSource } = resolveReviewRoles(state, options);
-  assertSafeCommand(reviewerConfig);
   const sameRunner = runnersMatch(implementerConfig, reviewerConfig);
 
   const prompt = buildIndependentReviewPrompt(state, gitContext, { cwd, implementerConfig, reviewerConfig });
@@ -377,13 +377,13 @@ function previewIndependentReview(state, options = {}) {
 async function runIndependentReview(state, options = {}) {
   const cwd = options.cwd || process.cwd();
   const now = options.now || (() => new Date().toISOString());
+  const { implementerConfig, reviewerConfig, roleSource } = resolveReviewRoles(state, options);
+  assertSafeCommand(reviewerConfig);
   const gitContext = collectGitContext({
     cwd,
     baseBranch: options.baseBranch || state.baseBranch,
     gitAdapter: options.gitAdapter,
   });
-  const { implementerConfig, reviewerConfig, roleSource } = resolveReviewRoles(state, options);
-  assertSafeCommand(reviewerConfig);
   const sameRunner = runnersMatch(implementerConfig, reviewerConfig);
 
   const prompt = buildIndependentReviewPrompt(state, gitContext, { cwd, implementerConfig, reviewerConfig });
