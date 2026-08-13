@@ -47,6 +47,24 @@ export type CompanyProgressionWorldEffect = {
 
 export type WorldEffectState = CompanyProgressionWorldEffect;
 
+export type CompanyProgressionReward = {
+  rewardId: string;
+  rewardType: "company_progression_reward_granted";
+  source: WorldEffectSource;
+  effectId: string;
+  triggerId: string;
+  fromLevel: number;
+  toLevel: number;
+  companyStage: string;
+  layoutId: string;
+  floorCount: number;
+  maxEmployees: number;
+  unlockedOfficeZones: string[];
+  milestoneIds: string[];
+};
+
+export type WorldRewardState = CompanyProgressionReward;
+
 export type WorldStateSnapshot = {
   worldId: string;
   activeWorldSpaceId: string;
@@ -55,6 +73,7 @@ export type WorldStateSnapshot = {
   buildings: WorldBuildingState[];
   actors: WorldActorState[];
   effects: WorldEffectState[];
+  rewards: WorldRewardState[];
   syncStatus: WorldStateSyncStatus;
   lastSuccessfulSyncAt?: string;
   errorSummary?: string;
@@ -73,6 +92,7 @@ export function copyWorldStateSnapshot(snapshot: WorldStateSnapshot): WorldState
     buildings: snapshot.buildings.map(copyWorldBuildingState),
     actors: snapshot.actors.map(copyWorldActorState),
     effects: snapshot.effects.map(copyWorldEffectState),
+    rewards: snapshot.rewards.map(copyCompanyProgressionReward),
   };
 }
 
@@ -96,5 +116,13 @@ export function copyWorldEffectState(effect: WorldEffectState): WorldEffectState
     ...effect,
     unlockedOfficeZones: [...effect.unlockedOfficeZones],
     milestoneIds: [...effect.milestoneIds],
+  };
+}
+
+export function copyCompanyProgressionReward(reward: WorldRewardState): WorldRewardState {
+  return {
+    ...reward,
+    unlockedOfficeZones: [...reward.unlockedOfficeZones],
+    milestoneIds: [...reward.milestoneIds],
   };
 }
