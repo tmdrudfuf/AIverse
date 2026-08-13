@@ -8,6 +8,7 @@ import { createNavigationState } from "../navigation/NavigationState";
 import type { NavigationState } from "../navigation/navigationTypes";
 import type { Point } from "../shared/geometry";
 import type { PhaserRuntime } from "../shared/phaserTypes";
+import { CompanyProgressionEventFeedService } from "../world-state/CompanyProgressionEventFeedService";
 import { CompanyProgressionRewardService } from "../world-state/CompanyProgressionRewardService";
 import { CompanyProgressionWorldEffectService } from "../world-state/CompanyProgressionWorldEffectService";
 import { DAILY_PROOF_OFFICE_SCENE_KEY } from "./officeConfig";
@@ -170,10 +171,14 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         const progressionRewards = new CompanyProgressionRewardService().createRewards({
           effects: progressionWorldEffects,
         });
+        const progressionEventFeed = new CompanyProgressionEventFeedService().createEvents({
+          rewards: progressionRewards,
+        });
         const returnPayload = this.officeExitController?.createReturnPayload(
           this.founderEntity.state.facing,
           progressionWorldEffects,
           progressionRewards,
+          progressionEventFeed,
         );
         if (returnPayload) {
           this.scene.start(this.spawnRequest.returnSceneKey, returnPayload);

@@ -3,10 +3,12 @@ import type { FounderState } from "../founder/founderTypes";
 import type { WorldBounds } from "../shared/geometry";
 import {
   copyCompanyProgressionReward,
+  copyWorldEventFeedState,
   copyWorldEffectState,
   copyWorldStateSnapshot,
   type WorldActorState,
   type WorldBuildingState,
+  type WorldEventFeedState,
   type WorldEffectState,
   type WorldRewardState,
   type WorldStateSnapshot,
@@ -26,6 +28,7 @@ export type WorldStateSynchronizationInput = {
   founderState?: FounderState;
   effects?: ReadonlyArray<WorldEffectState>;
   rewards?: ReadonlyArray<WorldRewardState>;
+  eventFeed?: ReadonlyArray<WorldEventFeedState>;
   syncedAt?: string;
 };
 
@@ -82,6 +85,7 @@ export function createSucceededWorldStateSnapshot(input: WorldStateSynchronizati
     actors: createWorldActorStates(input.founderState),
     effects: (input.effects ?? []).map(copyWorldEffectState),
     rewards: (input.rewards ?? []).map(copyCompanyProgressionReward),
+    eventFeed: (input.eventFeed ?? []).map(copyWorldEventFeedState),
     syncStatus: "Succeeded",
     lastSuccessfulSyncAt: syncedAt,
   };
@@ -97,6 +101,7 @@ export function createNotStartedWorldStateSnapshot(): WorldStateSnapshot {
     actors: [],
     effects: [],
     rewards: [],
+    eventFeed: [],
     syncStatus: "NotStarted",
   };
 }
@@ -131,6 +136,11 @@ function createStatusSnapshot(
       ? input.rewards.map(copyCompanyProgressionReward)
       : previous
         ? previous.rewards.map(copyCompanyProgressionReward)
+        : [],
+    eventFeed: input?.eventFeed
+      ? input.eventFeed.map(copyWorldEventFeedState)
+      : previous
+        ? previous.eventFeed.map(copyWorldEventFeedState)
         : [],
     syncStatus: status,
     lastSuccessfulSyncAt: previous?.lastSuccessfulSyncAt,
@@ -181,5 +191,6 @@ function createSemanticComparisonState(snapshot: WorldStateSnapshot) {
     actors: snapshot.actors,
     effects: snapshot.effects,
     rewards: snapshot.rewards,
+    eventFeed: snapshot.eventFeed,
   };
 }

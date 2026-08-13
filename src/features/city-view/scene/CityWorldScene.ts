@@ -127,6 +127,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         founderState: this.founderEntity?.state,
         effects: this.returnPayload?.worldEffects,
         rewards: this.returnPayload?.rewards,
+        eventFeed: this.returnPayload?.eventFeed,
       });
     }
 
