@@ -2,11 +2,13 @@ import type { CityBuildingDefinition } from "../buildings/buildingTypes";
 import type { FounderState } from "../founder/founderTypes";
 import type { WorldBounds } from "../shared/geometry";
 import {
+  copyCompanyProgressionReward,
   copyWorldEffectState,
   copyWorldStateSnapshot,
   type WorldActorState,
   type WorldBuildingState,
   type WorldEffectState,
+  type WorldRewardState,
   type WorldStateSnapshot,
   type WorldStateSyncResult,
   type WorldStateSyncStatus,
@@ -23,6 +25,7 @@ export type WorldStateSynchronizationInput = {
   buildings: ReadonlyArray<CityBuildingDefinition>;
   founderState?: FounderState;
   effects?: ReadonlyArray<WorldEffectState>;
+  rewards?: ReadonlyArray<WorldRewardState>;
   syncedAt?: string;
 };
 
@@ -78,6 +81,7 @@ export function createSucceededWorldStateSnapshot(input: WorldStateSynchronizati
     buildings: input.buildings.map(createWorldBuildingState),
     actors: createWorldActorStates(input.founderState),
     effects: (input.effects ?? []).map(copyWorldEffectState),
+    rewards: (input.rewards ?? []).map(copyCompanyProgressionReward),
     syncStatus: "Succeeded",
     lastSuccessfulSyncAt: syncedAt,
   };
@@ -92,6 +96,7 @@ export function createNotStartedWorldStateSnapshot(): WorldStateSnapshot {
     buildings: [],
     actors: [],
     effects: [],
+    rewards: [],
     syncStatus: "NotStarted",
   };
 }
@@ -121,6 +126,11 @@ function createStatusSnapshot(
       ? input.effects.map(copyWorldEffectState)
       : previous
         ? previous.effects.map(copyWorldEffectState)
+        : [],
+    rewards: input?.rewards
+      ? input.rewards.map(copyCompanyProgressionReward)
+      : previous
+        ? previous.rewards.map(copyCompanyProgressionReward)
         : [],
     syncStatus: status,
     lastSuccessfulSyncAt: previous?.lastSuccessfulSyncAt,
@@ -170,5 +180,6 @@ function createSemanticComparisonState(snapshot: WorldStateSnapshot) {
     buildings: snapshot.buildings,
     actors: snapshot.actors,
     effects: snapshot.effects,
+    rewards: snapshot.rewards,
   };
 }

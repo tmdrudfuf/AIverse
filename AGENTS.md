@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/090-company-progression-world-effect-foundation/plan.md
+shell commands, and other important information, read specs/091-company-progression-reward-foundation/plan.md
 <!-- SPECKIT END -->

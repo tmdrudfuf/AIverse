@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OfficeExitController } from "./OfficeExitController";
 import type { OfficeDefinition, OfficeSpawnRequest } from "./officeTypes";
-import type { WorldEffectState } from "../world-state/WorldStateTypes";
+import type { WorldEffectState, WorldRewardState } from "../world-state/WorldStateTypes";
 
 describe("OfficeExitController", () => {
   it("copies world effects into city return payloads when the exit is active", () => {
@@ -32,6 +32,36 @@ describe("OfficeExitController", () => {
     const payload = controller.createReturnPayload("left");
 
     expect(payload?.worldEffects).toBeUndefined();
+  });
+
+  it("copies rewards into city return payloads when the exit is active", () => {
+    const controller = new OfficeExitController(createSceneStub(), createOffice(), createSpawnRequest());
+    const rewards = [createReward(2)];
+
+    controller.update({ x: 24, y: 24 }, false);
+    const payload = controller.createReturnPayload("left", [], rewards);
+
+    expect(payload).toMatchObject({
+      buildingId: "daily-proof-inc",
+      returnPosition: { x: 100, y: 120 },
+      returnFacing: "left",
+      rewards,
+    });
+
+    rewards[0].unlockedOfficeZones[0] = "storage";
+    rewards[0].milestoneIds[0] = "mutated";
+
+    expect(payload?.rewards?.[0].unlockedOfficeZones).toEqual(["entrance", "workspace", "reception"]);
+    expect(payload?.rewards?.[0].milestoneIds).toEqual(["complete-first-client-project"]);
+  });
+
+  it("omits rewards from city return payloads when none are present", () => {
+    const controller = new OfficeExitController(createSceneStub(), createOffice(), createSpawnRequest());
+
+    controller.update({ x: 24, y: 24 }, false);
+    const payload = controller.createReturnPayload("left");
+
+    expect(payload?.rewards).toBeUndefined();
   });
 });
 
@@ -101,6 +131,24 @@ function createWorldEffect(toLevel: number): WorldEffectState {
     effectId: `company-level-${toLevel}-reached:world-effect`,
     effectType: "company_progression_level_reached",
     source: "company_progression",
+    triggerId: `company-level-${toLevel}-reached`,
+    fromLevel: 1,
+    toLevel,
+    companyStage: "smallOffice",
+    layoutId: "small-office-level-2",
+    floorCount: 1,
+    maxEmployees: 10,
+    unlockedOfficeZones: ["entrance", "workspace", "reception"],
+    milestoneIds: ["complete-first-client-project"],
+  };
+}
+
+function createReward(toLevel: number): WorldRewardState {
+  return {
+    rewardId: `company-level-${toLevel}-reached:world-effect:reward`,
+    rewardType: "company_progression_reward_granted",
+    source: "company_progression",
+    effectId: `company-level-${toLevel}-reached:world-effect`,
     triggerId: `company-level-${toLevel}-reached`,
     fromLevel: 1,
     toLevel,

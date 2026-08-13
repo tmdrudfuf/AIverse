@@ -1,7 +1,7 @@
 import type { Point, WorldBounds } from "../shared/geometry";
 import type { Rect } from "../buildings/buildingTypes";
 import type { FounderFacingDirection } from "../founder/founderTypes";
-import type { WorldEffectState } from "../world-state/WorldStateTypes";
+import type { WorldEffectState, WorldRewardState } from "../world-state/WorldStateTypes";
 
 export type OfficeTilemapDefinition = {
   mapKey: string;
@@ -77,4 +77,5 @@ export type CityReturnPayload = {
   returnPosition: Point;
   returnFacing?: FounderFacingDirection;
   worldEffects?: WorldEffectState[];
+  rewards?: WorldRewardState[];
 };
