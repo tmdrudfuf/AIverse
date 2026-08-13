@@ -1,6 +1,7 @@
 import type { EmployeeRecommendationResult, TaskAnalysis } from "./ai/AITypes";
 import type { ProjectManagementSuggestion } from "./ai/AIProjectManagerTypes";
 import type { CompanyDashboardSnapshot } from "./dashboard/CompanyDashboardTypes";
+import type { CompanyProgressionSnapshot, CompanyProgressionTrigger } from "./progression/CompanyProgressionTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
@@ -214,6 +215,8 @@ export type ProjectPortalState = {
   workSessions: Record<string, WorkSession[]>;
   projectDashboardSnapshot?: ProjectDashboardSnapshot;
   companyDashboardSnapshot?: CompanyDashboardSnapshot;
+  previousCompanyProgressionSnapshot?: CompanyProgressionSnapshot;
+  companyProgressionTriggers: CompanyProgressionTrigger[];
   companyInfluencePlan: CompanyInfluencePlanState;
   companyFocusSummary?: CompanyFocusSummary;
 };

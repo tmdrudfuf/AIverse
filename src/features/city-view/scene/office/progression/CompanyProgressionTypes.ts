@@ -32,3 +32,21 @@ export type OfficeZoneUnlockPreview = {
   label: string;
   requiredLevel: number;
 };
+
+export type CompanyProgressionTriggerType = "company_level_reached";
+
+export type CompanyProgressionTriggerSource = "company_progression";
+
+export type CompanyProgressionTrigger = {
+  triggerId: string;
+  triggerType: CompanyProgressionTriggerType;
+  source: CompanyProgressionTriggerSource;
+  fromLevel: number;
+  toLevel: number;
+  companyStage: CompanyStage;
+  layoutId: string;
+  floorCount: number;
+  maxEmployees: number;
+  unlockedOfficeZones: OfficeZoneType[];
+  milestones: CompanyProgressionMilestone[];
+};

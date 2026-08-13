@@ -155,6 +155,8 @@ export function createProjectPortalState(): ProjectPortalState {
     employeeAssignments: {},
     workSessions: {},
     projectDashboardSnapshot: undefined,
+    previousCompanyProgressionSnapshot: undefined,
+    companyProgressionTriggers: [],
     companyInfluencePlan: influencePlanningService.createInitialState(),
     companyFocusSummary: influencePlanningService.createFocusSummary(influencePlanningService.createInitialState()),
   };

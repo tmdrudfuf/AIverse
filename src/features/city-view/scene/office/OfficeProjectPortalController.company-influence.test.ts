@@ -13,6 +13,7 @@ import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 import { WorkstationOccupancyService } from "./workstations/WorkstationOccupancyService";
@@ -192,6 +193,33 @@ describe("OfficeProjectPortalController office zone progression unlocks", () => 
       requiredLevel: 3,
     });
   });
+
+  it("stores latest company progression triggers during dashboard refresh", () => {
+    const state = createProjectPortalState();
+    const controller = createControllerHarness(state);
+
+    controller.getCompanyDashboardSnapshot();
+    expect(state.companyProgressionTriggers).toEqual([]);
+
+    state.employees = Array.from({ length: 5 }, (_, index) =>
+      createEmployee({ id: `employee-${index + 1}`, name: `Employee ${index + 1}`, status: "Idle" }));
+    state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [createTask({ id: "task-done", status: "Done" })],
+    };
+
+    controller.getCompanyDashboardSnapshot();
+    expect(state.companyProgressionTriggers).toHaveLength(1);
+    expect(state.companyProgressionTriggers[0]).toMatchObject({
+      triggerId: "company-level-2-reached",
+      fromLevel: 1,
+      toLevel: 2,
+      companyStage: "smallOffice",
+    });
+
+    controller.getCompanyDashboardSnapshot();
+    expect(state.companyProgressionTriggers).toEqual([]);
+  });
 });
 
 type ControllerInternals = {
@@ -211,6 +239,7 @@ type ControllerInternals = {
     createConversationViewModel: ReturnType<typeof vi.fn>;
   };
   companyProgressionService: CompanyProgressionService;
+  companyProgressionTriggerService: CompanyProgressionTriggerService;
   officeLayoutService: OfficeLayoutService;
   companyDashboardProvider: InternalSimulationDashboardProvider;
   companyInfluencePlanningService: CompanyInfluencePlanningService;
@@ -234,6 +263,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.workstationOccupancyService = new WorkstationOccupancyService();
   harness.employeeDailyScheduleService = new EmployeeDailyScheduleService();
   harness.companyProgressionService = new CompanyProgressionService();
+  harness.companyProgressionTriggerService = new CompanyProgressionTriggerService();
   harness.officeLayoutService = new OfficeLayoutService();
   harness.companyDashboardProvider = new InternalSimulationDashboardProvider();
   harness.companyInfluencePlanningService = new CompanyInfluencePlanningService();

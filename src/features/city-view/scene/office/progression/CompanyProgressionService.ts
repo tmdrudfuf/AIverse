@@ -157,6 +157,16 @@ export class CompanyProgressionService {
       .map((snapshot) => cloneProgressionSnapshot(snapshot, evaluateMilestones(snapshot.requiredMilestones, normalized)));
   }
 
+  getReachedProgressionMetadata(input: CompanyProgressionInput = {}): ReadonlyArray<CompanyProgressionSnapshot> {
+    const normalized = normalizeInput(input);
+    const currentLevel = this.resolveCurrentCompanyLevel(input);
+
+    return Object.values(PROGRESSION_BY_LEVEL)
+      .filter((snapshot) => snapshot.companyLevel <= currentLevel)
+      .sort((left, right) => left.companyLevel - right.companyLevel)
+      .map((snapshot) => cloneProgressionSnapshot(snapshot, evaluateMilestones(snapshot.requiredMilestones, normalized)));
+  }
+
   getNextOfficeZoneUnlock(input: CompanyProgressionInput = {}): OfficeZoneUnlockPreview | undefined {
     const currentLevel = this.resolveCurrentCompanyLevel(input);
     const unlockedZones = new Set(this.getProgressionSnapshot(input).unlockedOfficeZones);
