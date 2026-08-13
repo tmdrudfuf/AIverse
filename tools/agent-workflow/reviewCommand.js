@@ -135,15 +135,17 @@ function collectGitContext(options = {}) {
   const mergeBase = gitAdapter.verify(baseBranchRef, cwd)
     ? gitAdapter.run(["merge-base", "HEAD", baseBranchRef], cwd)
     : "";
-
-  const stagedDiffStat = gitAdapter.run(["diff", "--cached", "--stat"], cwd);
-  const stagedDiff = gitAdapter.run(["diff", "--cached"], cwd);
-  const unstagedDiffStat = gitAdapter.run(["diff", "--stat"], cwd);
-  const unstagedDiff = gitAdapter.run(["diff"], cwd);
-  const committedLog = mergeBase ? gitAdapter.run(["log", "--oneline", `${mergeBase}..HEAD`], cwd) : "";
-  const committedDiffStat = mergeBase ? gitAdapter.run(["diff", `${mergeBase}..HEAD`, "--stat"], cwd) : "";
-  const committedDiff = mergeBase ? gitAdapter.run(["diff", `${mergeBase}..HEAD`], cwd) : "";
   const statusPorcelain = gitAdapter.run(["status", "--porcelain"], cwd);
+  const stagedStatusChanged = hasStagedStatusChange(statusPorcelain);
+  const unstagedStatusChanged = hasUnstagedStatusChange(statusPorcelain);
+
+  const stagedDiffStat = stagedStatusChanged ? gitAdapter.run(["diff", "--cached", "--stat"], cwd) : "";
+  const stagedDiff = stagedStatusChanged ? gitAdapter.run(["diff", "--cached"], cwd) : "";
+  const unstagedDiffStat = unstagedStatusChanged ? gitAdapter.run(["diff", "--stat"], cwd) : "";
+  const unstagedDiff = unstagedStatusChanged ? gitAdapter.run(["diff"], cwd) : "";
+  const committedLog = mergeBase ? gitAdapter.run(["log", "--oneline", `${mergeBase}..HEAD`], cwd) : "";
+  const committedDiffStat = committedLog ? gitAdapter.run(["diff", `${mergeBase}..HEAD`, "--stat"], cwd) : "";
+  const committedDiff = committedLog ? gitAdapter.run(["diff", `${mergeBase}..HEAD`], cwd) : "";
   // Spec 056 Part B fix (Codex review round 2, P1-001): --stat's
   // human-readable bar graph abbreviates long paths with a leading "..." and
   // scales the +/- counts to fit a fixed display width once a diff is large
@@ -151,9 +153,9 @@ function collectGitContext(options = {}) {
   // and its line-count-based high-risk classification. --numstat reports
   // exact, untruncated per-file additions/deletions and is used there
   // instead whenever present (see reviewCoverage.js#hasNumstatSupport).
-  const stagedDiffNumstat = gitAdapter.run(["diff", "--cached", "--numstat"], cwd);
-  const unstagedDiffNumstat = gitAdapter.run(["diff", "--numstat"], cwd);
-  const committedDiffNumstat = mergeBase ? gitAdapter.run(["diff", `${mergeBase}..HEAD`, "--numstat"], cwd) : "";
+  const stagedDiffNumstat = stagedStatusChanged ? gitAdapter.run(["diff", "--cached", "--numstat"], cwd) : "";
+  const unstagedDiffNumstat = unstagedStatusChanged ? gitAdapter.run(["diff", "--numstat"], cwd) : "";
+  const committedDiffNumstat = committedLog ? gitAdapter.run(["diff", `${mergeBase}..HEAD`, "--numstat"], cwd) : "";
 
   return {
     repositoryPath,
@@ -177,6 +179,18 @@ function collectGitContext(options = {}) {
     hasUnstagedChanges: Boolean(unstagedDiffStat),
     hasCommittedChanges: Boolean(committedLog),
   };
+}
+
+function hasStagedStatusChange(statusPorcelain) {
+  return String(statusPorcelain || "")
+    .split(/\r?\n/)
+    .some((line) => line && line[0] !== " " && line[0] !== "?");
+}
+
+function hasUnstagedStatusChange(statusPorcelain) {
+  return String(statusPorcelain || "")
+    .split(/\r?\n/)
+    .some((line) => line && line[1] !== " " && line[0] !== "?");
 }
 
 function readTextFileSafe(filePath, limits) {
