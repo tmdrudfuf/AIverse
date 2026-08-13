@@ -19,6 +19,7 @@ import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjec
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
@@ -255,6 +256,7 @@ type ControllerInternals = {
   workstationOccupancyService: WorkstationOccupancyService;
   employeeDailyScheduleService: EmployeeDailyScheduleService;
   companyProgressionService: CompanyProgressionService;
+  companyProgressionTriggerService: CompanyProgressionTriggerService;
   officeLayoutService: OfficeLayoutService;
   companyDashboardProvider: InternalSimulationDashboardProvider;
   projectDashboardProvider: InternalSimulationProjectDashboardProvider;
@@ -301,6 +303,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.workstationOccupancyService = new WorkstationOccupancyService();
   harness.employeeDailyScheduleService = new EmployeeDailyScheduleService();
   harness.companyProgressionService = new CompanyProgressionService();
+  harness.companyProgressionTriggerService = new CompanyProgressionTriggerService();
   harness.officeLayoutService = new OfficeLayoutService();
   harness.companyDashboardProvider = new InternalSimulationDashboardProvider();
   harness.projectDashboardProvider = new InternalSimulationProjectDashboardProvider();

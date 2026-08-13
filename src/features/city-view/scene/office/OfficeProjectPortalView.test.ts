@@ -1905,6 +1905,8 @@ function createPortalState(options: {
     workSessions: {},
     companyDashboardSnapshot,
     projectDashboardSnapshot: options.projectDashboardSnapshot,
+    previousCompanyProgressionSnapshot: undefined,
+    companyProgressionTriggers: [],
     companyInfluencePlan: {},
   };
 }
