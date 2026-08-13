@@ -28,6 +28,25 @@ export type WorldActorState = {
   facing?: FounderFacingDirection;
 };
 
+export type WorldEffectSource = "company_progression";
+
+export type CompanyProgressionWorldEffect = {
+  effectId: string;
+  effectType: "company_progression_level_reached";
+  source: WorldEffectSource;
+  triggerId: string;
+  fromLevel: number;
+  toLevel: number;
+  companyStage: string;
+  layoutId: string;
+  floorCount: number;
+  maxEmployees: number;
+  unlockedOfficeZones: string[];
+  milestoneIds: string[];
+};
+
+export type WorldEffectState = CompanyProgressionWorldEffect;
+
 export type WorldStateSnapshot = {
   worldId: string;
   activeWorldSpaceId: string;
@@ -35,6 +54,7 @@ export type WorldStateSnapshot = {
   bounds: WorldBounds;
   buildings: WorldBuildingState[];
   actors: WorldActorState[];
+  effects: WorldEffectState[];
   syncStatus: WorldStateSyncStatus;
   lastSuccessfulSyncAt?: string;
   errorSummary?: string;
@@ -52,6 +72,7 @@ export function copyWorldStateSnapshot(snapshot: WorldStateSnapshot): WorldState
     bounds: { ...snapshot.bounds },
     buildings: snapshot.buildings.map(copyWorldBuildingState),
     actors: snapshot.actors.map(copyWorldActorState),
+    effects: snapshot.effects.map(copyWorldEffectState),
   };
 }
 
@@ -67,5 +88,13 @@ export function copyWorldActorState(actor: WorldActorState): WorldActorState {
   return {
     ...actor,
     position: { ...actor.position },
+  };
+}
+
+export function copyWorldEffectState(effect: WorldEffectState): WorldEffectState {
+  return {
+    ...effect,
+    unlockedOfficeZones: [...effect.unlockedOfficeZones],
+    milestoneIds: [...effect.milestoneIds],
   };
 }

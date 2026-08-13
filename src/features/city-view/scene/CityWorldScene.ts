@@ -125,6 +125,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         bounds: CITY_NAVIGATION_BOUNDS,
         buildings: CITY_BUILDINGS,
         founderState: this.founderEntity?.state,
+        effects: this.returnPayload?.worldEffects,
       });
     }
 
