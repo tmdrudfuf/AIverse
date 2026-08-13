@@ -133,6 +133,7 @@ import type {
   ProjectDashboardSourceMetadata,
 } from "./project-dashboard/ProjectDashboardTypes";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
 import type { CompanyProgressionSnapshot, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
 import { GitHubIssueSyncProvider } from "./issue-sync/GitHubIssueSyncProvider";
 import { IssueSyncService } from "./issue-sync/IssueSyncService";
@@ -266,6 +267,7 @@ export class OfficeProjectPortalController {
   private readonly employeeConversationService: EmployeeConversationService;
   private readonly employeeAIService: EmployeeAIService;
   private readonly companyProgressionService: CompanyProgressionService;
+  private readonly companyProgressionTriggerService: CompanyProgressionTriggerService;
   private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
   private readonly companyDashboardProvider: CompanyDashboardProvider;
@@ -332,6 +334,7 @@ export class OfficeProjectPortalController {
     this.employeeConversationService = new EmployeeConversationService();
     this.employeeAIService = new EmployeeAIService();
     this.companyProgressionService = new CompanyProgressionService();
+    this.companyProgressionTriggerService = new CompanyProgressionTriggerService();
     this.officeLayoutService = new OfficeLayoutService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     const companyDashboardProvider = getEnabledCompanyDashboardProvider(createCompanyDashboardProviderRegistry());
@@ -597,6 +600,13 @@ export class OfficeProjectPortalController {
   getCompanyDashboardSnapshot() {
     const employeeInsightSources = this.getEmployeeInsightSources();
     const tasks = getAllLoadedTasks(this.state.taskCollections);
+    const companyProgression = this.getCompanyProgressionSnapshot();
+    this.state.companyProgressionTriggers = this.companyProgressionTriggerService.evaluateLevelTriggers({
+      previousSnapshot: this.state.previousCompanyProgressionSnapshot,
+      currentSnapshot: companyProgression,
+      reachedSnapshots: this.companyProgressionService.getReachedProgressionMetadata(this.getCompanyProgressionInput()),
+    });
+    this.state.previousCompanyProgressionSnapshot = companyProgression;
 
     return {
       ...this.companyDashboardProvider.getSnapshot({
@@ -606,7 +616,7 @@ export class OfficeProjectPortalController {
         tasks,
         workSessions: Object.values(this.state.workSessions).flat(),
         workstations: this.getWorkstationSnapshots(),
-        companyProgression: this.getCompanyProgressionSnapshot(),
+        companyProgression,
         nextOfficeZoneUnlock: this.getNextOfficeZoneUnlock(),
         repositoryMappings: this.state.repositoryMappings,
         repositorySummaries: this.state.repositorySummaries,
