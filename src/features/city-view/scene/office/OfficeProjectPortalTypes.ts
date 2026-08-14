@@ -156,6 +156,7 @@ export type ProjectPortalState = {
   selectedTaskId?: string;
   selectedEmployeeIndex: number;
   selectedProjectDashboardProjectId?: string;
+  selectedProjectDashboardActiveWorkIndex: number;
   selectedCandidatePromotionIndex: number;
   selectedInfluenceFocusIndex: number;
   selectedWorkSessionId?: string;
