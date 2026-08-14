@@ -229,6 +229,66 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.projectManagementSuggestions).toEqual(beforeSuggestions);
     expect(internals.aiProjectManagerService.createProjectManagementSuggestion).not.toHaveBeenCalled();
   });
+
+  it("moves Project Dashboard Active Work selection and opens the selected task detail", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.taskCollections["daily-proof"] = createMultiTaskCollection();
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ downPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedProjectDashboardActiveWorkIndex).toBe(1);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(state.viewMode).toBe("task-detail");
+    expect(state.selectedTaskProjectId).toBe("daily-proof");
+    expect(state.selectedTaskIndex).toBe(1);
+    expect(state.selectedTaskId).toBe("task-review");
+  });
+
+  it("leaves Project Dashboard data unchanged when the selected Active Work task is stale", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.taskCollections["daily-proof"] = createTaskCollection();
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = {
+      ...controller.getProjectDashboardSnapshot("daily-proof"),
+      activeWork: [{
+        id: "missing-task",
+        title: "Missing task",
+        status: "In Progress",
+        priority: "High",
+        progressPercent: 50,
+        updatedAt: "2026-01-01T10:00:00.000Z",
+      }],
+    };
+    const beforeTasks = structuredClone(state.taskCollections);
+    const beforeProjects = structuredClone(state.projects);
+    const beforeEmployees = structuredClone(state.employees);
+    const beforeWorkSessions = structuredClone(state.workSessions);
+    const beforeInfluence = structuredClone(state.companyInfluencePlan);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedTaskProjectId).toBeUndefined();
+    expect(state.selectedTaskId).toBeUndefined();
+    expect(state.taskCollections).toEqual(beforeTasks);
+    expect(state.projects).toEqual(beforeProjects);
+    expect(state.employees).toEqual(beforeEmployees);
+    expect(state.workSessions).toEqual(beforeWorkSessions);
+    expect(state.companyInfluencePlan).toEqual(beforeInfluence);
+  });
 });
 
 type ControllerInternals = {
@@ -414,6 +474,44 @@ function createTaskCollection(): TaskCollection {
       createdAt: "2026-01-01T09:00:00.000Z",
       updatedAt: "2026-01-01T10:00:00.000Z",
     }],
+  };
+}
+
+function createMultiTaskCollection(): TaskCollection {
+  return {
+    projectId: "daily-proof",
+    tasks: [
+      {
+        id: "task-dashboard",
+        title: "Build project dashboard",
+        description: "Read-only project detail slice.",
+        status: "Review",
+        priority: "High",
+        projectId: "daily-proof",
+        createdAt: "2026-01-01T09:00:00.000Z",
+        updatedAt: "2026-01-01T10:00:00.000Z",
+      },
+      {
+        id: "task-review",
+        title: "Review project dashboard",
+        description: "Review the task board entry action.",
+        status: "In Progress",
+        priority: "Medium",
+        projectId: "daily-proof",
+        createdAt: "2026-01-01T09:00:00.000Z",
+        updatedAt: "2026-01-01T10:15:00.000Z",
+      },
+      {
+        id: "task-done",
+        title: "Archive previous dashboard note",
+        description: "Completed task should not appear as active work.",
+        status: "Done",
+        priority: "Low",
+        projectId: "daily-proof",
+        createdAt: "2026-01-01T09:00:00.000Z",
+        updatedAt: "2026-01-01T10:30:00.000Z",
+      },
+    ],
   };
 }
 

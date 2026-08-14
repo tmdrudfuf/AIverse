@@ -660,6 +660,7 @@ export class OfficeProjectPortalController {
     const context = this.createProjectDashboardContext();
     const internalSnapshot = this.projectDashboardProvider.getProjectSnapshot(context, projectId);
     this.state.projectDashboardSnapshot = this.mergeGitHubProjectDashboardSource(internalSnapshot, context, projectId);
+    this.clampProjectDashboardActiveWorkSelection();
     return this.state.projectDashboardSnapshot;
   }
 
@@ -777,6 +778,7 @@ export class OfficeProjectPortalController {
     this.state.selectedTaskId = undefined;
     this.state.selectedEmployeeIndex = 0;
     this.state.selectedProjectDashboardProjectId = undefined;
+    this.state.selectedProjectDashboardActiveWorkIndex = 0;
     this.state.projectDashboardSnapshot = undefined;
     this.state.selectedWorkSessionId = undefined;
     this.repositoryRequestVersion += 1;
@@ -827,6 +829,7 @@ export class OfficeProjectPortalController {
     if (input.escapePressed) {
       this.state.viewMode = "list";
       this.state.selectedProjectDashboardProjectId = undefined;
+      this.state.selectedProjectDashboardActiveWorkIndex = 0;
       this.state.selectedCandidatePromotionIndex = 0;
       this.state.projectDashboardSnapshot = undefined;
       this.repositorySyncRequestVersion += 1;
@@ -840,6 +843,11 @@ export class OfficeProjectPortalController {
     if (input.upPressed || input.downPressed) {
       if (selectedPromotion) {
         this.moveCandidatePromotionSelection(input.upPressed ? -1 : 1);
+        this.view.render(this.state);
+        return;
+      }
+
+      if (this.moveProjectDashboardActiveWorkSelection(input.upPressed ? -1 : 1)) {
         this.view.render(this.state);
         return;
       }
@@ -1059,6 +1067,11 @@ export class OfficeProjectPortalController {
     }
 
     if (input.actionPressed || input.enterPressed) {
+      if (this.openSelectedProjectDashboardActiveWorkTask()) {
+        this.view.render(this.state);
+        return;
+      }
+
       const projectId = this.state.selectedProjectDashboardProjectId;
       if (projectId) {
         void this.syncRepositorySnapshot(projectId);
@@ -1240,6 +1253,7 @@ export class OfficeProjectPortalController {
 
   private async openProjectDashboard(projectId: string) {
     this.state.selectedProjectDashboardProjectId = projectId;
+    this.state.selectedProjectDashboardActiveWorkIndex = 0;
     this.state.selectedCandidatePromotionIndex = 0;
     if (this.hasRepositoryMapping(projectId) && !this.state.repositorySummaries[projectId]) {
       this.state.repositorySummaries[projectId] = createLoadingRepositorySummary();
@@ -3085,6 +3099,51 @@ export class OfficeProjectPortalController {
     const projectId = this.state.selectedProjectDashboardProjectId;
     const collection = projectId ? this.state.candidatePromotionReviewCollections[projectId] : undefined;
     return collection?.reviews[this.state.selectedCandidatePromotionIndex];
+  }
+
+  private moveProjectDashboardActiveWorkSelection(direction: number) {
+    const workItemCount = this.getVisibleProjectDashboardActiveWorkIds().length;
+    if (workItemCount === 0) {
+      this.state.selectedProjectDashboardActiveWorkIndex = 0;
+      return false;
+    }
+
+    const nextIndex = clamp(
+      this.state.selectedProjectDashboardActiveWorkIndex + direction,
+      0,
+      workItemCount - 1,
+    );
+    const changed = nextIndex !== this.state.selectedProjectDashboardActiveWorkIndex;
+    this.state.selectedProjectDashboardActiveWorkIndex = nextIndex;
+    return changed;
+  }
+
+  private openSelectedProjectDashboardActiveWorkTask() {
+    const projectId = this.state.selectedProjectDashboardProjectId;
+    const activeWorkIds = this.getVisibleProjectDashboardActiveWorkIds();
+    const activeWorkId = activeWorkIds[this.state.selectedProjectDashboardActiveWorkIndex];
+    const collection = projectId ? this.state.taskCollections[projectId] : undefined;
+    if (!projectId || !activeWorkId || !collection) return false;
+
+    const taskIndex = collection.tasks.findIndex((task) => task.id === activeWorkId);
+    if (taskIndex < 0) return false;
+
+    this.state.selectedTaskProjectId = projectId;
+    this.state.selectedTaskIndex = taskIndex;
+    this.state.selectedTaskId = activeWorkId;
+    this.state.viewMode = "task-detail";
+    return true;
+  }
+
+  private getVisibleProjectDashboardActiveWorkIds() {
+    return this.state.projectDashboardSnapshot?.activeWork.slice(0, 3).map((workItem) => workItem.id) ?? [];
+  }
+
+  private clampProjectDashboardActiveWorkSelection() {
+    const workItemCount = this.getVisibleProjectDashboardActiveWorkIds().length;
+    this.state.selectedProjectDashboardActiveWorkIndex = workItemCount === 0
+      ? 0
+      : clamp(this.state.selectedProjectDashboardActiveWorkIndex, 0, workItemCount - 1);
   }
 
   private async openTaskList(projectId: string) {

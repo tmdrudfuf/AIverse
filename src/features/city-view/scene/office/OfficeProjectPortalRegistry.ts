@@ -99,6 +99,7 @@ export function createProjectPortalState(): ProjectPortalState {
     selectedTaskIndex: 0,
     selectedEmployeeIndex: 0,
     selectedProjectDashboardProjectId: undefined,
+    selectedProjectDashboardActiveWorkIndex: 0,
     selectedCandidatePromotionIndex: 0,
     selectedInfluenceFocusIndex: 0,
     projects: registryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices())),

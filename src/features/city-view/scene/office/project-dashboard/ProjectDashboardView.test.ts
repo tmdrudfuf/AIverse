@@ -17,6 +17,7 @@ describe("ProjectDashboardView rows", () => {
       progressText: "Progress: 50% complete",
       healthText: "Critical unfinished work is visible.",
       activeWorkHeading: "Active Work",
+      activeWorkTaskIds: ["task-dashboard"],
       activeWorkRows: ["Build project dashboard - In Progress (High)"],
       employeeHeading: "Employees",
       employeeRows: ["Ada - working"],
@@ -66,6 +67,29 @@ describe("ProjectDashboardView rows", () => {
       "Status: Fresh",
       "Default Branch: main",
       "Open Issues: 0",
+    ]);
+  });
+
+  it("exposes visible Active Work task ids for dashboard row selection", () => {
+    const rows = createProjectDashboardPanelRows({
+      ...createSnapshot(),
+      activeWork: [
+        ...createSnapshot().activeWork,
+        {
+          id: "task-review",
+          title: "Review project dashboard",
+          status: "Review",
+          priority: "Medium",
+          progressPercent: 80,
+          updatedAt: "2026-01-01T10:15:00.000Z",
+        },
+      ],
+    });
+
+    expect(rows.activeWorkTaskIds).toEqual(["task-dashboard", "task-review"]);
+    expect(rows.activeWorkRows).toEqual([
+      "Build project dashboard - In Progress (High)",
+      "Review project dashboard - Review (Medium)",
     ]);
   });
 

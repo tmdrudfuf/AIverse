@@ -6,6 +6,7 @@ export type ProjectDashboardPanelRows = {
   progressText: string;
   healthText: string;
   activeWorkHeading: string;
+  activeWorkTaskIds: string[];
   activeWorkRows: string[];
   employeeHeading: string;
   employeeRows: string[];
@@ -27,6 +28,7 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       progressText: "Progress: Unavailable",
       healthText: "Health: Unavailable",
       activeWorkHeading: "Active Work",
+      activeWorkTaskIds: [],
       activeWorkRows: ["No active tasks visible."],
       employeeHeading: "Employees",
       employeeRows: ["No employee context visible."],
@@ -48,6 +50,7 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
       progressText: "Progress: Unavailable",
       healthText: snapshot.health.reason,
       activeWorkHeading: "Active Work",
+      activeWorkTaskIds: [],
       activeWorkRows: ["No active tasks visible."],
       employeeHeading: "Employees",
       employeeRows: ["No employee context visible."],
@@ -68,8 +71,9 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
     progressText: `Progress: ${snapshot.progress.label}`,
     healthText: snapshot.health.reason,
     activeWorkHeading: "Active Work",
+    activeWorkTaskIds: snapshot.activeWork.slice(0, 3).map((workItem) => workItem.id),
     activeWorkRows: snapshot.activeWork.length > 0
-      ? snapshot.activeWork.slice(0, 4).map((workItem) => `${workItem.title} - ${workItem.status} (${workItem.priority})`)
+      ? snapshot.activeWork.slice(0, 3).map((workItem) => `${workItem.title} - ${workItem.status} (${workItem.priority})`)
       : ["No active tasks visible."],
     employeeHeading: "Employees",
     employeeRows: snapshot.employees.length > 0

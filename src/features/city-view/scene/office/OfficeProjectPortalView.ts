@@ -284,7 +284,8 @@ export class OfficeProjectPortalView {
     this.addText(leftPanelX, this.panelY + 140, rows.activeWorkHeading, projectHeadingStyle());
     rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
-      this.addText(leftPanelX + 12, rowY, wrapText(`> ${row}`, 34), projectBodyStyle());
+      const selected = rows.activeWorkTaskIds.length > 0 && index === state.selectedProjectDashboardActiveWorkIndex;
+      this.addText(leftPanelX + 12, rowY, wrapText(`> ${row}`, 34), rowStyle(true, selected));
     });
 
     this.addText(rightPanelX, this.panelY + 140, rows.employeeHeading, projectHeadingStyle());
@@ -588,6 +589,10 @@ export class OfficeProjectPortalView {
     const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(lowerRows, maxLowerPanelHeight);
     this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, lowerPanelHeight);
     this.renderProjectDashboardLowerRows(lowerRows);
+    const instructionText = rows.activeWorkTaskIds.length > 0
+      ? "Esc back  Up/Down active work  Enter/Space open task"
+      : "Esc back";
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, instructionText, instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderProjectDashboardLowerRows(rows: ProjectDashboardRenderedLowerRow[]) {
