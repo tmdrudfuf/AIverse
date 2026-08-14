@@ -71,14 +71,14 @@ describe("createFakeGitAdapter", () => {
   it("returns a deterministic dirty snapshot reflecting staged/unstaged state", () => {
     const gitAdapter = createFakeGitAdapter({
       state: {
-        statusPorcelain: "M tracked.txt",
+        statusPorcelain: " M tracked.txt",
         unstagedDiffStat: "1 file changed",
         unstagedDiff: "-old\n+new",
       },
     });
     const context = collectGitContext({ cwd: "/fake", baseBranch: "main", gitAdapter });
     expect(context.hasUnstagedChanges).toBe(true);
-    expect(context.statusPorcelain).toBe("M tracked.txt");
+    expect(context.statusPorcelain).toBe(" M tracked.txt");
     expect(context.unstagedDiff).toContain("+new");
   });
 
@@ -89,6 +89,7 @@ describe("createFakeGitAdapter", () => {
         committedLog: "abc123 a commit",
         committedDiffStat: "1 file changed, committed",
         committedDiff: "committed-diff-body",
+        statusPorcelain: " M tracked.txt",
         unstagedDiffStat: "1 file changed, unstaged",
         unstagedDiff: "unstaged-diff-body",
       },
@@ -116,10 +117,10 @@ describe("createFakeGitAdapter", () => {
   it("allows setState to simulate a tree mutation between two collectGitContext calls", () => {
     const gitAdapter = createFakeGitAdapter();
     const before = collectGitContext({ cwd: "/fake", baseBranch: "main", gitAdapter });
-    gitAdapter.setState({ statusPorcelain: "M tracked.txt", unstagedDiff: "+changed" });
+    gitAdapter.setState({ statusPorcelain: " M tracked.txt", unstagedDiff: "+changed" });
     const after = collectGitContext({ cwd: "/fake", baseBranch: "main", gitAdapter });
     expect(before.statusPorcelain).toBe("");
-    expect(after.statusPorcelain).toBe("M tracked.txt");
+    expect(after.statusPorcelain).toBe(" M tracked.txt");
     expect(after.unstagedDiff).toBe("+changed");
   });
 });
