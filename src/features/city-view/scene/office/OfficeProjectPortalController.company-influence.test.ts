@@ -12,6 +12,7 @@ import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { CompanyGrowthGameplayLoopService } from "./progression/CompanyGrowthGameplayLoopService";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
@@ -220,6 +221,48 @@ describe("OfficeProjectPortalController office zone progression unlocks", () => 
     controller.getCompanyDashboardSnapshot();
     expect(state.companyProgressionTriggers).toEqual([]);
   });
+
+  it("returns copied company growth gameplay loop output from stored progression triggers", () => {
+    const state = createProjectPortalState();
+    const controller = createControllerHarness(state);
+
+    controller.getCompanyDashboardSnapshot();
+    state.employees = Array.from({ length: 5 }, (_, index) =>
+      createEmployee({ id: `employee-${index + 1}`, name: `Employee ${index + 1}`, status: "Idle" }));
+    state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [createTask({ id: "task-done", status: "Done" })],
+    };
+    controller.getCompanyDashboardSnapshot();
+
+    const result = controller.getCompanyGrowthGameplayLoopResult();
+    expect(result.triggers).toHaveLength(1);
+    expect(result.effects[0]).toMatchObject({
+      triggerId: "company-level-2-reached",
+      effectId: "company-level-2-reached:world-effect",
+      toLevel: 2,
+    });
+    expect(result.rewards[0]).toMatchObject({
+      triggerId: "company-level-2-reached",
+      effectId: result.effects[0].effectId,
+      rewardId: "company-level-2-reached:world-effect:reward",
+    });
+    expect(result.eventFeed[0]).toMatchObject({
+      triggerId: "company-level-2-reached",
+      rewardId: result.rewards[0].rewardId,
+    });
+
+    result.triggers[0].unlockedOfficeZones[0] = "storage";
+    result.effects[0].unlockedOfficeZones[0] = "storage";
+    result.rewards[0].milestoneIds[0] = "mutated";
+    result.eventFeed[0].milestoneIds[0] = "mutated";
+
+    const nextResult = controller.getCompanyGrowthGameplayLoopResult();
+    expect(nextResult.triggers[0].unlockedOfficeZones).toContain("reception");
+    expect(nextResult.effects[0].unlockedOfficeZones).toContain("reception");
+    expect(nextResult.rewards[0].milestoneIds).toEqual(["complete-first-client-project", "hire-five-employees"]);
+    expect(nextResult.eventFeed[0].milestoneIds).toEqual(["complete-first-client-project", "hire-five-employees"]);
+  });
 });
 
 type ControllerInternals = {
@@ -240,6 +283,7 @@ type ControllerInternals = {
   };
   companyProgressionService: CompanyProgressionService;
   companyProgressionTriggerService: CompanyProgressionTriggerService;
+  companyGrowthGameplayLoopService: CompanyGrowthGameplayLoopService;
   officeLayoutService: OfficeLayoutService;
   companyDashboardProvider: InternalSimulationDashboardProvider;
   companyInfluencePlanningService: CompanyInfluencePlanningService;
@@ -264,6 +308,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.employeeDailyScheduleService = new EmployeeDailyScheduleService();
   harness.companyProgressionService = new CompanyProgressionService();
   harness.companyProgressionTriggerService = new CompanyProgressionTriggerService();
+  harness.companyGrowthGameplayLoopService = new CompanyGrowthGameplayLoopService();
   harness.officeLayoutService = new OfficeLayoutService();
   harness.companyDashboardProvider = new InternalSimulationDashboardProvider();
   harness.companyInfluencePlanningService = new CompanyInfluencePlanningService();

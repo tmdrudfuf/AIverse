@@ -8,9 +8,6 @@ import { createNavigationState } from "../navigation/NavigationState";
 import type { NavigationState } from "../navigation/navigationTypes";
 import type { Point } from "../shared/geometry";
 import type { PhaserRuntime } from "../shared/phaserTypes";
-import { CompanyProgressionEventFeedService } from "../world-state/CompanyProgressionEventFeedService";
-import { CompanyProgressionRewardService } from "../world-state/CompanyProgressionRewardService";
-import { CompanyProgressionWorldEffectService } from "../world-state/CompanyProgressionWorldEffectService";
 import { DAILY_PROOF_OFFICE_SCENE_KEY } from "./officeConfig";
 import { OfficeActionInputController } from "./OfficeActionInputController";
 import { OfficeCollisionMap } from "./OfficeCollisionMap";
@@ -170,20 +167,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeInteractionPrompt?.update(activeObject);
 
       if (actionPressed) {
-        const progressionWorldEffects = new CompanyProgressionWorldEffectService().createEffects({
-          triggers: this.officeProjectPortalController?.getCompanyProgressionTriggers() ?? [],
-        });
-        const progressionRewards = new CompanyProgressionRewardService().createRewards({
-          effects: progressionWorldEffects,
-        });
-        const progressionEventFeed = new CompanyProgressionEventFeedService().createEvents({
-          rewards: progressionRewards,
-        });
+        const growthLoop = this.officeProjectPortalController?.getCompanyGrowthGameplayLoopResult();
         const returnPayload = this.officeExitController?.createReturnPayload(
           this.founderEntity.state.facing,
-          progressionWorldEffects,
-          progressionRewards,
-          progressionEventFeed,
+          growthLoop?.effects,
+          growthLoop?.rewards,
+          growthLoop?.eventFeed,
         );
         if (returnPayload) {
           this.scene.start(this.spawnRequest.returnSceneKey, returnPayload);
