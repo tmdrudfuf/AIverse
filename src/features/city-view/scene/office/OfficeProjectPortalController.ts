@@ -135,6 +135,11 @@ import type {
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
 import type { CompanyProgressionSnapshot, CompanyProgressionTrigger, OfficeZoneUnlockPreview } from "./progression/CompanyProgressionTypes";
+import {
+  CompanyGrowthGameplayLoopService,
+  copyCompanyProgressionTrigger,
+  type CompanyGrowthGameplayLoopResult,
+} from "./progression/CompanyGrowthGameplayLoopService";
 import { GitHubIssueSyncProvider } from "./issue-sync/GitHubIssueSyncProvider";
 import { IssueSyncService } from "./issue-sync/IssueSyncService";
 import { LocalIssueSyncProvider } from "./issue-sync/LocalIssueSyncProvider";
@@ -268,6 +273,7 @@ export class OfficeProjectPortalController {
   private readonly employeeAIService: EmployeeAIService;
   private readonly companyProgressionService: CompanyProgressionService;
   private readonly companyProgressionTriggerService: CompanyProgressionTriggerService;
+  private readonly companyGrowthGameplayLoopService: CompanyGrowthGameplayLoopService;
   private readonly officeLayoutService: OfficeLayoutService;
   private readonly workSessionService: WorkSessionService;
   private readonly companyDashboardProvider: CompanyDashboardProvider;
@@ -335,6 +341,7 @@ export class OfficeProjectPortalController {
     this.employeeAIService = new EmployeeAIService();
     this.companyProgressionService = new CompanyProgressionService();
     this.companyProgressionTriggerService = new CompanyProgressionTriggerService();
+    this.companyGrowthGameplayLoopService = new CompanyGrowthGameplayLoopService();
     this.officeLayoutService = new OfficeLayoutService();
     this.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
     const companyDashboardProvider = getEnabledCompanyDashboardProvider(createCompanyDashboardProviderRegistry());
@@ -627,6 +634,12 @@ export class OfficeProjectPortalController {
 
   getCompanyProgressionTriggers(): CompanyProgressionTrigger[] {
     return this.state.companyProgressionTriggers.map(copyCompanyProgressionTrigger);
+  }
+
+  getCompanyGrowthGameplayLoopResult(): CompanyGrowthGameplayLoopResult {
+    return this.companyGrowthGameplayLoopService.createLoopResult({
+      triggers: this.getCompanyProgressionTriggers(),
+    });
   }
 
   getCompanyFocusOptions() {
@@ -3886,14 +3899,6 @@ type ResolvedEmployeeConversationPlayerPosition = {
 
 function getAllLoadedTasks(taskCollections: ProjectPortalState["taskCollections"]): ProjectTask[] {
   return Object.values(taskCollections).flatMap((collection) => collection.tasks);
-}
-
-function copyCompanyProgressionTrigger(trigger: CompanyProgressionTrigger): CompanyProgressionTrigger {
-  return {
-    ...trigger,
-    unlockedOfficeZones: [...trigger.unlockedOfficeZones],
-    milestones: trigger.milestones.map((milestone) => ({ ...milestone })),
-  };
 }
 
 function getTaskActivityLogs(tasks: ProjectTask[]): TaskActivity[] {
