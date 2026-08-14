@@ -22,6 +22,7 @@ import type { PhaserRuntime } from "./shared/phaserTypes";
 import { CityCollisionMap } from "./tilemap/CityCollisionMap";
 import { createCityTilemapLayer, loadCityTilemapAssets } from "./tilemap/CityTilemapLayer";
 import { ProgressionEventFeedPanel } from "./world-state/ProgressionEventFeedPanel";
+import { ProgressionRewardPresentationPanel } from "./world-state/ProgressionRewardPresentationPanel";
 import type { WorldStateSnapshot } from "./world-state/WorldStateTypes";
 import { AI_CITY_WORLD_ID, CITY_WORLD_SPACE_ID, WorldStateSynchronizer } from "./world-state/WorldStateSynchronizer";
 
@@ -38,6 +39,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
     private buildingTransitionController?: BuildingTransitionController;
     private worldStateSynchronizer?: WorldStateSynchronizer;
     private progressionEventFeedPanel?: ProgressionEventFeedPanel;
+    private progressionRewardPresentationPanel?: ProgressionRewardPresentationPanel;
     private returnPayload?: CityReturnPayload;
 
     constructor() {
@@ -87,6 +89,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionPrompt = new BuildingInteractionPrompt(this);
       this.buildingTransitionController = new BuildingTransitionController();
       this.progressionEventFeedPanel = new ProgressionEventFeedPanel(this);
+      this.progressionRewardPresentationPanel = new ProgressionRewardPresentationPanel(this);
 
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController.update(0, this.navigationState.currentIntent);
@@ -133,6 +136,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         eventFeed: this.returnPayload?.eventFeed,
       });
       this.progressionEventFeedPanel?.update(result?.snapshot);
+      this.progressionRewardPresentationPanel?.update(result?.snapshot);
     }
 
     private destroyNavigationControllers() {
@@ -143,6 +147,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionPrompt?.destroy();
       this.buildingTransitionController?.destroy();
       this.progressionEventFeedPanel?.destroy();
+      this.progressionRewardPresentationPanel?.destroy();
       this.worldStateSynchronizer = undefined;
       this.navigationInputController = undefined;
       this.cameraController = undefined;
@@ -153,6 +158,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionPrompt = undefined;
       this.buildingTransitionController = undefined;
       this.progressionEventFeedPanel = undefined;
+      this.progressionRewardPresentationPanel = undefined;
       this.returnPayload = undefined;
       this.navigationState = undefined;
     }
