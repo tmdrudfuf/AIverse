@@ -6,6 +6,8 @@ import {
   createEmptyCompanyDashboardSnapshot,
   INTERNAL_SIMULATION_DASHBOARD_PROVIDER_ID,
 } from "./dashboard/CompanyDashboardTypes";
+import { FIFTH_EMPLOYEE_ID } from "./employees/EmployeeRecruitmentService";
+import type { Employee } from "./employees/EmployeeTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
 import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
@@ -70,6 +72,29 @@ describe("OfficeProjectPortalView", () => {
     }));
 
     expect(renderedText.map((item) => item.text)).toContain("Zones: 9 unlocked");
+  });
+
+  it("renders the selected fifth employee recruiting action before recruitment", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState();
+    state.selectedProjectIndex = -2;
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("> [RECRUIT] Recruit fifth employee");
+  });
+
+  it("renders the completed fifth employee recruiting action after recruitment", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState();
+    state.selectedProjectIndex = -2;
+    state.employees = [employee({ id: FIFTH_EMPLOYEE_ID, name: "GPT Product Engineer" })];
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("> [RECRUIT] Fifth employee joined");
   });
 
   it("keeps wrapped Company Dashboard source signals above the project list panel", () => {
@@ -1932,6 +1957,20 @@ function createDashboardProject(
       status,
       statusLabel,
     },
+  };
+}
+
+function employee(overrides: Partial<Employee>): Employee {
+  return {
+    id: "employee",
+    name: "Employee",
+    role: "Engineer",
+    status: "Idle",
+    avatarColor: "#64748b",
+    capabilities: ["Coding"],
+    description: "View test employee",
+    provider: "placeholder",
+    ...overrides,
   };
 }
 
