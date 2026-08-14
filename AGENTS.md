@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/094-progression-reward-presentation/plan.md
+shell commands, and other important information, read specs/095-office-progression-visual-state/plan.md
 <!-- SPECKIT END -->

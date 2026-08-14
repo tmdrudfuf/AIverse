@@ -22,6 +22,7 @@ import { EmployeeKnowledgeService } from "./knowledge/EmployeeKnowledgeService";
 import { OfficeInteractionController } from "./OfficeInteractionController";
 import { OfficeInteractionPrompt } from "./OfficeInteractionPrompt";
 import { OfficeInteractiveObjectRegistry } from "./OfficeInteractiveObjectRegistry";
+import { OfficeProgressionVisualStateLayer } from "./OfficeProgressionVisualStateLayer";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { OfficeEmployeeNpcRenderer } from "./npc/OfficeEmployeeNpcRenderer";
 import { OfficeSpawnManager } from "./OfficeSpawnManager";
@@ -43,6 +44,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeActionInputController?: OfficeActionInputController;
     private officeInteractionController?: OfficeInteractionController;
     private officeInteractionPrompt?: OfficeInteractionPrompt;
+    private officeProgressionVisualStateLayer?: OfficeProgressionVisualStateLayer;
     private officeProjectPortalController?: OfficeProjectPortalController;
     private officeEmployeeNpcRenderer?: OfficeEmployeeNpcRenderer;
     private employeeInsightService?: EmployeeInsightService;
@@ -95,6 +97,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
 
       this.officeInteractionController = new OfficeInteractionController(objectRegistry);
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
+      this.officeProgressionVisualStateLayer = new OfficeProgressionVisualStateLayer(this);
       this.officeProjectPortalController = new OfficeProjectPortalController(this);
       this.officeEmployeeNpcRenderer = new OfficeEmployeeNpcRenderer(this);
       this.employeeInsightService = new EmployeeInsightService();
@@ -111,6 +114,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
 
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController.update(0, this.navigationState.currentIntent);
+      this.refreshOfficeProgressionVisualState();
     }
 
     update(_: number, delta: number) {
@@ -150,6 +154,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         });
         this.refreshEmployeeNpcRenderer();
         this.refreshEmployeeInsightOverlay({ isBlockingOverlayOpen: true });
+        this.refreshOfficeProgressionVisualState();
         return;
       }
 
@@ -196,6 +201,14 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController?.update(delta, intent);
       this.refreshEmployeeNpcRenderer();
       this.refreshEmployeeInsightOverlay();
+      this.refreshOfficeProgressionVisualState();
+    }
+
+    private refreshOfficeProgressionVisualState() {
+      this.officeProgressionVisualStateLayer?.update(
+        this.officeProjectPortalController?.getCompanyProgressionSnapshot(),
+        this.officeProjectPortalController?.getActiveOfficeLayout(),
+      );
     }
 
     private refreshEmployeeNpcRenderer() {
@@ -259,6 +272,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeActionInputController?.destroy(this);
       this.officeInteractionController?.destroy();
       this.officeInteractionPrompt?.destroy();
+      this.officeProgressionVisualStateLayer?.destroy();
       this.employeeInsightOverlay?.destroy();
       this.employeeKnowledgeOverlay?.destroy();
       this.officeEmployeeNpcRenderer?.destroy();
@@ -273,6 +287,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeActionInputController = undefined;
       this.officeInteractionController = undefined;
       this.officeInteractionPrompt = undefined;
+      this.officeProgressionVisualStateLayer = undefined;
       this.officeProjectPortalController = undefined;
       this.officeEmployeeNpcRenderer = undefined;
       this.employeeInsightService = undefined;
