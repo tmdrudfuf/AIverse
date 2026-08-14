@@ -81,6 +81,7 @@ describe("ProjectDashboardView rows", () => {
           status: "Review",
           priority: "Medium",
           progressPercent: 80,
+          updatedAt: "2026-01-01T10:15:00.000Z",
         },
       ],
     });

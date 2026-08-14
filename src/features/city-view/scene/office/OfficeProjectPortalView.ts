@@ -285,8 +285,7 @@ export class OfficeProjectPortalView {
     rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
       const selected = rows.activeWorkTaskIds.length > 0 && index === state.selectedProjectDashboardActiveWorkIndex;
-      const marker = selected ? ">" : " ";
-      this.addText(leftPanelX + 12, rowY, wrapText(`${marker} ${row}`, 34), rowStyle(true, selected));
+      this.addText(leftPanelX + 12, rowY, wrapText(`> ${row}`, 34), rowStyle(true, selected));
     });
 
     this.addText(rightPanelX, this.panelY + 140, rows.employeeHeading, projectHeadingStyle());

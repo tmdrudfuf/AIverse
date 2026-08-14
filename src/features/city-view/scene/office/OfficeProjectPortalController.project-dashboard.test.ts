@@ -269,6 +269,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
         status: "In Progress",
         priority: "High",
         progressPercent: 50,
+        updatedAt: "2026-01-01T10:00:00.000Z",
       }],
     };
     const beforeTasks = structuredClone(state.taskCollections);
@@ -484,7 +485,7 @@ function createMultiTaskCollection(): TaskCollection {
         id: "task-dashboard",
         title: "Build project dashboard",
         description: "Read-only project detail slice.",
-        status: "In Progress",
+        status: "Review",
         priority: "High",
         projectId: "daily-proof",
         createdAt: "2026-01-01T09:00:00.000Z",
@@ -494,7 +495,7 @@ function createMultiTaskCollection(): TaskCollection {
         id: "task-review",
         title: "Review project dashboard",
         description: "Review the task board entry action.",
-        status: "Review",
+        status: "In Progress",
         priority: "Medium",
         projectId: "daily-proof",
         createdAt: "2026-01-01T09:00:00.000Z",

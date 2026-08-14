@@ -1837,6 +1837,7 @@ function createPortalState(options: {
     selectedEmployeeIndex: 0,
     selectedCandidatePromotionIndex: 0,
     selectedInfluenceFocusIndex: 0,
+    selectedProjectDashboardActiveWorkIndex: 0,
     projects: [{
       id: "daily-proof",
       name: "Daily Proof",

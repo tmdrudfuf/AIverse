@@ -71,9 +71,9 @@ export function createProjectDashboardPanelRows(snapshot: ProjectDashboardSnapsh
     progressText: `Progress: ${snapshot.progress.label}`,
     healthText: snapshot.health.reason,
     activeWorkHeading: "Active Work",
-    activeWorkTaskIds: snapshot.activeWork.slice(0, 4).map((workItem) => workItem.id),
+    activeWorkTaskIds: snapshot.activeWork.slice(0, 3).map((workItem) => workItem.id),
     activeWorkRows: snapshot.activeWork.length > 0
-      ? snapshot.activeWork.slice(0, 4).map((workItem) => `${workItem.title} - ${workItem.status} (${workItem.priority})`)
+      ? snapshot.activeWork.slice(0, 3).map((workItem) => `${workItem.title} - ${workItem.status} (${workItem.priority})`)
       : ["No active tasks visible."],
     employeeHeading: "Employees",
     employeeRows: snapshot.employees.length > 0
