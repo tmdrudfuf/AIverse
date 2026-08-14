@@ -23,6 +23,8 @@ export const FIFTH_EMPLOYEE: Employee = {
   role: "Engineer",
   status: "Idle",
   avatarColor: "#f59e0b",
+  assignedTaskId: undefined,
+  currentProjectId: undefined,
   capabilities: ["Product Planning", "Full Stack", "Launch Support"],
   description: "Fifth placeholder employee recruited to expand the AIverse team and support company growth.",
   provider: "placeholder",
