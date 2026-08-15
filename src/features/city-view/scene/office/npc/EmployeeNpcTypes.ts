@@ -19,12 +19,20 @@ export type EmployeeNpcPlaceholderStyle = {
   labelColor: string;
 };
 
+export type EmployeeNpcWorkAnimation = {
+  kind: "workstationTask";
+  active: boolean;
+  taskId?: string;
+  taskTitle?: string;
+};
+
 export type EmployeeNpcViewModel = {
   employeeId: string;
   displayName: string;
   displayLabel: string;
   state: EmployeeSimulationState;
   currentTaskTitle?: string;
+  workAnimation?: EmployeeNpcWorkAnimation;
   positionHint: EmployeeNpcPositionHint | EmployeeNpcMovementPositionHint;
   movementState?: EmployeeNpcMovementState;
   currentMovementPosition?: EmployeeNpcMovementPosition;
