@@ -12,8 +12,10 @@ import { DAILY_PROOF_OFFICE_SCENE_KEY } from "./officeConfig";
 import { OfficeActionInputController } from "./OfficeActionInputController";
 import { OfficeCollisionMap } from "./OfficeCollisionMap";
 import { OfficeExitController } from "./OfficeExitController";
+import { EmployeeConversationBubbleOverlay } from "./conversations/EmployeeConversationBubbleOverlay";
 import { EmployeeInsightOverlay } from "./insight/EmployeeInsightOverlay";
 import { EmployeeInsightService } from "./insight/EmployeeInsightService";
+import type { EmployeeInsightTarget } from "./insight/EmployeeInsightTypes";
 import { EmployeeKnowledgeOverlay } from "./knowledge/EmployeeKnowledgeOverlay";
 import { EmployeeKnowledgeService } from "./knowledge/EmployeeKnowledgeService";
 import { OfficeInteractionController } from "./OfficeInteractionController";
@@ -46,8 +48,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeProgressionVisualStateLayer?: OfficeProgressionVisualStateLayer;
     private officeProjectPortalController?: OfficeProjectPortalController;
     private officeEmployeeNpcRenderer?: OfficeEmployeeNpcRenderer;
+    private employeeConversationBubbleOverlay?: EmployeeConversationBubbleOverlay;
     private employeeInsightService?: EmployeeInsightService;
     private employeeInsightOverlay?: EmployeeInsightOverlay;
+    private currentEmployeeInsightTarget?: EmployeeInsightTarget;
     private employeeKnowledgeService?: EmployeeKnowledgeService;
     private employeeKnowledgeOverlay?: EmployeeKnowledgeOverlay;
     private officeTilemapLayers?: OfficeTilemapLayers;
@@ -100,6 +104,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeLevelUpReactionLayer = new OfficeLevelUpReactionLayer(this);
       this.officeProjectPortalController = new OfficeProjectPortalController(this);
       this.officeEmployeeNpcRenderer = new OfficeEmployeeNpcRenderer(this);
+      this.employeeConversationBubbleOverlay = new EmployeeConversationBubbleOverlay(this);
       this.employeeInsightService = new EmployeeInsightService();
       this.employeeInsightOverlay = new EmployeeInsightOverlay(this);
       this.employeeKnowledgeService = new EmployeeKnowledgeService();
@@ -154,6 +159,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         });
         this.refreshEmployeeNpcRenderer();
         this.refreshEmployeeInsightOverlay({ isBlockingOverlayOpen: true });
+        this.employeeConversationBubbleOverlay?.hide();
         this.refreshOfficeProgressionVisualState();
         return;
       }
@@ -168,6 +174,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const isExitActive = this.officeExitController?.isExitActive() ?? false;
       const activeObject = isExitActive ? undefined : this.officeInteractionController?.getActiveObject();
       this.officeInteractionPrompt?.update(activeObject);
+      this.refreshEmployeeInsightOverlay();
 
       if (actionPressed) {
         const growthLoop = this.officeProjectPortalController?.getCompanyGrowthGameplayLoopResult();
@@ -186,6 +193,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         if (interactionResult?.action === "use_computer") {
           this.officeInteractionPrompt?.update(undefined);
           this.officeProjectPortalController?.open();
+          this.employeeConversationBubbleOverlay?.hide();
+        } else if (!interactionResult) {
+          this.showNearbyEmployeeConversationBubble();
         }
       }
 
@@ -193,6 +203,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController?.update(delta, intent);
       this.refreshEmployeeNpcRenderer();
       this.refreshEmployeeInsightOverlay();
+      this.employeeConversationBubbleOverlay?.update(this.time.now);
       this.refreshOfficeProgressionVisualState();
     }
 
@@ -219,13 +230,25 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       );
 
       if (insightState.viewModel) {
+        this.currentEmployeeInsightTarget = insightState.target;
         this.employeeInsightOverlay.update(insightState.viewModel);
         this.refreshEmployeeKnowledgeOverlay(insightState.target);
         return;
       }
 
+      this.currentEmployeeInsightTarget = undefined;
       this.employeeInsightOverlay.hide();
       this.employeeKnowledgeOverlay?.hide();
+    }
+
+    private showNearbyEmployeeConversationBubble() {
+      const employeeId = this.currentEmployeeInsightTarget?.employeeId;
+      if (!employeeId) return;
+
+      const viewModel = this.officeProjectPortalController?.getEmployeeConversationViewModel(employeeId);
+      if (!viewModel) return;
+
+      this.employeeConversationBubbleOverlay?.show(viewModel, this.time.now);
     }
 
     private refreshEmployeeKnowledgeOverlay(insightTarget: ReturnType<EmployeeInsightService["getInsightState"]>["target"]) {
@@ -269,6 +292,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeLevelUpReactionLayer?.destroy();
       this.employeeInsightOverlay?.destroy();
       this.employeeKnowledgeOverlay?.destroy();
+      this.employeeConversationBubbleOverlay?.destroy();
       this.officeEmployeeNpcRenderer?.destroy();
       this.officeProjectPortalController?.destroy();
       this.officeExitController?.destroy();
@@ -285,8 +309,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeLevelUpReactionLayer = undefined;
       this.officeProjectPortalController = undefined;
       this.officeEmployeeNpcRenderer = undefined;
+      this.employeeConversationBubbleOverlay = undefined;
       this.employeeInsightService = undefined;
       this.employeeInsightOverlay = undefined;
+      this.currentEmployeeInsightTarget = undefined;
       this.employeeKnowledgeService = undefined;
       this.employeeKnowledgeOverlay = undefined;
       this.officeExitController = undefined;
