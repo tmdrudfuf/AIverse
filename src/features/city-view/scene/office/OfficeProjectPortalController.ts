@@ -729,6 +729,7 @@ export class OfficeProjectPortalController {
           displayLabel: snapshot.displayLabel,
           state: snapshot.currentState,
           currentTaskTitle: currentTask?.title,
+          workAnimation: createNpcWorkAnimation(snapshot, currentTask, movementSnapshot),
           positionHint: movementSnapshot?.positionHint ?? {
             zone: getNpcPositionZone(snapshot.currentState),
             slot: index,
@@ -4107,6 +4108,34 @@ function getConversationDistance(
   const zoneDistance = playerPosition.zone === npcPosition.zone ? 0 : 100;
   return zoneDistance + Math.abs(playerPosition.slot - npcPosition.slot);
 }
+
+function createNpcWorkAnimation(
+  snapshot: EmployeeSimulationSnapshot,
+  currentTask: ProjectTask | undefined,
+  movementSnapshot: EmployeeNpcMovementSnapshot | undefined,
+): EmployeeNpcViewModel["workAnimation"] {
+  if (
+    snapshot.currentState !== "working" ||
+    movementSnapshot?.movementState !== "arrived" ||
+    movementSnapshot.targetPosition.zone !== "workstation"
+  ) {
+    return undefined;
+  }
+
+  return {
+    kind: "workstationTask",
+    active: true,
+    taskId: currentTask?.id ?? snapshot.currentTaskId,
+    taskTitle: currentTask?.title ? truncateNpcWorkAnimationTaskTitle(currentTask.title) : undefined,
+  };
+}
+
+function truncateNpcWorkAnimationTaskTitle(title: string) {
+  const maxLength = 48;
+  if (title.length <= maxLength) return title;
+  return `${title.slice(0, maxLength - 3)}...`;
+}
+
 function createWorkstationTargetHints(workstationSnapshots: ReadonlyArray<WorkstationSnapshot>) {
   return workstationSnapshots.reduce<Record<string, EmployeeNpcMovementPositionHint>>((targetHints, snapshot) => {
     if (snapshot.state !== "reserved" && snapshot.state !== "occupied") return targetHints;

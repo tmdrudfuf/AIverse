@@ -6,6 +6,7 @@ import { resolveEmployeeNpcWorldPosition } from "./EmployeeNpcPositionResolver";
 type RenderedEmployeeNpc = {
   container: Phaser.GameObjects.Container;
   body: Phaser.GameObjects.Rectangle;
+  workIndicator: Phaser.GameObjects.Rectangle;
   nameText: Phaser.GameObjects.Text;
   stateText: Phaser.GameObjects.Text;
 };
@@ -56,6 +57,7 @@ export class OfficeEmployeeNpcRenderer {
     renderedNpc.container.setDepth(1100);
     renderedNpc.body.setFillStyle(style.fillColor, 1);
     renderedNpc.body.setStrokeStyle(2, style.borderColor, 1);
+    updateWorkIndicator(renderedNpc.workIndicator, viewModel, getSceneTime(this.scene));
     renderedNpc.nameText.setPosition(labelOffset.x, labelOffset.y);
     renderedNpc.nameText.setText(viewModel.displayName);
     renderedNpc.nameText.setColor(style.labelColor);
@@ -67,6 +69,9 @@ export class OfficeEmployeeNpcRenderer {
   private createNpc(viewModel: EmployeeNpcViewModel) {
     const body = this.scene.add.rectangle(0, 0, 22, 26, DEFAULT_STYLE.fillColor, 1);
     body.setStrokeStyle(2, DEFAULT_STYLE.borderColor, 1);
+
+    const workIndicator = this.scene.add.rectangle(14, -10, 8, 8, 0x22c55e, 0);
+    workIndicator.setVisible(false);
 
     const nameText = this.scene.add.text(0, 22, viewModel.displayName, {
       fontFamily: "monospace",
@@ -88,8 +93,8 @@ export class OfficeEmployeeNpcRenderer {
     });
     stateText.setOrigin(0.5, 0);
 
-    const container = this.scene.add.container(0, 0, [body, nameText, stateText]);
-    const renderedNpc = { container, body, nameText, stateText };
+    const container = this.scene.add.container(0, 0, [body, workIndicator, nameText, stateText]);
+    const renderedNpc = { container, body, workIndicator, nameText, stateText };
     this.renderedNpcs.set(viewModel.employeeId, renderedNpc);
     return renderedNpc;
   }
@@ -145,6 +150,33 @@ function formatStateLabel(viewModel: EmployeeNpcViewModel) {
   }
 
   return viewModel.displayLabel;
+}
+
+function updateWorkIndicator(
+  workIndicator: Phaser.GameObjects.Rectangle,
+  viewModel: EmployeeNpcViewModel,
+  sceneTimeMs: number,
+) {
+  if (!viewModel.workAnimation?.active) {
+    workIndicator.setVisible(false);
+    workIndicator.setFillStyle(0x22c55e, 0);
+    return;
+  }
+
+  const pulseSeed = getStablePulseSeed(viewModel.employeeId);
+  const alpha = 0.55 + Math.abs(Math.sin((sceneTimeMs + pulseSeed) / 180)) * 0.35;
+  workIndicator
+    .setPosition(14, -10)
+    .setVisible(true)
+    .setFillStyle(0x22c55e, alpha);
+}
+
+function getSceneTime(scene: PhaserScene) {
+  return typeof scene.time?.now === "number" ? scene.time.now : 0;
+}
+
+function getStablePulseSeed(value: string) {
+  return Array.from(value).reduce((seed, character) => seed + character.charCodeAt(0), 0);
 }
 
 function truncate(value: string, maxLength: number) {
