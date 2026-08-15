@@ -60,6 +60,7 @@ import {
   type PostValidationReviewTargetDisplayRows,
 } from "./post-validation-review-target/PostValidationReviewTargetView";
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
+import { FIFTH_EMPLOYEE_ID } from "./employees/EmployeeRecruitmentService";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { createIssueSyncDisplayRows, type IssueSyncDisplayRows } from "./issue-sync/IssueSyncView";
@@ -205,8 +206,10 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 200, wrapText(`[BLOCKED] ${dashboardRows.bottleneckText.replace("Bottleneck: ", "")}`, 38), mutedStyle());
     this.addText(this.panelX + 360, this.panelY + 200, wrapText(`[RISK] ${dashboardRows.riskText.replace("Risk: ", "")}`, 36), mutedStyle());
     this.addText(this.panelX + 44, this.panelY + 224, wrapText(dashboardRows.productivityText, 82), mutedStyle());
-    const focusMarker = state.selectedProjectIndex < 0 ? ">" : " ";
-    this.addText(this.panelX + 44, this.panelY + 248, wrapText(`${focusMarker} [FOCUS] ${dashboardRows.focusText.replace("Focus: ", "")}`, 82), rowStyle(true, state.selectedProjectIndex < 0));
+    const recruitMarker = state.selectedProjectIndex === -2 ? ">" : " ";
+    this.addText(this.panelX + 44, this.panelY + 248, wrapText(`${recruitMarker} ${getRecruitingActionText(state)}`, 38), rowStyle(true, state.selectedProjectIndex === -2));
+    const focusMarker = state.selectedProjectIndex === -1 ? ">" : " ";
+    this.addText(this.panelX + 360, this.panelY + 248, wrapText(`${focusMarker} [FOCUS] ${dashboardRows.focusText.replace("Focus: ", "")}`, 38), rowStyle(true, state.selectedProjectIndex === -1));
     this.addText(this.panelX + 44, this.panelY + DASHBOARD_SUMMARY_Y, summaryText, mutedStyle());
     this.addText(this.panelX + 44, this.panelY + sourceY, compactTextLine(`[SOURCE] ${dashboardRows.projectSourceText.replace("Sources: ", "")}`, 82), mutedStyle());
     this.addTerminalPanel(this.panelX + 20, this.panelY + projectsPanelY, this.panelWidth - 40, 100);
@@ -229,6 +232,7 @@ export class OfficeProjectPortalView {
       const rowY = this.panelY + dashboardSectionY + 30 + index * DASHBOARD_ROW_GAP;
       this.addText(this.panelX + 406, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
     });
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Up/Down select  Enter/Space action", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderInfluencePlanning(state: ProjectPortalState) {
@@ -848,6 +852,18 @@ function getNextActionText(project: ProjectPortalProject) {
 function getLastActionText(state: ProjectPortalState, project: ProjectPortalProject) {
   if (state.lastPlaceholderAction?.projectId !== project.id) return undefined;
   return `Placeholder action recorded: ${state.lastPlaceholderAction.actionLabel}`;
+}
+
+function getRecruitingActionText(state: ProjectPortalState) {
+  if (state.employees.some((employee) => employee.id === FIFTH_EMPLOYEE_ID)) {
+    return "[RECRUIT] Fifth employee joined";
+  }
+
+  if (state.fifthEmployeeRecruitmentResult?.status === "blocked") {
+    return "[RECRUIT] Starter roster not ready";
+  }
+
+  return "[RECRUIT] Recruit fifth employee";
 }
 
 function getRepositoryIdentityProviderLabel(provider: ProjectRegistryRepositoryIdentity["provider"]) {

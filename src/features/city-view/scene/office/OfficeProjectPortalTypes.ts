@@ -3,6 +3,7 @@ import type { ProjectManagementSuggestion } from "./ai/AIProjectManagerTypes";
 import type { CompanyDashboardSnapshot } from "./dashboard/CompanyDashboardTypes";
 import type { CompanyProgressionSnapshot, CompanyProgressionTrigger } from "./progression/CompanyProgressionTypes";
 import type { Employee } from "./employees/EmployeeTypes";
+import type { EmployeeRecruitmentResult } from "./employees/EmployeeRecruitmentService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
@@ -211,6 +212,7 @@ export type ProjectPortalState = {
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
   projectManagementSuggestions: Record<string, ProjectManagementSuggestion>;
   employees: Employee[];
+  fifthEmployeeRecruitmentResult?: EmployeeRecruitmentResult;
   employeeSimulations: Record<string, EmployeeSimulationSnapshot>;
   employeeAssignments: Record<string, string>;
   workSessions: Record<string, WorkSession[]>;

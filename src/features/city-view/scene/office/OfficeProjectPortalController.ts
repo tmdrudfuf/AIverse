@@ -26,6 +26,7 @@ import { PreparedWorkSessionService } from "./prepared-work-sessions/PreparedWor
 import type { CompanyDashboardProvider } from "./dashboard/CompanyDashboardTypes";
 import { EmployeeAIService } from "./employees/EmployeeAIService";
 import type { EmployeeAISnapshot } from "./employees/EmployeeAITypes";
+import { EmployeeRecruitmentService } from "./employees/EmployeeRecruitmentService";
 import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
@@ -265,6 +266,7 @@ export class OfficeProjectPortalController {
   private readonly activePostValidationReviewKeys = new Set<string>();
   private readonly taskService: ProjectTaskService;
   private readonly employeeService: EmployeeService;
+  private readonly employeeRecruitmentService: EmployeeRecruitmentService;
   private readonly employeeSimulationService: EmployeeSimulationService;
   private readonly employeeNpcMovementService: EmployeeNpcMovementService;
   private readonly workstationOccupancyService: WorkstationOccupancyService;
@@ -333,6 +335,7 @@ export class OfficeProjectPortalController {
     this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
+    this.employeeRecruitmentService = new EmployeeRecruitmentService();
     this.employeeSimulationService = new EmployeeSimulationService();
     this.employeeNpcMovementService = new EmployeeNpcMovementService();
     this.workstationOccupancyService = new WorkstationOccupancyService();
@@ -360,7 +363,7 @@ export class OfficeProjectPortalController {
     this.state.isOpen = true;
     this.state.justOpened = true;
     this.state.viewMode = "list";
-    this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, -1, this.state.projects.length - 1);
+    this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, -2, this.state.projects.length - 1);
     this.state.selectedProjectId = this.state.projects[this.state.selectedProjectIndex]?.id ?? "";
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
@@ -813,7 +816,14 @@ export class OfficeProjectPortalController {
     if (input.downPressed) this.moveProjectSelection(1);
 
     if (input.actionPressed || input.enterPressed) {
-      if (this.state.selectedProjectIndex < 0) {
+      if (this.state.selectedProjectIndex === -2) {
+        void this.recruitFifthEmployee().then((handled) => {
+          if (handled) this.view.render(this.state);
+        });
+        return;
+      }
+
+      if (this.state.selectedProjectIndex === -1) {
         this.openInfluencePlanning();
         return;
       }
@@ -3270,6 +3280,40 @@ export class OfficeProjectPortalController {
     );
   }
 
+  private async recruitFifthEmployee() {
+    if (this.state.employees.length === 0) {
+      const requestVersion = this.employeeRequestVersion + 1;
+      this.employeeRequestVersion = requestVersion;
+
+      const loadedEmployees = await this.employeeService.getEmployees();
+      if (!this.shouldApplyFifthEmployeeRecruitment(requestVersion)) return false;
+
+      this.state.employees = loadedEmployees;
+    }
+
+    const outcome = this.employeeRecruitmentService.recruitFifthEmployee(this.state.employees);
+    this.state.fifthEmployeeRecruitmentResult = outcome.result;
+
+    if (outcome.result.status !== "recruited") {
+      return true;
+    }
+
+    this.state.employees = outcome.employees;
+    this.refreshCandidateAssignmentsForSelectedProject();
+    this.refreshEmployeeSimulationSnapshots();
+    this.refreshCompanyDashboardSnapshot();
+    return true;
+  }
+
+  private shouldApplyFifthEmployeeRecruitment(requestVersion: number) {
+    return (
+      this.state.isOpen &&
+      this.state.viewMode === "list" &&
+      this.state.selectedProjectIndex === -2 &&
+      this.employeeRequestVersion === requestVersion
+    );
+  }
+
   private assignSelectedEmployeeToSelectedTask() {
     const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
     const collection = projectId ? this.state.taskCollections[projectId] : undefined;
@@ -3493,7 +3537,7 @@ export class OfficeProjectPortalController {
   }
 
   private moveProjectSelection(delta: number) {
-    const nextIndex = clamp(this.state.selectedProjectIndex + delta, -1, this.state.projects.length - 1);
+    const nextIndex = clamp(this.state.selectedProjectIndex + delta, -2, this.state.projects.length - 1);
     if (nextIndex === this.state.selectedProjectIndex) return;
 
     this.state.selectedProjectIndex = nextIndex;
