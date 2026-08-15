@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/098-fifth-employee-recruiting-action/plan.md
+shell commands, and other important information, read specs/099-visible-office-level-up-reaction/plan.md
 <!-- SPECKIT END -->
