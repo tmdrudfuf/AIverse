@@ -34,7 +34,11 @@ import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
 import { createExecutionPlanCollection, resolveCurrentExecutionPlan, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
-import { createExecutionReadinessCollection, createExecutionReadinessResultCollection } from "./execution-readiness/ExecutionReadinessTypes";
+import {
+  createExecutionReadinessCollection,
+  createExecutionReadinessResultCollection,
+  type ExecutionReadinessRepositoryEvidence,
+} from "./execution-readiness/ExecutionReadinessTypes";
 import { HumanExecutionApprovalService } from "./human-execution-approvals/HumanExecutionApprovalService";
 import { createHumanExecutionApprovalCollection } from "./human-execution-approvals/HumanExecutionApprovalTypes";
 import { RuntimePreflightService } from "./runtime-preflight/RuntimePreflightService";
@@ -212,6 +216,31 @@ function createExecutionPlanRepositoryContext(
     worktreePath,
     branchName,
     specPath,
+  };
+}
+
+function createExecutionReadinessRepositoryEvidence(
+  projectId: string,
+  project: ProjectPortalState["projects"][number] | undefined,
+  repositorySnapshot: RepositorySyncSnapshot | undefined,
+  plan: ExecutionPlan,
+): ExecutionReadinessRepositoryEvidence {
+  const repositoryIdentity = project?.repositoryIdentity;
+  const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+    ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+    : undefined;
+  const context = createExecutionPlanRepositoryContext(project, repositorySnapshot);
+
+  return {
+    projectId,
+    repositoryId,
+    repositoryPathSignal: context?.repositoryPath,
+    worktreePathSignal: context?.worktreePath,
+    branchSignal: repositorySnapshot?.currentBranch ?? context?.branchName,
+    specPathSignal: context?.specPath ?? plan.specPath,
+    repositorySyncStatus: repositorySnapshot?.syncStatus,
+    owner: repositoryIdentity?.owner,
+    name: repositoryIdentity?.name,
   };
 }
 
@@ -1706,11 +1735,7 @@ export class OfficeProjectPortalController {
     }
 
     const project = this.state.projects.find((item) => item.id === projectId);
-    const repositoryIdentity = project?.repositoryIdentity;
     const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
-    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
-      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
-      : undefined;
     const existingReadiness = this.state.executionReadinessCollections[projectId]
       ?? createExecutionReadinessCollection({ projectId, readiness: [], rulesVersion: "readiness-v1" });
     const existingResults = this.state.executionReadinessResultCollections[projectId]
@@ -1728,17 +1753,7 @@ export class OfficeProjectPortalController {
       preparedSessions: this.state.preparedWorkSessionRecords,
       activeSessions: this.state.workSessions,
       employees: this.state.employees,
-      repositoryEvidence: {
-        projectId,
-        repositoryId,
-        repositoryPathSignal: repositoryIdentity?.localPath,
-        worktreePathSignal: repositoryIdentity?.localPath,
-        branchSignal: repositorySnapshot?.currentBranch,
-        specPathSignal: revalidatedPlan.specPath,
-        repositorySyncStatus: repositorySnapshot?.syncStatus,
-        owner: repositoryIdentity?.owner,
-        name: repositoryIdentity?.name,
-      },
+      repositoryEvidence: createExecutionReadinessRepositoryEvidence(projectId, project, repositorySnapshot, revalidatedPlan),
       roleContext: {
         implementerAgent: "Implementer",
         reviewerAgent: "Reviewer",
@@ -1795,11 +1810,7 @@ export class OfficeProjectPortalController {
     }
 
     const project = this.state.projects.find((item) => item.id === projectId);
-    const repositoryIdentity = project?.repositoryIdentity;
     const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
-    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
-      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
-      : undefined;
     const existingReadiness = this.state.executionReadinessCollections[projectId]
       ?? createExecutionReadinessCollection({ projectId, readiness: [], rulesVersion: "readiness-v1" });
     const existingReadinessResults = this.state.executionReadinessResultCollections[projectId]
@@ -1817,17 +1828,7 @@ export class OfficeProjectPortalController {
       preparedSessions: this.state.preparedWorkSessionRecords,
       activeSessions: this.state.workSessions,
       employees: this.state.employees,
-      repositoryEvidence: {
-        projectId,
-        repositoryId,
-        repositoryPathSignal: repositoryIdentity?.localPath,
-        worktreePathSignal: repositoryIdentity?.localPath,
-        branchSignal: repositorySnapshot?.currentBranch,
-        specPathSignal: revalidatedPlan.specPath,
-        repositorySyncStatus: repositorySnapshot?.syncStatus,
-        owner: repositoryIdentity?.owner,
-        name: repositoryIdentity?.name,
-      },
+      repositoryEvidence: createExecutionReadinessRepositoryEvidence(projectId, project, repositorySnapshot, revalidatedPlan),
       roleContext: {
         implementerAgent: "Implementer",
         reviewerAgent: "Reviewer",
@@ -1898,11 +1899,7 @@ export class OfficeProjectPortalController {
     }
 
     const project = this.state.projects.find((item) => item.id === projectId);
-    const repositoryIdentity = project?.repositoryIdentity;
     const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
-    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
-      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
-      : undefined;
     const existingReadiness = this.state.executionReadinessCollections[projectId]
       ?? createExecutionReadinessCollection({ projectId, readiness: [], rulesVersion: "readiness-v1" });
     const existingReadinessResults = this.state.executionReadinessResultCollections[projectId]
@@ -1919,17 +1916,7 @@ export class OfficeProjectPortalController {
       preparedSessions: this.state.preparedWorkSessionRecords,
       activeSessions: this.state.workSessions,
       employees: this.state.employees,
-      repositoryEvidence: {
-        projectId,
-        repositoryId,
-        repositoryPathSignal: repositoryIdentity?.localPath,
-        worktreePathSignal: repositoryIdentity?.localPath,
-        branchSignal: repositorySnapshot?.currentBranch,
-        specPathSignal: revalidatedPlan.specPath,
-        repositorySyncStatus: repositorySnapshot?.syncStatus,
-        owner: repositoryIdentity?.owner,
-        name: repositoryIdentity?.name,
-      },
+      repositoryEvidence: createExecutionReadinessRepositoryEvidence(projectId, project, repositorySnapshot, revalidatedPlan),
       roleContext: {
         implementerAgent: "Implementer",
         reviewerAgent: "Reviewer",
