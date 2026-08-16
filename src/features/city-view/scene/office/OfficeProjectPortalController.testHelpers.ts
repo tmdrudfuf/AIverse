@@ -298,7 +298,7 @@ export async function driveDailyProofToRuntimeStart(
     owner: "ai-verse",
     name: "daily-proof",
     defaultBranch: "main",
-    localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-075",
+    localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
     connectionState: "Available",
   };
   internals.state.repositorySyncSnapshots["daily-proof"] = {
@@ -307,7 +307,7 @@ export async function driveDailyProofToRuntimeStart(
     owner: "ai-verse",
     name: "daily-proof",
     defaultBranch: "main",
-    currentBranch: "codex/075-claude-implementer-runtime-foundation",
+    currentBranch: "codex/103-daily-proof-configured-runtime-repository-context",
     syncStatus: "Succeeded",
     workingTreeState: "clean",
   };

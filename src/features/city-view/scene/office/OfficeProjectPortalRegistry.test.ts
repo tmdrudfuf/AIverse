@@ -19,7 +19,7 @@ describe("createProjectPortalState", () => {
       status: "Active",
       enabled: true,
       ownerCompany: "Daily Proof Inc.",
-      localRepositoryLabel: "Connected (local)",
+      localRepositoryLabel: "Bound (local)",
       repositoryIdentity: {
         provider: "github",
         owner: "ai-verse",
@@ -27,7 +27,17 @@ describe("createProjectPortalState", () => {
         url: "https://github.com/ai-verse/daily-proof",
         defaultBranch: "main",
         connectionState: "Configured",
+        localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
       },
+    });
+    expect(dailyProof?.localRepositoryBinding).toEqual({
+      projectId: "daily-proof",
+      repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
+      worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
+      branchName: "codex/103-daily-proof-configured-runtime-repository-context",
+      specPath: "specs/103-daily-proof-configured-runtime-repository-context/spec.md",
+      source: "ados-handoff",
+      boundAt: "2026-08-15T00:00:00.000Z",
     });
   });
 
@@ -102,5 +112,8 @@ describe("createProjectPortalState", () => {
     expect(second.projects[0].name).toBe("Daily Proof");
     expect(second.repositoryMappings[0].repository.owner).toBe("ai-verse");
     expect(second.projects[0].repositoryIdentity?.connectionState).toBe("Configured");
+    expect(second.projects[0].localRepositoryBinding?.worktreePath).toBe(
+      "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
+    );
   });
 });

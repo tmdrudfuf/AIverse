@@ -129,6 +129,30 @@ describe("ExecutionPlanService", () => {
     ]);
   });
 
+  it("accepts configured branch context when repository evidence omits a current branch", () => {
+    const service = new ExecutionPlanService();
+    const outcome = service.createPlan(createInput({
+      repositorySnapshot: { ...createRepositorySnapshot(), currentBranch: undefined },
+    }));
+
+    expect(outcome.result.reasonCodes).toEqual(["CREATED"]);
+    expect(outcome.plan?.branchName).toBe("codex/070-execution-plan-foundation");
+  });
+
+  it("blocks configured branch context when explicit repository evidence disagrees", () => {
+    const service = new ExecutionPlanService();
+    const outcome = service.createPlan(createInput({
+      repositorySnapshot: { ...createRepositorySnapshot(), currentBranch: "codex/other-feature" },
+    }));
+
+    expect(outcome.result).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["BRANCH_UNAVAILABLE"],
+      createdPlan: false,
+    });
+    expect(outcome.plan).toBeUndefined();
+  });
+
   it("protects returned plan and result arrays from caller mutation", () => {
     const service = new ExecutionPlanService();
     const outcome = service.createPlan(createInput());
