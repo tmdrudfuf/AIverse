@@ -870,6 +870,44 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")?.text).toBe("[CANDIDATE TOP] High/Bug #12 Fix crash on launch (Open)");
   });
 
+  it("renders read-only candidate detail for the selected Project Dashboard candidate", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "candidate-detail",
+      projectDashboardSnapshot: createProjectDashboardSnapshot(),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.selectedCandidateTaskId = "daily-proof:candidate-task:ai-verse/daily-proof#12";
+    state.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        taskCount: 1,
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        tasks: [createCandidateTask(12, "Fix crash on launch", "High", "Bug")],
+      },
+    };
+    state.candidateAssignmentCollections = {
+      "daily-proof": createCandidateAssignmentCollection("Recommended", "Strong"),
+    };
+    state.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("PendingReview"),
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("Candidate Detail");
+    expect(renderedText.map((item) => item.text)).toContain("Fix crash on launch");
+    expect(renderedText.map((item) => item.text)).toContain("Issue: #12 (Open)");
+    expect(renderedText.map((item) => item.text)).toContain("Candidate: High/Bug");
+    expect(renderedText.some((item) => item.text.includes("Assignment: Recommended -> GPT Engineer (Strong)"))).toBe(true);
+    expect(renderedText.some((item) => item.text.includes("Promotion: PendingReview"))).toBe(true);
+    expect(renderedText.some((item) => item.text.includes("No task, employee, runtime, repository, or GitHub changes."))).toBe(true);
+  });
+
   it("renders assignment recommendation rows separately below candidate task rows", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];

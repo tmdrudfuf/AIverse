@@ -120,6 +120,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     selectedProjectDashboardProjectId: undefined,
     selectedProjectDashboardActiveWorkIndex: 0,
     selectedCandidatePromotionIndex: 0,
+    selectedCandidateTaskId: undefined,
     selectedInfluenceFocusIndex: 0,
     projects: registryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices())),
     projectRegistryEntries: registryEntries,

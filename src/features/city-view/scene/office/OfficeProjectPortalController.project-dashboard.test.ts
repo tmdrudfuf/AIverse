@@ -20,6 +20,8 @@ import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
+import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
+import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
@@ -289,6 +291,71 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.workSessions).toEqual(beforeWorkSessions);
     expect(state.companyInfluencePlan).toEqual(beforeInfluence);
   });
+
+  it("opens selected candidate detail from Project Dashboard with the action input", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(state.viewMode).toBe("candidate-detail");
+    expect(state.selectedCandidateTaskId).toBe("candidate-12");
+
+    controller.updateInput(createInput({ escapePressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedProjectDashboardProjectId).toBe("daily-proof");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+  });
+
+  it("keeps Enter on Project Dashboard available for existing candidate progression", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+    expect(state.candidatePromotionDecisionRecords["daily-proof:candidate-promotion:candidate-12:candidate-promotion-v1"]).toMatchObject({
+      promotionStatus: "Approved",
+      candidateTaskId: "candidate-12",
+    });
+  });
+
+  it("leaves Project Dashboard unchanged when selected candidate detail target is stale", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview", "missing-candidate");
+    const controller = createControllerHarness(state);
+    const beforeCandidateTasks = structuredClone(state.candidateTaskCollections);
+    const beforePromotions = structuredClone(state.candidatePromotionReviewCollections);
+    const beforeDecisions = structuredClone(state.candidatePromotionDecisionRecords);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+    expect(state.candidateTaskCollections).toEqual(beforeCandidateTasks);
+    expect(state.candidatePromotionReviewCollections).toEqual(beforePromotions);
+    expect(state.candidatePromotionDecisionRecords).toEqual(beforeDecisions);
+  });
 });
 
 type ControllerInternals = {
@@ -512,6 +579,85 @@ function createMultiTaskCollection(): TaskCollection {
         updatedAt: "2026-01-01T10:30:00.000Z",
       },
     ],
+  };
+}
+
+function createCandidateTaskCollection(): CandidateTaskCollection {
+  return {
+    projectId: "daily-proof",
+    sourceProvider: "github",
+    syncStatus: "Succeeded",
+    tasks: [{
+      id: "candidate-12",
+      originatingIssueId: "ai-verse/daily-proof#12",
+      issueNumber: 12,
+      projectId: "daily-proof",
+      title: "Fix crash on launch",
+      summary: "Fix crash on launch",
+      labels: ["bug"],
+      assignees: ["ada"],
+      state: "Open",
+      estimatedPriority: "High",
+      estimatedTaskType: "Bug",
+      sourceProvider: "github",
+      sourceRepositoryOwner: "ai-verse",
+      sourceRepositoryName: "daily-proof",
+      issueCreatedAt: "2026-01-01T09:00:00.000Z",
+      issueUpdatedAt: "2026-01-01T10:00:00.000Z",
+      mappedAt: "2026-01-01T10:05:00.000Z",
+      syncedAt: "2026-01-01T10:05:00.000Z",
+    }],
+    taskCount: 1,
+    mappedAt: "2026-01-01T10:05:00.000Z",
+    sourceIssueCount: 1,
+    sourceIssueSyncStatus: "Succeeded",
+    sourceIssueSyncedAt: "2026-01-01T10:00:00.000Z",
+  };
+}
+
+function createCandidatePromotionCollection(
+  status: "PendingReview" | "Approved",
+  candidateTaskId = "candidate-12",
+): CandidatePromotionReviewCollection {
+  return {
+    projectId: "daily-proof",
+    sourceCandidateTaskStatus: "Succeeded",
+    sourceAssignmentStatus: "Succeeded",
+    reviewStatus: "Succeeded",
+    reviews: [{
+      id: `daily-proof:candidate-promotion:${candidateTaskId}:candidate-promotion-v1`,
+      projectId: "daily-proof",
+      candidateTaskId,
+      candidateTaskTitle: "Fix crash on launch",
+      candidateTaskType: "Bug",
+      candidateTaskPriority: "High",
+      candidateTaskState: "Open",
+      candidateTaskProvenance: {
+        candidateTaskId,
+        originatingIssueId: "ai-verse/daily-proof#12",
+        issueNumber: 12,
+        sourceProvider: "github",
+      },
+      assignmentRecommendationId: "assignment-12",
+      recommendedEmployeeId: "employee-1",
+      recommendedEmployeeName: "Ada",
+      assignmentStatus: "Recommended",
+      promotionStatus: status,
+      eligibility: {
+        status: "PendingReview",
+        isApprovable: true,
+        reasonCodes: ["ELIGIBLE_RECOMMENDED_ASSIGNMENT"],
+        summary: "Ready for promotion.",
+      },
+      availableActions: status === "PendingReview" ? ["Approved", "Deferred", "Rejected"] : ["Deferred"],
+      rulesetVersion: "candidate-promotion-v1",
+    }],
+    reviewCount: 1,
+    selectedIndex: 0,
+    generatedAt: "2026-01-01T10:10:00.000Z",
+    rulesetVersion: "candidate-promotion-v1",
+    sourceCandidateTaskCount: 1,
+    sourceAssignmentCount: 1,
   };
 }
 

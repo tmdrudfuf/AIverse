@@ -95,6 +95,7 @@ export type ProjectPortalViewMode =
   | "task-detail"
   | "employee-selection"
   | "project-dashboard"
+  | "candidate-detail"
   | "influence-planning";
 
 export type ProjectPortalServiceStatus = {
@@ -164,6 +165,7 @@ export type ProjectPortalState = {
   selectedProjectDashboardProjectId?: string;
   selectedProjectDashboardActiveWorkIndex: number;
   selectedCandidatePromotionIndex: number;
+  selectedCandidateTaskId?: string;
   selectedInfluenceFocusIndex: number;
   selectedWorkSessionId?: string;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
