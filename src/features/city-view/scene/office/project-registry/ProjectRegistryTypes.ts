@@ -25,6 +25,45 @@ export type ProjectRegistryRepositoryIdentity = {
   lastVerifiedAt?: string;
 };
 
+export type LocalProjectRepositoryBinding = {
+  projectId: string;
+  repositoryPath?: string;
+  worktreePath?: string;
+  branchName?: string;
+  specPath?: string;
+  source?: string;
+  boundAt?: string;
+};
+
+export type NormalizedLocalProjectRepositoryBinding = {
+  projectId: string;
+  repositoryPath: string;
+  worktreePath: string;
+  branchName?: string;
+  specPath?: string;
+  source?: string;
+  boundAt?: string;
+};
+
+export type LocalProjectRepositoryBindingRejectionReason = "UnknownProject" | "MissingLocalPath";
+
+export type LocalProjectRepositoryBindingResult =
+  | {
+      projectId: string;
+      status: "Bound";
+      binding: NormalizedLocalProjectRepositoryBinding;
+    }
+  | {
+      projectId: string;
+      status: "Rejected";
+      reason: LocalProjectRepositoryBindingRejectionReason;
+    };
+
+export type LocalProjectRepositoryBindingApplication = {
+  entries: ProjectRegistryEntry[];
+  results: LocalProjectRepositoryBindingResult[];
+};
+
 export type ProjectRegistryEntry = {
   id: string;
   displayName: string;
@@ -32,6 +71,7 @@ export type ProjectRegistryEntry = {
   lifecycleStatus: ProjectPortalProjectStatus;
   projectType: ProjectPortalProjectType;
   localRepository: ProjectRegistryLocalRepositoryIdentity;
+  localRepositoryBinding?: NormalizedLocalProjectRepositoryBinding;
   remoteRepository?: GitHubRepositoryReference;
   repositoryIdentity: ProjectRegistryRepositoryIdentity;
   owner: ProjectRegistryOwner;

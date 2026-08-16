@@ -69,6 +69,28 @@ describe("createProjectPortalState", () => {
     ]);
   });
 
+  it("applies optional local repository bindings to registry entries and portal projects", () => {
+    const binding = {
+      projectId: "daily-proof",
+      repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
+      worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-local-project-repository-binding",
+      branchName: "codex/102-local-project-repository-binding",
+      specPath: "specs/102-local-project-repository-binding/spec.md",
+      source: "ados-handoff",
+      boundAt: "2026-08-15T00:00:00.000Z",
+    };
+
+    const state = createProjectPortalState({ localRepositoryBindings: [binding] });
+    const registryEntry = state.projectRegistryEntries.find((entry) => entry.id === "daily-proof");
+    const portalProject = state.projects.find((project) => project.id === "daily-proof");
+
+    expect(registryEntry?.localRepositoryBinding).toEqual(binding);
+    expect(registryEntry?.repositoryIdentity.localPath).toBe(binding.worktreePath);
+    expect(portalProject?.localRepositoryLabel).toBe("Bound (local)");
+    expect(portalProject?.localRepositoryBinding).toEqual(binding);
+    expect(portalProject?.repositoryIdentity?.localPath).toBe(binding.worktreePath);
+  });
+
   it("returns independent state on every call", () => {
     const first = createProjectPortalState();
     const second = createProjectPortalState();

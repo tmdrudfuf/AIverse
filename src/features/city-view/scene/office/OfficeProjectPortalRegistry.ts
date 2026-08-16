@@ -7,7 +7,7 @@ import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePla
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import { toProjectPortalProject, toRepositoryMapping } from "./project-registry/ProjectRegistryAdapters";
 import { ProjectRegistryService } from "./project-registry/ProjectRegistryService";
-import type { ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
+import type { LocalProjectRepositoryBinding, ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
 
 const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
   {
@@ -84,9 +84,13 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
   },
 };
 
-export function createProjectPortalState(): ProjectPortalState {
+export type CreateProjectPortalStateOptions = {
+  localRepositoryBindings?: ReadonlyArray<LocalProjectRepositoryBinding>;
+};
+
+export function createProjectPortalState(options: CreateProjectPortalStateOptions = {}): ProjectPortalState {
   const influencePlanningService = new CompanyInfluencePlanningService();
-  const projectRegistryService = new ProjectRegistryService();
+  const projectRegistryService = new ProjectRegistryService(undefined, options.localRepositoryBindings);
   const registryEntries = projectRegistryService.getAllProjects();
 
   return {
