@@ -28,7 +28,7 @@
 
 **Goal**: A player can open read-only detail for the selected Project Dashboard candidate.
 
-**Independent Test**: Open a Project Dashboard with candidate data, press Space/action, and verify candidate detail opens for the selected candidate.
+**Independent Test**: Open a Project Dashboard with candidate data, press C/detail, and verify candidate detail opens for the selected candidate.
 
 - [x] T005 [US1] Add controller tests for candidate detail navigation in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`
 - [x] T006 [US1] Add view tests for candidate detail content in `src/features/city-view/scene/office/OfficeProjectPortalView.test.ts`
@@ -44,7 +44,7 @@
 **Independent Test**: Press Enter on a selected candidate promotion and verify the existing progression path is still reached instead of candidate detail.
 
 - [x] T009 [US2] Add controller regression coverage for Enter preserving candidate progression in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`
-- [x] T010 [US2] Keep candidate detail on Space/action only in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`
+- [x] T010 [US2] Keep candidate detail on C/detail only in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`
 
 ---
 
@@ -52,7 +52,7 @@
 
 **Goal**: Missing or stale candidate references stay on Project Dashboard without data mutation.
 
-**Independent Test**: Use stale candidate selection, press Space/action, and verify no unrelated detail opens and data remains unchanged.
+**Independent Test**: Use stale candidate selection, press C/detail, and verify no unrelated detail opens and data remains unchanged.
 
 - [x] T011 [US3] Add stale candidate detail guard test in `src/features/city-view/scene/office/OfficeProjectPortalController.project-dashboard.test.ts`
 - [x] T012 [US3] Guard missing candidate data in `src/features/city-view/scene/office/OfficeProjectPortalController.ts`

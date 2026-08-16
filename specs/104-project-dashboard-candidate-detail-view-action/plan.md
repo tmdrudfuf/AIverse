@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add a read-only candidate detail drill-in from the Project Dashboard. The implementation reuses loaded candidate task, assignment, promotion, and promoted-task state, adds local selected candidate detail state, and keeps existing Enter-based candidate progression controls intact by using the existing action/Space input for detail navigation only.
+Add a read-only candidate detail drill-in from the Project Dashboard. The implementation reuses loaded candidate task, assignment, promotion, and promoted-task state, adds local selected candidate detail state, and keeps existing Enter-based candidate progression controls intact by using a dedicated C/detail input for detail navigation only.
 
 ## Technical Context
 

@@ -94,5 +94,5 @@ As the player, I should remain on the Project Dashboard if candidate detail cann
 ## Assumptions
 
 - The candidate detail action uses the existing Project Dashboard selected candidate promotion when promotion reviews are available.
-- Space/action is the candidate detail action so Enter can continue to drive the existing candidate approval and runtime progression flow.
+- C/detail is the candidate detail action so Enter can continue to drive the existing candidate approval and runtime progression flow and Space can continue cycling promotion decisions.
 - The first slice is read-only and in-memory only.

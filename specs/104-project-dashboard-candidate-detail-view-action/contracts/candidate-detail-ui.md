@@ -12,8 +12,9 @@ Define the player-facing candidate detail behavior expected from the Project Das
 
 ## Candidate Detail Action
 
-- Action/Space opens the candidate detail view for the selected candidate task.
+- C/detail opens the candidate detail view for the selected candidate task.
 - Enter remains reserved for the existing candidate approval/progression flow on the Project Dashboard.
+- Space remains reserved for the existing promotion decision cycle on the Project Dashboard.
 - If no selected candidate can be resolved, the action leaves the player on the Project Dashboard.
 
 ## Candidate Detail Content
