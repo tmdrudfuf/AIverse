@@ -296,7 +296,10 @@ function getRepositoryBlockReason(
   if (!input.repositorySnapshot || input.repositorySnapshot.syncStatus !== "Succeeded") return "REPOSITORY_METADATA_UNAVAILABLE";
   if (!context?.repositoryId || !context.repositoryPath) return "REPOSITORY_METADATA_UNAVAILABLE";
   if (!context.worktreePath || !input.pathChecks?.worktreeExists) return "WORKTREE_UNAVAILABLE";
-  if (!context.branchName || context.branchName !== input.repositorySnapshot.currentBranch) return "BRANCH_UNAVAILABLE";
+  if (!context.branchName) return "BRANCH_UNAVAILABLE";
+  if (input.repositorySnapshot.currentBranch && context.branchName !== input.repositorySnapshot.currentBranch) {
+    return "BRANCH_UNAVAILABLE";
+  }
   if (!context.specPath || !input.pathChecks?.specExists) return "SPEC_UNAVAILABLE";
   return undefined;
 }

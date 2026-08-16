@@ -658,7 +658,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       owner: "ai-verse",
       name: "daily-proof",
       defaultBranch: "main",
-      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-070",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
       connectionState: "Available",
     };
     internals.state.repositorySyncSnapshots["daily-proof"] = {
@@ -667,7 +667,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       owner: "ai-verse",
       name: "daily-proof",
       defaultBranch: "main",
-      currentBranch: "codex/070-execution-plan-foundation",
+      currentBranch: "codex/103-daily-proof-configured-runtime-repository-context",
       syncStatus: "Succeeded",
       workingTreeState: "clean",
     };
@@ -704,12 +704,14 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       githubMutationStarted: false,
     });
     expect(plan).toMatchObject({
-      featureId: "070-execution-plan-foundation",
+      featureId: "103-daily-proof-configured-runtime-repository-context",
       projectTaskId: internals.state.taskCollections["daily-proof"]?.tasks[0]?.id,
       implementerAgent: "Implementer",
       reviewerAgent: "Reviewer",
-      branchName: "codex/070-execution-plan-foundation",
-      specPath: "specs/070-execution-plan-foundation/spec.md",
+      repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
+      worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
+      branchName: "codex/103-daily-proof-configured-runtime-repository-context",
+      specPath: "specs/103-daily-proof-configured-runtime-repository-context/spec.md",
       executionStarted: false,
       runtimeStarted: false,
       subprocessStarted: false,
@@ -840,7 +842,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       owner: "ai-verse",
       name: "daily-proof",
       defaultBranch: "main",
-      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-070",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
       connectionState: "Available",
     };
     internals.state.repositorySyncSnapshots["daily-proof"] = {
@@ -849,7 +851,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       owner: "ai-verse",
       name: "daily-proof",
       defaultBranch: "main",
-      currentBranch: "codex/070-execution-plan-foundation",
+      currentBranch: "codex/103-daily-proof-configured-runtime-repository-context",
       syncStatus: "Succeeded",
       workingTreeState: "clean",
     };
@@ -923,7 +925,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       owner: "ai-verse",
       name: "daily-proof",
       defaultBranch: "main",
-      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-spec-070",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
       connectionState: "Available",
     };
     internals.state.repositorySyncSnapshots["daily-proof"] = {
@@ -932,7 +934,7 @@ describe("OfficeProjectPortalController issue sync concurrency and isolation", (
       owner: "ai-verse",
       name: "daily-proof",
       defaultBranch: "main",
-      currentBranch: "codex/070-execution-plan-foundation",
+      currentBranch: "codex/103-daily-proof-configured-runtime-repository-context",
       syncStatus: "Succeeded",
       workingTreeState: "clean",
     };

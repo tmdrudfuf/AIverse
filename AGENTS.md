@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/102-local-project-repository-binding/plan.md
+shell commands, and other important information, read specs/103-daily-proof-configured-runtime-repository-context/plan.md
 <!-- SPECKIT END -->

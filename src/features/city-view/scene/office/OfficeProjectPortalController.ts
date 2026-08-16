@@ -120,6 +120,7 @@ import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { resolveEmployeeNpcWorldPosition } from "./npc/EmployeeNpcPositionResolver";
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
@@ -173,8 +174,8 @@ const CONVERSATION_POSITION_ZONES = new Set<string>([
   "breakArea",
   "idleSpot",
 ]);
-const EXECUTION_PLAN_FEATURE_ID = "070-execution-plan-foundation";
-const EXECUTION_PLAN_SPEC_PATH = "specs/070-execution-plan-foundation/spec.md";
+const EXECUTION_PLAN_FEATURE_ID = "103-daily-proof-configured-runtime-repository-context";
+const EXECUTION_PLAN_SPEC_PATH = "specs/103-daily-proof-configured-runtime-repository-context/spec.md";
 const EXECUTION_PLAN_VALIDATION_COMMANDS = [
   "npm test",
   "npx tsc --noEmit",
@@ -189,6 +190,30 @@ const EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE = [
   "no-repository-mutation",
   "no-github-mutation",
 ];
+
+function createExecutionPlanRepositoryContext(
+  project: ProjectPortalState["projects"][number] | undefined,
+  repositorySnapshot: RepositorySyncSnapshot | undefined,
+) {
+  const repositoryIdentity = project?.repositoryIdentity;
+  const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
+    ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
+    : undefined;
+  const binding = project?.localRepositoryBinding;
+  const repositoryPath = binding?.repositoryPath ?? repositoryIdentity?.localPath;
+  const worktreePath = binding?.worktreePath ?? repositoryIdentity?.localPath;
+  const branchName = binding?.branchName ?? repositorySnapshot?.currentBranch;
+  const specPath = binding?.specPath ?? EXECUTION_PLAN_SPEC_PATH;
+
+  if (!repositoryId || !repositoryPath || !worktreePath || !branchName || !specPath) return undefined;
+  return {
+    repositoryId,
+    repositoryPath,
+    worktreePath,
+    branchName,
+    specPath,
+  };
+}
 
 export type OfficeProjectPortalInput = {
   actionPressed: boolean;
@@ -2964,11 +2989,7 @@ export class OfficeProjectPortalController {
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
     const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
-    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
-      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
-      : undefined;
-    const localPath = repositoryIdentity?.localPath;
-    const branchName = repositorySnapshot?.currentBranch;
+    const repositoryContext = createExecutionPlanRepositoryContext(project, repositorySnapshot);
     const existingPlans = this.state.executionPlanCollections[projectId]
       ?? createExecutionPlanCollection({ projectId, plans: [], rulesVersion: "plan-v1" });
     const outcome = this.executionPlanService.createPlan({
@@ -2986,15 +3007,7 @@ export class OfficeProjectPortalController {
       employees: this.state.employees,
       repositoryIdentity,
       repositorySnapshot,
-      repositoryContext: repositoryId && localPath && branchName
-        ? {
-            repositoryId,
-            repositoryPath: localPath,
-            worktreePath: localPath,
-            branchName,
-            specPath: EXECUTION_PLAN_SPEC_PATH,
-          }
-        : undefined,
+      repositoryContext,
       roleContext: {
         implementerAgent: "Implementer",
         reviewerAgent: "Reviewer",
@@ -3002,8 +3015,8 @@ export class OfficeProjectPortalController {
         allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
       },
       pathChecks: {
-        worktreeExists: Boolean(localPath),
-        specExists: true,
+        worktreeExists: Boolean(repositoryContext?.worktreePath),
+        specExists: Boolean(repositoryContext?.specPath),
       },
       existingPlans,
     });
@@ -3035,12 +3048,8 @@ export class OfficeProjectPortalController {
     const project = this.state.projects.find((item) => item.id === projectId);
     const repositoryIdentity = project?.repositoryIdentity;
     const repositorySnapshot = this.state.repositorySyncSnapshots[projectId];
-    const repositoryId = repositoryIdentity?.owner && repositoryIdentity.name
-      ? `${repositoryIdentity.provider}:${repositoryIdentity.owner}/${repositoryIdentity.name}`
-      : undefined;
-    const localPath = repositoryIdentity?.localPath;
-    const branchName = repositorySnapshot?.currentBranch;
-    if (!repositoryIdentity || !repositorySnapshot || !repositoryId || !localPath || !branchName) {
+    const repositoryContext = createExecutionPlanRepositoryContext(project, repositorySnapshot);
+    if (!repositoryIdentity || !repositorySnapshot || !repositoryContext) {
       return false;
     }
 
@@ -3061,15 +3070,7 @@ export class OfficeProjectPortalController {
       employees: this.state.employees,
       repositoryIdentity,
       repositorySnapshot,
-      repositoryContext: repositoryId && localPath && branchName
-        ? {
-            repositoryId,
-            repositoryPath: localPath,
-            worktreePath: localPath,
-            branchName,
-            specPath: EXECUTION_PLAN_SPEC_PATH,
-          }
-        : undefined,
+      repositoryContext,
       roleContext: {
         implementerAgent: "Implementer",
         reviewerAgent: "Reviewer",
@@ -3077,8 +3078,8 @@ export class OfficeProjectPortalController {
         allowedMutationScope: EXECUTION_PLAN_ALLOWED_MUTATION_SCOPE,
       },
       pathChecks: {
-        worktreeExists: Boolean(localPath),
-        specExists: true,
+        worktreeExists: Boolean(repositoryContext.worktreePath),
+        specExists: Boolean(repositoryContext.specPath),
       },
       existingPlans,
     });

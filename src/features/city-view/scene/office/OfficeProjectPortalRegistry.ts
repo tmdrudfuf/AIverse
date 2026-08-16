@@ -9,6 +9,18 @@ import { toProjectPortalProject, toRepositoryMapping } from "./project-registry/
 import { ProjectRegistryService } from "./project-registry/ProjectRegistryService";
 import type { LocalProjectRepositoryBinding, ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
 
+const DEFAULT_LOCAL_REPOSITORY_BINDINGS: LocalProjectRepositoryBinding[] = [
+  {
+    projectId: "daily-proof",
+    repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
+    worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-daily-proof-configured-runtime-repository-context",
+    branchName: "codex/103-daily-proof-configured-runtime-repository-context",
+    specPath: "specs/103-daily-proof-configured-runtime-repository-context/spec.md",
+    source: "ados-handoff",
+    boundAt: "2026-08-15T00:00:00.000Z",
+  },
+];
+
 const PLACEHOLDER_SERVICES: ProjectPortalServiceStatus[] = [
   {
     id: "github",
@@ -90,7 +102,10 @@ export type CreateProjectPortalStateOptions = {
 
 export function createProjectPortalState(options: CreateProjectPortalStateOptions = {}): ProjectPortalState {
   const influencePlanningService = new CompanyInfluencePlanningService();
-  const projectRegistryService = new ProjectRegistryService(undefined, options.localRepositoryBindings);
+  const projectRegistryService = new ProjectRegistryService(
+    undefined,
+    options.localRepositoryBindings ?? DEFAULT_LOCAL_REPOSITORY_BINDINGS,
+  );
   const registryEntries = projectRegistryService.getAllProjects();
 
   return {
