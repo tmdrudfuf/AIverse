@@ -635,9 +635,9 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 280, wrapText(candidateTask.summary || "No summary available.", 72), bodyStyle());
 
     this.addText(this.panelX + 390, this.panelY + 104, "Context:", headingStyle());
-    this.addText(this.panelX + 406, this.panelY + 136, wrapText(getCandidateAssignmentText(assignment), 34), bodyStyle());
-    this.addText(this.panelX + 406, this.panelY + 184, wrapText(getCandidatePromotionText(promotion), 34), bodyStyle());
-    this.addText(this.panelX + 406, this.panelY + 232, wrapText(getCandidatePromotionResultText(promotionResult, promotedTask), 34), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 136, wrapText(getCandidateAssignmentText(assignment), 52), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 184, wrapText(getCandidatePromotionText(promotion), 52), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 232, wrapText(getCandidatePromotionResultText(promotionResult, promotedTask), 52), bodyStyle());
 
     this.addText(this.panelX + 28, this.panelY + 360, "Read-only candidate inspection. No task, employee, runtime, repository, or GitHub changes.", mutedStyle());
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
