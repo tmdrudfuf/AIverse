@@ -599,9 +599,9 @@ export class OfficeProjectPortalView {
     const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(lowerRows, maxLowerPanelHeight);
     this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, lowerPanelHeight);
     this.renderProjectDashboardLowerRows(lowerRows);
-    const canOpenCandidateDetail = Boolean(getSelectedCandidateTask(state));
+    const canOpenCandidateDetail = canOpenSelectedCandidateDetail(state);
     const instructionText = canOpenCandidateDetail
-      ? "Esc back  Up/Down select  Enter run  Space detail"
+      ? "Esc back  Up/Down select  Enter run  Space cycle  C detail"
       : rows.activeWorkTaskIds.length > 0
         ? "Esc back  Up/Down active work  Enter/Space open task"
         : "Esc back";
@@ -944,14 +944,15 @@ function getSelectedCandidateTask(state: ProjectPortalState): CandidateTask | un
   return collection.tasks.find((task) => task.id === selectedCandidateTaskId);
 }
 
+function canOpenSelectedCandidateDetail(state: ProjectPortalState) {
+  return Boolean(getSelectedCandidateTask(state));
+}
+
 function getSelectedCandidateTaskId(state: ProjectPortalState) {
   const projectId = state.selectedProjectDashboardProjectId;
   const promotionCollection = projectId ? state.candidatePromotionReviewCollections[projectId] : undefined;
   const selectedPromotion = promotionCollection?.reviews[state.selectedCandidatePromotionIndex];
-  if (selectedPromotion) return selectedPromotion.candidateTaskId;
-
-  const candidateTaskCollection = projectId ? state.candidateTaskCollections[projectId] : undefined;
-  return candidateTaskCollection?.tasks[0]?.id;
+  return selectedPromotion?.candidateTaskId;
 }
 
 function getCandidateAssignment(state: ProjectPortalState, candidateTask: CandidateTask) {

@@ -83,4 +83,20 @@ describe("OfficeActionInputController", () => {
     expect(input.consumeStartPostValidationReviewPressed()).toBe(true);
     expect(input.consumeStartPostValidationReviewPressed()).toBe(false);
   });
+
+  it("keeps candidate detail pending separate from Space action", () => {
+    const input = new OfficeActionInputController() as unknown as {
+      pendingAction: boolean;
+      pendingOpenCandidateDetail: boolean;
+      consumeActionPressed: () => boolean;
+      consumeOpenCandidateDetailPressed: () => boolean;
+    };
+    input.pendingAction = true;
+    input.pendingOpenCandidateDetail = true;
+
+    expect(input.consumeActionPressed()).toBe(true);
+    expect(input.consumeActionPressed()).toBe(false);
+    expect(input.consumeOpenCandidateDetailPressed()).toBe(true);
+    expect(input.consumeOpenCandidateDetailPressed()).toBe(false);
+  });
 });

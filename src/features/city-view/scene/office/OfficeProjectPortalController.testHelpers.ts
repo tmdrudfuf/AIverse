@@ -190,6 +190,7 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     upPressed: false,
     downPressed: false,
     enterPressed: false,
+    openCandidateDetailPressed: false,
     startImplementerPressed: false,
     startReviewerPressed: false,
     promoteReviewPressed: false,

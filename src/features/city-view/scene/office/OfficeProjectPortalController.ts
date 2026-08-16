@@ -250,6 +250,7 @@ export type OfficeProjectPortalInput = {
   upPressed: boolean;
   downPressed: boolean;
   enterPressed: boolean;
+  openCandidateDetailPressed: boolean;
   // Distinct from enterPressed/actionPressed by design: those drive the
   // existing Plan -> Readiness -> Approval -> Preflight -> Runtime Start
   // cascade, while this field exists solely to request an Implementer
@@ -1123,13 +1124,11 @@ export class OfficeProjectPortalController {
       }
     }
 
-    if (input.actionPressed) {
-      const candidateTaskId = this.getSelectedCandidateTaskId();
-      if (this.openSelectedCandidateDetail()) {
+    if (input.openCandidateDetailPressed && selectedPromotion) {
+      if (this.openSelectedCandidateDetail(selectedPromotion.candidateTaskId)) {
         this.view.render(this.state);
         return;
       }
-      if (candidateTaskId) return;
     }
 
     if (input.actionPressed && selectedPromotion) {
@@ -3126,9 +3125,8 @@ export class OfficeProjectPortalController {
     return collection?.reviews[this.state.selectedCandidatePromotionIndex];
   }
 
-  private openSelectedCandidateDetail() {
+  private openSelectedCandidateDetail(candidateTaskId: string) {
     const projectId = this.state.selectedProjectDashboardProjectId;
-    const candidateTaskId = this.getSelectedCandidateTaskId();
     const collection = projectId ? this.state.candidateTaskCollections[projectId] : undefined;
     if (!projectId || !candidateTaskId || !collection) return false;
 
@@ -3138,15 +3136,6 @@ export class OfficeProjectPortalController {
     this.state.selectedCandidateTaskId = candidateTask.id;
     this.state.viewMode = "candidate-detail";
     return true;
-  }
-
-  private getSelectedCandidateTaskId() {
-    const selectedPromotion = this.getSelectedCandidatePromotionReview();
-    if (selectedPromotion) return selectedPromotion.candidateTaskId;
-
-    const projectId = this.state.selectedProjectDashboardProjectId;
-    const collection = projectId ? this.state.candidateTaskCollections[projectId] : undefined;
-    return collection?.tasks[0]?.id;
   }
 
   private moveProjectDashboardActiveWorkSelection(direction: number) {
