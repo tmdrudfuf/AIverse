@@ -72,6 +72,24 @@ describe("ProjectRegistryAdapters", () => {
       expect(dailyProof.repositoryIdentity.connectionState).toBe("Configured");
     });
 
+    it("maps localRepositoryBinding as an independent copy, not a shared reference", () => {
+      const [dailyProof] = createDefaultProjectRegistryEntries();
+      const boundEntry: ProjectRegistryEntry = {
+        ...dailyProof,
+        localRepositoryBinding: {
+          projectId: "daily-proof",
+          repositoryPath: "C:/repo",
+          worktreePath: "C:/worktree",
+          branchName: "codex/102-local-project-repository-binding",
+        },
+      };
+
+      const project = toProjectPortalProject(boundEntry, []);
+      if (project.localRepositoryBinding) project.localRepositoryBinding.worktreePath = "C:/mutated";
+
+      expect(boundEntry.localRepositoryBinding?.worktreePath).toBe("C:/worktree");
+    });
+
     it("passes through the provided linked services unchanged", () => {
       const [dailyProof] = createDefaultProjectRegistryEntries();
       const linkedServices = [{ id: "github", label: "GitHub", status: "Not connected" as const, enabled: false, placeholder: true as const }];

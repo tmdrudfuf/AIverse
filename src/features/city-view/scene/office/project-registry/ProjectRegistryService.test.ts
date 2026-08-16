@@ -90,6 +90,22 @@ describe("ProjectRegistryService", () => {
     expect(registry.getProject("daily-proof")?.repositoryIdentity.owner).toBe("ai-verse");
   });
 
+  it("returns independent copies of local repository binding metadata", () => {
+    const registry = new ProjectRegistryService(undefined, [{
+      projectId: "daily-proof",
+      repositoryPath: "C:/repo",
+      worktreePath: "C:/worktree",
+      branchName: "codex/102-local-project-repository-binding",
+      specPath: "specs/102-local-project-repository-binding/spec.md",
+    }]);
+
+    const entry = registry.getProject("daily-proof");
+    if (!entry?.localRepositoryBinding) throw new Error("expected bound daily-proof entry");
+    entry.localRepositoryBinding.worktreePath = "C:/mutated";
+
+    expect(registry.getProject("daily-proof")?.localRepositoryBinding?.worktreePath).toBe("C:/worktree");
+  });
+
   it("seeds from a custom set of entries when provided", () => {
     const registry = new ProjectRegistryService([createEntry({ id: "solo-project", displayName: "Solo Project" })]);
 
@@ -105,6 +121,7 @@ function createEntry(overrides: Partial<ProjectRegistryEntry> & { id: string; di
     lifecycleStatus: overrides.lifecycleStatus ?? "Planned",
     projectType: overrides.projectType ?? "Restaurant",
     localRepository: overrides.localRepository ?? { connected: false, label: "Not connected" },
+    localRepositoryBinding: overrides.localRepositoryBinding,
     remoteRepository: overrides.remoteRepository,
     repositoryIdentity: overrides.repositoryIdentity ?? { provider: "local", connectionState: "Unknown" },
     owner: overrides.owner ?? { companyName: "AIverse Internal" },

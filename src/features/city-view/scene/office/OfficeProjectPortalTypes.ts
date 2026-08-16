@@ -73,7 +73,11 @@ import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } f
 import type { CompanyFocusSummary, CompanyInfluencePlanState } from "./influence/CompanyInfluencePlanningTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import type { ProjectDashboardSnapshot } from "./project-dashboard/ProjectDashboardTypes";
-import type { ProjectRegistryEntry, ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
+import type {
+  NormalizedLocalProjectRepositoryBinding,
+  ProjectRegistryEntry,
+  ProjectRegistryRepositoryIdentity,
+} from "./project-registry/ProjectRegistryTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
@@ -118,6 +122,7 @@ export type ProjectPortalProject = {
   nextAction: ProjectPortalNextAction;
   ownerCompany?: string;
   localRepositoryLabel?: string;
+  localRepositoryBinding?: NormalizedLocalProjectRepositoryBinding;
   repositoryIdentity?: ProjectRegistryRepositoryIdentity;
 };
 

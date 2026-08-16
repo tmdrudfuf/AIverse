@@ -17,6 +17,7 @@ export function toProjectPortalProject(
     nextAction: createNextAction(entry),
     ownerCompany: entry.owner.companyName,
     localRepositoryLabel: entry.localRepository.label,
+    ...(entry.localRepositoryBinding ? { localRepositoryBinding: { ...entry.localRepositoryBinding } } : {}),
     repositoryIdentity: { ...entry.repositoryIdentity },
   };
 }
