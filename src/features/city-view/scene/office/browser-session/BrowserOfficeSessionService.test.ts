@@ -106,6 +106,20 @@ describe("BrowserOfficeSessionService", () => {
       workSessions: { "task-1": { id: "not-an-array" } },
     }));
     expect(service.restoreState(createProjectPortalState({ browserOfficeSessionService: false })).workSessions).toEqual({});
+
+    storage.setItem(BROWSER_OFFICE_SESSION_STORAGE_KEY, JSON.stringify({
+      version: BROWSER_OFFICE_SESSION_SCHEMA_VERSION,
+      savedAt: "2026-08-17T00:00:00.000Z",
+      taskCollections: { "daily-proof": { projectId: "daily-proof", tasks: "not-an-array" } },
+      employees: [],
+      confirmedEmployeeAssignmentRecords: {},
+      confirmedEmployeeAssignmentResultCollections: {},
+      preparedWorkSessionRecords: {},
+      preparedWorkSessionResultCollections: {},
+      activeWorkSessionStartResultCollections: {},
+      workSessions: {},
+    }));
+    expect(service.restoreState(createProjectPortalState({ browserOfficeSessionService: false })).taskCollections).toEqual({});
   });
 
   it("fails open when browser storage throws", () => {

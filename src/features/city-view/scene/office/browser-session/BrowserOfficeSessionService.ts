@@ -109,13 +109,14 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     isOptionalString(value.selectedProjectDashboardProjectId) &&
     isOptionalString(value.selectedWorkSessionId) &&
     (value.selectedProjectDashboardActiveWorkIndex === undefined || typeof value.selectedProjectDashboardActiveWorkIndex === "number") &&
-    isRecord(value.taskCollections) &&
+    isTaskCollectionRecord(value.taskCollections) &&
     Array.isArray(value.employees) &&
-    isRecord(value.confirmedEmployeeAssignmentRecords) &&
-    isRecord(value.confirmedEmployeeAssignmentResultCollections) &&
-    isRecord(value.preparedWorkSessionRecords) &&
-    isRecord(value.preparedWorkSessionResultCollections) &&
-    isRecord(value.activeWorkSessionStartResultCollections) &&
+    value.employees.every(isRecord) &&
+    isRecordOfRecords(value.confirmedEmployeeAssignmentRecords) &&
+    isResultCollectionRecord(value.confirmedEmployeeAssignmentResultCollections) &&
+    isRecordOfRecords(value.preparedWorkSessionRecords) &&
+    isResultCollectionRecord(value.preparedWorkSessionResultCollections) &&
+    isResultCollectionRecord(value.activeWorkSessionStartResultCollections) &&
     isRecordOfArrays(value.workSessions)
   );
 }
@@ -126,6 +127,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isRecordOfArrays(value: unknown): value is Record<string, unknown[]> {
   return isRecord(value) && Object.values(value).every(Array.isArray);
+}
+
+function isRecordOfRecords(value: unknown): value is Record<string, Record<string, unknown>> {
+  return isRecord(value) && Object.values(value).every(isRecord);
+}
+
+function isTaskCollectionRecord(value: unknown) {
+  return isRecord(value) && Object.values(value).every((collection) => (
+    isRecord(collection) &&
+    typeof collection.projectId === "string" &&
+    Array.isArray(collection.tasks)
+  ));
+}
+
+function isResultCollectionRecord(value: unknown) {
+  return isRecord(value) && Object.values(value).every((collection) => (
+    isRecord(collection) &&
+    Array.isArray(collection.results)
+  ));
 }
 
 function isOptionalString(value: unknown) {
