@@ -3,6 +3,10 @@ import type {
   ProjectPortalState,
   ProjectWorkspace,
 } from "./OfficeProjectPortalTypes";
+import {
+  BrowserOfficeSessionService,
+  createBrowserOfficeSessionService,
+} from "./browser-session/BrowserOfficeSessionService";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import { toProjectPortalProject, toRepositoryMapping } from "./project-registry/ProjectRegistryAdapters";
@@ -98,6 +102,7 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
 
 export type CreateProjectPortalStateOptions = {
   localRepositoryBindings?: ReadonlyArray<LocalProjectRepositoryBinding>;
+  browserOfficeSessionService?: BrowserOfficeSessionService | false;
 };
 
 export function createProjectPortalState(options: CreateProjectPortalStateOptions = {}): ProjectPortalState {
@@ -108,7 +113,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
   );
   const registryEntries = projectRegistryService.getAllProjects();
 
-  return {
+  const state: ProjectPortalState = {
     isOpen: false,
     justOpened: false,
     viewMode: "list",
@@ -182,6 +187,11 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     companyInfluencePlan: influencePlanningService.createInitialState(),
     companyFocusSummary: influencePlanningService.createFocusSummary(influencePlanningService.createInitialState()),
   };
+
+  const browserOfficeSessionService = options.browserOfficeSessionService === false
+    ? undefined
+    : options.browserOfficeSessionService ?? createBrowserOfficeSessionService();
+  return browserOfficeSessionService?.restoreState(state) ?? state;
 }
 
 function createRepositoryMappings(registryEntries: ReadonlyArray<ProjectRegistryEntry>): AIverseProjectRepositoryMapping[] {

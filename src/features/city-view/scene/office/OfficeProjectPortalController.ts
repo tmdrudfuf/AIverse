@@ -3,6 +3,10 @@ import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { ActiveWorkSessionStartService } from "./active-work-sessions/ActiveWorkSessionStartService";
+import {
+  BrowserOfficeSessionService,
+  createBrowserOfficeSessionService,
+} from "./browser-session/BrowserOfficeSessionService";
 import { EmployeeConversationService } from "./conversations/EmployeeConversationService";
 import type {
   EmployeeConversation,
@@ -286,10 +290,15 @@ export type OfficeProjectPortalInput = {
   startPostValidationReviewPressed: boolean;
 };
 
+export type OfficeProjectPortalControllerOptions = {
+  browserOfficeSessionService?: BrowserOfficeSessionService;
+};
+
 export class OfficeProjectPortalController {
   private readonly maxEmployeeConversationDistance = 48;
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
+  private readonly browserOfficeSessionService?: BrowserOfficeSessionService;
   private readonly repositoryService: GitHubRepositoryService;
   private readonly repositorySyncService: RepositorySyncService;
   private readonly issueSyncService: IssueSyncService;
@@ -349,8 +358,9 @@ export class OfficeProjectPortalController {
   private employeeRecommendationRequestVersion = 0;
   private projectManagerRequestVersion = 0;
 
-  constructor(scene: PhaserScene) {
-    this.state = createProjectPortalState();
+  constructor(scene: PhaserScene, options: OfficeProjectPortalControllerOptions = {}) {
+    this.browserOfficeSessionService = options.browserOfficeSessionService ?? createBrowserOfficeSessionService();
+    this.state = createProjectPortalState({ browserOfficeSessionService: this.browserOfficeSessionService });
     this.view = new OfficeProjectPortalView(scene, this.state);
     this.repositoryService = new GitHubRepositoryService(
       new CachedGitHubRepositoryProvider(
@@ -500,6 +510,7 @@ export class OfficeProjectPortalController {
     this.state.employees = employees;
     this.refreshCandidateAssignmentsForSelectedProject();
     this.refreshEmployeeSimulationSnapshots();
+    this.persistBrowserOfficeSession();
   }
 
   getEmployeeSimulationSnapshots(): ReadonlyArray<EmployeeSimulationSnapshot> {
@@ -852,6 +863,7 @@ export class OfficeProjectPortalController {
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
     this.projectManagerRequestVersion += 1;
+    this.persistBrowserOfficeSession();
     this.view.hide();
   }
 
@@ -863,9 +875,14 @@ export class OfficeProjectPortalController {
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
     this.projectManagerRequestVersion += 1;
+    this.persistBrowserOfficeSession();
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
+  }
+
+  private persistBrowserOfficeSession() {
+    this.browserOfficeSessionService?.saveState(this.state);
   }
 
   private updateListInput(input: OfficeProjectPortalInput) {
@@ -1364,6 +1381,7 @@ export class OfficeProjectPortalController {
 
     this.state.taskCollections[projectId] = collection;
     this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
+    this.persistBrowserOfficeSession();
     this.view.render(this.state);
   }
 
@@ -1525,6 +1543,7 @@ export class OfficeProjectPortalController {
     this.state.taskCollections = beforeTasks;
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1558,6 +1577,7 @@ export class OfficeProjectPortalController {
       this.candidateProjectTaskPromotionService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1615,6 +1635,7 @@ export class OfficeProjectPortalController {
       this.confirmedEmployeeAssignmentService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1670,6 +1691,7 @@ export class OfficeProjectPortalController {
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1731,6 +1753,7 @@ export class OfficeProjectPortalController {
       this.activeWorkSessionStartService.upsertResult(existingResults, outcome.result);
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
     this.state.preparedWorkSessionRecords = beforePreparedSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1797,6 +1820,7 @@ export class OfficeProjectPortalController {
       approvals: [],
       rulesVersion: "approval-v1",
     });
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1890,6 +1914,7 @@ export class OfficeProjectPortalController {
     const existingApprovalResults = this.state.humanExecutionApprovalResultCollections[projectId];
     this.state.humanExecutionApprovalResultCollections[projectId] =
       this.humanExecutionApprovalService.upsertResult(existingApprovalResults, approvalOutcome.result);
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1976,6 +2001,7 @@ export class OfficeProjectPortalController {
       });
       this.state.runtimePreflightCollections[projectId] = blockedOutcome.preflightCollection ?? existingPreflights;
       this.state.runtimePreflightResultCollections[projectId] = blockedOutcome.resultCollection ?? existingPreflightResults;
+      this.persistBrowserOfficeSession();
       return true;
     }
 
@@ -2008,6 +2034,7 @@ export class OfficeProjectPortalController {
 
     this.state.runtimePreflightCollections[projectId] = outcome.preflightCollection ?? existingPreflights;
     this.state.runtimePreflightResultCollections[projectId] = outcome.resultCollection ?? existingPreflightResults;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -2094,6 +2121,7 @@ export class OfficeProjectPortalController {
       this.state.runtimeStartCollections[projectId] = existingStarts;
     }
     this.state.runtimeStartResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -3211,6 +3239,7 @@ export class OfficeProjectPortalController {
     this.state.taskCollections[projectId] = collection;
     this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(collection.tasks.length - 1, 0));
     this.state.selectedTaskId = collection.tasks[this.state.selectedTaskIndex]?.id;
+    this.persistBrowserOfficeSession();
     void this.prepareTaskAnalyses(collection.tasks, projectId);
     void this.prepareSelectedEmployeeRecommendation();
     void this.prepareProjectManagementSuggestion(projectId);
@@ -3238,6 +3267,7 @@ export class OfficeProjectPortalController {
     this.state.employees = employees;
     this.refreshEmployeeSimulationSnapshots();
     this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(employees.length - 1, 0));
+    this.persistBrowserOfficeSession();
     void this.prepareSelectedEmployeeRecommendation();
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
@@ -3329,6 +3359,7 @@ export class OfficeProjectPortalController {
     this.refreshCandidateAssignmentsForSelectedProject();
     this.refreshEmployeeSimulationSnapshots();
     this.refreshCompanyDashboardSnapshot();
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -3411,6 +3442,7 @@ export class OfficeProjectPortalController {
     this.refreshEmployeeSimulationSnapshotsForTaskAssigned();
     this.state.selectedTaskId = task.id;
     this.state.viewMode = "task-detail";
+    this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
@@ -3466,6 +3498,7 @@ export class OfficeProjectPortalController {
       ...updatedTask,
       status: task.status === "Todo" ? "In Progress" : task.status,
     });
+    this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
@@ -3495,6 +3528,7 @@ export class OfficeProjectPortalController {
     if (assigneeEmployeeId) {
       this.releaseEmployeeIfUnassigned(assigneeEmployeeId, task.id);
       this.refreshEmployeeSimulationSnapshotsForWorkCompleted();
+      this.persistBrowserOfficeSession();
       this.view.render(this.state);
     }
   }
@@ -3516,6 +3550,7 @@ export class OfficeProjectPortalController {
       ...updatedTask,
       status: nextStatus,
     });
+    this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(task.projectId);
     this.view.render(this.state);
   }
