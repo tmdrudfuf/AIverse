@@ -93,7 +93,11 @@ export function createBrowserOfficeSessionService(options?: BrowserOfficeSession
 
 function getDefaultStorage(): BrowserOfficeSessionStorage | undefined {
   if (typeof window === "undefined") return undefined;
-  return window.localStorage;
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
 }
 
 function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeSessionSnapshot {

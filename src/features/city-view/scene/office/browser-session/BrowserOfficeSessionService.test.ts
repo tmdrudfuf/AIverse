@@ -126,6 +126,32 @@ describe("BrowserOfficeSessionService", () => {
     expect(service.saveState(state)).toBe(false);
   });
 
+  it("fails open when default browser storage access throws", () => {
+    const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: Object.defineProperty({}, "localStorage", {
+        get: () => {
+          throw new Error("blocked");
+        },
+      }),
+    });
+
+    try {
+      const service = new BrowserOfficeSessionService();
+      const state = createProjectPortalState({ browserOfficeSessionService: false });
+
+      expect(() => service.restoreState(state)).not.toThrow();
+      expect(service.saveState(state)).toBe(false);
+    } finally {
+      if (previousWindow) {
+        Object.defineProperty(globalThis, "window", previousWindow);
+      } else {
+        Reflect.deleteProperty(globalThis, "window");
+      }
+    }
+  });
+
   it("loads only current-version snapshots", () => {
     const storage = createMemoryStorage();
     storage.setItem(BROWSER_OFFICE_SESSION_STORAGE_KEY, JSON.stringify({
