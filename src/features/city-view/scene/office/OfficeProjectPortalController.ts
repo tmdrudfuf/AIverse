@@ -3,6 +3,10 @@ import { AIProjectManagerService } from "./ai/AIProjectManagerService";
 import { AIService } from "./ai/AIService";
 import { createMockAIService } from "./ai/MockAIServiceFactory";
 import { ActiveWorkSessionStartService } from "./active-work-sessions/ActiveWorkSessionStartService";
+import {
+  BrowserOfficeSessionService,
+  createBrowserOfficeSessionService,
+} from "./browser-session/BrowserOfficeSessionService";
 import { EmployeeConversationService } from "./conversations/EmployeeConversationService";
 import type {
   EmployeeConversation,
@@ -286,10 +290,15 @@ export type OfficeProjectPortalInput = {
   startPostValidationReviewPressed: boolean;
 };
 
+export type OfficeProjectPortalControllerOptions = {
+  browserOfficeSessionService?: BrowserOfficeSessionService;
+};
+
 export class OfficeProjectPortalController {
   private readonly maxEmployeeConversationDistance = 48;
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
+  private readonly browserOfficeSessionService: BrowserOfficeSessionService;
   private readonly repositoryService: GitHubRepositoryService;
   private readonly repositorySyncService: RepositorySyncService;
   private readonly issueSyncService: IssueSyncService;
@@ -349,8 +358,9 @@ export class OfficeProjectPortalController {
   private employeeRecommendationRequestVersion = 0;
   private projectManagerRequestVersion = 0;
 
-  constructor(scene: PhaserScene) {
-    this.state = createProjectPortalState();
+  constructor(scene: PhaserScene, options: OfficeProjectPortalControllerOptions = {}) {
+    this.browserOfficeSessionService = options.browserOfficeSessionService ?? createBrowserOfficeSessionService();
+    this.state = createProjectPortalState({ browserOfficeSessionService: this.browserOfficeSessionService });
     this.view = new OfficeProjectPortalView(scene, this.state);
     this.repositoryService = new GitHubRepositoryService(
       new CachedGitHubRepositoryProvider(
@@ -435,50 +445,60 @@ export class OfficeProjectPortalController {
 
     if (this.state.viewMode === "list") {
       this.updateListInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "detail") {
       this.updateDetailInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "workspace") {
       this.updateWorkspaceInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "repository-detail") {
       this.updateRepositoryDetailInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "task-list") {
       this.updateTaskListInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "task-detail") {
       this.updateTaskDetailInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "project-dashboard") {
       this.updateProjectDashboardInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "candidate-detail") {
       this.updateCandidateDetailInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "influence-planning") {
       this.updateInfluencePlanningInput(input);
+      this.persistBrowserOfficeSession();
       return;
     }
 
     this.updateEmployeeSelectionInput(input);
+    this.persistBrowserOfficeSession();
   }
 
   isOpen() {
@@ -852,6 +872,7 @@ export class OfficeProjectPortalController {
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
     this.projectManagerRequestVersion += 1;
+    this.persistBrowserOfficeSession();
     this.view.hide();
   }
 
@@ -863,9 +884,14 @@ export class OfficeProjectPortalController {
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
     this.projectManagerRequestVersion += 1;
+    this.persistBrowserOfficeSession();
     this.view.destroy();
     this.state.isOpen = false;
     this.state.justOpened = false;
+  }
+
+  private persistBrowserOfficeSession() {
+    this.browserOfficeSessionService.saveState(this.state);
   }
 
   private updateListInput(input: OfficeProjectPortalInput) {

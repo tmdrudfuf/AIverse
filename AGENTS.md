@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/104-project-dashboard-candidate-detail-view-action/plan.md
+shell commands, and other important information, read specs/105-browser-office-session-save-restore/plan.md
 <!-- SPECKIT END -->

@@ -5,6 +5,7 @@ import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } f
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { ActiveWorkSessionStartResultCollection } from "./active-work-sessions/ActiveWorkSessionTypes";
+import type { ActiveWorkSessionStartService } from "./active-work-sessions/ActiveWorkSessionStartService";
 import type { ExecutionPlanCollection, ExecutionPlanResultCollection } from "./execution-plans/ExecutionPlanTypes";
 import type {
   ExecutionReadinessCollection,
@@ -101,6 +102,7 @@ export type ControllerInternals = {
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
   };
+  activeWorkSessionStartService: ActiveWorkSessionStartService;
   issueSyncService: {
     readIssueSnapshots: (identity: { owner?: string; name?: string; provider: string }) => Promise<IssueSnapshotCollection>;
   };
@@ -137,6 +139,7 @@ export type ControllerInternals = {
     ) => PostValidationReviewTargetOutcome;
   };
   syncIssueSnapshots: (projectId: string) => Promise<void>;
+  startSelectedWorkSessionForPromotion: (projectId: string, candidateTaskId: string) => boolean;
   startImplementerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewFixRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
