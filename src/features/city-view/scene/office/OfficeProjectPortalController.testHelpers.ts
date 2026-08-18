@@ -59,6 +59,7 @@ export type ControllerInternals = {
     selectedTaskProjectId: string | undefined;
     selectedTaskId: string | undefined;
     selectedTaskIndex: number;
+    selectedEmployeeIndex: number;
     projects: ProjectPortalProjectLike[];
     repositorySummaries: Record<string, { connectionStatus: string }>;
     repositorySyncSnapshots: ProjectPortalState["repositorySyncSnapshots"];
@@ -142,8 +143,13 @@ export type ControllerInternals = {
     ) => PostValidationReviewTargetOutcome;
   };
   syncIssueSnapshots: (projectId: string) => Promise<void>;
+  recordCandidatePromotionDecision: (projectId: string, candidateTaskId: string, targetStatus: "Approved" | "Rejected" | "Deferred") => boolean;
+  promoteSelectedCandidateTask: (projectId: string, candidateTaskId: string) => boolean;
+  assignSelectedEmployeeToSelectedTask: () => void;
   startSelectedWorkSessionForPromotion: (projectId: string, candidateTaskId: string) => boolean;
   startPlaceholderWorkOnSelectedTask: () => Promise<void>;
+  moveSelectedTaskToReview: () => void;
+  markSelectedTaskDone: () => void;
   startImplementerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewFixRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;

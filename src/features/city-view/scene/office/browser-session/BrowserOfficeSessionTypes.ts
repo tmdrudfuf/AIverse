@@ -1,4 +1,8 @@
 import type { ActiveWorkSessionStartResultCollection } from "../active-work-sessions/ActiveWorkSessionTypes";
+import type { CandidateAssignmentRecommendationCollection } from "../candidate-assignments/CandidateAssignmentTypes";
+import type { CandidateProjectTaskPromotionResultCollection } from "../candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
+import type { CandidatePromotionDecision, CandidatePromotionReviewCollection } from "../candidate-promotions/CandidatePromotionTypes";
+import type { CandidateTaskCollection } from "../candidate-tasks/CandidateTaskTypes";
 import type {
   ConfirmedEmployeeAssignmentRecord,
   ConfirmedEmployeeAssignmentResultCollection,
@@ -22,6 +26,11 @@ export type BrowserOfficeSessionSnapshot = {
   selectedProjectDashboardProjectId?: string;
   selectedProjectDashboardActiveWorkIndex?: number;
   selectedWorkSessionId?: string;
+  candidateTaskCollections: Record<string, CandidateTaskCollection>;
+  candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
+  candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
+  candidatePromotionDecisionRecords: Record<string, CandidatePromotionDecision>;
+  candidateProjectTaskPromotionResultCollections: Record<string, CandidateProjectTaskPromotionResultCollection>;
   taskCollections: Record<string, TaskCollection>;
   employees: Employee[];
   confirmedEmployeeAssignmentRecords: Record<string, ConfirmedEmployeeAssignmentRecord>;
@@ -44,6 +53,11 @@ export type BrowserOfficeSessionState = Pick<
   | "selectedProjectDashboardProjectId"
   | "selectedProjectDashboardActiveWorkIndex"
   | "selectedWorkSessionId"
+  | "candidateTaskCollections"
+  | "candidateAssignmentCollections"
+  | "candidatePromotionReviewCollections"
+  | "candidatePromotionDecisionRecords"
+  | "candidateProjectTaskPromotionResultCollections"
   | "taskCollections"
   | "employees"
   | "confirmedEmployeeAssignmentRecords"

@@ -43,6 +43,11 @@ export class BrowserOfficeSessionService {
     state.selectedProjectDashboardProjectId = snapshot.selectedProjectDashboardProjectId;
     state.selectedProjectDashboardActiveWorkIndex = clampIndex(snapshot.selectedProjectDashboardActiveWorkIndex);
     state.selectedWorkSessionId = snapshot.selectedWorkSessionId;
+    state.candidateTaskCollections = clone(snapshot.candidateTaskCollections);
+    state.candidateAssignmentCollections = clone(snapshot.candidateAssignmentCollections);
+    state.candidatePromotionReviewCollections = clone(snapshot.candidatePromotionReviewCollections);
+    state.candidatePromotionDecisionRecords = clone(snapshot.candidatePromotionDecisionRecords);
+    state.candidateProjectTaskPromotionResultCollections = clone(snapshot.candidateProjectTaskPromotionResultCollections);
     state.taskCollections = clone(snapshot.taskCollections);
     state.employees = clone(snapshot.employees);
     state.confirmedEmployeeAssignmentRecords = clone(snapshot.confirmedEmployeeAssignmentRecords);
@@ -68,6 +73,11 @@ export class BrowserOfficeSessionService {
       selectedProjectDashboardProjectId: state.selectedProjectDashboardProjectId,
       selectedProjectDashboardActiveWorkIndex: clampIndex(state.selectedProjectDashboardActiveWorkIndex),
       selectedWorkSessionId: state.selectedWorkSessionId,
+      candidateTaskCollections: clone(state.candidateTaskCollections),
+      candidateAssignmentCollections: clone(state.candidateAssignmentCollections),
+      candidatePromotionReviewCollections: clone(state.candidatePromotionReviewCollections),
+      candidatePromotionDecisionRecords: clone(state.candidatePromotionDecisionRecords),
+      candidateProjectTaskPromotionResultCollections: clone(state.candidateProjectTaskPromotionResultCollections),
       taskCollections: clone(state.taskCollections),
       employees: clone(state.employees),
       confirmedEmployeeAssignmentRecords: clone(state.confirmedEmployeeAssignmentRecords),
@@ -109,6 +119,11 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     isOptionalString(value.selectedProjectDashboardProjectId) &&
     isOptionalString(value.selectedWorkSessionId) &&
     (value.selectedProjectDashboardActiveWorkIndex === undefined || typeof value.selectedProjectDashboardActiveWorkIndex === "number") &&
+    isRecordOfRecords(value.candidateTaskCollections) &&
+    isRecordOfRecords(value.candidateAssignmentCollections) &&
+    isRecordOfRecords(value.candidatePromotionReviewCollections) &&
+    isRecordOfRecords(value.candidatePromotionDecisionRecords) &&
+    isResultCollectionRecord(value.candidateProjectTaskPromotionResultCollections) &&
     isTaskCollectionRecord(value.taskCollections) &&
     Array.isArray(value.employees) &&
     value.employees.every(isRecord) &&

@@ -445,60 +445,50 @@ export class OfficeProjectPortalController {
 
     if (this.state.viewMode === "list") {
       this.updateListInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "detail") {
       this.updateDetailInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "workspace") {
       this.updateWorkspaceInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "repository-detail") {
       this.updateRepositoryDetailInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "task-list") {
       this.updateTaskListInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "task-detail") {
       this.updateTaskDetailInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "project-dashboard") {
       this.updateProjectDashboardInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "candidate-detail") {
       this.updateCandidateDetailInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     if (this.state.viewMode === "influence-planning") {
       this.updateInfluencePlanningInput(input);
-      this.persistBrowserOfficeSession();
       return;
     }
 
     this.updateEmployeeSelectionInput(input);
-    this.persistBrowserOfficeSession();
   }
 
   isOpen() {
@@ -1553,6 +1543,7 @@ export class OfficeProjectPortalController {
     this.state.taskCollections = beforeTasks;
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1586,6 +1577,7 @@ export class OfficeProjectPortalController {
       this.candidateProjectTaskPromotionService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1643,6 +1635,7 @@ export class OfficeProjectPortalController {
       this.confirmedEmployeeAssignmentService.upsertResult(existingResults, outcome.result);
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1698,6 +1691,7 @@ export class OfficeProjectPortalController {
     this.state.employees = beforeEmployees;
     this.state.workSessions = beforeWorkSessions;
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1759,6 +1753,7 @@ export class OfficeProjectPortalController {
       this.activeWorkSessionStartService.upsertResult(existingResults, outcome.result);
     this.state.confirmedEmployeeAssignmentRecords = beforeAssignments;
     this.state.preparedWorkSessionRecords = beforePreparedSessions;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1825,6 +1820,7 @@ export class OfficeProjectPortalController {
       approvals: [],
       rulesVersion: "approval-v1",
     });
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -1918,6 +1914,7 @@ export class OfficeProjectPortalController {
     const existingApprovalResults = this.state.humanExecutionApprovalResultCollections[projectId];
     this.state.humanExecutionApprovalResultCollections[projectId] =
       this.humanExecutionApprovalService.upsertResult(existingApprovalResults, approvalOutcome.result);
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -2004,6 +2001,7 @@ export class OfficeProjectPortalController {
       });
       this.state.runtimePreflightCollections[projectId] = blockedOutcome.preflightCollection ?? existingPreflights;
       this.state.runtimePreflightResultCollections[projectId] = blockedOutcome.resultCollection ?? existingPreflightResults;
+      this.persistBrowserOfficeSession();
       return true;
     }
 
@@ -2036,6 +2034,7 @@ export class OfficeProjectPortalController {
 
     this.state.runtimePreflightCollections[projectId] = outcome.preflightCollection ?? existingPreflights;
     this.state.runtimePreflightResultCollections[projectId] = outcome.resultCollection ?? existingPreflightResults;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -2122,6 +2121,7 @@ export class OfficeProjectPortalController {
       this.state.runtimeStartCollections[projectId] = existingStarts;
     }
     this.state.runtimeStartResultCollections[projectId] = outcome.resultCollection ?? existingResults;
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -3442,6 +3442,7 @@ export class OfficeProjectPortalController {
     this.refreshEmployeeSimulationSnapshotsForTaskAssigned();
     this.state.selectedTaskId = task.id;
     this.state.viewMode = "task-detail";
+    this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }
@@ -3527,6 +3528,7 @@ export class OfficeProjectPortalController {
     if (assigneeEmployeeId) {
       this.releaseEmployeeIfUnassigned(assigneeEmployeeId, task.id);
       this.refreshEmployeeSimulationSnapshotsForWorkCompleted();
+      this.persistBrowserOfficeSession();
       this.view.render(this.state);
     }
   }
@@ -3548,6 +3550,7 @@ export class OfficeProjectPortalController {
       ...updatedTask,
       status: nextStatus,
     });
+    this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(task.projectId);
     this.view.render(this.state);
   }
