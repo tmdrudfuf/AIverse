@@ -130,6 +130,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const upPressed = this.officeActionInputController?.consumeUpPressed() ?? false;
       const downPressed = this.officeActionInputController?.consumeDownPressed() ?? false;
       const enterPressed = this.officeActionInputController?.consumeEnterPressed() ?? false;
+      const openCandidateDetailPressed = this.officeActionInputController?.consumeOpenCandidateDetailPressed() ?? false;
       const startImplementerPressed = this.officeActionInputController?.consumeStartImplementerPressed() ?? false;
       const startReviewerPressed = this.officeActionInputController?.consumeStartReviewerPressed() ?? false;
       const promoteReviewPressed = this.officeActionInputController?.consumePromoteReviewPressed() ?? false;
@@ -147,6 +148,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           upPressed,
           downPressed,
           enterPressed,
+          openCandidateDetailPressed,
           startImplementerPressed,
           startReviewerPressed,
           promoteReviewPressed,

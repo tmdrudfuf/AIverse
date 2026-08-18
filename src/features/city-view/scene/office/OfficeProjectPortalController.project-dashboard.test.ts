@@ -20,6 +20,8 @@ import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
 import { CompanyProgressionService } from "./progression/CompanyProgressionService";
 import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
+import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
+import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeDailyScheduleService } from "./schedules/EmployeeDailyScheduleService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
@@ -289,6 +291,191 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.workSessions).toEqual(beforeWorkSessions);
     expect(state.companyInfluencePlan).toEqual(beforeInfluence);
   });
+
+  it("keeps Space on Active Work when candidate tasks are loaded without a selected promotion", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.taskCollections["daily-proof"] = createMultiTaskCollection();
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ downPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(state.viewMode).toBe("task-detail");
+    expect(state.selectedTaskProjectId).toBe("daily-proof");
+    expect(state.selectedTaskIndex).toBe(1);
+    expect(state.selectedTaskId).toBe("task-review");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+  });
+
+  it("keeps Enter on Active Work when candidate tasks are loaded without a selected promotion", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.taskCollections["daily-proof"] = createMultiTaskCollection();
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ downPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("task-detail");
+    expect(state.selectedTaskProjectId).toBe("daily-proof");
+    expect(state.selectedTaskIndex).toBe(1);
+    expect(state.selectedTaskId).toBe("task-review");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+  });
+
+  it("does not treat candidateTasks[0] as a selected candidate detail target", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ openCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+  });
+
+  it("keeps Space available for existing candidate promotion status cycling", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("Approved");
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+    expect(state.candidatePromotionDecisionRecords["daily-proof:candidate-promotion:candidate-12:candidate-promotion-v1"]).toMatchObject({
+      promotionStatus: "Deferred",
+      candidateTaskId: "candidate-12",
+    });
+  });
+
+  it("opens selected candidate detail from Project Dashboard with the candidate detail input", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ openCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("candidate-detail");
+    expect(state.selectedCandidateTaskId).toBe("candidate-12");
+
+    controller.updateInput(createInput({ escapePressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedProjectDashboardProjectId).toBe("daily-proof");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+  });
+
+  it("opens detail for the selected candidate promotion rather than an unrelated fallback", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.selectedCandidatePromotionIndex = 1;
+    const candidateTasks = createCandidateTaskCollection();
+    candidateTasks.tasks.push({
+      ...candidateTasks.tasks[0],
+      id: "candidate-34",
+      originatingIssueId: "ai-verse/daily-proof#34",
+      issueNumber: 34,
+      title: "Add onboarding checklist",
+      summary: "Add onboarding checklist",
+    });
+    candidateTasks.taskCount = 2;
+    state.candidateTaskCollections["daily-proof"] = candidateTasks;
+    const candidatePromotions = createCandidatePromotionCollection("PendingReview");
+    candidatePromotions.reviews.push({
+      ...candidatePromotions.reviews[0],
+      id: "daily-proof:candidate-promotion:candidate-34:candidate-promotion-v1",
+      candidateTaskId: "candidate-34",
+      candidateTaskTitle: "Add onboarding checklist",
+      candidateTaskProvenance: {
+        ...candidatePromotions.reviews[0].candidateTaskProvenance,
+        candidateTaskId: "candidate-34",
+        originatingIssueId: "ai-verse/daily-proof#34",
+        issueNumber: 34,
+      },
+    });
+    candidatePromotions.reviewCount = 2;
+    state.candidatePromotionReviewCollections["daily-proof"] = candidatePromotions;
+    const controller = createControllerHarness(state);
+    state.projectDashboardSnapshot = controller.getProjectDashboardSnapshot("daily-proof");
+
+    controller.updateInput(createInput({ openCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("candidate-detail");
+    expect(state.selectedCandidateTaskId).toBe("candidate-34");
+  });
+
+  it("keeps Enter on Project Dashboard available for existing candidate progression", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+    expect(state.candidatePromotionDecisionRecords["daily-proof:candidate-promotion:candidate-12:candidate-promotion-v1"]).toMatchObject({
+      promotionStatus: "Approved",
+      candidateTaskId: "candidate-12",
+    });
+  });
+
+  it("leaves Project Dashboard unchanged when selected candidate detail target is stale", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview", "missing-candidate");
+    const controller = createControllerHarness(state);
+    const beforeCandidateTasks = structuredClone(state.candidateTaskCollections);
+    const beforePromotions = structuredClone(state.candidatePromotionReviewCollections);
+    const beforeDecisions = structuredClone(state.candidatePromotionDecisionRecords);
+
+    controller.updateInput(createInput({ openCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedCandidateTaskId).toBeUndefined();
+    expect(state.candidateTaskCollections).toEqual(beforeCandidateTasks);
+    expect(state.candidatePromotionReviewCollections).toEqual(beforePromotions);
+    expect(state.candidatePromotionDecisionRecords).toEqual(beforeDecisions);
+  });
 });
 
 type ControllerInternals = {
@@ -448,6 +635,7 @@ function createInput(overrides: Partial<OfficeProjectPortalInput>): OfficeProjec
     upPressed: false,
     downPressed: false,
     enterPressed: false,
+    openCandidateDetailPressed: false,
     startImplementerPressed: false,
     startReviewerPressed: false,
     promoteReviewPressed: false,
@@ -512,6 +700,85 @@ function createMultiTaskCollection(): TaskCollection {
         updatedAt: "2026-01-01T10:30:00.000Z",
       },
     ],
+  };
+}
+
+function createCandidateTaskCollection(): CandidateTaskCollection {
+  return {
+    projectId: "daily-proof",
+    sourceProvider: "github",
+    syncStatus: "Succeeded",
+    tasks: [{
+      id: "candidate-12",
+      originatingIssueId: "ai-verse/daily-proof#12",
+      issueNumber: 12,
+      projectId: "daily-proof",
+      title: "Fix crash on launch",
+      summary: "Fix crash on launch",
+      labels: ["bug"],
+      assignees: ["ada"],
+      state: "Open",
+      estimatedPriority: "High",
+      estimatedTaskType: "Bug",
+      sourceProvider: "github",
+      sourceRepositoryOwner: "ai-verse",
+      sourceRepositoryName: "daily-proof",
+      issueCreatedAt: "2026-01-01T09:00:00.000Z",
+      issueUpdatedAt: "2026-01-01T10:00:00.000Z",
+      mappedAt: "2026-01-01T10:05:00.000Z",
+      syncedAt: "2026-01-01T10:05:00.000Z",
+    }],
+    taskCount: 1,
+    mappedAt: "2026-01-01T10:05:00.000Z",
+    sourceIssueCount: 1,
+    sourceIssueSyncStatus: "Succeeded",
+    sourceIssueSyncedAt: "2026-01-01T10:00:00.000Z",
+  };
+}
+
+function createCandidatePromotionCollection(
+  status: "PendingReview" | "Approved",
+  candidateTaskId = "candidate-12",
+): CandidatePromotionReviewCollection {
+  return {
+    projectId: "daily-proof",
+    sourceCandidateTaskStatus: "Succeeded",
+    sourceAssignmentStatus: "Succeeded",
+    reviewStatus: "Succeeded",
+    reviews: [{
+      id: `daily-proof:candidate-promotion:${candidateTaskId}:candidate-promotion-v1`,
+      projectId: "daily-proof",
+      candidateTaskId,
+      candidateTaskTitle: "Fix crash on launch",
+      candidateTaskType: "Bug",
+      candidateTaskPriority: "High",
+      candidateTaskState: "Open",
+      candidateTaskProvenance: {
+        candidateTaskId,
+        originatingIssueId: "ai-verse/daily-proof#12",
+        issueNumber: 12,
+        sourceProvider: "github",
+      },
+      assignmentRecommendationId: "assignment-12",
+      recommendedEmployeeId: "employee-1",
+      recommendedEmployeeName: "Ada",
+      assignmentStatus: "Recommended",
+      promotionStatus: status,
+      eligibility: {
+        status: "PendingReview",
+        isApprovable: true,
+        reasonCodes: ["ELIGIBLE_RECOMMENDED_ASSIGNMENT"],
+        summary: "Ready for promotion.",
+      },
+      availableActions: status === "PendingReview" ? ["Approved", "Deferred", "Rejected"] : ["Deferred"],
+      rulesetVersion: "candidate-promotion-v1",
+    }],
+    reviewCount: 1,
+    selectedIndex: 0,
+    generatedAt: "2026-01-01T10:10:00.000Z",
+    rulesetVersion: "candidate-promotion-v1",
+    sourceCandidateTaskCount: 1,
+    sourceAssignmentCount: 1,
   };
 }
 

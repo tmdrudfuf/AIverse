@@ -221,6 +221,7 @@ function createInput(overrides: Partial<OfficeProjectPortalInput>): OfficeProjec
     upPressed: false,
     downPressed: false,
     enterPressed: false,
+    openCandidateDetailPressed: false,
     startImplementerPressed: false,
     startReviewerPressed: false,
     promoteReviewPressed: false,

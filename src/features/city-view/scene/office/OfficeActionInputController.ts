@@ -5,6 +5,9 @@ const ESCAPE_KEY_CODE = "Escape";
 const UP_KEY_CODE = "ArrowUp";
 const DOWN_KEY_CODE = "ArrowDown";
 const ENTER_KEY_CODE = "Enter";
+// Distinct from ACTION_KEY_CODE: candidate detail inspection must not shadow
+// the existing Space-driven promotion decision cycle or Active Work opening.
+const OPEN_CANDIDATE_DETAIL_KEY_CODE = "KeyC";
 // Deliberately distinct from ENTER_KEY_CODE/ACTION_KEY_CODE: this is the one
 // and only input that can request a Claude Implementer Runtime start, and it
 // must never be satisfied by the same keypress that advances the existing
@@ -45,6 +48,7 @@ export class OfficeActionInputController {
   private pendingUp = false;
   private pendingDown = false;
   private pendingEnter = false;
+  private pendingOpenCandidateDetail = false;
   private pendingStartImplementer = false;
   private pendingStartReviewer = false;
   private pendingPromoteReview = false;
@@ -84,6 +88,12 @@ export class OfficeActionInputController {
     if (event.code === ENTER_KEY_CODE) {
       event.preventDefault();
       this.pendingEnter = true;
+      return;
+    }
+
+    if (event.code === OPEN_CANDIDATE_DETAIL_KEY_CODE) {
+      event.preventDefault();
+      this.pendingOpenCandidateDetail = true;
       return;
     }
 
@@ -180,6 +190,12 @@ export class OfficeActionInputController {
     return enterPressed;
   }
 
+  consumeOpenCandidateDetailPressed() {
+    const pressed = this.pendingOpenCandidateDetail;
+    this.pendingOpenCandidateDetail = false;
+    return pressed;
+  }
+
   consumeStartImplementerPressed() {
     const startImplementerPressed = this.pendingStartImplementer;
     this.pendingStartImplementer = false;
@@ -246,6 +262,7 @@ export class OfficeActionInputController {
     this.pendingUp = false;
     this.pendingDown = false;
     this.pendingEnter = false;
+    this.pendingOpenCandidateDetail = false;
     this.pendingStartImplementer = false;
     this.pendingStartReviewer = false;
     this.pendingPromoteReview = false;

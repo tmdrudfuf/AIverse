@@ -250,6 +250,7 @@ export type OfficeProjectPortalInput = {
   upPressed: boolean;
   downPressed: boolean;
   enterPressed: boolean;
+  openCandidateDetailPressed: boolean;
   // Distinct from enterPressed/actionPressed by design: those drive the
   // existing Plan -> Readiness -> Approval -> Preflight -> Runtime Start
   // cascade, while this field exists solely to request an Implementer
@@ -464,6 +465,11 @@ export class OfficeProjectPortalController {
 
     if (this.state.viewMode === "project-dashboard") {
       this.updateProjectDashboardInput(input);
+      return;
+    }
+
+    if (this.state.viewMode === "candidate-detail") {
+      this.updateCandidateDetailInput(input);
       return;
     }
 
@@ -837,6 +843,7 @@ export class OfficeProjectPortalController {
     this.state.selectedEmployeeIndex = 0;
     this.state.selectedProjectDashboardProjectId = undefined;
     this.state.selectedProjectDashboardActiveWorkIndex = 0;
+    this.state.selectedCandidateTaskId = undefined;
     this.state.projectDashboardSnapshot = undefined;
     this.state.selectedWorkSessionId = undefined;
     this.repositoryRequestVersion += 1;
@@ -896,6 +903,7 @@ export class OfficeProjectPortalController {
       this.state.selectedProjectDashboardProjectId = undefined;
       this.state.selectedProjectDashboardActiveWorkIndex = 0;
       this.state.selectedCandidatePromotionIndex = 0;
+      this.state.selectedCandidateTaskId = undefined;
       this.state.projectDashboardSnapshot = undefined;
       this.repositorySyncRequestVersion += 1;
       this.issueSyncRequestVersion += 1;
@@ -1116,6 +1124,13 @@ export class OfficeProjectPortalController {
       }
     }
 
+    if (input.openCandidateDetailPressed && selectedPromotion) {
+      if (this.openSelectedCandidateDetail(selectedPromotion.candidateTaskId)) {
+        this.view.render(this.state);
+        return;
+      }
+    }
+
     if (input.actionPressed && selectedPromotion) {
       const targetStatus = getNextPromotionCycleStatus(selectedPromotion);
       if (targetStatus) {
@@ -1142,6 +1157,14 @@ export class OfficeProjectPortalController {
         void this.syncRepositorySnapshot(projectId);
         void this.syncIssueSnapshots(projectId);
       }
+    }
+  }
+
+  private updateCandidateDetailInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "project-dashboard";
+      this.state.selectedCandidateTaskId = undefined;
+      this.view.render(this.state);
     }
   }
 
@@ -1320,6 +1343,7 @@ export class OfficeProjectPortalController {
     this.state.selectedProjectDashboardProjectId = projectId;
     this.state.selectedProjectDashboardActiveWorkIndex = 0;
     this.state.selectedCandidatePromotionIndex = 0;
+    this.state.selectedCandidateTaskId = undefined;
     if (this.hasRepositoryMapping(projectId) && !this.state.repositorySummaries[projectId]) {
       this.state.repositorySummaries[projectId] = createLoadingRepositorySummary();
     }
@@ -1483,6 +1507,7 @@ export class OfficeProjectPortalController {
     const beforeTasks = this.state.taskCollections;
     const beforeEmployees = this.state.employees;
     const beforeWorkSessions = this.state.workSessions;
+    this.candidatePromotionService ??= new CandidatePromotionService();
     const result = this.candidatePromotionService.applyDecision(
       collection,
       this.state.candidatePromotionDecisionRecords,
@@ -3098,6 +3123,19 @@ export class OfficeProjectPortalController {
     const projectId = this.state.selectedProjectDashboardProjectId;
     const collection = projectId ? this.state.candidatePromotionReviewCollections[projectId] : undefined;
     return collection?.reviews[this.state.selectedCandidatePromotionIndex];
+  }
+
+  private openSelectedCandidateDetail(candidateTaskId: string) {
+    const projectId = this.state.selectedProjectDashboardProjectId;
+    const collection = projectId ? this.state.candidateTaskCollections[projectId] : undefined;
+    if (!projectId || !candidateTaskId || !collection) return false;
+
+    const candidateTask = collection.tasks.find((task) => task.id === candidateTaskId);
+    if (!candidateTask) return false;
+
+    this.state.selectedCandidateTaskId = candidateTask.id;
+    this.state.viewMode = "candidate-detail";
+    return true;
   }
 
   private moveProjectDashboardActiveWorkSelection(direction: number) {

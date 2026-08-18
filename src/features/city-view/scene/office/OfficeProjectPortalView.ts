@@ -4,6 +4,7 @@ import { createCandidateAssignmentDisplayRows, type CandidateAssignmentDisplayRo
 import { createCandidateProjectTaskPromotionDisplayRows, type CandidateProjectTaskPromotionDisplayRows } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionView";
 import { createCandidatePromotionDisplayRows, type CandidatePromotionDisplayRows } from "./candidate-promotions/CandidatePromotionView";
 import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from "./candidate-tasks/CandidateTaskView";
+import type { CandidateTask } from "./candidate-tasks/CandidateTaskTypes";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
 import { parsePromotedProjectTaskProvenance } from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
@@ -147,6 +148,11 @@ export class OfficeProjectPortalView {
 
     if (state.viewMode === "project-dashboard") {
       this.renderProjectDashboard(state);
+      return;
+    }
+
+    if (state.viewMode === "candidate-detail") {
+      this.renderCandidateDetail(state);
       return;
     }
 
@@ -593,10 +599,48 @@ export class OfficeProjectPortalView {
     const lowerPanelHeight = calculateProjectDashboardLowerPanelHeight(lowerRows, maxLowerPanelHeight);
     this.addTerminalPanel(this.panelX + 22, bottomPanelY, this.panelWidth - 44, lowerPanelHeight);
     this.renderProjectDashboardLowerRows(lowerRows);
-    const instructionText = rows.activeWorkTaskIds.length > 0
-      ? "Esc back  Up/Down active work  Enter/Space open task"
-      : "Esc back";
+    const canOpenCandidateDetail = canOpenSelectedCandidateDetail(state);
+    const instructionText = canOpenCandidateDetail
+      ? "Esc back  Up/Down select  Enter run  Space cycle  C detail"
+      : rows.activeWorkTaskIds.length > 0
+        ? "Esc back  Up/Down active work  Enter/Space open task"
+        : "Esc back";
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, instructionText, instructionStyle()).setOrigin(1, 0.5);
+  }
+
+  private renderCandidateDetail(state: ProjectPortalState) {
+    const candidateTask = getSelectedCandidateTask(state);
+    this.addText(this.panelX + 28, this.panelY + 24, "Candidate Detail", titleStyle());
+
+    if (!candidateTask) {
+      this.addText(this.panelX + 28, this.panelY + 84, "Candidate task not found.", bodyStyle());
+      this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
+      return;
+    }
+
+    const sourceRepository = getCandidateSourceRepository(candidateTask);
+    const assignment = getCandidateAssignment(state, candidateTask);
+    const promotion = getCandidatePromotion(state, candidateTask);
+    const promotionResult = getCandidateProjectTaskPromotionResult(state, candidateTask);
+    const promotedTask = getPromotedProjectTask(state, candidateTask);
+
+    this.addText(this.panelX + 28, this.panelY + 64, wrapText(candidateTask.title, 70), headingStyle());
+    this.addText(this.panelX + 28, this.panelY + 104, `Issue: #${candidateTask.issueNumber} (${candidateTask.state})`, bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 132, `Candidate: ${candidateTask.estimatedPriority}/${candidateTask.estimatedTaskType}`, bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 160, `Source: ${candidateTask.sourceProvider}${sourceRepository ? ` ${sourceRepository}` : ""}`, bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 188, wrapText(`Labels: ${candidateTask.labels.join(", ") || "None"}`, 70), mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + 216, wrapText(`Assignees: ${candidateTask.assignees.join(", ") || "None"}`, 70), mutedStyle());
+
+    this.addText(this.panelX + 28, this.panelY + 252, "Summary:", headingStyle());
+    this.addText(this.panelX + 44, this.panelY + 280, wrapText(candidateTask.summary || "No summary available.", 72), bodyStyle());
+
+    this.addText(this.panelX + 390, this.panelY + 104, "Context:", headingStyle());
+    this.addText(this.panelX + 390, this.panelY + 136, wrapText(getCandidateAssignmentText(assignment), 52), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 184, wrapText(getCandidatePromotionText(promotion), 52), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 232, wrapText(getCandidatePromotionResultText(promotionResult, promotedTask), 52), bodyStyle());
+
+    this.addText(this.panelX + 28, this.panelY + 360, "Read-only candidate inspection. No task, employee, runtime, repository, or GitHub changes.", mutedStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderProjectDashboardLowerRows(rows: ProjectDashboardRenderedLowerRow[]) {
@@ -889,6 +933,73 @@ function getSelectedTask(state: ProjectPortalState) {
   const projectId = state.selectedTaskProjectId ?? project?.id;
   const collection = projectId ? state.taskCollections[projectId] : undefined;
   return collection?.tasks[state.selectedTaskIndex];
+}
+
+function getSelectedCandidateTask(state: ProjectPortalState): CandidateTask | undefined {
+  const projectId = state.selectedProjectDashboardProjectId;
+  const collection = projectId ? state.candidateTaskCollections[projectId] : undefined;
+  if (!collection) return undefined;
+
+  const selectedCandidateTaskId = state.selectedCandidateTaskId ?? getSelectedCandidateTaskId(state);
+  return collection.tasks.find((task) => task.id === selectedCandidateTaskId);
+}
+
+function canOpenSelectedCandidateDetail(state: ProjectPortalState) {
+  return Boolean(getSelectedCandidateTask(state));
+}
+
+function getSelectedCandidateTaskId(state: ProjectPortalState) {
+  const projectId = state.selectedProjectDashboardProjectId;
+  const promotionCollection = projectId ? state.candidatePromotionReviewCollections[projectId] : undefined;
+  const selectedPromotion = promotionCollection?.reviews[state.selectedCandidatePromotionIndex];
+  return selectedPromotion?.candidateTaskId;
+}
+
+function getCandidateAssignment(state: ProjectPortalState, candidateTask: CandidateTask) {
+  const collection = state.candidateAssignmentCollections[candidateTask.projectId];
+  return collection?.recommendations.find((recommendation) => recommendation.candidateTaskId === candidateTask.id);
+}
+
+function getCandidatePromotion(state: ProjectPortalState, candidateTask: CandidateTask) {
+  const collection = state.candidatePromotionReviewCollections[candidateTask.projectId];
+  return collection?.reviews.find((review) => review.candidateTaskId === candidateTask.id);
+}
+
+function getCandidateProjectTaskPromotionResult(state: ProjectPortalState, candidateTask: CandidateTask) {
+  const collection = state.candidateProjectTaskPromotionResultCollections[candidateTask.projectId];
+  return collection?.results.find((result) => result.candidateTaskId === candidateTask.id);
+}
+
+function getPromotedProjectTask(state: ProjectPortalState, candidateTask: CandidateTask) {
+  const collection = state.taskCollections[candidateTask.projectId];
+  return collection?.tasks.find((task) =>
+    parsePromotedProjectTaskProvenance(task.description)?.candidateTaskId === candidateTask.id
+  );
+}
+
+function getCandidateSourceRepository(candidateTask: CandidateTask) {
+  if (!candidateTask.sourceRepositoryOwner || !candidateTask.sourceRepositoryName) return undefined;
+  return `${candidateTask.sourceRepositoryOwner}/${candidateTask.sourceRepositoryName}`;
+}
+
+function getCandidateAssignmentText(assignment: ReturnType<typeof getCandidateAssignment>) {
+  if (!assignment) return "Assignment: Not recommended yet";
+  const employee = assignment.recommendedEmployeeName ?? "No employee";
+  return `Assignment: ${assignment.assignmentStatus} -> ${employee} (${assignment.matchTier})`;
+}
+
+function getCandidatePromotionText(promotion: ReturnType<typeof getCandidatePromotion>) {
+  if (!promotion) return "Promotion: Not reviewed yet";
+  return `Promotion: ${promotion.promotionStatus}; ${promotion.eligibility.summary}`;
+}
+
+function getCandidatePromotionResultText(
+  result: ReturnType<typeof getCandidateProjectTaskPromotionResult>,
+  promotedTask: ProjectTask | undefined,
+) {
+  if (promotedTask) return `ProjectTask: ${promotedTask.title} (${promotedTask.status})`;
+  if (result) return `ProjectTask: ${result.status}`;
+  return "ProjectTask: Not promoted";
 }
 
 function getSelectedEmployee(state: ProjectPortalState): Employee | undefined {
