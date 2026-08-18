@@ -77,6 +77,41 @@ describe("OfficeProjectPortalController browser office session save restore", ()
     expect(saved.workSessions?.["task-12"]?.[0]?.id).toBe(createSessionId());
   });
 
+  it("saves active work created by async task-detail workflow before another input", async () => {
+    const storage = createMemoryStorage();
+    const controller = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({
+        storage,
+        now: () => "2026-08-17T00:00:00.000Z",
+      }),
+    });
+    const internals = getControllerInternals(controller);
+    const task = createTask({ status: "Todo" });
+
+    internals.state.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [task],
+    };
+    internals.state.employees = [createEmployee({ status: "Working", assignedTaskId: task.id })];
+    controller.open();
+    internals.state.selectedTaskProjectId = "daily-proof";
+    internals.state.selectedTaskId = task.id;
+    internals.state.selectedTaskIndex = 0;
+    internals.state.viewMode = "task-detail";
+
+    await internals.startPlaceholderWorkOnSelectedTask();
+
+    const saved = JSON.parse(storage.getItem(BROWSER_OFFICE_SESSION_STORAGE_KEY) ?? "{}") as {
+      selectedWorkSessionId?: string;
+      taskCollections?: Record<string, { tasks: ProjectTask[] }>;
+      workSessions?: Record<string, WorkSession[]>;
+    };
+
+    expect(saved.selectedWorkSessionId).toBeTruthy();
+    expect(saved.taskCollections?.["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
+    expect(saved.workSessions?.[task.id]?.[0]?.taskId).toBe(task.id);
+  });
+
   it("treats restored active work as already started instead of creating a duplicate", () => {
     const storage = createMemoryStorage();
     const seedService = new BrowserOfficeSessionService({ storage });

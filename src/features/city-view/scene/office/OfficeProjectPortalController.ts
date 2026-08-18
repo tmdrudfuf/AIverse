@@ -520,6 +520,7 @@ export class OfficeProjectPortalController {
     this.state.employees = employees;
     this.refreshCandidateAssignmentsForSelectedProject();
     this.refreshEmployeeSimulationSnapshots();
+    this.persistBrowserOfficeSession();
   }
 
   getEmployeeSimulationSnapshots(): ReadonlyArray<EmployeeSimulationSnapshot> {
@@ -1390,6 +1391,7 @@ export class OfficeProjectPortalController {
 
     this.state.taskCollections[projectId] = collection;
     this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(projectId);
+    this.persistBrowserOfficeSession();
     this.view.render(this.state);
   }
 
@@ -3237,6 +3239,7 @@ export class OfficeProjectPortalController {
     this.state.taskCollections[projectId] = collection;
     this.state.selectedTaskIndex = clamp(this.state.selectedTaskIndex, 0, Math.max(collection.tasks.length - 1, 0));
     this.state.selectedTaskId = collection.tasks[this.state.selectedTaskIndex]?.id;
+    this.persistBrowserOfficeSession();
     void this.prepareTaskAnalyses(collection.tasks, projectId);
     void this.prepareSelectedEmployeeRecommendation();
     void this.prepareProjectManagementSuggestion(projectId);
@@ -3264,6 +3267,7 @@ export class OfficeProjectPortalController {
     this.state.employees = employees;
     this.refreshEmployeeSimulationSnapshots();
     this.state.selectedEmployeeIndex = clamp(this.state.selectedEmployeeIndex, 0, Math.max(employees.length - 1, 0));
+    this.persistBrowserOfficeSession();
     void this.prepareSelectedEmployeeRecommendation();
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
@@ -3355,6 +3359,7 @@ export class OfficeProjectPortalController {
     this.refreshCandidateAssignmentsForSelectedProject();
     this.refreshEmployeeSimulationSnapshots();
     this.refreshCompanyDashboardSnapshot();
+    this.persistBrowserOfficeSession();
     return true;
   }
 
@@ -3492,6 +3497,7 @@ export class OfficeProjectPortalController {
       ...updatedTask,
       status: task.status === "Todo" ? "In Progress" : task.status,
     });
+    this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
   }

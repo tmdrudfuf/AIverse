@@ -140,6 +140,7 @@ export type ControllerInternals = {
   };
   syncIssueSnapshots: (projectId: string) => Promise<void>;
   startSelectedWorkSessionForPromotion: (projectId: string, candidateTaskId: string) => boolean;
+  startPlaceholderWorkOnSelectedTask: () => Promise<void>;
   startImplementerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewerRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   startReviewFixRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
