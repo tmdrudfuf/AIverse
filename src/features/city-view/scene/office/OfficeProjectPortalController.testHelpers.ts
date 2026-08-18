@@ -56,6 +56,9 @@ export type ControllerInternals = {
   state: {
     viewMode: string;
     selectedProjectDashboardProjectId: string | undefined;
+    selectedTaskProjectId: string | undefined;
+    selectedTaskId: string | undefined;
+    selectedTaskIndex: number;
     projects: ProjectPortalProjectLike[];
     repositorySummaries: Record<string, { connectionStatus: string }>;
     repositorySyncSnapshots: ProjectPortalState["repositorySyncSnapshots"];
