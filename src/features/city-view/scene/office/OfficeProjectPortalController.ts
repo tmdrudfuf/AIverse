@@ -298,7 +298,7 @@ export class OfficeProjectPortalController {
   private readonly maxEmployeeConversationDistance = 48;
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
-  private readonly browserOfficeSessionService: BrowserOfficeSessionService;
+  private readonly browserOfficeSessionService?: BrowserOfficeSessionService;
   private readonly repositoryService: GitHubRepositoryService;
   private readonly repositorySyncService: RepositorySyncService;
   private readonly issueSyncService: IssueSyncService;
@@ -891,7 +891,7 @@ export class OfficeProjectPortalController {
   }
 
   private persistBrowserOfficeSession() {
-    this.browserOfficeSessionService.saveState(this.state);
+    this.browserOfficeSessionService?.saveState(this.state);
   }
 
   private updateListInput(input: OfficeProjectPortalInput) {

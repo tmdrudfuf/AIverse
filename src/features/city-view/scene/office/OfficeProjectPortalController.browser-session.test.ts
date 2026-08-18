@@ -9,6 +9,7 @@ import {
 import type { Employee } from "./employees/EmployeeTypes";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import {
   getControllerInternals,
   createInput,
@@ -57,7 +58,7 @@ describe("OfficeProjectPortalController browser office session save restore", ()
       }),
     });
     const internals = getControllerInternals(controller);
-    applyRestorableSession(internals.state);
+    applyRestorableSession(internals.state as ProjectPortalState);
 
     controller.open();
     controller.updateInput(createInput({}));
@@ -107,7 +108,7 @@ function createRestorableState() {
   return state;
 }
 
-function applyRestorableSession(state: ReturnType<typeof createProjectPortalState>) {
+function applyRestorableSession(state: ProjectPortalState) {
   const task = createTask({ status: "In Progress" });
   const assignment = createAssignment();
   const preparedSession = createPreparedSession();
