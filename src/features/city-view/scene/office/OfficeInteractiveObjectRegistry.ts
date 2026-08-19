@@ -18,7 +18,11 @@ type TiledObjectProperty = {
 };
 
 export class OfficeInteractiveObjectRegistry {
-  constructor(private readonly objects: OfficeInteractiveObject[]) {}
+  private readonly objects = new Map<string, OfficeInteractiveObject>();
+
+  constructor(objects: OfficeInteractiveObject[]) {
+    objects.forEach((object) => this.registerObject(object));
+  }
 
   static fromTilemapLayers(office: OfficeDefinition, layers: OfficeTilemapLayers) {
     const interactionObjects = layers.interactionLayer.objects
@@ -44,22 +48,63 @@ export class OfficeInteractiveObjectRegistry {
   }
 
   getObjects() {
-    return [...this.objects];
+    return Array.from(this.objects.values()).map(cloneOfficeInteractiveObject);
+  }
+
+  getObject(id: string) {
+    const object = this.objects.get(id);
+    return object ? cloneOfficeInteractiveObject(object) : undefined;
+  }
+
+  registerObject(object: OfficeInteractiveObject) {
+    const clonedObject = cloneOfficeInteractiveObject(object);
+    this.objects.set(clonedObject.id, clonedObject);
+    return cloneOfficeInteractiveObject(clonedObject);
+  }
+
+  updateObject(id: string, changes: Partial<Omit<OfficeInteractiveObject, "id">>) {
+    const currentObject = this.objects.get(id);
+    if (!currentObject) return undefined;
+
+    const updatedObject: OfficeInteractiveObject = {
+      ...currentObject,
+      ...changes,
+      id,
+      interactionZone: changes.interactionZone ? { ...changes.interactionZone } : { ...currentObject.interactionZone },
+    };
+    this.objects.set(id, updatedObject);
+    return cloneOfficeInteractiveObject(updatedObject);
+  }
+
+  removeObject(id: string) {
+    return this.objects.delete(id);
   }
 
   findActiveObject(founderPosition: Point): OfficeInteractiveObject | undefined {
-    const activeObjects = this.objects.filter(
+    const activeObjects = Array.from(this.objects.values()).filter(
       (object) => object.enabled && isPointInRect(founderPosition, object.interactionZone),
     );
     if (activeObjects.length === 0) return undefined;
 
-    return activeObjects.sort((left, right) => {
+    const [activeObject] = activeObjects.sort((left, right) => {
       const distanceDelta = getDistanceToRectCenter(founderPosition, left.interactionZone) - getDistanceToRectCenter(founderPosition, right.interactionZone);
       if (distanceDelta !== 0) return distanceDelta;
 
+      const areaDelta = getRectArea(left.interactionZone) - getRectArea(right.interactionZone);
+      if (areaDelta !== 0) return areaDelta;
+
       return left.id.localeCompare(right.id);
-    })[0];
+    });
+
+    return activeObject ? cloneOfficeInteractiveObject(activeObject) : undefined;
   }
+}
+
+function cloneOfficeInteractiveObject(object: OfficeInteractiveObject): OfficeInteractiveObject {
+  return {
+    ...object,
+    interactionZone: { ...object.interactionZone },
+  };
 }
 
 function createObjectFromInteractionMarker(marker: Phaser.Types.Tilemaps.TiledObject): OfficeInteractiveObject | undefined {
@@ -131,4 +176,8 @@ function isPointInRect(point: Point, rect: Rect) {
 
 function getDistanceToRectCenter(point: Point, rect: Rect) {
   return Math.hypot(point.x - (rect.x + rect.width / 2), point.y - (rect.y + rect.height / 2));
+}
+
+function getRectArea(rect: Rect) {
+  return rect.width * rect.height;
 }

@@ -47,6 +47,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeLevelUpReactionLayer?: OfficeLevelUpReactionLayer;
     private officeProgressionVisualStateLayer?: OfficeProgressionVisualStateLayer;
     private officeProjectPortalController?: OfficeProjectPortalController;
+    private officeInteractiveObjectRegistry?: OfficeInteractiveObjectRegistry;
     private officeEmployeeNpcRenderer?: OfficeEmployeeNpcRenderer;
     private employeeConversationBubbleOverlay?: EmployeeConversationBubbleOverlay;
     private employeeInsightService?: EmployeeInsightService;
@@ -93,12 +94,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       };
       validateOfficeLayout(this.office, this.officeCollisionMap);
 
-      const objectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);
-      this.officeVisualLayer = new OfficeVisualLayer(this, this.office, objectRegistry.getObjects());
+      this.officeInteractiveObjectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);
+      this.officeVisualLayer = new OfficeVisualLayer(this, this.office, this.officeInteractiveObjectRegistry.getObjects());
       this.founderEntity = new FounderEntity(this, this.office.founderSpawn);
       if (this.spawnRequest?.returnFacing) this.founderEntity.setFacing(this.spawnRequest.returnFacing);
 
-      this.officeInteractionController = new OfficeInteractionController(objectRegistry);
+      this.officeInteractionController = new OfficeInteractionController(this.officeInteractiveObjectRegistry);
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
       this.officeProgressionVisualStateLayer = new OfficeProgressionVisualStateLayer(this);
       this.officeLevelUpReactionLayer = new OfficeLevelUpReactionLayer(this);
@@ -309,6 +310,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController = undefined;
       this.founderMovementController = undefined;
       this.officeMovementResolver = undefined;
+      this.officeInteractiveObjectRegistry = undefined;
       this.founderEntity = undefined;
       this.officeActionInputController = undefined;
       this.officeInteractionController = undefined;

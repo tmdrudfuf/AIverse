@@ -19,11 +19,17 @@ export class OfficeInteractionController {
   consumePlaceholderInteraction(): OfficeInteractionResult | undefined {
     if (!this.activeObject) return undefined;
 
+    const currentObject = this.registry.getObject(this.activeObject.id);
+    if (!currentObject?.enabled) {
+      this.activeObject = undefined;
+      return undefined;
+    }
+
     this.lastInteractionResult = {
-      objectId: this.activeObject.id,
-      action: this.activeObject.action,
+      objectId: currentObject.id,
+      action: currentObject.action,
       status: "placeholder",
-      message: `${this.activeObject.displayName} interaction is a placeholder.`,
+      message: `${currentObject.displayName} interaction is a placeholder.`,
     };
     console.info("Office interaction placeholder", this.lastInteractionResult);
     return this.lastInteractionResult;

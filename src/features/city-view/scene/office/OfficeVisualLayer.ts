@@ -8,7 +8,7 @@ const INTERACTIVE_OBJECT_DEPTH = 7;
 export class OfficeVisualLayer {
   private readonly title: Phaser.GameObjects.Text;
   private readonly exitMarker: Phaser.GameObjects.Container;
-  private readonly interactiveObjectMarkers: Phaser.GameObjects.Container[];
+  private interactiveObjectMarkers: Phaser.GameObjects.Container[] = [];
 
   constructor(
     scene: PhaserScene,
@@ -28,6 +28,11 @@ export class OfficeVisualLayer {
       .setDepth(OFFICE_OVERLAY_DEPTH);
 
     this.exitMarker = createExitMarker(scene, office);
+    this.refreshInteractiveObjects(scene, interactiveObjects);
+  }
+
+  refreshInteractiveObjects(scene: PhaserScene, interactiveObjects: ReadonlyArray<OfficeInteractiveObject> = []) {
+    this.interactiveObjectMarkers.forEach((marker) => marker.destroy(true));
     this.interactiveObjectMarkers = interactiveObjects
       .filter((object) => object.enabled && object.type === "computer")
       .map((object) => createComputerMarker(scene, object));
