@@ -24,12 +24,13 @@ import { OfficeInteractiveObjectRegistry } from "./OfficeInteractiveObjectRegist
 import { OfficeLevelUpReactionLayer } from "./OfficeLevelUpReactionLayer";
 import { OfficeProgressionVisualStateLayer } from "./OfficeProgressionVisualStateLayer";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
+import { ReceptionDeskRuntimeSpawnService } from "./ReceptionDeskRuntimeSpawnService";
 import { OfficeEmployeeNpcRenderer } from "./npc/OfficeEmployeeNpcRenderer";
 import { OfficeSpawnManager } from "./OfficeSpawnManager";
 import { OfficeTileMovementResolver } from "./OfficeTileMovementResolver";
 import { createOfficeTilemapLayer, loadOfficeTilemapAssets, type OfficeTilemapLayers } from "./OfficeTilemapLayer";
 import { OfficeVisualLayer } from "./OfficeVisualLayer";
-import type { OfficeDefinition, OfficeSpawnRequest } from "./officeTypes";
+import type { OfficeDefinition, OfficeInteractiveAction, OfficeSpawnRequest } from "./officeTypes";
 
 export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
   return class CompanyOfficeScene extends PhaserRuntime.Scene {
@@ -47,6 +48,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeLevelUpReactionLayer?: OfficeLevelUpReactionLayer;
     private officeProgressionVisualStateLayer?: OfficeProgressionVisualStateLayer;
     private officeProjectPortalController?: OfficeProjectPortalController;
+    private receptionDeskRuntimeSpawnService?: ReceptionDeskRuntimeSpawnService;
     private officeInteractiveObjectRegistry?: OfficeInteractiveObjectRegistry;
     private officeEmployeeNpcRenderer?: OfficeEmployeeNpcRenderer;
     private employeeConversationBubbleOverlay?: EmployeeConversationBubbleOverlay;
@@ -59,6 +61,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
     private spawnRequest?: OfficeSpawnRequest;
+    private receptionDeskRuntimeSpawnObjectId?: string;
+    private receptionDeskRuntimeSpawnSignature?: string;
 
     constructor() {
       super({ key: DAILY_PROOF_OFFICE_SCENE_KEY });
@@ -104,6 +108,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeProgressionVisualStateLayer = new OfficeProgressionVisualStateLayer(this);
       this.officeLevelUpReactionLayer = new OfficeLevelUpReactionLayer(this);
       this.officeProjectPortalController = new OfficeProjectPortalController(this);
+      this.receptionDeskRuntimeSpawnService = new ReceptionDeskRuntimeSpawnService();
       this.officeEmployeeNpcRenderer = new OfficeEmployeeNpcRenderer(this);
       this.employeeConversationBubbleOverlay = new EmployeeConversationBubbleOverlay(this);
       this.employeeInsightService = new EmployeeInsightService();
@@ -199,7 +204,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         }
 
         const interactionResult = this.officeInteractionController?.consumePlaceholderInteraction();
-        if (interactionResult?.action === "use_computer") {
+        if (interactionResult && opensProjectWorkspace(interactionResult.action)) {
           this.officeInteractionPrompt?.update(undefined);
           this.officeProjectPortalController?.open();
           this.employeeConversationBubbleOverlay?.hide();
@@ -217,11 +222,48 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     }
 
     private refreshOfficeProgressionVisualState() {
-      this.officeProgressionVisualStateLayer?.update(
-        this.officeProjectPortalController?.getCompanyProgressionSnapshot(),
-        this.officeProjectPortalController?.getActiveOfficeLayout(),
-      );
+      const progression = this.officeProjectPortalController?.getCompanyProgressionSnapshot();
+      const activeLayout = this.officeProjectPortalController?.getActiveOfficeLayout();
+
+      this.syncReceptionDeskRuntimeSpawn(progression, activeLayout);
+      this.officeProgressionVisualStateLayer?.update(progression, activeLayout);
       this.officeLevelUpReactionLayer?.update(this.officeProjectPortalController?.getCompanyProgressionTriggers());
+    }
+
+    private syncReceptionDeskRuntimeSpawn(progression: ReturnType<OfficeProjectPortalController["getCompanyProgressionSnapshot"]> | undefined, activeLayout: ReturnType<OfficeProjectPortalController["getActiveOfficeLayout"]> | undefined) {
+      if (!this.office || !this.officeInteractiveObjectRegistry || !this.officeVisualLayer || !this.receptionDeskRuntimeSpawnService || !progression || !activeLayout) {
+        return;
+      }
+
+      const receptionDesk = this.receptionDeskRuntimeSpawnService.createReceptionDeskInteractable({
+        office: this.office,
+        progression,
+        layout: activeLayout,
+      });
+
+      if (!receptionDesk) {
+        if (!this.receptionDeskRuntimeSpawnObjectId) return;
+
+        this.officeInteractiveObjectRegistry.removeObject(this.receptionDeskRuntimeSpawnObjectId);
+        this.receptionDeskRuntimeSpawnObjectId = undefined;
+        this.receptionDeskRuntimeSpawnSignature = undefined;
+        this.officeVisualLayer.refreshInteractiveObjects(this, this.officeInteractiveObjectRegistry.getObjects());
+        return;
+      }
+
+      const nextSignature = createReceptionDeskRuntimeSpawnSignature(receptionDesk);
+      if (this.receptionDeskRuntimeSpawnObjectId === receptionDesk.id && this.receptionDeskRuntimeSpawnSignature === nextSignature) {
+        return;
+      }
+
+      if (this.receptionDeskRuntimeSpawnObjectId && this.receptionDeskRuntimeSpawnObjectId !== receptionDesk.id) {
+        this.officeInteractiveObjectRegistry.removeObject(this.receptionDeskRuntimeSpawnObjectId);
+      }
+
+      this.officeInteractiveObjectRegistry.registerObject(receptionDesk);
+      this.receptionDeskRuntimeSpawnObjectId = receptionDesk.id;
+      this.receptionDeskRuntimeSpawnSignature = nextSignature;
+      this.officeVisualLayer.refreshInteractiveObjects(this, this.officeInteractiveObjectRegistry.getObjects());
     }
 
     private refreshEmployeeNpcRenderer() {
@@ -318,6 +360,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeProgressionVisualStateLayer = undefined;
       this.officeLevelUpReactionLayer = undefined;
       this.officeProjectPortalController = undefined;
+      this.receptionDeskRuntimeSpawnService = undefined;
       this.officeEmployeeNpcRenderer = undefined;
       this.employeeConversationBubbleOverlay = undefined;
       this.employeeInsightService = undefined;
@@ -331,9 +374,20 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeCollisionMap = undefined;
       this.office = undefined;
       this.spawnRequest = undefined;
+      this.receptionDeskRuntimeSpawnObjectId = undefined;
+      this.receptionDeskRuntimeSpawnSignature = undefined;
       this.navigationState = undefined;
     }
   };
+}
+
+function opensProjectWorkspace(action: OfficeInteractiveAction) {
+  return action === "use_computer" || action === "open_workspace";
+}
+
+function createReceptionDeskRuntimeSpawnSignature(object: ReturnType<ReceptionDeskRuntimeSpawnService["createReceptionDeskInteractable"]>) {
+  if (!object) return "";
+  return [object.id, object.type, object.displayName, object.enabled, object.action, object.markerId, object.interactionZone.x, object.interactionZone.y, object.interactionZone.width, object.interactionZone.height].join("|");
 }
 
 function validateOfficeLayout(office: OfficeDefinition, collisionMap: OfficeCollisionMap) {

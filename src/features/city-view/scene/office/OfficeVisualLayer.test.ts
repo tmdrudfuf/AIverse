@@ -4,14 +4,14 @@ import { OfficeVisualLayer } from "./OfficeVisualLayer";
 import type { OfficeDefinition, OfficeInteractiveObject } from "./officeTypes";
 
 describe("OfficeVisualLayer", () => {
-  it("refreshes interactive markers from the current enabled computer objects", () => {
+  it("refreshes interactive markers from the current enabled computer and desk objects", () => {
     const { scene, containers } = createSceneStub();
     const layer = new OfficeVisualLayer(scene, createOffice(), [
       createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
       createObject("desk-1", { x: 120, y: 0, width: 80, height: 60 }, { type: "desk", action: "inspect" }),
     ]);
 
-    expect(containers).toHaveLength(2);
+    expect(containers).toHaveLength(3);
 
     layer.refreshInteractiveObjects(scene, [
       createObject("computer-2", { x: 200, y: 0, width: 80, height: 60 }),
@@ -19,7 +19,8 @@ describe("OfficeVisualLayer", () => {
     ]);
 
     expect(containers[1].destroyedWithChildren).toBe(true);
-    expect(containers).toHaveLength(3);
+    expect(containers[2].destroyedWithChildren).toBe(true);
+    expect(containers).toHaveLength(4);
 
     layer.destroy();
 
