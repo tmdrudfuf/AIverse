@@ -90,6 +90,9 @@ export class OfficeInteractiveObjectRegistry {
       const distanceDelta = getDistanceToRectCenter(founderPosition, left.interactionZone) - getDistanceToRectCenter(founderPosition, right.interactionZone);
       if (distanceDelta !== 0) return distanceDelta;
 
+      const areaDelta = getRectArea(left.interactionZone) - getRectArea(right.interactionZone);
+      if (areaDelta !== 0) return areaDelta;
+
       return left.id.localeCompare(right.id);
     });
 
@@ -173,4 +176,8 @@ function isPointInRect(point: Point, rect: Rect) {
 
 function getDistanceToRectCenter(point: Point, rect: Rect) {
   return Math.hypot(point.x - (rect.x + rect.width / 2), point.y - (rect.y + rect.height / 2));
+}
+
+function getRectArea(rect: Rect) {
+  return rect.width * rect.height;
 }

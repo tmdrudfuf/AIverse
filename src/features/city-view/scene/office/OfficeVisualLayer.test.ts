@@ -102,7 +102,7 @@ function createOffice(): OfficeDefinition {
     sceneKey: "office-daily-proof",
     buildingId: "daily-proof",
     companyName: "Daily Proof",
-    worldBounds: { width: 960, height: 640 },
+    worldBounds: { x: 0, y: 0, width: 960, height: 640 },
     walkableBounds: { x: 0, y: 0, width: 960, height: 640 },
     founderSpawn: { x: 10, y: 10 },
     exitZone: { x: 20, y: 20, width: 80, height: 40 },
