@@ -8,6 +8,11 @@ const ENTER_KEY_CODE = "Enter";
 // Distinct from ACTION_KEY_CODE: candidate detail inspection must not shadow
 // the existing Space-driven promotion decision cycle or Active Work opening.
 const OPEN_CANDIDATE_DETAIL_KEY_CODE = "KeyC";
+const APPROVE_CANDIDATE_DETAIL_KEY_CODE = "KeyA";
+const DEFER_CANDIDATE_DETAIL_KEY_CODE = "KeyD";
+// R is reserved for reviewer runtime, so reject uses a detail-only key that
+// does not overlap existing Project Dashboard or agent workflow controls.
+const REJECT_CANDIDATE_DETAIL_KEY_CODE = "KeyJ";
 // Deliberately distinct from ENTER_KEY_CODE/ACTION_KEY_CODE: this is the one
 // and only input that can request a Claude Implementer Runtime start, and it
 // must never be satisfied by the same keypress that advances the existing
@@ -49,6 +54,9 @@ export class OfficeActionInputController {
   private pendingDown = false;
   private pendingEnter = false;
   private pendingOpenCandidateDetail = false;
+  private pendingApproveCandidateDetail = false;
+  private pendingDeferCandidateDetail = false;
+  private pendingRejectCandidateDetail = false;
   private pendingStartImplementer = false;
   private pendingStartReviewer = false;
   private pendingPromoteReview = false;
@@ -94,6 +102,24 @@ export class OfficeActionInputController {
     if (event.code === OPEN_CANDIDATE_DETAIL_KEY_CODE) {
       event.preventDefault();
       this.pendingOpenCandidateDetail = true;
+      return;
+    }
+
+    if (event.code === APPROVE_CANDIDATE_DETAIL_KEY_CODE) {
+      event.preventDefault();
+      this.pendingApproveCandidateDetail = true;
+      return;
+    }
+
+    if (event.code === DEFER_CANDIDATE_DETAIL_KEY_CODE) {
+      event.preventDefault();
+      this.pendingDeferCandidateDetail = true;
+      return;
+    }
+
+    if (event.code === REJECT_CANDIDATE_DETAIL_KEY_CODE) {
+      event.preventDefault();
+      this.pendingRejectCandidateDetail = true;
       return;
     }
 
@@ -196,6 +222,24 @@ export class OfficeActionInputController {
     return pressed;
   }
 
+  consumeApproveCandidateDetailPressed() {
+    const pressed = this.pendingApproveCandidateDetail;
+    this.pendingApproveCandidateDetail = false;
+    return pressed;
+  }
+
+  consumeDeferCandidateDetailPressed() {
+    const pressed = this.pendingDeferCandidateDetail;
+    this.pendingDeferCandidateDetail = false;
+    return pressed;
+  }
+
+  consumeRejectCandidateDetailPressed() {
+    const pressed = this.pendingRejectCandidateDetail;
+    this.pendingRejectCandidateDetail = false;
+    return pressed;
+  }
+
   consumeStartImplementerPressed() {
     const startImplementerPressed = this.pendingStartImplementer;
     this.pendingStartImplementer = false;
@@ -263,6 +307,9 @@ export class OfficeActionInputController {
     this.pendingDown = false;
     this.pendingEnter = false;
     this.pendingOpenCandidateDetail = false;
+    this.pendingApproveCandidateDetail = false;
+    this.pendingDeferCandidateDetail = false;
+    this.pendingRejectCandidateDetail = false;
     this.pendingStartImplementer = false;
     this.pendingStartReviewer = false;
     this.pendingPromoteReview = false;

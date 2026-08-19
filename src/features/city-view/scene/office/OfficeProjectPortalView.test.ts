@@ -870,7 +870,7 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")?.text).toBe("[CANDIDATE TOP] High/Bug #12 Fix crash on launch (Open)");
   });
 
-  it("renders read-only candidate detail for the selected Project Dashboard candidate", () => {
+  it("renders decision controls in candidate detail for the selected Project Dashboard candidate", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
     const state = createPortalState({
@@ -905,7 +905,8 @@ describe("OfficeProjectPortalView", () => {
     expect(renderedText.map((item) => item.text)).toContain("Candidate: High/Bug");
     expect(renderedText.some((item) => item.text.includes("Assignment: Recommended -> GPT Engineer (Strong)"))).toBe(true);
     expect(renderedText.some((item) => item.text.includes("Promotion: PendingReview"))).toBe(true);
-    expect(renderedText.some((item) => item.text.includes("No task, employee, runtime, repository, or GitHub changes."))).toBe(true);
+    expect(renderedText.some((item) => item.text.includes("Decision controls update review status only."))).toBe(true);
+    expect(renderedText.map((item) => item.text)).toContain("Esc back  A approve  D defer  J reject");
   });
 
   it("renders assignment recommendation rows separately below candidate task rows", () => {

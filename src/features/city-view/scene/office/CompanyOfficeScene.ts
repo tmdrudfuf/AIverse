@@ -131,6 +131,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const downPressed = this.officeActionInputController?.consumeDownPressed() ?? false;
       const enterPressed = this.officeActionInputController?.consumeEnterPressed() ?? false;
       const openCandidateDetailPressed = this.officeActionInputController?.consumeOpenCandidateDetailPressed() ?? false;
+      const approveCandidateDetailPressed = this.officeActionInputController?.consumeApproveCandidateDetailPressed() ?? false;
+      const deferCandidateDetailPressed = this.officeActionInputController?.consumeDeferCandidateDetailPressed() ?? false;
+      const rejectCandidateDetailPressed = this.officeActionInputController?.consumeRejectCandidateDetailPressed() ?? false;
       const startImplementerPressed = this.officeActionInputController?.consumeStartImplementerPressed() ?? false;
       const startReviewerPressed = this.officeActionInputController?.consumeStartReviewerPressed() ?? false;
       const promoteReviewPressed = this.officeActionInputController?.consumePromoteReviewPressed() ?? false;
@@ -149,6 +152,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           downPressed,
           enterPressed,
           openCandidateDetailPressed,
+          approveCandidateDetailPressed,
+          deferCandidateDetailPressed,
+          rejectCandidateDetailPressed,
           startImplementerPressed,
           startReviewerPressed,
           promoteReviewPressed,

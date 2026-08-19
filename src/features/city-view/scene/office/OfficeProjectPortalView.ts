@@ -639,8 +639,8 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 390, this.panelY + 184, wrapText(getCandidatePromotionText(promotion), 52), bodyStyle());
     this.addText(this.panelX + 390, this.panelY + 232, wrapText(getCandidatePromotionResultText(promotionResult, promotedTask), 52), bodyStyle());
 
-    this.addText(this.panelX + 28, this.panelY + 360, "Read-only candidate inspection. No task, employee, runtime, repository, or GitHub changes.", mutedStyle());
-    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back", instructionStyle()).setOrigin(1, 0.5);
+    this.addText(this.panelX + 28, this.panelY + 360, "Decision controls update review status only. No task, employee, runtime, repository, or GitHub changes.", mutedStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  A approve  D defer  J reject", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderProjectDashboardLowerRows(rows: ProjectDashboardRenderedLowerRow[]) {

@@ -393,6 +393,77 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.selectedCandidateTaskId).toBeUndefined();
   });
 
+  it("records an Approved decision from candidate detail and stays on candidate detail", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "candidate-detail";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.selectedCandidateTaskId = "candidate-12";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ approveCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("candidate-detail");
+    expect(state.selectedCandidateTaskId).toBe("candidate-12");
+    expect(state.candidatePromotionDecisionRecords["daily-proof:candidate-promotion:candidate-12:candidate-promotion-v1"]).toMatchObject({
+      promotionStatus: "Approved",
+      candidateTaskId: "candidate-12",
+    });
+    expect(state.candidatePromotionReviewCollections["daily-proof"].reviews[0].promotionStatus).toBe("Approved");
+  });
+
+  it("records Deferred and Rejected decisions from candidate detail for the selected candidate", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "candidate-detail";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.selectedCandidateTaskId = "candidate-12";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ deferCandidateDetailPressed: true }));
+
+    expect(state.candidatePromotionDecisionRecords["daily-proof:candidate-promotion:candidate-12:candidate-promotion-v1"]).toMatchObject({
+      promotionStatus: "Deferred",
+      candidateTaskId: "candidate-12",
+    });
+
+    controller.updateInput(createInput({ rejectCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("candidate-detail");
+    expect(state.candidatePromotionDecisionRecords["daily-proof:candidate-promotion:candidate-12:candidate-promotion-v1"]).toMatchObject({
+      promotionStatus: "Rejected",
+      candidateTaskId: "candidate-12",
+    });
+  });
+
+  it("does not record stale candidate detail decisions", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "candidate-detail";
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.selectedCandidateTaskId = "missing-candidate";
+    state.candidateTaskCollections["daily-proof"] = createCandidateTaskCollection();
+    state.candidatePromotionReviewCollections["daily-proof"] = createCandidatePromotionCollection("PendingReview");
+    const controller = createControllerHarness(state);
+    const beforeCandidateTasks = structuredClone(state.candidateTaskCollections);
+    const beforePromotions = structuredClone(state.candidatePromotionReviewCollections);
+    const beforeDecisions = structuredClone(state.candidatePromotionDecisionRecords);
+
+    controller.updateInput(createInput({ approveCandidateDetailPressed: true }));
+
+    expect(state.viewMode).toBe("candidate-detail");
+    expect(state.candidateTaskCollections).toEqual(beforeCandidateTasks);
+    expect(state.candidatePromotionReviewCollections).toEqual(beforePromotions);
+    expect(state.candidatePromotionDecisionRecords).toEqual(beforeDecisions);
+  });
+
   it("opens detail for the selected candidate promotion rather than an unrelated fallback", () => {
     const state = createProjectPortalState();
     state.isOpen = true;
@@ -636,6 +707,9 @@ function createInput(overrides: Partial<OfficeProjectPortalInput>): OfficeProjec
     downPressed: false,
     enterPressed: false,
     openCandidateDetailPressed: false,
+    approveCandidateDetailPressed: false,
+    deferCandidateDetailPressed: false,
+    rejectCandidateDetailPressed: false,
     startImplementerPressed: false,
     startReviewerPressed: false,
     promoteReviewPressed: false,

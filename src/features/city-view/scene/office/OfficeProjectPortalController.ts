@@ -255,6 +255,9 @@ export type OfficeProjectPortalInput = {
   downPressed: boolean;
   enterPressed: boolean;
   openCandidateDetailPressed: boolean;
+  approveCandidateDetailPressed?: boolean;
+  deferCandidateDetailPressed?: boolean;
+  rejectCandidateDetailPressed?: boolean;
   // Distinct from enterPressed/actionPressed by design: those drive the
   // existing Plan -> Readiness -> Approval -> Preflight -> Runtime Start
   // cascade, while this field exists solely to request an Implementer
@@ -1181,6 +1184,28 @@ export class OfficeProjectPortalController {
     if (input.escapePressed) {
       this.state.viewMode = "project-dashboard";
       this.state.selectedCandidateTaskId = undefined;
+      this.view.render(this.state);
+      return;
+    }
+
+    const targetStatus = input.approveCandidateDetailPressed
+      ? "Approved"
+      : input.deferCandidateDetailPressed
+        ? "Deferred"
+        : input.rejectCandidateDetailPressed
+          ? "Rejected"
+          : undefined;
+    if (!targetStatus) return;
+
+    const selectedPromotion = this.getSelectedCandidateDetailPromotionReview();
+    if (!canRecordPromotionDecision(selectedPromotion, targetStatus)) return;
+
+    const recorded = this.recordCandidatePromotionDecision(
+      selectedPromotion.projectId,
+      selectedPromotion.candidateTaskId,
+      targetStatus,
+    );
+    if (recorded) {
       this.view.render(this.state);
     }
   }
@@ -3151,6 +3176,16 @@ export class OfficeProjectPortalController {
     const projectId = this.state.selectedProjectDashboardProjectId;
     const collection = projectId ? this.state.candidatePromotionReviewCollections[projectId] : undefined;
     return collection?.reviews[this.state.selectedCandidatePromotionIndex];
+  }
+
+  private getSelectedCandidateDetailPromotionReview() {
+    const projectId = this.state.selectedProjectDashboardProjectId;
+    const candidateTaskId = this.state.selectedCandidateTaskId;
+    const candidateTaskCollection = projectId ? this.state.candidateTaskCollections[projectId] : undefined;
+    const collection = projectId ? this.state.candidatePromotionReviewCollections[projectId] : undefined;
+    if (!candidateTaskId) return undefined;
+    if (!candidateTaskCollection?.tasks.some((task) => task.id === candidateTaskId)) return undefined;
+    return collection?.reviews.find((review) => review.candidateTaskId === candidateTaskId);
   }
 
   private openSelectedCandidateDetail(candidateTaskId: string) {
