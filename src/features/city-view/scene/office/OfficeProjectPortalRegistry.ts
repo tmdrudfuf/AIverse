@@ -181,6 +181,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     employeeSimulations: {},
     employeeAssignments: {},
     workSessions: {},
+    taskCompletionProgressionFeedback: undefined,
     projectDashboardSnapshot: undefined,
     previousCompanyProgressionSnapshot: undefined,
     companyProgressionTriggers: [],

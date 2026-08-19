@@ -150,6 +150,18 @@ export type ProjectPortalPlaceholderAction = {
   workspaceSectionId?: ProjectWorkspaceSectionId;
 };
 
+export type TaskCompletionProgressionFeedback = {
+  projectId: string;
+  taskId: string;
+  taskTitle: string;
+  completedAt: string;
+  previousCompanyLevel: number;
+  currentCompanyLevel: number;
+  levelUp: boolean;
+  message: string;
+  milestoneSummary: string;
+};
+
 export type ProjectPortalState = {
   isOpen: boolean;
   justOpened: boolean;
@@ -223,6 +235,7 @@ export type ProjectPortalState = {
   employeeSimulations: Record<string, EmployeeSimulationSnapshot>;
   employeeAssignments: Record<string, string>;
   workSessions: Record<string, WorkSession[]>;
+  taskCompletionProgressionFeedback?: TaskCompletionProgressionFeedback;
   projectDashboardSnapshot?: ProjectDashboardSnapshot;
   companyDashboardSnapshot?: CompanyDashboardSnapshot;
   previousCompanyProgressionSnapshot?: CompanyProgressionSnapshot;

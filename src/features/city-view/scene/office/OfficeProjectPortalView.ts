@@ -829,6 +829,13 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 28, this.panelY + 284, "Next Action:", headingStyle());
     this.addText(this.panelX + 44, this.panelY + 312, getTaskNextActionText(task), rowStyle(true, false));
 
+    const completionFeedback = getTaskCompletionProgressionFeedback(state, task);
+    if (completionFeedback) {
+      this.addText(this.panelX + 390, this.panelY + 196, "Completion:", headingStyle());
+      this.addText(this.panelX + 406, this.panelY + 224, wrapText(completionFeedback.message, 30), bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 260, wrapText(completionFeedback.milestoneSummary, 30), mutedStyle());
+    }
+
     this.addText(this.panelX + 28, this.panelY + 348, "Activity:", headingStyle());
     const activityLog = task.activityLog ?? [];
     if (activityLog.length === 0) {
@@ -933,6 +940,12 @@ function getSelectedTask(state: ProjectPortalState) {
   const projectId = state.selectedTaskProjectId ?? project?.id;
   const collection = projectId ? state.taskCollections[projectId] : undefined;
   return collection?.tasks[state.selectedTaskIndex];
+}
+
+function getTaskCompletionProgressionFeedback(state: ProjectPortalState, task: ProjectTask) {
+  const feedback = state.taskCompletionProgressionFeedback;
+  if (!feedback || feedback.projectId !== task.projectId || feedback.taskId !== task.id) return undefined;
+  return feedback;
 }
 
 function getSelectedCandidateTask(state: ProjectPortalState): CandidateTask | undefined {
