@@ -832,8 +832,8 @@ export class OfficeProjectPortalView {
     const completionFeedback = getTaskCompletionProgressionFeedback(state, task);
     if (completionFeedback) {
       this.addText(this.panelX + 390, this.panelY + 196, "Completion:", headingStyle());
-      this.addText(this.panelX + 406, this.panelY + 224, wrapText(completionFeedback.message, 30), bodyStyle());
-      this.addText(this.panelX + 406, this.panelY + 260, wrapText(completionFeedback.milestoneSummary, 30), mutedStyle());
+      this.addText(this.panelX + 406, this.panelY + 224, completionFeedback.message, bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 260, completionFeedback.milestoneSummary, mutedStyle());
     }
 
     this.addText(this.panelX + 28, this.panelY + 348, "Activity:", headingStyle());
