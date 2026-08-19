@@ -34,8 +34,8 @@ export class OfficeVisualLayer {
   refreshInteractiveObjects(scene: PhaserScene, interactiveObjects: ReadonlyArray<OfficeInteractiveObject> = []) {
     this.interactiveObjectMarkers.forEach((marker) => marker.destroy(true));
     this.interactiveObjectMarkers = interactiveObjects
-      .filter((object) => object.enabled && object.type === "computer")
-      .map((object) => createComputerMarker(scene, object));
+      .filter((object) => object.enabled && (object.type === "computer" || object.type === "desk"))
+      .map((object) => (object.type === "desk" ? createDeskMarker(scene, object) : createComputerMarker(scene, object)));
   }
 
   destroy() {
@@ -71,6 +71,38 @@ function createComputerMarker(scene: PhaserScene, object: OfficeInteractiveObjec
 
   const label = scene.add
     .text(centerX, deskY + 9, object.displayName.toUpperCase(), {
+      backgroundColor: "rgba(37, 50, 71, 0.92)",
+      color: "#ffffff",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "10px",
+      fontStyle: "700",
+      padding: { x: 6, y: 2 },
+    })
+    .setOrigin(0.5, 0.5);
+
+  marker.add([graphics, label]);
+  return marker;
+}
+
+function createDeskMarker(scene: PhaserScene, object: OfficeInteractiveObject) {
+  const zone = object.interactionZone;
+  const centerX = zone.x + zone.width / 2;
+  const deskY = zone.y + zone.height - 28;
+  const marker = scene.add.container(0, 0).setDepth(INTERACTIVE_OBJECT_DEPTH);
+  const graphics = scene.add.graphics();
+
+  graphics.fillStyle(0x8b6f4e, 1);
+  graphics.fillRoundedRect(zone.x + 8, deskY, zone.width - 16, 24, 5);
+  graphics.lineStyle(2, 0x253247, 0.95);
+  graphics.strokeRoundedRect(zone.x + 8, deskY, zone.width - 16, 24, 5);
+
+  graphics.fillStyle(0xf4c85d, 0.95);
+  graphics.fillRoundedRect(centerX - 34, zone.y + 12, 68, 24, 4);
+  graphics.lineStyle(2, 0x253247, 0.9);
+  graphics.strokeRoundedRect(centerX - 34, zone.y + 12, 68, 24, 4);
+
+  const label = scene.add
+    .text(centerX, deskY + 12, object.displayName.toUpperCase(), {
       backgroundColor: "rgba(37, 50, 71, 0.92)",
       color: "#ffffff",
       fontFamily: "Arial, sans-serif",
