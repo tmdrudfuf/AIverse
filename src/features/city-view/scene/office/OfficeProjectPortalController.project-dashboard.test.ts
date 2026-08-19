@@ -547,6 +547,110 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.candidatePromotionReviewCollections).toEqual(beforePromotions);
     expect(state.candidatePromotionDecisionRecords).toEqual(beforeDecisions);
   });
+
+  it("refreshes task completion progression feedback and level triggers when a Review task is marked Done", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "task-detail";
+    state.selectedTaskProjectId = "daily-proof";
+    state.selectedTaskIndex = 0;
+    state.selectedTaskId = "task-dashboard";
+    state.taskCollections["daily-proof"] = createReviewTaskCollection();
+    state.employees = Array.from({ length: 5 }, (_, index) => createEmployee({
+      id: `employee-${index + 1}`,
+      name: `Employee ${index + 1}`,
+      assignedTaskId: index === 0 ? "task-dashboard" : undefined,
+      currentProjectId: index === 0 ? "daily-proof" : undefined,
+      status: index === 0 ? "Working" : "Idle",
+    }));
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    const task = state.taskCollections["daily-proof"].tasks[0];
+    expect(task.status).toBe("Done");
+    expect(task.activityLog?.[0]).toMatchObject({
+      type: "status_changed",
+      message: "Task marked done",
+    });
+    expect(state.taskCompletionProgressionFeedback).toMatchObject({
+      projectId: "daily-proof",
+      taskId: "task-dashboard",
+      taskTitle: "Build project dashboard",
+      previousCompanyLevel: 1,
+      currentCompanyLevel: 2,
+      levelUp: true,
+      message: "Task complete: company advanced to level 2.",
+    });
+    expect(state.taskCompletionProgressionFeedback?.milestoneSummary).toContain("Complete first client project");
+    expect(state.companyProgressionTriggers[0]).toMatchObject({
+      fromLevel: 1,
+      toLevel: 2,
+    });
+    expect(state.companyProgressionTriggers[0]?.milestones.map((milestone) => milestone.milestoneId)).toEqual([
+      "complete-first-client-project",
+      "hire-five-employees",
+    ]);
+    expect(state.employees[0]).toMatchObject({
+      id: "employee-1",
+      status: "Idle",
+      assignedTaskId: undefined,
+      currentProjectId: undefined,
+    });
+  });
+
+  it("records task completion feedback without a false level-up when only milestone progress changes", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "task-detail";
+    state.selectedTaskProjectId = "daily-proof";
+    state.selectedTaskIndex = 0;
+    state.selectedTaskId = "task-dashboard";
+    state.taskCollections["daily-proof"] = createReviewTaskCollection();
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.taskCollections["daily-proof"].tasks[0].status).toBe("Done");
+    expect(state.companyProgressionTriggers).toEqual([]);
+    expect(state.taskCompletionProgressionFeedback).toMatchObject({
+      taskId: "task-dashboard",
+      previousCompanyLevel: 1,
+      currentCompanyLevel: 1,
+      levelUp: false,
+      message: "Task complete: progression updated at level 1.",
+    });
+    expect(state.taskCompletionProgressionFeedback?.milestoneSummary).toContain("Complete first client project 1/1");
+    expect(state.taskCompletionProgressionFeedback?.milestoneSummary).toContain("Hire five employees 0/5");
+  });
+
+  it("does not create completion progression feedback for non-Done or already Done actions", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "task-detail";
+    state.selectedTaskProjectId = "daily-proof";
+    state.selectedTaskIndex = 0;
+    state.selectedTaskId = "task-dashboard";
+    state.taskCollections["daily-proof"] = createTaskCollection();
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.taskCollections["daily-proof"].tasks[0].status).toBe("Review");
+    expect(state.taskCompletionProgressionFeedback).toBeUndefined();
+    expect(state.companyProgressionTriggers).toEqual([]);
+
+    state.taskCollections["daily-proof"] = createDoneTaskCollection();
+    state.selectedTaskId = "task-dashboard";
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.taskCompletionProgressionFeedback).toBeUndefined();
+    expect(state.companyProgressionTriggers).toEqual([]);
+  });
 });
 
 type ControllerInternals = {
@@ -777,6 +881,40 @@ function createMultiTaskCollection(): TaskCollection {
   };
 }
 
+function createReviewTaskCollection(): TaskCollection {
+  return {
+    projectId: "daily-proof",
+    tasks: [{
+      id: "task-dashboard",
+      title: "Build project dashboard",
+      description: "Read-only project detail slice.",
+      status: "Review",
+      priority: "High",
+      projectId: "daily-proof",
+      assignee: "Employee 1",
+      assigneeId: "employee-1",
+      createdAt: "2026-01-01T09:00:00.000Z",
+      updatedAt: "2026-01-01T10:00:00.000Z",
+    }],
+  };
+}
+
+function createDoneTaskCollection(): TaskCollection {
+  return {
+    projectId: "daily-proof",
+    tasks: [{
+      id: "task-dashboard",
+      title: "Build project dashboard",
+      description: "Read-only project detail slice.",
+      status: "Done",
+      priority: "High",
+      projectId: "daily-proof",
+      createdAt: "2026-01-01T09:00:00.000Z",
+      updatedAt: "2026-01-01T10:00:00.000Z",
+    }],
+  };
+}
+
 function createCandidateTaskCollection(): CandidateTaskCollection {
   return {
     projectId: "daily-proof",
@@ -856,7 +994,7 @@ function createCandidatePromotionCollection(
   };
 }
 
-function createEmployee(): Employee {
+function createEmployee(overrides: Partial<Employee> = {}): Employee {
   return {
     id: "employee-1",
     name: "Ada",
@@ -867,6 +1005,7 @@ function createEmployee(): Employee {
     description: "Project dashboard test employee",
     assignedTaskId: "task-dashboard",
     currentProjectId: "daily-proof",
+    ...overrides,
   };
 }
 

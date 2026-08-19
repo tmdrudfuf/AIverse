@@ -127,7 +127,7 @@ import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
-import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { resolveEmployeeNpcWorldPosition } from "./npc/EmployeeNpcPositionResolver";
@@ -3558,7 +3558,11 @@ export class OfficeProjectPortalController {
     const task = this.getSelectedTask();
     if (!task || task.status !== "Review") return;
 
-    this.moveSelectedTaskStatus("Done", "Task marked done", "marked-done");
+    const previousProgression = this.getCompanyProgressionSnapshot();
+    const updatedTask = this.moveSelectedTaskStatus("Done", "Task marked done", "marked-done");
+    if (!updatedTask) return;
+
+    this.refreshTaskCompletionProgressionFeedback(updatedTask, previousProgression);
     const assigneeEmployeeId = this.getTaskAssigneeEmployeeId(task);
     if (assigneeEmployeeId) {
       this.releaseEmployeeIfUnassigned(assigneeEmployeeId, task.id);
@@ -3570,7 +3574,7 @@ export class OfficeProjectPortalController {
 
   private moveSelectedTaskStatus(nextStatus: TaskStatus, message: string, activityIdLabel: string) {
     const task = this.getSelectedTask();
-    if (!task) return;
+    if (!task) return undefined;
 
     const changedAt = new Date().toISOString();
     const updatedTask = this.appendTaskActivity(task, {
@@ -3588,6 +3592,30 @@ export class OfficeProjectPortalController {
     this.persistBrowserOfficeSession();
     void this.prepareProjectManagementSuggestion(task.projectId);
     this.view.render(this.state);
+    return { ...updatedTask, status: nextStatus };
+  }
+
+  private refreshTaskCompletionProgressionFeedback(
+    task: ProjectTask,
+    previousProgression: CompanyProgressionSnapshot,
+  ) {
+    const currentProgression = this.getCompanyProgressionSnapshot();
+    const reachedSnapshots = this.companyProgressionService.getReachedProgressionMetadata(this.getCompanyProgressionInput());
+    const triggers = this.companyProgressionTriggerService.evaluateLevelTriggers({
+      previousSnapshot: previousProgression,
+      currentSnapshot: currentProgression,
+      reachedSnapshots,
+    });
+
+    this.state.companyProgressionTriggers = triggers.map(copyCompanyProgressionTrigger);
+    this.state.previousCompanyProgressionSnapshot = currentProgression;
+    this.state.taskCompletionProgressionFeedback = createTaskCompletionProgressionFeedback({
+      task,
+      completedAt: task.updatedAt,
+      previousProgression,
+      currentProgression,
+      nextProgression: this.companyProgressionService.getFutureProgressionMetadata(this.getCompanyProgressionInput())[0],
+    });
   }
 
   private updateSelectedTask(updatedTask: ProjectTask) {
@@ -4159,6 +4187,50 @@ function getTaskStatusProgressPercent(status: TaskStatus) {
   if (status === "Review") return 80;
   if (status === "In Progress") return 50;
   return 0;
+}
+
+function createTaskCompletionProgressionFeedback(input: {
+  task: ProjectTask;
+  completedAt: string;
+  previousProgression: CompanyProgressionSnapshot;
+  currentProgression: CompanyProgressionSnapshot;
+  nextProgression?: CompanyProgressionSnapshot;
+}): TaskCompletionProgressionFeedback {
+  const levelUp = input.currentProgression.companyLevel > input.previousProgression.companyLevel;
+  return {
+    projectId: input.task.projectId,
+    taskId: input.task.id,
+    taskTitle: input.task.title,
+    completedAt: input.completedAt,
+    previousCompanyLevel: input.previousProgression.companyLevel,
+    currentCompanyLevel: input.currentProgression.companyLevel,
+    levelUp,
+    message: levelUp
+      ? `Task complete: company advanced to level ${input.currentProgression.companyLevel}.`
+      : `Task complete: progression updated at level ${input.currentProgression.companyLevel}.`,
+    milestoneSummary: levelUp
+      ? createReachedMilestoneSummary(input.currentProgression)
+      : createNextMilestoneSummary(input.nextProgression),
+  };
+}
+
+function createReachedMilestoneSummary(snapshot: CompanyProgressionSnapshot) {
+  if (snapshot.requiredMilestones.length === 0) return `Reached ${snapshot.companyStage}.`;
+  return `Reached ${snapshot.companyStage}: ${snapshot.requiredMilestones.map((milestone) => milestone.label).join(", ")}.`;
+}
+
+function createNextMilestoneSummary(snapshot: CompanyProgressionSnapshot | undefined) {
+  if (!snapshot) return "All visible company progression milestones are complete.";
+
+  const milestoneText = snapshot.requiredMilestones
+    .map((milestone) => {
+      const currentValue = milestone.currentValue ?? 0;
+      const targetValue = milestone.targetValue ?? 0;
+      return `${milestone.label} ${currentValue}/${targetValue}`;
+    })
+    .join(", ");
+
+  return `Next level ${snapshot.companyLevel}: ${milestoneText}.`;
 }
 
 function canRecordPromotionDecision(

@@ -6,6 +6,8 @@ import type { Employee } from "./employees/EmployeeTypes";
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { CompanyProgressionService } from "./progression/CompanyProgressionService";
+import { CompanyProgressionTriggerService } from "./progression/CompanyProgressionTriggerService";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
 import { MockWorkSessionProvider } from "./work-sessions/MockWorkSessionProvider";
 import { WorkSessionService } from "./work-sessions/WorkSessionService";
@@ -127,6 +129,8 @@ type ControllerHarness = {
   workSessionService: WorkSessionService;
   aiService: ReturnType<typeof createMockAIService>;
   employeeSimulationService: EmployeeSimulationService;
+  companyProgressionService: CompanyProgressionService;
+  companyProgressionTriggerService: CompanyProgressionTriggerService;
   aiProjectManagerService: {
     createProjectManagementSuggestion: ReturnType<typeof vi.fn>;
   };
@@ -141,6 +145,8 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   controller.workSessionService = new WorkSessionService(new MockWorkSessionProvider());
   controller.aiService = createMockAIService();
   controller.employeeSimulationService = new EmployeeSimulationService();
+  controller.companyProgressionService = new CompanyProgressionService();
+  controller.companyProgressionTriggerService = new CompanyProgressionTriggerService();
   controller.aiProjectManagerService = {
     createProjectManagementSuggestion: vi.fn(async () => ({
       projectId: "daily-proof",

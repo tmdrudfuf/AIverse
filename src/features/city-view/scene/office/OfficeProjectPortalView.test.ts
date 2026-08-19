@@ -35,6 +35,7 @@ import {
   INTERNAL_SIMULATION_PROJECT_DASHBOARD_PROVIDER_ID,
   type ProjectDashboardSnapshot,
 } from "./project-dashboard/ProjectDashboardTypes";
+import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 
 describe("OfficeProjectPortalView", () => {
   it("renders Company Dashboard project source signals in the Phaser portal panel", () => {
@@ -173,6 +174,35 @@ describe("OfficeProjectPortalView", () => {
     [riskRow, activityRow, advisoryRow, attentionRow, sourceRow, syncRow].forEach((row) => {
       assertRowInsidePanel(row, lowerPanel);
     });
+  });
+
+  it("renders matching task completion progression feedback in task detail", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "task-detail" });
+    state.selectedTaskProjectId = "daily-proof";
+    state.selectedTaskIndex = 0;
+    state.selectedTaskId = "task-dashboard";
+    state.taskCollections["daily-proof"] = createTaskCollection();
+    state.taskCompletionProgressionFeedback = {
+      projectId: "daily-proof",
+      taskId: "task-dashboard",
+      taskTitle: "Build project dashboard",
+      completedAt: "2026-01-01T10:30:00.000Z",
+      previousCompanyLevel: 1,
+      currentCompanyLevel: 2,
+      levelUp: true,
+      message: "Task complete: company advanced to level 2.",
+      milestoneSummary: "Reached smallOffice: Complete first client project, Hire five employees.",
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("Completion:");
+    expect(renderedText.map((item) => item.text)).toContain("Task complete: company advanced to level 2.");
+    expect(renderedText.map((item) => item.text)).toContain(
+      "Reached smallOffice: Complete first client project, Hire five employees.",
+    );
   });
 
   it("keeps wrapped Active Work and Employee rows inside their section panels for realistic multi-item, long-title projects", () => {
@@ -1968,11 +1998,28 @@ function createPortalState(options: {
     employeeSimulations: {},
     employeeAssignments: {},
     workSessions: {},
+    taskCompletionProgressionFeedback: undefined,
     companyDashboardSnapshot,
     projectDashboardSnapshot: options.projectDashboardSnapshot,
     previousCompanyProgressionSnapshot: undefined,
     companyProgressionTriggers: [],
     companyInfluencePlan: {},
+  };
+}
+
+function createTaskCollection(): TaskCollection {
+  return {
+    projectId: "daily-proof",
+    tasks: [{
+      id: "task-dashboard",
+      title: "Build project dashboard",
+      description: "Read-only project detail slice.",
+      status: "Done",
+      priority: "High",
+      projectId: "daily-proof",
+      createdAt: "2026-01-01T09:00:00.000Z",
+      updatedAt: "2026-01-01T10:30:00.000Z",
+    }],
   };
 }
 
