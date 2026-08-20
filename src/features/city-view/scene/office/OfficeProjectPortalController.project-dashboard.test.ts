@@ -584,6 +584,10 @@ describe("OfficeProjectPortalController project dashboard", () => {
       message: "Task complete: company advanced to level 2.",
     });
     expect(state.taskCompletionProgressionFeedback?.milestoneSummary).toContain("Complete first client project");
+    expect(state.receptionDeskUpgradeBenefits).toMatchObject({
+      level: 2,
+      benefits: expect.arrayContaining(["Reception area unlocked"]),
+    });
     expect(state.companyProgressionTriggers[0]).toMatchObject({
       fromLevel: 1,
       toLevel: 2,
@@ -597,6 +601,33 @@ describe("OfficeProjectPortalController project dashboard", () => {
       status: "Idle",
       assignedTaskId: undefined,
       currentProjectId: undefined,
+    });
+  });
+
+  it("refreshes reception desk upgrade benefits from current company progression", () => {
+    const levelOneState = createProjectPortalState();
+    const levelOneController = createControllerHarness(levelOneState);
+
+    levelOneController.open();
+
+    expect(levelOneState.receptionDeskUpgradeBenefits).toBeUndefined();
+
+    const levelTwoState = createProjectPortalState();
+    levelTwoState.employees = Array.from({ length: 5 }, (_, index) => createEmployee({ id: `employee-${index + 1}` }));
+    levelTwoState.taskCollections["daily-proof"] = createDoneTaskCollection();
+    const levelTwoController = createControllerHarness(levelTwoState);
+
+    levelTwoController.open();
+
+    expect(levelTwoState.receptionDeskUpgradeBenefits).toMatchObject({
+      source: "reception_desk_upgrade",
+      level: 2,
+      heading: "Reception Upgrade Benefits",
+      benefits: [
+        "Reception area unlocked",
+        "Employee capacity increased to 10",
+        "Workspace coordination now has a front-desk entry point",
+      ],
     });
   });
 

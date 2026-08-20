@@ -205,6 +205,43 @@ describe("OfficeProjectPortalView", () => {
     );
   });
 
+  it("renders reception desk upgrade benefits in the workspace when unlocked", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({ viewMode: "workspace" });
+    state.workspaces = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        projectName: "Daily Proof",
+        sections: [
+          { id: "repository", label: "Repository", status: "Mock connected", enabled: true, placeholder: true },
+          { id: "tasks", label: "Tasks", status: "3 tasks", enabled: true, placeholder: true },
+        ],
+      },
+    };
+    state.receptionDeskUpgradeBenefits = {
+      source: "reception_desk_upgrade",
+      level: 2,
+      heading: "Reception Upgrade Benefits",
+      summary: "Level 2 reception is active for this workspace.",
+      benefits: [
+        "Reception area unlocked",
+        "Employee capacity increased to 10",
+        "Workspace coordination now has a front-desk entry point",
+      ],
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    expect(renderedText.map((item) => item.text)).toContain("Reception Upgrade Benefits");
+    expect(renderedText.map((item) => item.text)).toContain("Level 2 reception is active for\nthis workspace.");
+    expect(renderedText.map((item) => item.text)).toContain("> Reception area unlocked");
+    expect(renderedText.map((item) => item.text)).toContain("> Employee capacity increased\nto 10");
+    expect(renderedText.map((item) => item.text)).toContain("> Workspace coordination now\nhas a front-desk entry point");
+    expect(renderedPanels).toContainEqual(expect.objectContaining({ y: 88 + 157, height: 158 }));
+  });
+
   it("keeps wrapped Active Work and Employee rows inside their section panels for realistic multi-item, long-title projects", () => {
     const renderedText: RenderedText[] = [];
     const renderedPanels: RenderedPanel[] = [];
@@ -1999,6 +2036,7 @@ function createPortalState(options: {
     employeeAssignments: {},
     workSessions: {},
     taskCompletionProgressionFeedback: undefined,
+    receptionDeskUpgradeBenefits: undefined,
     companyDashboardSnapshot,
     projectDashboardSnapshot: options.projectDashboardSnapshot,
     previousCompanyProgressionSnapshot: undefined,

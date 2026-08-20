@@ -129,6 +129,7 @@ import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone }
 import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
+import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { resolveEmployeeNpcWorldPosition } from "./npc/EmployeeNpcPositionResolver";
 import type { EmployeeNpcMovementPositionHint, EmployeeNpcMovementSnapshot } from "./npc/EmployeeNpcMovementTypes";
@@ -685,6 +686,7 @@ export class OfficeProjectPortalController {
     const employeeInsightSources = this.getEmployeeInsightSources();
     const tasks = getAllLoadedTasks(this.state.taskCollections);
     const companyProgression = this.getCompanyProgressionSnapshot();
+    this.refreshReceptionDeskUpgradeBenefits(companyProgression);
     this.state.companyProgressionTriggers = this.companyProgressionTriggerService.evaluateLevelTriggers({
       previousSnapshot: this.state.previousCompanyProgressionSnapshot,
       currentSnapshot: companyProgression,
@@ -3609,6 +3611,7 @@ export class OfficeProjectPortalController {
 
     this.state.companyProgressionTriggers = triggers.map(copyCompanyProgressionTrigger);
     this.state.previousCompanyProgressionSnapshot = currentProgression;
+    this.refreshReceptionDeskUpgradeBenefits(currentProgression);
     this.state.taskCompletionProgressionFeedback = createTaskCompletionProgressionFeedback({
       task,
       completedAt: task.updatedAt,
@@ -3781,7 +3784,13 @@ export class OfficeProjectPortalController {
   }
 
   private refreshCompanyDashboardSnapshot() {
+    const companyProgression = this.getCompanyProgressionSnapshot();
+    this.refreshReceptionDeskUpgradeBenefits(companyProgression);
     this.state.companyDashboardSnapshot = this.getCompanyDashboardSnapshot();
+  }
+
+  private refreshReceptionDeskUpgradeBenefits(companyProgression: CompanyProgressionSnapshot | undefined) {
+    this.state.receptionDeskUpgradeBenefits = new ReceptionDeskUpgradeBenefitsService().createBenefits(companyProgression);
   }
 
   private createProjectDashboardContext() {
