@@ -853,7 +853,7 @@ export class OfficeProjectPortalView {
     const completionFeedback = getTaskCompletionProgressionFeedback(state, task);
     if (completionFeedback) {
       this.addText(this.panelX + 390, this.panelY + 196, "Completion:", headingStyle());
-      this.addText(this.panelX + 406, this.panelY + 224, wrapAndClampText(completionFeedback.message, 34, 2), bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 224, wrapAndClampText(completionFeedback.message, 48, 2), bodyStyle());
       this.addText(this.panelX + 406, this.panelY + 260, wrapAndClampText(completionFeedback.milestoneSummary, 34, 2), mutedStyle());
     }
 
@@ -1128,7 +1128,7 @@ function createProjectDashboardLowerRows(
   }
 
   if (repositorySyncRows.length > 0) {
-    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 30 });
+    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 8 });
   }
 
   if (issueSyncRows) {
@@ -1361,22 +1361,17 @@ function calculateProjectDashboardLowerRowsDesiredHeight(rows: ProjectDashboardR
 }
 
 /**
- * Drops the lowest-priority rows from the end (repository-sync and issue-sync
- * rows are always appended last, in ascending priority order) until the
- * remaining rows fit within maxHeight -- so newly-stacked rows can never
- * silently render past the drawn panel's bottom edge.
+ * Drops the least-protected rows until the remaining rows fit within
+ * maxHeight, using later rows as the tie-break within the same priority tier.
+ * This keeps newly-stacked rows from silently rendering past the drawn panel
+ * while preserving source-of-truth rows that happen to render later.
  */
 function fitProjectDashboardLowerRows(
   rows: ProjectDashboardRenderedLowerRow[],
   maxHeight: number,
 ): ProjectDashboardRenderedLowerRow[] {
   let fitted = rows;
-  const usePriorityFit = rows.some((row) => row.usePriorityFit);
   while (fitted.length > 0 && calculateProjectDashboardLowerRowsDesiredHeight(fitted) > maxHeight) {
-    if (!usePriorityFit) {
-      fitted = fitted.slice(0, -1);
-      continue;
-    }
     let removeIndex = fitted.length - 1;
     let removePriority = fitted[removeIndex]?.dropPriority ?? removeIndex;
     fitted.forEach((row, index) => {
