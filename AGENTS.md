@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/111-implementer-runtime-ready-row-i-start/plan.md
+shell commands, and other important information, read specs/112-project-portal-text-overflow-and-layout/plan.md
 <!-- SPECKIT END -->

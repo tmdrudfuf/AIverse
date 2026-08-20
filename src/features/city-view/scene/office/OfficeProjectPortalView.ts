@@ -82,12 +82,13 @@ const DASHBOARD_SOURCE_TO_PROJECTS_GAP = 12;
 const DASHBOARD_MIN_PROJECTS_PANEL_Y = 340;
 const DASHBOARD_PROJECTS_HEADING_OFFSET = 12;
 const PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT = 136;
-const PROJECT_DASHBOARD_LOWER_PANEL_Y = 270;
-const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 282;
+const PROJECT_DASHBOARD_LOWER_PANEL_Y = 264;
+const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 274;
 const PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT = 14;
-const PROJECT_DASHBOARD_LOWER_ROW_GAP = 4;
-const PROJECT_DASHBOARD_LOWER_PANEL_PADDING = 10;
+const PROJECT_DASHBOARD_LOWER_ROW_GAP = 2;
+const PROJECT_DASHBOARD_LOWER_PANEL_PADDING = 2;
 const PROJECT_DASHBOARD_LOWER_WRAP_LENGTH = 78;
+const PORTAL_FOOTER_SAFE_GAP = 36;
 
 export class OfficeProjectPortalView {
   private readonly content: Phaser.GameObjects.Container;
@@ -276,18 +277,18 @@ export class OfficeProjectPortalView {
     const bottomPanelY = this.panelY + PROJECT_DASHBOARD_LOWER_PANEL_Y;
 
     this.addTerminalPanel(this.panelX + 18, topPanelY, this.panelWidth - 36, 58);
-    this.addText(this.panelX + 28, this.panelY + 24, rows.title, projectTitleStyle());
-    this.addText(this.panelX + this.panelWidth - 28, this.panelY + 32, rows.sourceText, projectMetaStyle()).setOrigin(1, 0);
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(rows.title, 42), projectTitleStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + 32, compactTextLine(rows.sourceText, 34), projectMetaStyle()).setOrigin(1, 0);
 
     if (!state.projectDashboardSnapshot?.project.isAvailable) {
       this.addText(this.panelX + 34, this.panelY + 72, `[STATUS] ${rows.statusText}`, projectStatusStyle());
-      this.addText(this.panelX + 34, this.panelY + 96, wrapText(rows.healthText, 78), projectBodyStyle());
+      this.addText(this.panelX + 34, this.panelY + 96, wrapAndClampText(rows.healthText, 78, 3), projectBodyStyle());
       return;
     }
 
     this.addText(this.panelX + 34, this.panelY + 70, `[STATUS] ${rows.statusText}`, projectStatusStyle());
     this.addText(this.panelX + 34, this.panelY + 94, `[PROGRESS] ${rows.progressText.replace("Progress: ", "")}`, projectBodyStyle());
-    this.addText(this.panelX + 364, this.panelY + 70, wrapText(`[HEALTH] ${rows.healthText}`, 34), projectBodyStyle());
+    this.addText(this.panelX + 364, this.panelY + 70, wrapAndClampText(`[HEALTH] ${rows.healthText}`, 34, 2), projectBodyStyle());
 
     this.addTerminalPanel(leftPanelX - 6, sectionPanelY, 292, PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT);
     this.addTerminalPanel(rightPanelX - 6, sectionPanelY, 292, PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT);
@@ -295,13 +296,13 @@ export class OfficeProjectPortalView {
     rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
       const selected = rows.activeWorkTaskIds.length > 0 && index === state.selectedProjectDashboardActiveWorkIndex;
-      this.addText(leftPanelX + 12, rowY, wrapText(`> ${row}`, 34), rowStyle(true, selected));
+      this.addText(leftPanelX + 12, rowY, compactTextLine(`> ${row}`, 34), rowStyle(true, selected));
     });
 
     this.addText(rightPanelX, this.panelY + 140, rows.employeeHeading, projectHeadingStyle());
     rows.employeeRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
-      this.addText(rightPanelX + 12, rowY, wrapText(`> ${row}`, 32), projectBodyStyle());
+      this.addText(rightPanelX + 12, rowY, compactTextLine(`> ${row}`, 32), projectBodyStyle());
     });
 
     const dashboardProjectId = state.selectedProjectDashboardProjectId;
@@ -566,7 +567,7 @@ export class OfficeProjectPortalView {
       )
       : undefined;
 
-    const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y;
+    const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
       createProjectDashboardLowerRows(
         rows,
@@ -624,22 +625,32 @@ export class OfficeProjectPortalView {
     const promotionResult = getCandidateProjectTaskPromotionResult(state, candidateTask);
     const promotedTask = getPromotedProjectTask(state, candidateTask);
 
-    this.addText(this.panelX + 28, this.panelY + 64, wrapText(candidateTask.title, 70), headingStyle());
+    this.addText(this.panelX + 28, this.panelY + 64, wrapAndClampText(candidateTask.title, 70, 2), headingStyle());
     this.addText(this.panelX + 28, this.panelY + 104, `Issue: #${candidateTask.issueNumber} (${candidateTask.state})`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 132, `Candidate: ${candidateTask.estimatedPriority}/${candidateTask.estimatedTaskType}`, bodyStyle());
-    this.addText(this.panelX + 28, this.panelY + 160, `Source: ${candidateTask.sourceProvider}${sourceRepository ? ` ${sourceRepository}` : ""}`, bodyStyle());
-    this.addText(this.panelX + 28, this.panelY + 188, wrapText(`Labels: ${candidateTask.labels.join(", ") || "None"}`, 70), mutedStyle());
-    this.addText(this.panelX + 28, this.panelY + 216, wrapText(`Assignees: ${candidateTask.assignees.join(", ") || "None"}`, 70), mutedStyle());
+    this.addText(
+      this.panelX + 28,
+      this.panelY + 160,
+      compactTextLine(`Source: ${candidateTask.sourceProvider}${sourceRepository ? ` ${sourceRepository}` : ""}`, 70),
+      bodyStyle(),
+    );
+    this.addText(this.panelX + 28, this.panelY + 188, wrapAndClampText(`Labels: ${candidateTask.labels.join(", ") || "None"}`, 70, 2), mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + 216, wrapAndClampText(`Assignees: ${candidateTask.assignees.join(", ") || "None"}`, 70, 2), mutedStyle());
 
     this.addText(this.panelX + 28, this.panelY + 252, "Summary:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 280, wrapText(candidateTask.summary || "No summary available.", 72), bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 280, wrapAndClampText(candidateTask.summary || "No summary available.", 72, 3), bodyStyle());
 
     this.addText(this.panelX + 390, this.panelY + 104, "Context:", headingStyle());
-    this.addText(this.panelX + 390, this.panelY + 136, wrapText(getCandidateAssignmentText(assignment), 52), bodyStyle());
-    this.addText(this.panelX + 390, this.panelY + 184, wrapText(getCandidatePromotionText(promotion), 52), bodyStyle());
-    this.addText(this.panelX + 390, this.panelY + 232, wrapText(getCandidatePromotionResultText(promotionResult, promotedTask), 52), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 136, wrapAndClampText(getCandidateAssignmentText(assignment), 52, 2), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 184, wrapAndClampText(getCandidatePromotionText(promotion), 52, 2), bodyStyle());
+    this.addText(this.panelX + 390, this.panelY + 232, wrapAndClampText(getCandidatePromotionResultText(promotionResult, promotedTask), 52, 2), bodyStyle());
 
-    this.addText(this.panelX + 28, this.panelY + 360, "Decision controls update review status only. No task, employee, runtime, repository, or GitHub changes.", mutedStyle());
+    this.addText(
+      this.panelX + 28,
+      this.panelY + 360,
+      compactTextLine("Decision controls update review status only. No task, employee, runtime, repository, or GitHub changes.", 88),
+      mutedStyle(),
+    );
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  A approve  D defer  J reject", instructionStyle()).setOrigin(1, 0.5);
   }
 
@@ -656,36 +667,36 @@ export class OfficeProjectPortalView {
     const project = state.projects[state.selectedProjectIndex];
     if (!project) return;
 
-    this.addText(this.panelX + 28, this.panelY + 24, project.name, titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(project.name, 46), titleStyle());
     this.addText(this.panelX + 28, this.panelY + 64, `${project.status} | ${project.type}`, headingStyle());
-    this.addText(this.panelX + 28, this.panelY + 104, wrapText(project.description, 74), bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 104, wrapAndClampText(project.description, 74, 3), bodyStyle());
 
     this.addText(this.panelX + 28, this.panelY + 174, "Linked Services", headingStyle());
     project.linkedServices.forEach((service, index) => {
       const rowY = this.panelY + 208 + index * 26;
-      this.addText(this.panelX + 44, rowY, `${service.label}  -  ${service.status}`, rowStyle(service.enabled, false));
+      this.addText(this.panelX + 44, rowY, compactTextLine(`${service.label}  -  ${service.status}`, 38), rowStyle(service.enabled, false));
     });
 
     let projectInfoY = this.panelY + 174;
     if (project.localRepositoryLabel) {
-      this.addText(this.panelX + 390, projectInfoY, `Repository: ${project.localRepositoryLabel}`, mutedStyle());
+      this.addText(this.panelX + 390, projectInfoY, compactTextLine(`Repository: ${project.localRepositoryLabel}`, 52), mutedStyle());
       projectInfoY += 26;
     }
     if (project.ownerCompany) {
-      this.addText(this.panelX + 390, projectInfoY, `Company: ${project.ownerCompany}`, mutedStyle());
+      this.addText(this.panelX + 390, projectInfoY, compactTextLine(`Company: ${project.ownerCompany}`, 52), mutedStyle());
       projectInfoY += 26;
     }
     if (project.repositoryIdentity) {
-      this.addText(this.panelX + 390, projectInfoY, getRepositoryIdentityRepoText(project.repositoryIdentity), mutedStyle());
+      this.addText(this.panelX + 390, projectInfoY, compactTextLine(getRepositoryIdentityRepoText(project.repositoryIdentity), 52), mutedStyle());
       projectInfoY += 26;
-      this.addText(this.panelX + 390, projectInfoY, getRepositoryIdentityStatusText(project.repositoryIdentity), mutedStyle());
+      this.addText(this.panelX + 390, projectInfoY, compactTextLine(getRepositoryIdentityStatusText(project.repositoryIdentity), 52), mutedStyle());
     }
 
     this.addText(this.panelX + 28, this.panelY + 326, "Next Action", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 358, getNextActionText(project), rowStyle(project.nextAction.enabled, false));
+    this.addText(this.panelX + 44, this.panelY + 358, compactTextLine(getNextActionText(project), 72), rowStyle(project.nextAction.enabled, false));
 
     const lastActionText = getLastActionText(state, project);
-    if (lastActionText) this.addText(this.panelX + 44, this.panelY + 386, lastActionText, mutedStyle());
+    if (lastActionText) this.addText(this.panelX + 44, this.panelY + 386, compactTextLine(lastActionText, 78), mutedStyle());
 
     const instructionText = project.nextAction.enabled ? "Esc back  Enter/Space action" : "Esc back";
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, instructionText, instructionStyle()).setOrigin(1, 0.5);
@@ -696,7 +707,7 @@ export class OfficeProjectPortalView {
     const workspace = project ? state.workspaces[project.id] : undefined;
     if (!workspace) return;
 
-    this.addText(this.panelX + 28, this.panelY + 24, `${workspace.projectName} Workspace`, titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(`${workspace.projectName} Workspace`, 46), titleStyle());
     this.addText(this.panelX + 28, this.panelY + 78, "Sections", headingStyle());
 
     workspace.sections.forEach((section, index) => {
@@ -706,7 +717,7 @@ export class OfficeProjectPortalView {
       this.addText(
         this.panelX + 44,
         rowY,
-        `${marker} ${section.label.padEnd(12, " ")} ${status}`,
+        compactTextLine(`${marker} ${section.label.padEnd(12, " ")} ${status}`, 42),
         rowStyle(section.enabled, index === state.selectedWorkspaceSectionIndex),
       );
     });
@@ -714,17 +725,17 @@ export class OfficeProjectPortalView {
     if (state.receptionDeskUpgradeBenefits) {
       const benefits = state.receptionDeskUpgradeBenefits;
       this.addTerminalPanel(this.panelX + 360, this.panelY + 88, 280, 158);
-      this.addText(this.panelX + 376, this.panelY + 104, benefits.heading, headingStyle());
-      this.addText(this.panelX + 376, this.panelY + 132, wrapText(benefits.summary, 32), mutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 104, compactTextLine(benefits.heading, 32), headingStyle());
+      this.addText(this.panelX + 376, this.panelY + 132, wrapAndClampText(benefits.summary, 32, 2), mutedStyle());
       benefits.benefits.slice(0, 3).forEach((benefit, index) => {
-        this.addText(this.panelX + 388, this.panelY + 174 + index * 24, wrapText(`> ${benefit}`, 31), projectMutedStyle());
+        this.addText(this.panelX + 388, this.panelY + 174 + index * 24, wrapAndClampText(`> ${benefit}`, 31, 2), projectMutedStyle());
       });
     }
 
     const lastActionText = getLastActionText(state, project);
-    if (lastActionText) this.addText(this.panelX + 44, this.panelY + 340, lastActionText, mutedStyle());
+    if (lastActionText) this.addText(this.panelX + 44, this.panelY + 340, compactTextLine(lastActionText, 78), mutedStyle());
 
-    this.addText(this.panelX + 28, this.panelY + 354, "Repository and Tasks use local mock data. Other sections are placeholders.", mutedStyle());
+    this.addText(this.panelX + 28, this.panelY + 354, compactTextLine("Repository and Tasks use local mock data. Other sections are placeholders.", 82), mutedStyle());
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Up/Down select  Enter/Space open", instructionStyle()).setOrigin(1, 0.5);
   }
 
@@ -734,7 +745,7 @@ export class OfficeProjectPortalView {
     const summary = projectId ? state.repositorySummaries[projectId] : undefined;
     const title = project ? `${project.name} Repository` : "Repository";
 
-    this.addText(this.panelX + 28, this.panelY + 24, title, titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(title, 46), titleStyle());
 
     if (!summary || summary.connectionStatus === "loading") {
       this.addText(this.panelX + 28, this.panelY + 84, "Status: Loading...", headingStyle());
@@ -756,7 +767,7 @@ export class OfficeProjectPortalView {
     }
 
     this.addText(this.panelX + 28, this.panelY + 84, "Status: Error", headingStyle());
-    this.addText(this.panelX + 28, this.panelY + 128, summary.errorMessage ?? "Unable to load repository summary.", bodyStyle());
+    this.addText(this.panelX + 28, this.panelY + 128, wrapAndClampText(summary.errorMessage ?? "Unable to load repository summary.", 78, 3), bodyStyle());
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Enter refresh", instructionStyle()).setOrigin(1, 0.5);
   }
 
@@ -775,7 +786,7 @@ export class OfficeProjectPortalView {
 
     rows.forEach((row, index) => {
       const style = index === 0 ? headingStyle() : bodyStyle();
-      this.addText(this.panelX + 28, this.panelY + 84 + index * 36, row, style);
+      this.addText(this.panelX + 28, this.panelY + 84 + index * 36, compactTextLine(row, 82), style);
     });
   }
 
@@ -785,7 +796,7 @@ export class OfficeProjectPortalView {
     const collection = projectId ? state.taskCollections[projectId] : undefined;
     const title = project ? `${project.name} Tasks` : "Project Tasks";
 
-    this.addText(this.panelX + 28, this.panelY + 24, title, titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(title, 46), titleStyle());
     this.addText(this.panelX + 28, this.panelY + 78, "Tasks", headingStyle());
 
     if (!collection) {
@@ -803,7 +814,7 @@ export class OfficeProjectPortalView {
     collection.tasks.forEach((task, index) => {
       const rowY = this.panelY + 116 + index * 38;
       const marker = index === state.selectedTaskIndex ? ">" : " ";
-      const rowText = `${marker} ${task.title.padEnd(28, " ")} ${task.status.padEnd(11, " ")} ${task.priority}`;
+      const rowText = compactTextLine(`${marker} ${task.title.padEnd(28, " ")} ${task.status.padEnd(11, " ")} ${task.priority}`, 78);
       this.addText(this.panelX + 44, rowY, rowText, rowStyle(true, index === state.selectedTaskIndex));
     });
 
@@ -819,7 +830,7 @@ export class OfficeProjectPortalView {
       return;
     }
 
-    this.addText(this.panelX + 28, this.panelY + 24, task.title, titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(task.title, 46), titleStyle());
     this.addText(this.panelX + 28, this.panelY + 78, `Status: ${task.status}`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 106, `Priority: ${task.priority}`, bodyStyle());
     this.addText(this.panelX + 28, this.panelY + 134, `Assigned: ${getTaskAssigneeText(state, task)}`, bodyStyle());
@@ -830,20 +841,20 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 390, this.panelY + 78, "Work Session:", headingStyle());
       this.addText(this.panelX + 406, this.panelY + 106, `Provider: ${latestWorkSession.provider}`, bodyStyle());
       this.addText(this.panelX + 406, this.panelY + 132, `Status: ${latestWorkSession.status}`, bodyStyle());
-      this.addText(this.panelX + 406, this.panelY + 158, wrapText(`Started: ${latestWorkSession.startedAt}`, 30), bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 158, compactTextLine(`Started: ${latestWorkSession.startedAt}`, 30), bodyStyle());
     }
 
     this.addText(this.panelX + 28, this.panelY + 196, "Description:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 224, wrapText(task.description, 70), bodyStyle());
+    this.addText(this.panelX + 44, this.panelY + 224, wrapAndClampText(task.description, 70, 3), bodyStyle());
 
     this.addText(this.panelX + 28, this.panelY + 284, "Next Action:", headingStyle());
-    this.addText(this.panelX + 44, this.panelY + 312, getTaskNextActionText(task), rowStyle(true, false));
+    this.addText(this.panelX + 44, this.panelY + 312, compactTextLine(getTaskNextActionText(task), 72), rowStyle(true, false));
 
     const completionFeedback = getTaskCompletionProgressionFeedback(state, task);
     if (completionFeedback) {
       this.addText(this.panelX + 390, this.panelY + 196, "Completion:", headingStyle());
-      this.addText(this.panelX + 406, this.panelY + 224, completionFeedback.message, bodyStyle());
-      this.addText(this.panelX + 406, this.panelY + 260, completionFeedback.milestoneSummary, mutedStyle());
+      this.addText(this.panelX + 406, this.panelY + 224, wrapAndClampText(completionFeedback.message, 48, 2), bodyStyle());
+      this.addText(this.panelX + 406, this.panelY + 260, wrapAndClampText(completionFeedback.milestoneSummary, 34, 2), mutedStyle());
     }
 
     this.addText(this.panelX + 28, this.panelY + 348, "Activity:", headingStyle());
@@ -852,7 +863,7 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 44, this.panelY + 376, "No activity yet.", mutedStyle());
     } else {
       activityLog.slice(0, 3).forEach((activity, index) => {
-        this.addText(this.panelX + 44, this.panelY + 374 + index * 18, wrapText(activity.message, 68), mutedStyle());
+        this.addText(this.panelX + 44, this.panelY + 374 + index * 18, compactTextLine(activity.message, 68), mutedStyle());
       });
     }
 
@@ -871,16 +882,16 @@ export class OfficeProjectPortalView {
     state.employees.forEach((employee, index) => {
       const rowY = this.panelY + 84 + index * 34;
       const marker = index === state.selectedEmployeeIndex ? ">" : " ";
-      const rowText = `${marker} ${employee.name.padEnd(16, " ")} ${employee.role.padEnd(10, " ")} ${employee.status}`;
+      const rowText = compactTextLine(`${marker} ${employee.name.padEnd(16, " ")} ${employee.role.padEnd(10, " ")} ${employee.status}`, 78);
       this.addText(this.panelX + 44, rowY, rowText, rowStyle(true, index === state.selectedEmployeeIndex));
     });
 
     const selectedEmployee = getSelectedEmployee(state);
     if (selectedEmployee) {
       this.addText(this.panelX + 28, this.panelY + 238, "Capabilities:", headingStyle());
-      this.addText(this.panelX + 44, this.panelY + 268, wrapText(selectedEmployee.capabilities.join(", "), 70), bodyStyle());
+      this.addText(this.panelX + 44, this.panelY + 268, wrapAndClampText(selectedEmployee.capabilities.join(", "), 70, 2), bodyStyle());
       this.addText(this.panelX + 28, this.panelY + 312, "Description:", headingStyle());
-      this.addText(this.panelX + 44, this.panelY + 340, wrapText(selectedEmployee.description, 72), mutedStyle());
+      this.addText(this.panelX + 44, this.panelY + 340, wrapAndClampText(selectedEmployee.description, 72, 2), mutedStyle());
     }
 
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Up/Down select  Enter/Space assign", instructionStyle()).setOrigin(1, 0.5);
@@ -1117,7 +1128,7 @@ function createProjectDashboardLowerRows(
   }
 
   if (repositorySyncRows.length > 0) {
-    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 30 });
+    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 29 });
   }
 
   if (issueSyncRows) {
@@ -1350,10 +1361,10 @@ function calculateProjectDashboardLowerRowsDesiredHeight(rows: ProjectDashboardR
 }
 
 /**
- * Drops the lowest-priority rows from the end (repository-sync and issue-sync
- * rows are always appended last, in ascending priority order) until the
- * remaining rows fit within maxHeight -- so newly-stacked rows can never
- * silently render past the drawn panel's bottom edge.
+ * Drops the least-protected rows until the remaining rows fit within
+ * maxHeight, using later rows as the tie-break within the same priority tier.
+ * This keeps newly-stacked rows from silently rendering past the drawn panel
+ * while preserving source-of-truth rows that happen to render later.
  */
 function fitProjectDashboardLowerRows(
   rows: ProjectDashboardRenderedLowerRow[],
@@ -1388,20 +1399,21 @@ function wrapText(text: string, maxLength: number) {
   let currentLine = "";
 
   words.forEach((word) => {
-    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    const fittedWord = word.length > maxLength ? compactTextLine(word, maxLength) : word;
+    const nextLine = currentLine ? `${currentLine} ${fittedWord}` : fittedWord;
     if (nextLine.length > maxLength) {
       if (currentLine) {
         lines.push(currentLine);
-        currentLine = word;
+        currentLine = fittedWord;
         return;
       }
 
-      lines.push(word);
+      lines.push(fittedWord);
       currentLine = "";
       return;
     }
 
-    currentLine = nextLine;
+    currentLine = currentLine ? `${currentLine} ${fittedWord}` : fittedWord;
   });
 
   if (currentLine) lines.push(currentLine);
