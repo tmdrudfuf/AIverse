@@ -40,6 +40,6 @@ export function createImplementerRuntimeDisplayRows(
       return { statusText: "Failed; inspect needed; Codex not started; no mutation" };
     case "Blocked":
     default:
-      return { statusText: "Claude blocked; resolve requirements; Codex not started" };
+      return { statusText: "Claude blocked; inspect result; Codex not started" };
   }
 }
