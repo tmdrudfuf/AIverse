@@ -26,7 +26,7 @@ export function createImplementerRuntimeDisplayRows(
 
   const latestResult = results?.results[results.results.length - 1];
   if (!latestResult) {
-    return { statusText: "Claude ready; explicit start required; Codex not started" };
+    return { statusText: "Claude ready; press I to start; Codex not started" };
   }
 
   switch (latestResult.status) {
