@@ -9,6 +9,7 @@ import {
 import { FIFTH_EMPLOYEE_ID } from "./employees/EmployeeRecruitmentService";
 import type { Employee } from "./employees/EmployeeTypes";
 import type { CandidateAssignmentRecommendationCollection } from "./candidate-assignments/CandidateAssignmentTypes";
+import type { CandidateTask } from "./candidate-tasks/CandidateTaskTypes";
 import type { CandidateProjectTaskPromotionResultCollection } from "./candidate-project-task-promotions/CandidateProjectTaskPromotionTypes";
 import type { CandidatePromotionReviewCollection } from "./candidate-promotions/CandidatePromotionTypes";
 import type { ConfirmedEmployeeAssignmentResultCollection } from "./confirmed-assignments/ConfirmedEmployeeAssignmentTypes";
@@ -201,7 +202,7 @@ describe("OfficeProjectPortalView", () => {
     expect(renderedText.map((item) => item.text)).toContain("Completion:");
     expect(renderedText.map((item) => item.text)).toContain("Task complete: company advanced to level 2.");
     expect(renderedText.map((item) => item.text)).toContain(
-      "Reached smallOffice: Complete first client project, Hire five employees.",
+      "Reached smallOffice: Complete first\nclient project, Hire five employees.",
     );
   });
 
@@ -272,6 +273,225 @@ describe("OfficeProjectPortalView", () => {
       const matchingPanel = sectionPanels.find((panel) => panel.y <= row.y);
       assertRowInsidePanel(row, matchingPanel);
     });
+  });
+
+  it("compacts long Project Dashboard identifiers while keeping core lower rows clear of the footer", () => {
+    const renderedText: RenderedText[] = [];
+    const renderedPanels: RenderedPanel[] = [];
+    const scene = createSceneStub(renderedText, renderedPanels);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({
+        project: {
+          projectId: "daily-proof",
+          name: "Daily Proof Enterprise Operations Terminal With Long Runtime Surface",
+          status: "Active",
+          isAvailable: true,
+        },
+        health: {
+          status: "risk",
+          label: "Project needs attention",
+          reason: "This health reason is intentionally long enough to wrap but should stay inside the top panel.",
+          signals: [],
+        },
+        activeWork: [
+          {
+            id: "task-1",
+            title: "SuperLongUnbrokenTaskIdentifierForRuntimeDashboardLayoutRegressionCoverage",
+            status: "In Progress",
+            priority: "Critical",
+            progressPercent: 10,
+            updatedAt: "2026-01-01T10:00:00.000Z",
+          },
+        ],
+        employees: [{
+          employeeId: "employee-1",
+          name: "ExtremelyLongEmployeeNameWithoutConvenientBreakpointsForPortalRows",
+          role: "Engineer",
+          aiState: "working",
+          focusLabel: "Focused",
+        }],
+        advisory: {
+          status: "available",
+          healthSummary: "Long advisory text that should be clamped before it pushes later rows into the footer area.",
+          topRiskLabel: "Another long risk label that should remain readable.",
+          nextAttentionLabel: "Long next attention label that should compact safely.",
+        },
+      }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.projects[0].repositoryIdentity = {
+      provider: "github",
+      owner: "ai-verse",
+      name: "daily-proof-enterprise-operations-terminal-with-long-runtime-surface",
+      defaultBranch: "main",
+      connectionState: "Configured",
+    };
+    state.repositorySyncSnapshots = {
+      "daily-proof": {
+        provider: "github",
+        availability: "available",
+        defaultBranch: "feature/super-long-runtime-layout-stability-branch-name",
+        latestCommit: {
+          sha: "1234567890abcdef1234567890abcdef",
+          message: "Long commit message",
+          committedAt: "2026-01-01T00:00:00.000Z",
+        },
+        syncStatus: "Succeeded",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const lowerPanel = findLowerProjectPanel(renderedPanels);
+    const instructionRow = renderedText.find((item) => item.text.startsWith("Esc back"));
+    const activeWorkRow = renderedText.find((item) => item.text.startsWith("> SuperLong"));
+    const repoSyncRow = findRenderedRow(renderedText, "[REPO-SYNC]");
+    const lowerRows = renderedText.filter((item) =>
+      item.text.startsWith("[") && item.y >= (lowerPanel?.y ?? 0)
+    );
+
+    expect(activeWorkRow?.text).toContain("...");
+    expect(repoSyncRow?.text).toContain("...");
+    expect(instructionRow).toBeDefined();
+    lowerRows.forEach((row) => assertRowInsidePanel(row, lowerPanel));
+    expect((lowerPanel?.y ?? 0) + (lowerPanel?.height ?? 0)).toBeLessThanOrEqual((instructionRow?.y ?? 0) - PROJECT_ROW_SAFE_GAP);
+  });
+
+  it("bounds long project detail metadata and action rows before the footer", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "detail" });
+    state.selectedProjectId = "daily-proof";
+    state.lastPlaceholderAction = {
+      projectId: "daily-proof",
+      actionLabel: "Open an extremely long placeholder workspace action label",
+      status: "placeholder",
+    };
+    state.projects = [{
+      id: "daily-proof",
+      name: "Daily Proof Enterprise Operations Terminal With Very Long Name",
+      status: "Active",
+      type: "Company",
+      enabled: true,
+      description: "This description is intentionally verbose so the project detail body has to clamp the copy before reaching the lower action area and footer prompt.",
+      linkedServices: [
+        { id: "svc-1", label: "Very Long Linked Service Name That Must Fit", status: "Placeholder", enabled: true, placeholder: true },
+      ],
+      nextAction: {
+        label: "Review the extraordinarily long workspace stabilization action",
+        enabled: true,
+        placeholder: true,
+      },
+      ownerCompany: "Daily Proof Incorporated With A Long Legal Display Name",
+      localRepositoryLabel: "Connected local worktree with a very long descriptive label",
+      repositoryIdentity: {
+        provider: "github",
+        owner: "ai-verse",
+        name: "daily-proof-enterprise-operations-terminal-with-long-name",
+        defaultBranch: "feature/super-long-layout-stability-branch",
+        connectionState: "Configured",
+      },
+    }];
+
+    new OfficeProjectPortalView(scene, state);
+
+    const instructionRow = renderedText.find((item) => item.text.startsWith("Esc back"));
+    const boundedRows = renderedText.filter((item) =>
+      item.text.startsWith("Daily Proof Enterprise")
+      || item.text.startsWith("Repository:")
+      || item.text.startsWith("Company:")
+      || item.text.startsWith("Repo:")
+      || item.text.startsWith("Default Branch:")
+      || item.text.startsWith("Review the extraordinarily")
+      || item.text.startsWith("Placeholder action recorded")
+    );
+
+    expect(boundedRows.some((row) => row.text.includes("..."))).toBe(true);
+    boundedRows.forEach((row) => {
+      expect(row.y + row.text.split("\n").length * PROJECT_ROW_LINE_HEIGHT).toBeLessThan(instructionRow?.y ?? 0);
+    });
+  });
+
+  it("clamps long task and candidate detail content clear of footer instructions", () => {
+    const renderedTaskText: RenderedText[] = [];
+    const taskScene = createSceneStub(renderedTaskText, []);
+    const taskState = createPortalState({ viewMode: "task-detail" });
+    taskState.selectedTaskProjectId = "daily-proof";
+    taskState.selectedTaskId = "task-long";
+    taskState.taskCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [{
+        id: "task-long",
+        projectId: "daily-proof",
+        title: "Extremely Long Task Title Without Natural Breakpoints For Portal Layout Stability",
+        description: "A long task description should wrap and clamp before it crowds the next action, activity rows, or footer instructions in the compact Project Portal overlay.",
+        status: "In Progress",
+        priority: "Critical",
+        estimatedHours: 13,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T01:00:00.000Z",
+        activityLog: [{
+          id: "activity-1",
+          taskId: "task-long",
+          type: "note_added",
+          message: "Long activity message that should be compacted before it reaches the footer instruction row in task detail.",
+          createdAt: "2026-01-01T02:00:00.000Z",
+        }],
+      }],
+    };
+
+    new OfficeProjectPortalView(taskScene, taskState);
+
+    const taskInstruction = renderedTaskText.find((item) => item.text.startsWith("Esc back"));
+    expect(renderedTaskText.some((item) => item.text.includes("..."))).toBe(true);
+    renderedTaskText
+      .filter((item) => item.y >= 224 && !item.text.startsWith("Esc back"))
+      .forEach((row) => {
+        expect(row.y + row.text.split("\n").length * PROJECT_ROW_LINE_HEIGHT).toBeLessThan(taskInstruction?.y ?? 0);
+      });
+
+    const renderedCandidateText: RenderedText[] = [];
+    const candidateScene = createSceneStub(renderedCandidateText, []);
+    const candidateState = createPortalState({ viewMode: "candidate-detail" });
+    candidateState.selectedProjectDashboardProjectId = "daily-proof";
+    candidateState.selectedCandidateTaskId = "daily-proof:candidate-task:ai-verse/daily-proof#42";
+    const candidateTask = createCandidateTask(
+      42,
+      "Long Candidate Issue Title With Repository Context And Runtime Layout Stabilization Details",
+      "High",
+      "Feature",
+    );
+    candidateTask.summary = "This candidate summary is intentionally long enough to require clamping so the decision controls and footer remain readable in the portal.";
+    candidateTask.labels = ["layout", "text-overflow", "very-long-label-that-needs-fitting"];
+    candidateTask.assignees = ["long-user-name-without-natural-breaks"];
+    candidateState.candidateTaskCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        sourceProvider: "github",
+        syncStatus: "Succeeded",
+        taskCount: 1,
+        sourceIssueCount: 1,
+        sourceIssueSyncStatus: "Succeeded",
+        tasks: [candidateTask],
+      },
+    };
+    candidateState.candidateAssignmentCollections = {
+      "daily-proof": createCandidateAssignmentCollection("Recommended", "Strong"),
+    };
+    candidateState.candidatePromotionReviewCollections = {
+      "daily-proof": createCandidatePromotionCollection("PendingReview"),
+    };
+
+    new OfficeProjectPortalView(candidateScene, candidateState);
+
+    const candidateInstruction = renderedCandidateText.find((item) => item.text.startsWith("Esc back"));
+    expect(renderedCandidateText.some((item) => item.text.includes("..."))).toBe(true);
+    renderedCandidateText
+      .filter((item) => item.y >= 280 && !item.text.startsWith("Esc back"))
+      .forEach((row) => {
+        expect(row.y + row.text.split("\n").length * PROJECT_ROW_LINE_HEIGHT).toBeLessThan(candidateInstruction?.y ?? 0);
+      });
   });
 
   it("renders registry-derived Repository and Company info on the project detail screen", () => {
@@ -2161,7 +2381,7 @@ function createCandidateTask(
   title: string,
   estimatedPriority: "High" | "Medium" | "Low" | "Normal",
   estimatedTaskType: "Bug" | "Feature" | "Documentation" | "Maintenance" | "Research" | "Unknown",
-) {
+): CandidateTask {
   return {
     id: `daily-proof:candidate-task:ai-verse/daily-proof#${issueNumber}`,
     originatingIssueId: `ai-verse/daily-proof#${issueNumber}`,
