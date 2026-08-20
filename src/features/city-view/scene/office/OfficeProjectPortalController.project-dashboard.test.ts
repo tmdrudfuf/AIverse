@@ -688,6 +688,7 @@ type ControllerInternals = {
   state: ProjectPortalState;
   view: {
     render: ReturnType<typeof vi.fn>;
+    show: ReturnType<typeof vi.fn>;
     hide: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
   };
@@ -735,6 +736,7 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.state = state;
   harness.view = {
     render: vi.fn(),
+    show: vi.fn(),
     hide: vi.fn(),
     destroy: vi.fn(),
   };
