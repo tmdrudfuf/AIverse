@@ -80,10 +80,10 @@ describe("createImplementerRuntimeDisplayRows", () => {
     expect(rows.statusText).toContain("unavailable");
   });
 
-  it("shows Claude Ready / Explicit Start Required when Runtime Start exists but no attempt has been made", () => {
+  it("shows Claude Ready with the I start label when Runtime Start exists but no attempt has been made", () => {
     const rows = createImplementerRuntimeDisplayRows(createRuntimeStartResults("Started"), undefined);
     expect(rows.statusText).toContain("ready");
-    expect(rows.statusText).toContain("explicit start required");
+    expect(rows.statusText).toContain("press I to start");
     expect(rows.statusText).toContain("Codex not started");
   });
 
