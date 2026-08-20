@@ -711,6 +711,16 @@ export class OfficeProjectPortalView {
       );
     });
 
+    if (state.receptionDeskUpgradeBenefits) {
+      const benefits = state.receptionDeskUpgradeBenefits;
+      this.addTerminalPanel(this.panelX + 360, this.panelY + 88, 280, 158);
+      this.addText(this.panelX + 376, this.panelY + 104, benefits.heading, headingStyle());
+      this.addText(this.panelX + 376, this.panelY + 132, wrapText(benefits.summary, 32), mutedStyle());
+      benefits.benefits.slice(0, 3).forEach((benefit, index) => {
+        this.addText(this.panelX + 388, this.panelY + 174 + index * 24, wrapText(`> ${benefit}`, 31), projectMutedStyle());
+      });
+    }
+
     const lastActionText = getLastActionText(state, project);
     if (lastActionText) this.addText(this.panelX + 44, this.panelY + 340, lastActionText, mutedStyle());
 

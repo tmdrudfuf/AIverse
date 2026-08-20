@@ -79,6 +79,7 @@ import type {
   ProjectRegistryRepositoryIdentity,
 } from "./project-registry/ProjectRegistryTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
+import type { ReceptionDeskUpgradeBenefits } from "./ReceptionDeskUpgradeBenefitsService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
@@ -236,6 +237,7 @@ export type ProjectPortalState = {
   employeeAssignments: Record<string, string>;
   workSessions: Record<string, WorkSession[]>;
   taskCompletionProgressionFeedback?: TaskCompletionProgressionFeedback;
+  receptionDeskUpgradeBenefits?: ReceptionDeskUpgradeBenefits;
   projectDashboardSnapshot?: ProjectDashboardSnapshot;
   companyDashboardSnapshot?: CompanyDashboardSnapshot;
   previousCompanyProgressionSnapshot?: CompanyProgressionSnapshot;
