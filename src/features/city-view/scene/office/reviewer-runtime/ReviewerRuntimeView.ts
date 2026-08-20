@@ -44,6 +44,9 @@ export function createReviewerRuntimeDisplayRows(
       return { statusText: "Failed; inspect needed; not validated; no mutation" };
     case "Blocked":
     default:
+      if (latestResult.reasonCodes.includes("REVIEWER_RUNTIME_TARGET_UNCOMMITTED")) {
+        return { statusText: "Blocked; uncommitted target; inspect; not started" };
+      }
       return { statusText: "Blocked; resolve requirements; not started" };
   }
 }
