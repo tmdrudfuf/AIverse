@@ -110,6 +110,7 @@ describe("createImplementerRuntimeDisplayRows", () => {
   it("shows Blocked with Codex Not Started", () => {
     const rows = createImplementerRuntimeDisplayRows(createRuntimeStartResults("Started"), createImplementerResults("Blocked"));
     expect(rows.statusText.toLowerCase()).toContain("blocked");
+    expect(rows.statusText.toLowerCase()).toContain("inspect");
     expect(rows.statusText).toContain("Codex not started");
   });
 
