@@ -82,13 +82,13 @@ const DASHBOARD_SOURCE_TO_PROJECTS_GAP = 12;
 const DASHBOARD_MIN_PROJECTS_PANEL_Y = 340;
 const DASHBOARD_PROJECTS_HEADING_OFFSET = 12;
 const PROJECT_DASHBOARD_SECTION_PANEL_HEIGHT = 136;
-const PROJECT_DASHBOARD_LOWER_PANEL_Y = 270;
-const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 282;
+const PROJECT_DASHBOARD_LOWER_PANEL_Y = 264;
+const PROJECT_DASHBOARD_LOWER_ROW_START_Y = 274;
 const PROJECT_DASHBOARD_LOWER_ROW_LINE_HEIGHT = 14;
-const PROJECT_DASHBOARD_LOWER_ROW_GAP = 4;
-const PROJECT_DASHBOARD_LOWER_PANEL_PADDING = 10;
+const PROJECT_DASHBOARD_LOWER_ROW_GAP = 2;
+const PROJECT_DASHBOARD_LOWER_PANEL_PADDING = 2;
 const PROJECT_DASHBOARD_LOWER_WRAP_LENGTH = 78;
-const PORTAL_FOOTER_SAFE_GAP = 22;
+const PORTAL_FOOTER_SAFE_GAP = 36;
 
 export class OfficeProjectPortalView {
   private readonly content: Phaser.GameObjects.Container;
@@ -296,13 +296,13 @@ export class OfficeProjectPortalView {
     rows.activeWorkRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
       const selected = rows.activeWorkTaskIds.length > 0 && index === state.selectedProjectDashboardActiveWorkIndex;
-      this.addText(leftPanelX + 12, rowY, wrapAndClampText(`> ${row}`, 34, 2), rowStyle(true, selected));
+      this.addText(leftPanelX + 12, rowY, compactTextLine(`> ${row}`, 34), rowStyle(true, selected));
     });
 
     this.addText(rightPanelX, this.panelY + 140, rows.employeeHeading, projectHeadingStyle());
     rows.employeeRows.slice(0, 3).forEach((row, index) => {
       const rowY = this.panelY + 168 + index * 32;
-      this.addText(rightPanelX + 12, rowY, wrapAndClampText(`> ${row}`, 32, 2), projectBodyStyle());
+      this.addText(rightPanelX + 12, rowY, compactTextLine(`> ${row}`, 32), projectBodyStyle());
     });
 
     const dashboardProjectId = state.selectedProjectDashboardProjectId;
@@ -1128,7 +1128,7 @@ function createProjectDashboardLowerRows(
   }
 
   if (repositorySyncRows.length > 0) {
-    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 8 });
+    lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 29 });
   }
 
   if (issueSyncRows) {
@@ -1371,7 +1371,12 @@ function fitProjectDashboardLowerRows(
   maxHeight: number,
 ): ProjectDashboardRenderedLowerRow[] {
   let fitted = rows;
+  const usePriorityFit = rows.some((row) => row.usePriorityFit);
   while (fitted.length > 0 && calculateProjectDashboardLowerRowsDesiredHeight(fitted) > maxHeight) {
+    if (!usePriorityFit) {
+      fitted = fitted.slice(0, -1);
+      continue;
+    }
     let removeIndex = fitted.length - 1;
     let removePriority = fitted[removeIndex]?.dropPriority ?? removeIndex;
     fitted.forEach((row, index) => {
@@ -1395,7 +1400,7 @@ function wrapText(text: string, maxLength: number) {
 
   words.forEach((word) => {
     const fittedWord = word.length > maxLength ? compactTextLine(word, maxLength) : word;
-    const nextLine = currentLine ? `${currentLine} ${word}` : word;
+    const nextLine = currentLine ? `${currentLine} ${fittedWord}` : fittedWord;
     if (nextLine.length > maxLength) {
       if (currentLine) {
         lines.push(currentLine);

@@ -202,7 +202,7 @@ describe("OfficeProjectPortalView", () => {
     expect(renderedText.map((item) => item.text)).toContain("Completion:");
     expect(renderedText.map((item) => item.text)).toContain("Task complete: company advanced to level 2.");
     expect(renderedText.map((item) => item.text)).toContain(
-      "Reached smallOffice: Complete first\nclient project, Hire five employees.",
+      "Reached smallOffice: Complete\nfirst client project, Hire five...",
     );
   });
 
