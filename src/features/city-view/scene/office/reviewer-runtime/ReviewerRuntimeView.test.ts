@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ImplementerRuntimeResultCollection } from "../implementer-runtime/ImplementerRuntimeTypes";
 import { createReviewerRuntimeDisplayRows } from "./ReviewerRuntimeView";
-import type { ReviewerRuntimeResultCollection } from "./ReviewerRuntimeTypes";
+import type { ReviewerRuntimeReasonCode, ReviewerRuntimeResultCollection } from "./ReviewerRuntimeTypes";
 
 const PROJECT_ID = "daily-proof";
 const WRAP_LENGTH = 78;
@@ -42,6 +42,7 @@ function createReviewerResults(
   status: "Completed" | "TimedOut" | "Blocked" | "Failed",
   decision: "Approved" | "ChangesRequested" | "Unknown" = "Unknown",
   blockingFindingCount = 0,
+  reasonCodes: ReviewerRuntimeReasonCode[] = ["REVIEWER_RUNTIME_STARTED"],
 ): ReviewerRuntimeResultCollection {
   return {
     projectId: PROJECT_ID,
@@ -56,7 +57,7 @@ function createReviewerResults(
         decision,
         blockingFindingCount,
         nonBlockingFindingCount: 0,
-        reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
+        reasonCodes,
         started: status === "Completed" || status === "TimedOut",
         duplicateActiveAttempt: false,
         agentStarted: status === "Completed" || status === "TimedOut",
@@ -133,6 +134,30 @@ describe("createReviewerRuntimeDisplayRows", () => {
     expect(rows.statusText).toContain("resolve requirements");
   });
 
+  it("explains an uncommitted target Blocked result with inspect and not-started wording", () => {
+    const rows = createReviewerRuntimeDisplayRows(
+      createImplementerResults("Completed"),
+      createReviewerResults("Blocked", "Unknown", 0, ["REVIEWER_RUNTIME_TARGET_UNCOMMITTED"]),
+    );
+    expect(rows.statusText).toContain("Blocked");
+    expect(rows.statusText).toContain("uncommitted target");
+    expect(rows.statusText).toContain("inspect");
+    expect(rows.statusText).toContain("not started");
+    expect(rows.statusText).not.toContain("resolve requirements");
+    const forbiddenProgressClaims = [
+      "Validation Passed",
+      "Approved for Merge",
+      "Ready to Merge",
+      "Changes Committed",
+      "PR Created",
+      "Published",
+      "Deployed",
+    ];
+    for (const phrase of forbiddenProgressClaims) {
+      expect(rows.statusText).not.toContain(phrase);
+    }
+  });
+
   it("every state's row fits within the shared wrap budget with the panel prefix", () => {
     const states: Array<ReturnType<typeof createReviewerRuntimeDisplayRows>> = [
       createReviewerRuntimeDisplayRows(undefined, undefined),
@@ -143,6 +168,10 @@ describe("createReviewerRuntimeDisplayRows", () => {
       createReviewerRuntimeDisplayRows(createImplementerResults("Completed"), createReviewerResults("TimedOut")),
       createReviewerRuntimeDisplayRows(createImplementerResults("Completed"), createReviewerResults("Failed")),
       createReviewerRuntimeDisplayRows(createImplementerResults("Completed"), createReviewerResults("Blocked")),
+      createReviewerRuntimeDisplayRows(
+        createImplementerResults("Completed"),
+        createReviewerResults("Blocked", "Unknown", 0, ["REVIEWER_RUNTIME_TARGET_UNCOMMITTED"]),
+      ),
     ];
 
     for (const rows of states) {

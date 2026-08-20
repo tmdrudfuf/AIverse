@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/113-implementer-runtime-blocked-result-inspect-action/plan.md
+shell commands, and other important information, read specs/114-reviewer-runtime-uncommitted-target-blocked-result/plan.md
 <!-- SPECKIT END -->
