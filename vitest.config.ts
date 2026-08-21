@@ -1,4 +1,5 @@
 import { configDefaults, defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 // Spec 056 (Agent Workflow Performance and Review Convergence), Part A:
 // this repository's working directory can contain harness-managed git
@@ -11,6 +12,11 @@ import { configDefaults, defineConfig } from "vitest/config";
 // about which files Vitest treats as tests to run from this checkout; it
 // does not read, modify, or delete anything under .claude/worktrees/.
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
   test: {
     exclude: [...configDefaults.exclude, "**/.claude/**"],
   },
