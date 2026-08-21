@@ -37,6 +37,7 @@ Create a gitignored local state file such as `.agent-workflow/example-state.json
     "npm test",
     "npx tsc --noEmit",
     "npm run build",
+    "npm run test:e2e:home-canvas",
     "git diff --check"
   ],
   "scopeConstraints": [
@@ -734,6 +735,7 @@ node tools/agent-workflow/cli.js orchestrate `
   --full-validation-command "npm test" `
   --full-validation-command "npx tsc --noEmit" `
   --full-validation-command "npm run build" `
+  --full-validation-command "npm run test:e2e:home-canvas" `
   --full-validation-command "git diff --check"
 ```
 
@@ -744,7 +746,7 @@ Equivalent state configuration (`state.validationPolicy`):
   "validationPolicy": {
     "strategy": "focused-final-full",
     "focusedCommands": ["node --test tools/agent-workflow/validationPolicy.test.ts"],
-    "fullCommands": ["npm test", "npx tsc --noEmit", "npm run build", "git diff --check"]
+    "fullCommands": ["npm test", "npx tsc --noEmit", "npm run build", "npm run test:e2e:home-canvas", "git diff --check"]
   }
 }
 ```
@@ -784,7 +786,7 @@ Skipping applies to every validation occurrence (focused and full alike) in that
 ```text
 Validation strategy: focused-final-full
 Focused validation commands: node --test tools/agent-workflow/validationPolicy.test.ts
-Final full validation commands: npm test; npx tsc --noEmit; npm run build; git diff --check
+Final full validation commands: npm test; npx tsc --noEmit; npm run build; npm run test:e2e:home-canvas; git diff --check
 Next validation phase: focused (strategy=focused-final-full)
 ```
 
