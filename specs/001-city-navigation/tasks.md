@@ -144,7 +144,7 @@ Each task uses this format:
   - Files likely affected: `src/features/city-view/scene/layers/CityBuildingLayer.ts`, `src/features/city-view/scene/CityWorldScene.ts`
   - Acceptance criteria: Buildings remain visual landmarks only; no click handlers, hover inspection, entry transitions, selection state, or building data model is added.
 
-- [ ] T024 [US4] Document scene extension boundaries in `src/features/city-view/scene/CityWorldScene.ts`
+- [X] T024 [US4] Document scene extension boundaries in `src/features/city-view/scene/CityWorldScene.ts`
   - Files likely affected: `src/features/city-view/scene/CityWorldScene.ts`
   - Acceptance criteria: A brief code comment identifies where future layers/controllers can be composed; comment is limited to extension guidance and does not describe unimplemented behavior as present.
 
