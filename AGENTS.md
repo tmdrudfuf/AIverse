@@ -72,5 +72,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/117-home-route-playwright-canvas-boot-smoke/plan.md
+shell commands, and other important information, read specs/118-add-playwright-chromium-e2e-home-canvas/plan.md
 <!-- SPECKIT END -->
