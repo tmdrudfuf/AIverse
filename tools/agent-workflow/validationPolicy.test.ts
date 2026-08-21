@@ -47,6 +47,14 @@ describe("resolveValidationPolicy: full command resolution", () => {
     expect(policy.fullCommands).toEqual(DEFAULT_VALIDATION_COMMANDS);
   });
 
+  it("includes the home canvas Playwright smoke in the default full validation gate", () => {
+    const policy = resolveValidationPolicy({}, {});
+    expect(policy.fullCommands).toContain("npm run test:e2e:home-canvas");
+    expect(policy.fullCommands.indexOf("npm run test:e2e:home-canvas")).toBeGreaterThan(
+      policy.fullCommands.indexOf("npm run build"),
+    );
+  });
+
   it("resolves fullCommands from state.validationCommands (legacy field)", () => {
     const policy = resolveValidationPolicy({ validationCommands: ["legacy full"] }, {});
     expect(policy.fullCommands).toEqual(["legacy full"]);

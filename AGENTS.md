@@ -37,8 +37,10 @@ Do not implement application features directly from a prompt unless the active f
 
 Run these validations after every implementation:
 
+- `npm test`
 - `npx tsc --noEmit`
 - `npm run build`
+- `npm run test:e2e:home-canvas`
 - `git diff --check`
 - `git diff --cached --check`
 
@@ -72,5 +74,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/118-add-playwright-chromium-e2e-home-canvas/plan.md
+shell commands, and other important information, read specs/119-playwright-home-canvas-smoke-ados-validation/plan.md
 <!-- SPECKIT END -->

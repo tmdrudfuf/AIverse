@@ -133,10 +133,11 @@ describe("agent workflow prompt generation", () => {
     expect(generated.prompt).toContain("Human Merge Decision");
   });
 
-  it("includes no-push/no-merge rules, validation commands, and human-only command labels", () => {
-    const generated = generatePrompt(createState());
+  it("includes no-push/no-merge rules, default validation commands, and human-only command labels", () => {
+    const generated = generatePrompt(createState({ validationCommands: [] }));
 
     expect(generated.prompt).toContain("npm run build");
+    expect(generated.prompt).toContain("npm run test:e2e:home-canvas");
     expect(generated.prompt).toContain("Do not push.");
     expect(generated.prompt).toContain("Do not merge pull requests.");
     expect(generated.prompt).toContain("HUMAN-ONLY: git push");

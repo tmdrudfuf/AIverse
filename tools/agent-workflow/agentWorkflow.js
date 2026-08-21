@@ -14,6 +14,7 @@ const DEFAULT_VALIDATION_COMMANDS = [
   "npm test",
   "npx tsc --noEmit",
   "npm run build",
+  "npm run test:e2e:home-canvas",
   "git diff --check",
 ];
 
