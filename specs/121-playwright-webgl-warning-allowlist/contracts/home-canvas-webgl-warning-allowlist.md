@@ -19,6 +19,11 @@ Initial allowed warning:
 - A Chromium WebGL fallback/performance warning that includes both:
   - `WebGL`
   - `Software WebGL has been deprecated`
+- A Chromium WebGL driver performance warning that includes all of:
+  - `WebGL`
+  - `GL Driver Message`
+  - `Performance`
+  - `GPU stall due to ReadPixels`
 
 Any future allowed warning must be added with focused test coverage and documented here.
 

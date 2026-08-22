@@ -14,6 +14,14 @@ export const ALLOWED_BROWSER_CONSOLE_WARNINGS: readonly AllowedWarning[] = [
     matches: (text) =>
       /\bWebGL\b/i.test(text) && /software WebGL has been deprecated/i.test(text),
   },
+  {
+    label: "Chromium WebGL ReadPixels performance stall notice",
+    matches: (text) =>
+      /\bWebGL\b/i.test(text) &&
+      /GL Driver Message/i.test(text) &&
+      /\bPerformance\b/i.test(text) &&
+      /GPU stall due to ReadPixels/i.test(text),
+  },
 ];
 
 export function formatBrowserConsoleFailureSignal(
