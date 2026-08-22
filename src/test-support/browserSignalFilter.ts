@@ -10,11 +10,6 @@ type AllowedWarning = {
 
 export const ALLOWED_BROWSER_CONSOLE_WARNINGS: readonly AllowedWarning[] = [
   {
-    label: "Chromium software WebGL fallback deprecation notice",
-    matches: (text) =>
-      /\bWebGL\b/i.test(text) && /software WebGL has been deprecated/i.test(text),
-  },
-  {
     label: "Chromium WebGL ReadPixels performance stall notice",
     matches: (text) =>
       /\bWebGL\b/i.test(text) &&
