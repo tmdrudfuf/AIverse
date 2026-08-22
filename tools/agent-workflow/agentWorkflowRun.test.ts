@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { determineNextStage, writeState } from "./agentWorkflow.js";
+import { DEFAULT_VALIDATION_COMMANDS, determineNextStage, writeState } from "./agentWorkflow.js";
 import { formatDryRunPreview, formatRunSummary } from "./cli.js";
 import { previewWorkflowCommand, runWorkflowCommand, runWorkflowCommandAndPersist } from "./agentWorkflowRun.js";
 import { CLAUDE_FULL_ACCESS_ARGS, CODEX_FULL_ACCESS_ARGS } from "./agentRunner.js";
@@ -31,7 +31,7 @@ function createState(overrides: Partial<WorkflowState> = {}): WorkflowState {
     featureName: "Agent Workflow Run Command",
     currentBranch: "codex/agent-workflow-run-command",
     baseBranch: "main",
-    validationCommands: ["npm test", "npx tsc --noEmit", "npm run build", "git diff --check"],
+    validationCommands: [...DEFAULT_VALIDATION_COMMANDS],
     scopeConstraints: ["Local runner only.", "Do not push.", "Do not merge."],
     results: [],
     ...overrides,
