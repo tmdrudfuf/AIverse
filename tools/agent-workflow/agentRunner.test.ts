@@ -16,7 +16,7 @@ import {
   isRemoteMutatingCommand,
   runWorkflowAgent,
 } from "./agentRunner.js";
-import { determineNextStage, getRunDirectory } from "./agentWorkflow.js";
+import { DEFAULT_VALIDATION_COMMANDS, determineNextStage, getRunDirectory } from "./agentWorkflow.js";
 
 type WorkflowState = {
   featureId: string;
@@ -41,7 +41,7 @@ function createState(overrides: Partial<WorkflowState> = {}): WorkflowState {
     featureName: "CLI Agent Runner Foundation",
     currentBranch: "codex/cli-agent-runner-foundation",
     baseBranch: "main",
-    validationCommands: ["npm test", "npx tsc --noEmit", "npm run build", "git diff --check"],
+    validationCommands: [...DEFAULT_VALIDATION_COMMANDS],
     scopeConstraints: ["Local runner only.", "Do not push.", "Do not merge."],
     results: [],
     ...overrides,

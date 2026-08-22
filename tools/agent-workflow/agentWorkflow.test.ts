@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_VALIDATION_COMMANDS,
   detectDecision,
   determineNextStage,
   generatePrompt,
@@ -41,7 +42,7 @@ function createState(overrides: Partial<WorkflowState> = {}): WorkflowState {
     currentBranch: "codex/agent-review-orchestration",
     baseBranch: "main",
     expectedCommit: "abc123",
-    validationCommands: ["npm test", "npx tsc --noEmit", "npm run build", "git diff --check"],
+    validationCommands: [...DEFAULT_VALIDATION_COMMANDS],
     scopeConstraints: ["Local scripts/templates/docs only.", "Do not push.", "Do not merge."],
     results: [],
     ...overrides,
