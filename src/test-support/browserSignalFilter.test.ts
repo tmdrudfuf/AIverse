@@ -6,6 +6,16 @@ import {
 } from "./browserSignalFilter";
 
 describe("browser signal filter", () => {
+  it("ignores the documented warning-level Chromium software WebGL deprecation message", () => {
+    expect(
+      formatBrowserConsoleFailureSignal({
+        type: "warning",
+        text:
+          "[GroupMarkerNotSet(crbug.com/242999)!:A0A01B00] Automatic fallback to software WebGL has been deprecated.",
+      }),
+    ).toBeNull();
+  });
+
   it("ignores the documented warning-level Chromium WebGL ReadPixels performance message", () => {
     expect(
       formatBrowserConsoleFailureSignal({
@@ -34,16 +44,13 @@ describe("browser signal filter", () => {
     ).toBe("console warning: [.WebGL-0x123]GPU stall due to ReadPixels");
   });
 
-  it("keeps unrelated WebGL warnings as failure signals", () => {
+  it("keeps partial software WebGL deprecation messages as failure signals", () => {
     expect(
       formatBrowserConsoleFailureSignal({
         type: "warning",
-        text:
-          "[GroupMarkerNotSet(crbug.com/242999)!:A0A01B00] Automatic fallback to software WebGL has been deprecated.",
+        text: "Software WebGL fallback is active.",
       }),
-    ).toBe(
-      "console warning: [GroupMarkerNotSet(crbug.com/242999)!:A0A01B00] Automatic fallback to software WebGL has been deprecated.",
-    );
+    ).toBe("console warning: Software WebGL fallback is active.");
   });
 
   it("keeps the documented WebGL ReadPixels text as a failure when emitted as an error", () => {
