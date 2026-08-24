@@ -45,7 +45,7 @@ describe("Daily Proof canvas boot console smoke", () => {
   });
 
   it("boots the Daily Proof city canvas configuration without console warnings or errors", async () => {
-    const host = {} as HTMLDivElement;
+    const host = createHostProbeStub();
 
     const game = await bootCitySceneCanvas(host);
 
@@ -71,6 +71,21 @@ describe("Daily Proof canvas boot console smoke", () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
+  it("exposes read-only city canvas probe attributes after a successful boot", async () => {
+    const host = createHostProbeStub(1);
+
+    const game = await bootCitySceneCanvas(host);
+
+    expect(game).toBeTruthy();
+    expect(host.attributes).toEqual({
+      "data-aiverse-city-canvas-state": "ready",
+      "data-aiverse-city-canvas-width": "1200",
+      "data-aiverse-city-canvas-height": "720",
+      "data-aiverse-city-canvas-scene-count": "2",
+      "data-aiverse-city-canvas-rendered-count": "1",
+    });
+  });
+
   it("skips game creation for an absent host without console warnings or errors", async () => {
     const game = await bootCitySceneCanvas(null);
 
@@ -81,11 +96,33 @@ describe("Daily Proof canvas boot console smoke", () => {
   });
 
   it("skips game creation when the component is disposed before dynamic import completes", async () => {
-    const game = await bootCitySceneCanvas({} as HTMLDivElement, { shouldCreateGame: () => false });
+    const host = createHostProbeStub();
+
+    const game = await bootCitySceneCanvas(host, { shouldCreateGame: () => false });
 
     expect(game).toBeNull();
     expect(gameConstructor).not.toHaveBeenCalled();
+    expect(host.attributes).toEqual({
+      "data-aiverse-city-canvas-state": "skipped",
+    });
     expect(warnSpy).not.toHaveBeenCalled();
     expect(errorSpy).not.toHaveBeenCalled();
   });
 });
+
+function createHostProbeStub(canvasCount = 0) {
+  const attributes: Record<string, string> = {};
+
+  return {
+    attributes,
+    setAttribute: (name: string, value: string) => {
+      attributes[name] = value;
+    },
+    removeAttribute: (name: string) => {
+      delete attributes[name];
+    },
+    querySelectorAll: (selector: string) => ({
+      length: selector === "canvas" ? canvasCount : 0,
+    }),
+  } as unknown as HTMLDivElement & { attributes: Record<string, string> };
+}
