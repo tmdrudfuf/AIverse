@@ -1,18 +1,28 @@
 import { expect, test } from "@playwright/test";
 
-test("home route boots the city canvas in Chromium without browser error signals", async ({
+import {
+  formatBrowserConsoleFailureSignal,
+  formatPageErrorFailureSignal,
+} from "../src/test-support/browserSignalFilter";
+
+test("home route boots the city canvas in Chromium without unexpected browser signals", async ({
   page,
 }) => {
   const browserSignals: string[] = [];
 
   page.on("console", (message) => {
-    if (message.type() === "warning" || message.type() === "error") {
-      browserSignals.push(`console ${message.type()}: ${message.text()}`);
+    const failureSignal = formatBrowserConsoleFailureSignal({
+      type: message.type(),
+      text: message.text(),
+    });
+
+    if (failureSignal) {
+      browserSignals.push(failureSignal);
     }
   });
 
   page.on("pageerror", (error) => {
-    browserSignals.push(`page error: ${error.message}`);
+    browserSignals.push(formatPageErrorFailureSignal(error.message));
   });
 
   await page.goto("/");

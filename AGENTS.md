@@ -74,5 +74,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/120-persistent-ados-playwright-home-canvas-validation/plan.md
+shell commands, and other important information, read specs/121-playwright-webgl-warning-allowlist/plan.md
 <!-- SPECKIT END -->
