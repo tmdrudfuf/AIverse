@@ -1245,6 +1245,65 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
   });
 
+  it("renders Project Dashboard without an ADOS run preparation collection", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    delete (state as Partial<ProjectPortalState>).externalProjectAdosRunPreparations;
+
+    expect(() => new OfficeProjectPortalView(scene, state)).not.toThrow();
+    expect(renderedText.map((item) => item.text)).toContain("Daily Proof");
+    expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[ADOS PREP]")).toBeUndefined();
+  });
+
+  it("renders an external project ADOS run preparation row on the Project Dashboard", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.externalProjectAdosRunPreparations = {
+      "daily-proof": {
+        id: "daily-proof:external-ados-run-preparation",
+        projectId: "daily-proof",
+        developmentRequestDraftId: "daily-proof:external-development-request-draft",
+        status: "Prepared",
+        featureBranch: "codex/128-external-project-ados-run-preparation",
+        authoritativeBaseSha: "3193608fd10aaa08cc0709f2be3a579b87f1d03c",
+        specPath: "spec.md",
+        validationCommands: [
+          "npm test",
+          "npx tsc --noEmit",
+          "npm run build",
+          "npm run test:e2e:home-canvas",
+          "git diff --check",
+          "git diff --cached --check",
+        ],
+        reviewerCommand: "claude -p",
+        executionPolicyVersion: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        sideEffectBoundary: "Local preparation only.",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const adosPrepRow = findRenderedRow(renderedText, "[ADOS PREP]");
+    expect(adosPrepRow?.text).toContain("Prepared - codex/128-external-project-ados-run-preparation");
+    expect(adosPrepRow?.text).toContain("base");
+    expect(adosPrepRow?.text).toContain("3193608");
+    expect(adosPrepRow?.text).toContain("6 validation commands");
+    expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
+  });
+
   it("renders decision controls in candidate detail for the selected Project Dashboard candidate", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -2337,6 +2396,7 @@ function createPortalState(options: {
     postValidationReviewTargetCollections: {},
     postValidationReviewTargetResultCollections: {},
     externalProjectDevelopmentRequestDrafts: {},
+    externalProjectAdosRunPreparations: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
