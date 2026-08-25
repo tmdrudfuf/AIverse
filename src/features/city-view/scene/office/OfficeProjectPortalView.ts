@@ -578,8 +578,9 @@ export class OfficeProjectPortalView {
         latestPostValidationReviewTargetResult,
       )
       : undefined;
+    const developmentRequestDrafts = state.externalProjectDevelopmentRequestDrafts ?? {};
     const developmentRequestRows = createExternalProjectDevelopmentRequestDisplayRows(
-      dashboardProjectId ? state.externalProjectDevelopmentRequestDrafts[dashboardProjectId] : undefined,
+      dashboardProjectId ? developmentRequestDrafts[dashboardProjectId] : undefined,
     );
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
