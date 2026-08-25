@@ -16,6 +16,7 @@ import type { ProjectRegistryEntry } from "../project-registry/ProjectRegistryTy
 import type { TaskCollection } from "../tasks/ProjectTaskTypes";
 import type { WorkSession } from "../work-sessions/WorkSessionTypes";
 import type { Employee } from "../employees/EmployeeTypes";
+import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
 
 export const BROWSER_OFFICE_SESSION_STORAGE_KEY = "aiverse.office.session";
 export const BROWSER_OFFICE_SESSION_SCHEMA_VERSION = "browser-office-session-v1";
@@ -40,6 +41,7 @@ export type BrowserOfficeSessionSnapshot = {
   preparedWorkSessionRecords: Record<string, PreparedWorkSessionRecord>;
   preparedWorkSessionResultCollections: Record<string, PreparedWorkSessionResultCollection>;
   activeWorkSessionStartResultCollections: Record<string, ActiveWorkSessionStartResultCollection>;
+  externalProjectDevelopmentRequestDrafts?: ExternalProjectDevelopmentRequestDrafts;
   workSessions: Record<string, WorkSession[]>;
 };
 
@@ -68,5 +70,6 @@ export type BrowserOfficeSessionState = Pick<
   | "preparedWorkSessionRecords"
   | "preparedWorkSessionResultCollections"
   | "activeWorkSessionStartResultCollections"
+  | "externalProjectDevelopmentRequestDrafts"
   | "workSessions"
 >;

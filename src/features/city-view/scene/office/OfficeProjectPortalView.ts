@@ -63,6 +63,10 @@ import {
 import { createCompanyDashboardPanelRows } from "./dashboard/CompanyDashboardView";
 import { FIFTH_EMPLOYEE_ID } from "./employees/EmployeeRecruitmentService";
 import type { Employee } from "./employees/EmployeeTypes";
+import {
+  createExternalProjectDevelopmentRequestDisplayRows,
+  type ExternalProjectDevelopmentRequestDisplayRows,
+} from "./external-development-requests/ExternalProjectDevelopmentRequestView";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { createIssueSyncDisplayRows, type IssueSyncDisplayRows } from "./issue-sync/IssueSyncView";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
@@ -574,6 +578,9 @@ export class OfficeProjectPortalView {
         latestPostValidationReviewTargetResult,
       )
       : undefined;
+    const developmentRequestRows = createExternalProjectDevelopmentRequestDisplayRows(
+      dashboardProjectId ? state.externalProjectDevelopmentRequestDrafts[dashboardProjectId] : undefined,
+    );
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -596,6 +603,7 @@ export class OfficeProjectPortalView {
         reviewFixRuntimeRows,
         validationRuntimeRows,
         postValidationReviewTargetRows,
+        developmentRequestRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -1136,6 +1144,7 @@ function createProjectDashboardLowerRows(
   reviewFixRuntimeRows?: ReviewFixRuntimeDisplayRows,
   validationRuntimeRows?: ValidationRuntimeDisplayRows,
   postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
+  developmentRequestRows?: ExternalProjectDevelopmentRequestDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -1324,6 +1333,15 @@ function createProjectDashboardLowerRows(
       text: `[RE-REVIEW] ${postValidationReviewTargetRows.statusText}`,
       maxLines: 1,
       dropPriority: 23,
+      usePriorityFit: true,
+    });
+  }
+
+  if (developmentRequestRows) {
+    lowerRows.push({
+      text: `[DEV REQUEST] ${developmentRequestRows.statusText}; ${developmentRequestRows.contextText}; ${developmentRequestRows.boundaryText}`,
+      maxLines: 2,
+      dropPriority: 8,
       usePriorityFit: true,
     });
   }

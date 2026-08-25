@@ -13,7 +13,12 @@ import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
-import { EXTERNAL_PROJECT_DRAFT_ID, addExternalProjectDraftToState, createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import {
+  EXTERNAL_PROJECT_DRAFT_ID,
+  addExternalProjectDraftToState,
+  applyExternalProjectDraftRepositoryIdentityChoiceToState,
+  createProjectPortalState,
+} from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
@@ -214,6 +219,83 @@ describe("OfficeProjectPortalController project dashboard", () => {
         name: "AIverse",
         connectionState: "Configured",
       },
+    });
+  });
+
+  it("creates an external project development request draft from a configured draft dashboard", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(Object.keys(state.externalProjectDevelopmentRequestDrafts)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
+    expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      status: "Draft",
+      title: "Development request for External Project Draft",
+      repositoryProvider: "local",
+      repositoryOwner: "AIverse",
+      repositoryName: "AIverse",
+      branchName: "codex/126-external-project-repository-identity-edit-overlay",
+      specPath: "specs/126-external-project-repository-identity-edit-overlay/spec.md",
+    });
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.repositorySyncSnapshots[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(state.issueSyncCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+  });
+
+  it("reuses the existing external project development request draft on repeated dashboard activation", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    const firstDraft = state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID];
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(Object.keys(state.externalProjectDevelopmentRequestDrafts)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
+    expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.id).toBe(firstDraft?.id);
+    expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.createdAt).toBe(firstDraft?.createdAt);
+  });
+
+  it("persists external project development request drafts through browser session state", () => {
+    const storage = createMemoryStorage();
+    const state = createProjectPortalState({ browserOfficeSessionService: false });
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.browserOfficeSessionService = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-08-24T00:00:00.000Z",
+    });
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    const restored = new BrowserOfficeSessionService({ storage }).restoreState(
+      createProjectPortalState({ browserOfficeSessionService: false }),
+    );
+    expect(restored.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      status: "Draft",
+      repositoryProvider: "local",
+      repositoryOwner: "AIverse",
+      repositoryName: "AIverse",
     });
   });
 
