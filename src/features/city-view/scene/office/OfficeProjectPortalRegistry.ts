@@ -13,6 +13,10 @@ import { toProjectPortalProject, toRepositoryMapping } from "./project-registry/
 import { ProjectRegistryService } from "./project-registry/ProjectRegistryService";
 import type { LocalProjectRepositoryBinding, ProjectRegistryEntry } from "./project-registry/ProjectRegistryTypes";
 
+export const EXTERNAL_PROJECT_DRAFT_ID = "external-project-draft";
+
+const EXTERNAL_PROJECT_DRAFT_CREATED_AT = "2026-08-24T00:00:00.000Z";
+
 const DEFAULT_LOCAL_REPOSITORY_BINDINGS: LocalProjectRepositoryBinding[] = [
   {
     projectId: "daily-proof",
@@ -194,6 +198,58 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     ? undefined
     : options.browserOfficeSessionService ?? createBrowserOfficeSessionService();
   return browserOfficeSessionService?.restoreState(state) ?? state;
+}
+
+export function createExternalProjectDraftEntry(): ProjectRegistryEntry {
+  return {
+    id: EXTERNAL_PROJECT_DRAFT_ID,
+    displayName: "External Project Draft",
+    shortDescription: "Draft external project awaiting repository details.",
+    lifecycleStatus: "Planned",
+    projectType: "External",
+    localRepository: {
+      connected: false,
+      label: "Not connected",
+    },
+    repositoryIdentity: {
+      provider: "local",
+      connectionState: "Unknown",
+    },
+    owner: {
+      companyName: "AIverse External",
+    },
+    createdAt: EXTERNAL_PROJECT_DRAFT_CREATED_AT,
+    lastActivityAt: EXTERNAL_PROJECT_DRAFT_CREATED_AT,
+  };
+}
+
+export function addExternalProjectDraftToState(state: ProjectPortalState): ProjectPortalState {
+  const existingEntry = state.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID);
+  const registryEntries = existingEntry
+    ? state.projectRegistryEntries
+    : [...state.projectRegistryEntries, createExternalProjectDraftEntry()];
+
+  state.projectRegistryEntries = registryEntries.map((entry) => ({
+    ...entry,
+    localRepository: { ...entry.localRepository },
+    ...(entry.localRepositoryBinding ? { localRepositoryBinding: { ...entry.localRepositoryBinding } } : {}),
+    ...(entry.remoteRepository ? { remoteRepository: { ...entry.remoteRepository } } : {}),
+    repositoryIdentity: { ...entry.repositoryIdentity },
+    owner: { ...entry.owner },
+  }));
+  state.projects = state.projectRegistryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices()));
+  state.repositoryMappings = createRepositoryMappings(state.projectRegistryEntries);
+  state.selectedProjectIndex = state.projects.findIndex((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID);
+  state.selectedProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+  state.selectedWorkspaceSectionIndex = 0;
+  state.selectedRepositoryProjectId = undefined;
+  state.selectedTaskProjectId = undefined;
+  state.selectedTaskId = undefined;
+  state.selectedTaskIndex = 0;
+  state.selectedEmployeeIndex = 0;
+  state.selectedWorkSessionId = undefined;
+
+  return state;
 }
 
 function createRepositoryMappings(registryEntries: ReadonlyArray<ProjectRegistryEntry>): AIverseProjectRepositoryMapping[] {

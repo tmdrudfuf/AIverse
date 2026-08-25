@@ -213,8 +213,10 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 44, this.panelY + 200, wrapText(`[BLOCKED] ${dashboardRows.bottleneckText.replace("Bottleneck: ", "")}`, 38), mutedStyle());
     this.addText(this.panelX + 360, this.panelY + 200, wrapText(`[RISK] ${dashboardRows.riskText.replace("Risk: ", "")}`, 36), mutedStyle());
     this.addText(this.panelX + 44, this.panelY + 224, wrapText(dashboardRows.productivityText, 82), mutedStyle());
+    const addExternalProjectMarker = state.selectedProjectIndex === -3 ? ">" : " ";
+    this.addText(this.panelX + 44, this.panelY + 248, wrapText(`${addExternalProjectMarker} [ADD] External project draft`, 38), rowStyle(true, state.selectedProjectIndex === -3));
     const recruitMarker = state.selectedProjectIndex === -2 ? ">" : " ";
-    this.addText(this.panelX + 44, this.panelY + 248, wrapText(`${recruitMarker} ${getRecruitingActionText(state)}`, 38), rowStyle(true, state.selectedProjectIndex === -2));
+    this.addText(this.panelX + 360, this.panelY + 224, wrapText(`${recruitMarker} ${getRecruitingActionText(state)}`, 38), rowStyle(true, state.selectedProjectIndex === -2));
     const focusMarker = state.selectedProjectIndex === -1 ? ">" : " ";
     this.addText(this.panelX + 360, this.panelY + 248, wrapText(`${focusMarker} [FOCUS] ${dashboardRows.focusText.replace("Focus: ", "")}`, 38), rowStyle(true, state.selectedProjectIndex === -1));
     this.addText(this.panelX + 44, this.panelY + DASHBOARD_SUMMARY_Y, summaryText, mutedStyle());

@@ -13,8 +13,10 @@ import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
-import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import { EXTERNAL_PROJECT_DRAFT_ID, createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
+import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
 import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjectDashboardProvider";
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
@@ -28,6 +30,76 @@ import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import { WorkstationOccupancyService } from "./workstations/WorkstationOccupancyService";
 
 describe("OfficeProjectPortalController project dashboard", () => {
+  it("adds and selects an external project draft from the Company Dashboard flow", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.selectedProjectIndex = -3;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.selectedProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+    expect(state.selectedProjectIndex).toBe(state.projects.findIndex((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID));
+    expect(state.projectRegistryEntries.filter((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      id: EXTERNAL_PROJECT_DRAFT_ID,
+      name: "External Project Draft",
+      status: "Planned",
+      type: "External",
+      enabled: false,
+      ownerCompany: "AIverse External",
+      localRepositoryLabel: "Not connected",
+      repositoryIdentity: {
+        provider: "local",
+        connectionState: "Unknown",
+      },
+    });
+    expect(state.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
+    expect(internals.view.render).toHaveBeenCalled();
+  });
+
+  it("reselects the existing external project draft instead of creating duplicates", () => {
+    const state = createProjectPortalState();
+    state.isOpen = true;
+    state.justOpened = false;
+    state.selectedProjectIndex = -3;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    state.selectedProjectIndex = -3;
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.projectRegistryEntries.filter((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(state.projects.filter((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(state.selectedProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+  });
+
+  it("persists the external project draft through browser session state", () => {
+    const storage = createMemoryStorage();
+    const state = createProjectPortalState({ browserOfficeSessionService: false });
+    state.isOpen = true;
+    state.justOpened = false;
+    state.selectedProjectIndex = -3;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.browserOfficeSessionService = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-08-24T00:00:00.000Z",
+    });
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    const restored = new BrowserOfficeSessionService({ storage }).restoreState(
+      createProjectPortalState({ browserOfficeSessionService: false }),
+    );
+    expect(restored.projectRegistryEntries.filter((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(restored.projects.filter((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(restored.selectedProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+    expect(restored.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
+  });
+
   it("opens a selected project dashboard from the Company Dashboard flow", async () => {
     const state = createProjectPortalState();
     state.isOpen = true;
@@ -718,6 +790,7 @@ type ControllerInternals = {
   companyInfluencePlanningService: CompanyInfluencePlanningService;
   aiService: ReturnType<typeof createMockAIService>;
   aiProjectManagerService: AIProjectManagerService;
+  browserOfficeSessionService?: BrowserOfficeSessionService;
   repositoryRequestVersion: number;
   repositorySyncRequestVersion: number;
   issueSyncRequestVersion: number;
@@ -777,6 +850,16 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.projectManagerRequestVersion = 0;
 
   return controller;
+}
+
+function createMemoryStorage(): BrowserOfficeSessionStorage {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+  };
 }
 
 function createRepositorySyncSnapshot(): RepositorySyncSnapshot {

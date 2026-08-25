@@ -126,7 +126,7 @@ import type { CompanyFocusId, CompanyFocusSummary } from "./influence/CompanyInf
 import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
-import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import { addExternalProjectDraftToState, createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
@@ -432,7 +432,7 @@ export class OfficeProjectPortalController {
     this.state.isOpen = true;
     this.state.justOpened = true;
     this.state.viewMode = "list";
-    this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, -2, this.state.projects.length - 1);
+    this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, -3, this.state.projects.length - 1);
     this.state.selectedProjectId = this.state.projects[this.state.selectedProjectIndex]?.id ?? "";
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
@@ -904,6 +904,11 @@ export class OfficeProjectPortalController {
         void this.recruitFifthEmployee().then((handled) => {
           if (handled) this.view.render(this.state);
         });
+        return;
+      }
+
+      if (this.state.selectedProjectIndex === -3) {
+        this.addExternalProjectDraft();
         return;
       }
 
@@ -3665,7 +3670,7 @@ export class OfficeProjectPortalController {
   }
 
   private moveProjectSelection(delta: number) {
-    const nextIndex = clamp(this.state.selectedProjectIndex + delta, -2, this.state.projects.length - 1);
+    const nextIndex = clamp(this.state.selectedProjectIndex + delta, -3, this.state.projects.length - 1);
     if (nextIndex === this.state.selectedProjectIndex) return;
 
     this.state.selectedProjectIndex = nextIndex;
@@ -3682,6 +3687,18 @@ export class OfficeProjectPortalController {
     this.taskAnalysisRequestVersion += 1;
     this.employeeRecommendationRequestVersion += 1;
     this.projectManagerRequestVersion += 1;
+    this.view.render(this.state);
+  }
+
+  private addExternalProjectDraft() {
+    addExternalProjectDraftToState(this.state);
+    this.taskRequestVersion += 1;
+    this.employeeRequestVersion += 1;
+    this.taskAnalysisRequestVersion += 1;
+    this.employeeRecommendationRequestVersion += 1;
+    this.projectManagerRequestVersion += 1;
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
   }
 
