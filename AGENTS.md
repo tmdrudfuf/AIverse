@@ -74,5 +74,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/122-city-canvas-read-only-e2e-state/plan.md
+shell commands, and other important information, read specs/123-browser-persisted-external-project-registration-state/plan.md
 <!-- SPECKIT END -->

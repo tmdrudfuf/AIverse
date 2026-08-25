@@ -1,4 +1,11 @@
 import type { ProjectPortalState } from "../OfficeProjectPortalTypes";
+import { toProjectPortalProject, toRepositoryMapping } from "../project-registry/ProjectRegistryAdapters";
+import type {
+  NormalizedLocalProjectRepositoryBinding,
+  ProjectRegistryEntry,
+  ProjectRegistryRepositoryConnectionState,
+  ProjectRegistryRepositoryIdentity,
+} from "../project-registry/ProjectRegistryTypes";
 import {
   BROWSER_OFFICE_SESSION_SCHEMA_VERSION,
   BROWSER_OFFICE_SESSION_STORAGE_KEY,
@@ -43,6 +50,7 @@ export class BrowserOfficeSessionService {
     state.selectedProjectDashboardProjectId = snapshot.selectedProjectDashboardProjectId;
     state.selectedProjectDashboardActiveWorkIndex = clampIndex(snapshot.selectedProjectDashboardActiveWorkIndex);
     state.selectedWorkSessionId = snapshot.selectedWorkSessionId;
+    restoreProjectRegistryEntries(state, snapshot.projectRegistryEntries);
     state.candidateTaskCollections = clone(snapshot.candidateTaskCollections);
     state.candidateAssignmentCollections = clone(snapshot.candidateAssignmentCollections);
     state.candidatePromotionReviewCollections = clone(snapshot.candidatePromotionReviewCollections);
@@ -73,6 +81,7 @@ export class BrowserOfficeSessionService {
       selectedProjectDashboardProjectId: state.selectedProjectDashboardProjectId,
       selectedProjectDashboardActiveWorkIndex: clampIndex(state.selectedProjectDashboardActiveWorkIndex),
       selectedWorkSessionId: state.selectedWorkSessionId,
+      projectRegistryEntries: cloneProjectRegistryEntries(state.projectRegistryEntries),
       candidateTaskCollections: clone(state.candidateTaskCollections),
       candidateAssignmentCollections: clone(state.candidateAssignmentCollections),
       candidatePromotionReviewCollections: clone(state.candidatePromotionReviewCollections),
@@ -119,6 +128,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     isOptionalString(value.selectedProjectDashboardProjectId) &&
     isOptionalString(value.selectedWorkSessionId) &&
     (value.selectedProjectDashboardActiveWorkIndex === undefined || typeof value.selectedProjectDashboardActiveWorkIndex === "number") &&
+    (value.projectRegistryEntries === undefined || Array.isArray(value.projectRegistryEntries)) &&
     isRecordOfRecords(value.candidateTaskCollections) &&
     isRecordOfRecords(value.candidateAssignmentCollections) &&
     isRecordOfRecords(value.candidatePromotionReviewCollections) &&
@@ -165,6 +175,119 @@ function isResultCollectionRecord(value: unknown) {
 
 function isOptionalString(value: unknown) {
   return value === undefined || typeof value === "string";
+}
+
+function restoreProjectRegistryEntries(
+  state: ProjectPortalState,
+  savedEntries: ProjectRegistryEntry[] | undefined,
+) {
+  if (!savedEntries) return;
+
+  const validSavedEntries = savedEntries.filter(isProjectRegistryEntry).map(cloneProjectRegistryEntry);
+  if (!validSavedEntries.length) return;
+
+  const entriesById = new Map(state.projectRegistryEntries.map((entry) => [entry.id, cloneProjectRegistryEntry(entry)]));
+  for (const entry of validSavedEntries) {
+    entriesById.set(entry.id, cloneProjectRegistryEntry(entry));
+  }
+
+  const registryEntries = Array.from(entriesById.values());
+  state.projectRegistryEntries = registryEntries.map(cloneProjectRegistryEntry);
+  state.projects = registryEntries.map((entry) => toProjectPortalProject(entry, clone(state.services)));
+  state.repositoryMappings = registryEntries
+    .map((entry) => toRepositoryMapping(entry))
+    .filter((mapping): mapping is ProjectPortalState["repositoryMappings"][number] => Boolean(mapping));
+}
+
+function cloneProjectRegistryEntries(entries: ReadonlyArray<ProjectRegistryEntry>): ProjectRegistryEntry[] {
+  return entries.map(cloneProjectRegistryEntry);
+}
+
+function cloneProjectRegistryEntry(entry: ProjectRegistryEntry): ProjectRegistryEntry {
+  return {
+    ...entry,
+    localRepository: { ...entry.localRepository },
+    ...(entry.localRepositoryBinding ? { localRepositoryBinding: { ...entry.localRepositoryBinding } } : {}),
+    ...(entry.remoteRepository ? { remoteRepository: { ...entry.remoteRepository } } : {}),
+    repositoryIdentity: { ...entry.repositoryIdentity },
+    owner: { ...entry.owner },
+  };
+}
+
+function isProjectRegistryEntry(value: unknown): value is ProjectRegistryEntry {
+  if (!isRecord(value)) return false;
+  return (
+    isNonEmptyString(value.id) &&
+    isNonEmptyString(value.displayName) &&
+    typeof value.shortDescription === "string" &&
+    isProjectLifecycleStatus(value.lifecycleStatus) &&
+    isNonEmptyString(value.projectType) &&
+    isLocalRepository(value.localRepository) &&
+    (value.localRepositoryBinding === undefined || isNormalizedLocalProjectRepositoryBinding(value.localRepositoryBinding)) &&
+    (value.remoteRepository === undefined || isRemoteRepository(value.remoteRepository)) &&
+    isRepositoryIdentity(value.repositoryIdentity) &&
+    isOwner(value.owner) &&
+    typeof value.createdAt === "string" &&
+    typeof value.lastActivityAt === "string"
+  );
+}
+
+function isProjectLifecycleStatus(value: unknown) {
+  return value === "Active" || value === "Planned" || value === "Coming Soon";
+}
+
+function isLocalRepository(value: unknown) {
+  return isRecord(value) && typeof value.connected === "boolean" && typeof value.label === "string";
+}
+
+function isNormalizedLocalProjectRepositoryBinding(value: unknown): value is NormalizedLocalProjectRepositoryBinding {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.projectId) &&
+    isNonEmptyString(value.repositoryPath) &&
+    isNonEmptyString(value.worktreePath) &&
+    isOptionalString(value.branchName) &&
+    isOptionalString(value.specPath) &&
+    isOptionalString(value.source) &&
+    isOptionalString(value.boundAt)
+  );
+}
+
+function isRemoteRepository(value: unknown) {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.owner) &&
+    isNonEmptyString(value.name) &&
+    isOptionalString(value.url) &&
+    (value.visibility === "public" || value.visibility === "private" || value.visibility === "unknown") &&
+    isOptionalString(value.defaultBranchHint)
+  );
+}
+
+function isRepositoryIdentity(value: unknown): value is ProjectRegistryRepositoryIdentity {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.provider) &&
+    isRepositoryConnectionState(value.connectionState) &&
+    isOptionalString(value.owner) &&
+    isOptionalString(value.name) &&
+    isOptionalString(value.defaultBranch) &&
+    isOptionalString(value.url) &&
+    isOptionalString(value.localPath) &&
+    isOptionalString(value.lastVerifiedAt)
+  );
+}
+
+function isRepositoryConnectionState(value: unknown): value is ProjectRegistryRepositoryConnectionState {
+  return value === "Configured" || value === "Available" || value === "Unavailable" || value === "Unknown";
+}
+
+function isOwner(value: unknown) {
+  return isRecord(value) && typeof value.companyName === "string";
+}
+
+function isNonEmptyString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 function clampIndex(value: number | undefined) {
