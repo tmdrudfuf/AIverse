@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import {
+  EXTERNAL_PROJECT_DRAFT_ID,
+  addExternalProjectDraftToState,
+  createProjectPortalState,
+} from "./OfficeProjectPortalRegistry";
 
 describe("createProjectPortalState", () => {
   it("derives all three projects from the project registry, in order", () => {
@@ -99,6 +103,31 @@ describe("createProjectPortalState", () => {
     expect(portalProject?.localRepositoryLabel).toBe("Bound (local)");
     expect(portalProject?.localRepositoryBinding).toEqual(binding);
     expect(portalProject?.repositoryIdentity?.localPath).toBe(binding.worktreePath);
+  });
+
+  it("adds one external project draft and derives a portal row without repository mapping", () => {
+    const state = createProjectPortalState();
+
+    addExternalProjectDraftToState(state);
+    addExternalProjectDraftToState(state);
+
+    expect(state.projectRegistryEntries.filter((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(state.projects.filter((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      name: "External Project Draft",
+      status: "Planned",
+      type: "External",
+      enabled: false,
+      description: "Draft external project awaiting repository details.",
+      ownerCompany: "AIverse External",
+      localRepositoryLabel: "Not connected",
+      repositoryIdentity: {
+        provider: "local",
+        connectionState: "Unknown",
+      },
+    });
+    expect(state.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
+    expect(state.selectedProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
   });
 
   it("returns independent state on every call", () => {
