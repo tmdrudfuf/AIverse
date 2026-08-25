@@ -13,7 +13,7 @@ import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
 import { OfficeProjectPortalController, type OfficeProjectPortalInput } from "./OfficeProjectPortalController";
-import { EXTERNAL_PROJECT_DRAFT_ID, createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import { EXTERNAL_PROJECT_DRAFT_ID, addExternalProjectDraftToState, createProjectPortalState } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
@@ -98,6 +98,123 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(restored.projects.filter((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toHaveLength(1);
     expect(restored.selectedProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
     expect(restored.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
+  });
+
+  it("opens the external project repository identity edit overlay from the draft dashboard and applies a choice", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(state.viewMode).toBe("repository-identity-edit");
+    expect(state.selectedRepositoryIdentityChoiceIndex).toBe(2);
+
+    state.selectedRepositoryIdentityChoiceIndex = 0;
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedProjectDashboardProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+    expect(state.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      localRepository: {
+        connected: true,
+        label: "Bound (local)",
+      },
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)?.localRepositoryLabel).toBe("Bound (local)");
+  });
+
+  it("cancels the external project repository identity edit overlay without mutation", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "repository-identity-edit";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    state.selectedRepositoryIdentityChoiceIndex = 0;
+    const before = JSON.stringify(state.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID));
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ escapePressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(JSON.stringify(state.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID))).toBe(before);
+  });
+
+  it("persists edited external project repository identity through browser session state", () => {
+    const storage = createMemoryStorage();
+    const state = createProjectPortalState({ browserOfficeSessionService: false });
+    addExternalProjectDraftToState(state);
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "repository-identity-edit";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    state.selectedRepositoryIdentityChoiceIndex = 0;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.browserOfficeSessionService = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-08-24T00:00:00.000Z",
+    });
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    const restored = new BrowserOfficeSessionService({ storage }).restoreState(
+      createProjectPortalState({ browserOfficeSessionService: false }),
+    );
+    const restoredDraft = restored.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID);
+    expect(restoredDraft).toMatchObject({
+      localRepository: {
+        connected: true,
+        label: "Bound (local)",
+      },
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
+    expect(restored.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)?.localRepositoryLabel).toBe("Bound (local)");
+  });
+
+  it("applies external project repository identity from the dashboard without changing project-list selection", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "repository-identity-edit";
+    state.selectedProjectIndex = 0;
+    state.selectedProjectId = "daily-proof";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    state.selectedRepositoryIdentityChoiceIndex = 0;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedProjectDashboardProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+    expect(state.selectedProjectIndex).toBe(0);
+    expect(state.selectedProjectId).toBe("daily-proof");
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      localRepositoryLabel: "Bound (local)",
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
   });
 
   it("opens a selected project dashboard from the Company Dashboard flow", async () => {

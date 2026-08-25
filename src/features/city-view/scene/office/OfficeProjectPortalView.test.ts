@@ -28,6 +28,7 @@ import type {
 import type { RuntimePreflightResultCollection } from "./runtime-preflight/RuntimePreflightTypes";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { OfficeProjectPortalView } from "./OfficeProjectPortalView";
+import { EXTERNAL_PROJECT_DRAFT_ID } from "./OfficeProjectPortalRegistry";
 import type { PreparedWorkSessionResultCollection } from "./prepared-work-sessions/PreparedWorkSessionTypes";
 import type { RuntimeStartResultCollection } from "./runtime-start/RuntimeStartTypes";
 import type { ImplementerRuntimeResultCollection } from "./implementer-runtime/ImplementerRuntimeTypes";
@@ -85,6 +86,42 @@ describe("OfficeProjectPortalView", () => {
     new OfficeProjectPortalView(scene, state);
 
     expect(renderedText.map((item) => item.text)).toContain("> [RECRUIT] Recruit fifth employee");
+  });
+
+  it("renders the external project repository identity edit overlay choices", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "repository-identity-edit" });
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    state.selectedRepositoryIdentityChoiceIndex = 1;
+    state.projects = [{
+      id: EXTERNAL_PROJECT_DRAFT_ID,
+      name: "External Project Draft",
+      status: "Planned",
+      type: "External",
+      enabled: false,
+      description: "Draft external project awaiting repository details.",
+      linkedServices: [],
+      nextAction: {
+        label: "Coming soon",
+        enabled: false,
+        placeholder: true,
+      },
+      localRepositoryLabel: "Not connected",
+      repositoryIdentity: {
+        provider: "local",
+        connectionState: "Unknown",
+      },
+    }];
+
+    new OfficeProjectPortalView(scene, state);
+
+    const text = renderedText.map((item) => item.text);
+    expect(text).toContain("Repository Identity");
+    expect(text).toContain("[CURRENT]");
+    expect(text).toContain("Repo: Not yet known (Local)");
+    expect(text).toContain("> GitHub AIverse identity");
+    expect(text).toContain("Metadata only. No filesystem, GitHub, runtime, or repository mutation.");
   });
 
   it("renders the completed fifth employee recruiting action after recruitment", () => {
@@ -2184,6 +2221,7 @@ function createPortalState(options: {
     selectedProjectIndex: 0,
     selectedProjectId: "daily-proof",
     selectedWorkspaceSectionIndex: 0,
+    selectedRepositoryIdentityChoiceIndex: 0,
     selectedTaskIndex: 0,
     selectedEmployeeIndex: 0,
     selectedCandidatePromotionIndex: 0,
