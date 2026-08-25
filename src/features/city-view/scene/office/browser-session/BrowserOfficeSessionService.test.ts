@@ -83,6 +83,21 @@ describe("BrowserOfficeSessionService", () => {
       status: "running",
       startedAt: "2026-08-17T00:00:00.000Z",
     }];
+    source.externalProjectAdosRunPreparations["external-crm"] = {
+      id: "external-crm:external-ados-run-preparation",
+      projectId: "external-crm",
+      developmentRequestDraftId: "external-crm:external-development-request-draft",
+      status: "Prepared",
+      featureBranch: "codex/128-external-project-ados-run-preparation",
+      authoritativeBaseSha: "3193608fd10aaa08cc0709f2be3a579b87f1d03c",
+      specPath: "specs/128-external-project-ados-run-preparation/spec.md",
+      validationCommands: ["npm test", "npx tsc --noEmit"],
+      reviewerCommand: "claude -p",
+      executionPolicyVersion: 1,
+      createdAt: "2026-08-24T00:00:00.000Z",
+      updatedAt: "2026-08-24T00:00:00.000Z",
+      sideEffectBoundary: "Local preparation only.",
+    };
 
     expect(service.saveState(source)).toBe(true);
 
@@ -109,6 +124,12 @@ describe("BrowserOfficeSessionService", () => {
     });
     expect(restored.taskCollections["daily-proof"]?.tasks[0]?.status).toBe("In Progress");
     expect(restored.employees[0]).toMatchObject({ id: "gpt-engineer", status: "Working" });
+    expect(restored.externalProjectAdosRunPreparations["external-crm"]).toMatchObject({
+      projectId: "external-crm",
+      status: "Prepared",
+      featureBranch: "codex/128-external-project-ados-run-preparation",
+      reviewerCommand: "claude -p",
+    });
     expect(restored.workSessions["task-1"]?.[0]?.id).toBe("session-1");
   });
 

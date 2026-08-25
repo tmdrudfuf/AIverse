@@ -7,6 +7,10 @@ import { createCandidateTaskDisplayRows, type CandidateTaskDisplayRows } from ".
 import type { CandidateTask } from "./candidate-tasks/CandidateTaskTypes";
 import { createConfirmedEmployeeAssignmentDisplayRows, type ConfirmedEmployeeAssignmentDisplayRows } from "./confirmed-assignments/ConfirmedEmployeeAssignmentView";
 import { parsePromotedProjectTaskProvenance } from "./confirmed-assignments/ConfirmedEmployeeAssignmentService";
+import {
+  createExternalProjectAdosRunPreparationDisplayRows,
+  type ExternalProjectAdosRunPreparationDisplayRows,
+} from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationView";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
 import { resolveCurrentExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
@@ -582,6 +586,10 @@ export class OfficeProjectPortalView {
     const developmentRequestRows = createExternalProjectDevelopmentRequestDisplayRows(
       dashboardProjectId ? developmentRequestDrafts[dashboardProjectId] : undefined,
     );
+    const adosRunPreparations = state.externalProjectAdosRunPreparations ?? {};
+    const adosRunPreparationRows = createExternalProjectAdosRunPreparationDisplayRows(
+      dashboardProjectId ? adosRunPreparations[dashboardProjectId] : undefined,
+    );
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -605,6 +613,7 @@ export class OfficeProjectPortalView {
         validationRuntimeRows,
         postValidationReviewTargetRows,
         developmentRequestRows,
+        adosRunPreparationRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -1146,6 +1155,7 @@ function createProjectDashboardLowerRows(
   validationRuntimeRows?: ValidationRuntimeDisplayRows,
   postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
   developmentRequestRows?: ExternalProjectDevelopmentRequestDisplayRows,
+  adosRunPreparationRows?: ExternalProjectAdosRunPreparationDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -1341,6 +1351,15 @@ function createProjectDashboardLowerRows(
   if (developmentRequestRows) {
     lowerRows.push({
       text: `[DEV REQUEST] ${developmentRequestRows.statusText}; ${developmentRequestRows.contextText}; ${developmentRequestRows.boundaryText}`,
+      maxLines: 2,
+      dropPriority: 8,
+      usePriorityFit: true,
+    });
+  }
+
+  if (adosRunPreparationRows) {
+    lowerRows.push({
+      text: `[ADOS PREP] ${adosRunPreparationRows.statusText}; ${adosRunPreparationRows.contextText}; ${adosRunPreparationRows.boundaryText}`,
       maxLines: 2,
       dropPriority: 8,
       usePriorityFit: true,

@@ -36,6 +36,10 @@ import { EmployeeSimulationService } from "./employees/EmployeeSimulationService
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
 import {
+  canCreateExternalProjectAdosRunPreparation,
+  createExternalProjectAdosRunPreparation,
+} from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
+import {
   canCreateExternalProjectDevelopmentRequestDraft,
   createExternalProjectDevelopmentRequestDraft,
 } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
@@ -1191,6 +1195,11 @@ export class OfficeProjectPortalController {
 
     if (input.actionPressed || input.enterPressed) {
       if (this.openExternalProjectRepositoryIdentityEdit()) {
+        this.view.render(this.state);
+        return;
+      }
+
+      if (this.createExternalProjectAdosRunPreparation()) {
         this.view.render(this.state);
         return;
       }
@@ -3789,6 +3798,27 @@ export class OfficeProjectPortalController {
         project,
         existingDraft: this.state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID],
       }),
+    };
+    this.persistBrowserOfficeSession();
+    return true;
+  }
+
+  private createExternalProjectAdosRunPreparation() {
+    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
+
+    const developmentRequestDraft = this.state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID];
+    if (!canCreateExternalProjectAdosRunPreparation(developmentRequestDraft)) return false;
+
+    const preparation = createExternalProjectAdosRunPreparation({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      developmentRequestDraft,
+      existingPreparation: this.state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID],
+    });
+    if (!preparation) return false;
+
+    this.state.externalProjectAdosRunPreparations = {
+      ...this.state.externalProjectAdosRunPreparations,
+      [EXTERNAL_PROJECT_DRAFT_ID]: preparation,
     };
     this.persistBrowserOfficeSession();
     return true;
