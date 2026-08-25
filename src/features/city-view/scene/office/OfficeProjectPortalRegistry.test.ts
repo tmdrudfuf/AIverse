@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   EXTERNAL_PROJECT_DRAFT_ID,
+  applyExternalProjectDraftRepositoryIdentityChoiceToState,
   addExternalProjectDraftToState,
   createProjectPortalState,
 } from "./OfficeProjectPortalRegistry";
@@ -128,6 +129,57 @@ describe("createProjectPortalState", () => {
     });
     expect(state.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
     expect(state.selectedProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+  });
+
+  it("applies and clears external draft repository identity choices through derived portal state", () => {
+    const state = createProjectPortalState();
+
+    addExternalProjectDraftToState(state);
+
+    expect(applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree")).toBe(true);
+    expect(state.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      localRepository: {
+        connected: true,
+        label: "Bound (local)",
+      },
+      localRepositoryBinding: {
+        projectId: EXTERNAL_PROJECT_DRAFT_ID,
+        worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-repository-identity-edit-overlay",
+        branchName: "codex/126-external-project-repository-identity-edit-overlay",
+      },
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      localRepositoryLabel: "Bound (local)",
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
+    expect(state.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
+
+    expect(applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-unknown")).toBe(true);
+    const resetEntry = state.projectRegistryEntries.find((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID);
+    expect(resetEntry).toMatchObject({
+      localRepository: {
+        connected: false,
+        label: "Not connected",
+      },
+      repositoryIdentity: {
+        provider: "local",
+        connectionState: "Unknown",
+      },
+    });
+    expect(resetEntry?.localRepositoryBinding).toBeUndefined();
+    expect(resetEntry?.remoteRepository).toBeUndefined();
+    expect(state.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
   });
 
   it("returns independent state on every call", () => {

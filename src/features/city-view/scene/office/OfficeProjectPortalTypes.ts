@@ -91,6 +91,7 @@ export type ProjectPortalViewMode =
   | "list"
   | "detail"
   | "workspace"
+  | "repository-identity-edit"
   | "repository-detail"
   | "task-list"
   | "task-detail"
@@ -170,6 +171,7 @@ export type ProjectPortalState = {
   selectedProjectIndex: number;
   selectedProjectId: string;
   selectedWorkspaceSectionIndex: number;
+  selectedRepositoryIdentityChoiceIndex: number;
   selectedRepositoryProjectId?: string;
   selectedTaskProjectId?: string;
   selectedTaskIndex: number;

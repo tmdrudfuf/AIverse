@@ -126,7 +126,13 @@ import type { CompanyFocusId, CompanyFocusSummary } from "./influence/CompanyInf
 import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
-import { addExternalProjectDraftToState, createProjectPortalState } from "./OfficeProjectPortalRegistry";
+import {
+  EXTERNAL_PROJECT_DRAFT_ID,
+  EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES,
+  addExternalProjectDraftToState,
+  applyExternalProjectDraftRepositoryIdentityChoiceToState,
+  createProjectPortalState,
+} from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
@@ -459,6 +465,11 @@ export class OfficeProjectPortalController {
 
     if (this.state.viewMode === "workspace") {
       this.updateWorkspaceInput(input);
+      return;
+    }
+
+    if (this.state.viewMode === "repository-identity-edit") {
+      this.updateRepositoryIdentityEditInput(input);
       return;
     }
 
@@ -932,6 +943,7 @@ export class OfficeProjectPortalController {
       this.state.selectedCandidatePromotionIndex = 0;
       this.state.selectedCandidateTaskId = undefined;
       this.state.projectDashboardSnapshot = undefined;
+      this.state.selectedRepositoryIdentityChoiceIndex = 0;
       this.repositorySyncRequestVersion += 1;
       this.issueSyncRequestVersion += 1;
       this.refreshCompanyDashboardSnapshot();
@@ -1174,6 +1186,11 @@ export class OfficeProjectPortalController {
     }
 
     if (input.actionPressed || input.enterPressed) {
+      if (this.openExternalProjectRepositoryIdentityEdit()) {
+        this.view.render(this.state);
+        return;
+      }
+
       if (this.openSelectedProjectDashboardActiveWorkTask()) {
         this.view.render(this.state);
         return;
@@ -1266,6 +1283,30 @@ export class OfficeProjectPortalController {
       if (section.id === "tasks") {
         void this.openTaskList(project.id);
       }
+    }
+  }
+
+  private updateRepositoryIdentityEditInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "project-dashboard";
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.upPressed) this.moveRepositoryIdentityChoiceSelection(-1);
+    if (input.downPressed) this.moveRepositoryIdentityChoiceSelection(1);
+
+    if (input.actionPressed || input.enterPressed) {
+      const choice = EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES[this.state.selectedRepositoryIdentityChoiceIndex];
+      if (!choice) return;
+      const applied = applyExternalProjectDraftRepositoryIdentityChoiceToState(this.state, choice.id);
+      if (!applied) return;
+      this.state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+      this.state.projectDashboardSnapshot = this.getProjectDashboardSnapshot(EXTERNAL_PROJECT_DRAFT_ID);
+      this.state.viewMode = "project-dashboard";
+      this.persistBrowserOfficeSession();
+      this.refreshCompanyDashboardSnapshot();
+      this.view.render(this.state);
     }
   }
 
@@ -3690,6 +3731,18 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
+  private moveRepositoryIdentityChoiceSelection(delta: number) {
+    const nextIndex = clamp(
+      this.state.selectedRepositoryIdentityChoiceIndex + delta,
+      0,
+      EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES.length - 1,
+    );
+    if (nextIndex === this.state.selectedRepositoryIdentityChoiceIndex) return;
+
+    this.state.selectedRepositoryIdentityChoiceIndex = nextIndex;
+    this.view.render(this.state);
+  }
+
   private addExternalProjectDraft() {
     addExternalProjectDraftToState(this.state);
     this.taskRequestVersion += 1;
@@ -3700,6 +3753,17 @@ export class OfficeProjectPortalController {
     this.persistBrowserOfficeSession();
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
+  }
+
+  private openExternalProjectRepositoryIdentityEdit() {
+    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
+    if (!this.state.projectRegistryEntries.some((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)) return false;
+
+    this.state.selectedRepositoryIdentityChoiceIndex = getCurrentRepositoryIdentityChoiceIndex(
+      this.state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)?.repositoryIdentity,
+    );
+    this.state.viewMode = "repository-identity-edit";
+    return true;
   }
 
   private moveWorkspaceSelection(delta: number) {
@@ -4399,6 +4463,18 @@ function getLatestTimestamp(timestamps: ReadonlyArray<string | undefined>, fallb
   }, undefined);
 
   return latestTimestamp ?? fallbackTimestamp;
+}
+
+function getCurrentRepositoryIdentityChoiceIndex(
+  identity: ProjectPortalState["projects"][number]["repositoryIdentity"],
+) {
+  const index = EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES.findIndex((choice) => (
+    choice.repositoryIdentity.provider === identity?.provider &&
+    choice.repositoryIdentity.owner === identity?.owner &&
+    choice.repositoryIdentity.name === identity?.name &&
+    choice.repositoryIdentity.connectionState === identity?.connectionState
+  ));
+  return index >= 0 ? index : 0;
 }
 
 function getNpcPositionZone(state: EmployeeSimulationSnapshot["currentState"]): EmployeeNpcPositionZone {

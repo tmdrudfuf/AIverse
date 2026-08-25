@@ -66,6 +66,7 @@ import type { Employee } from "./employees/EmployeeTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import { createIssueSyncDisplayRows, type IssueSyncDisplayRows } from "./issue-sync/IssueSyncView";
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
+import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPortalRegistry";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
 import { createRepositorySyncDisplayRows } from "./repository-sync/RepositorySyncView";
@@ -164,6 +165,11 @@ export class OfficeProjectPortalView {
 
     if (state.viewMode === "workspace") {
       this.renderWorkspace(state);
+      return;
+    }
+
+    if (state.viewMode === "repository-identity-edit") {
+      this.renderRepositoryIdentityEdit(state);
       return;
     }
 
@@ -771,6 +777,36 @@ export class OfficeProjectPortalView {
     this.addText(this.panelX + 28, this.panelY + 84, "Status: Error", headingStyle());
     this.addText(this.panelX + 28, this.panelY + 128, wrapAndClampText(summary.errorMessage ?? "Unable to load repository summary.", 78, 3), bodyStyle());
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Enter refresh", instructionStyle()).setOrigin(1, 0.5);
+  }
+
+  private renderRepositoryIdentityEdit(state: ProjectPortalState) {
+    const project = state.projects.find((item) => item.id === state.selectedProjectDashboardProjectId)
+      ?? state.projects[state.selectedProjectIndex];
+    const identity = project?.repositoryIdentity;
+
+    this.addText(this.panelX + 28, this.panelY + 24, "Repository Identity", titleStyle());
+    this.addText(this.panelX + 28, this.panelY + 64, compactTextLine(project?.name ?? "External Project Draft", 46), headingStyle());
+
+    this.addTerminalPanel(this.panelX + 20, this.panelY + 96, this.panelWidth - 40, 112);
+    this.addText(this.panelX + 36, this.panelY + 112, "[CURRENT]", headingStyle());
+    this.addText(this.panelX + 52, this.panelY + 144, compactTextLine(identity ? getRepositoryIdentityRepoText(identity) : "Repo: Not yet known (Local)", 78), bodyStyle());
+    this.addText(this.panelX + 52, this.panelY + 170, compactTextLine(identity ? getRepositoryIdentityStatusText(identity) : "Status: Unknown", 78), mutedStyle());
+
+    this.addText(this.panelX + 28, this.panelY + 232, "Choices", headingStyle());
+    EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES.forEach((choice, index) => {
+      const rowY = this.panelY + 266 + index * 44;
+      const marker = index === state.selectedRepositoryIdentityChoiceIndex ? ">" : " ";
+      this.addText(
+        this.panelX + 44,
+        rowY,
+        compactTextLine(`${marker} ${choice.label}`, 74),
+        rowStyle(true, index === state.selectedRepositoryIdentityChoiceIndex),
+      );
+      this.addText(this.panelX + 74, rowY + 20, compactTextLine(choice.summary, 76), mutedStyle());
+    });
+
+    this.addText(this.panelX + 28, this.panelY + 414, compactTextLine("Metadata only. No filesystem, GitHub, runtime, or repository mutation.", 82), mutedStyle());
+    this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc cancel  Up/Down select  Enter/Space apply", instructionStyle()).setOrigin(1, 0.5);
   }
 
   private renderConnectedRepositorySummary(summary: GitHubRepositorySummary) {
