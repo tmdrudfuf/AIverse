@@ -5,6 +5,7 @@ import type { CompanyProgressionSnapshot, CompanyProgressionTrigger } from "./pr
 import type { Employee } from "./employees/EmployeeTypes";
 import type { EmployeeRecruitmentResult } from "./employees/EmployeeRecruitmentService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
+import type { ExternalProjectDevelopmentRequestDrafts } from "./external-development-requests/ExternalProjectDevelopmentRequestTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
 import type { CandidateTaskCollection } from "./candidate-tasks/CandidateTaskTypes";
@@ -229,6 +230,7 @@ export type ProjectPortalState = {
   validationRuntimeResultCollections: Record<string, ValidationRuntimeResultCollection>;
   postValidationReviewTargetCollections: Record<string, PostValidationReviewTargetCollection>;
   postValidationReviewTargetResultCollections: Record<string, PostValidationReviewTargetResultCollection>;
+  externalProjectDevelopmentRequestDrafts: ExternalProjectDevelopmentRequestDrafts;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

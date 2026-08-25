@@ -249,6 +249,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     validationRuntimeResultCollections: {},
     postValidationReviewTargetCollections: {},
     postValidationReviewTargetResultCollections: {},
+    externalProjectDevelopmentRequestDrafts: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

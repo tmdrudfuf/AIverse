@@ -35,6 +35,10 @@ import { EmployeeService } from "./employees/EmployeeService";
 import { EmployeeSimulationService } from "./employees/EmployeeSimulationService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import { MockEmployeeProvider } from "./employees/MockEmployeeProvider";
+import {
+  canCreateExternalProjectDevelopmentRequestDraft,
+  createExternalProjectDevelopmentRequestDraft,
+} from "./external-development-requests/ExternalProjectDevelopmentRequestService";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
 import { createExecutionPlanCollection, resolveCurrentExecutionPlan, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { ExecutionReadinessService } from "./execution-readiness/ExecutionReadinessService";
@@ -1187,6 +1191,11 @@ export class OfficeProjectPortalController {
 
     if (input.actionPressed || input.enterPressed) {
       if (this.openExternalProjectRepositoryIdentityEdit()) {
+        this.view.render(this.state);
+        return;
+      }
+
+      if (this.createExternalProjectDevelopmentRequestDraft()) {
         this.view.render(this.state);
         return;
       }
@@ -3758,11 +3767,30 @@ export class OfficeProjectPortalController {
   private openExternalProjectRepositoryIdentityEdit() {
     if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
     if (!this.state.projectRegistryEntries.some((entry) => entry.id === EXTERNAL_PROJECT_DRAFT_ID)) return false;
+    const project = this.state.projects.find((item) => item.id === EXTERNAL_PROJECT_DRAFT_ID);
+    if (canCreateExternalProjectDevelopmentRequestDraft(project)) return false;
 
     this.state.selectedRepositoryIdentityChoiceIndex = getCurrentRepositoryIdentityChoiceIndex(
-      this.state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)?.repositoryIdentity,
+      project?.repositoryIdentity,
     );
     this.state.viewMode = "repository-identity-edit";
+    return true;
+  }
+
+  private createExternalProjectDevelopmentRequestDraft() {
+    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
+
+    const project = this.state.projects.find((item) => item.id === EXTERNAL_PROJECT_DRAFT_ID);
+    if (!project || !canCreateExternalProjectDevelopmentRequestDraft(project)) return false;
+
+    this.state.externalProjectDevelopmentRequestDrafts = {
+      ...this.state.externalProjectDevelopmentRequestDrafts,
+      [EXTERNAL_PROJECT_DRAFT_ID]: createExternalProjectDevelopmentRequestDraft({
+        project,
+        existingDraft: this.state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID],
+      }),
+    };
+    this.persistBrowserOfficeSession();
     return true;
   }
 

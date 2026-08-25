@@ -1194,6 +1194,57 @@ describe("OfficeProjectPortalView", () => {
     expect(findRenderedRow(renderedText, "[CANDIDATE TOP]")?.text).toBe("[CANDIDATE TOP] High/Bug #12 Fix crash on launch (Open)");
   });
 
+  it("renders Project Dashboard without a development request draft collection", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    delete (state as Partial<ProjectPortalState>).externalProjectDevelopmentRequestDrafts;
+
+    expect(() => new OfficeProjectPortalView(scene, state)).not.toThrow();
+    expect(renderedText.map((item) => item.text)).toContain("Daily Proof");
+    expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
+    expect(findRenderedRow(renderedText, "[DEV REQUEST]")).toBeUndefined();
+  });
+
+  it("renders an external project development request draft row on the Project Dashboard", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.externalProjectDevelopmentRequestDrafts = {
+      "daily-proof": {
+        id: "daily-proof:external-development-request-draft",
+        projectId: "daily-proof",
+        projectName: "Daily Proof",
+        status: "Draft",
+        title: "Development request for Daily Proof",
+        summary: "Draft request for future external project development work.",
+        repositoryProvider: "github",
+        repositoryOwner: "ai-verse",
+        repositoryName: "daily-proof",
+        branchName: "main",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        sideEffectBoundary: "Local draft only.",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const devRequestRow = findRenderedRow(renderedText, "[DEV REQUEST]");
+    expect(devRequestRow?.text).toContain("Draft - Development request for Daily Proof");
+    expect(devRequestRow?.text).toContain("github:ai-verse/daily-proof");
+    expect(devRequestRow?.text).toContain("Local draft only");
+    expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
+  });
+
   it("renders decision controls in candidate detail for the selected Project Dashboard candidate", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -2285,6 +2336,7 @@ function createPortalState(options: {
     validationRuntimeResultCollections: {},
     postValidationReviewTargetCollections: {},
     postValidationReviewTargetResultCollections: {},
+    externalProjectDevelopmentRequestDrafts: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
