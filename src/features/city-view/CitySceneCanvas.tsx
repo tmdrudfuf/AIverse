@@ -3,6 +3,12 @@
 import { useEffect, useRef } from "react";
 import { createCityScene } from "./scene/createCityScene";
 
+const CITY_CANVAS_WIDTH = 1200;
+const CITY_CANVAS_HEIGHT = 720;
+const CITY_CANVAS_PROBE_PREFIX = "data-aiverse-city-canvas";
+
+type CityCanvasProbeState = "booting" | "ready" | "skipped" | "destroyed";
+
 export default function CitySceneCanvas() {
   const host = useRef<HTMLDivElement>(null);
   const game = useRef<import("phaser").Game | null>(null);
@@ -16,7 +22,12 @@ export default function CitySceneCanvas() {
       });
     }
     mountScene();
-    return () => { disposed = true; game.current?.destroy(true); game.current = null; };
+    return () => {
+      disposed = true;
+      setCityCanvasProbeState(host.current, "destroyed");
+      game.current?.destroy(true);
+      game.current = null;
+    };
   }, []);
 
   return <div ref={host} className="city-scene-canvas" role="img" aria-label="Pixel-art city with roads, sidewalks, grass, trees, Daily Proof Inc., AI Lab, and Portfolio Studio" />;
@@ -32,17 +43,58 @@ export async function bootCitySceneCanvas(
 ): Promise<import("phaser").Game | null> {
   if (!host) return null;
 
-  const Phaser = (await import("phaser")).default;
-  if (options.shouldCreateGame && !options.shouldCreateGame()) return null;
+  setCityCanvasProbeState(host, "booting");
 
-  return new Phaser.Game({
+  const Phaser = (await import("phaser")).default;
+  if (options.shouldCreateGame && !options.shouldCreateGame()) {
+    setCityCanvasProbeState(host, "skipped");
+    return null;
+  }
+
+  const scene = createCityScene(Phaser);
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: host,
-    width: 1200,
-    height: 720,
+    width: CITY_CANVAS_WIDTH,
+    height: CITY_CANVAS_HEIGHT,
     pixelArt: true,
     transparent: true,
     scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
-    scene: createCityScene(Phaser),
+    scene,
   });
+
+  setCityCanvasReadyProbeState(host, scene.length);
+
+  return game;
+}
+
+function setCityCanvasProbeState(host: HTMLDivElement | null, state: CityCanvasProbeState) {
+  if (!host) return;
+
+  host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-state`, state);
+  if (state !== "ready") {
+    host.removeAttribute(`${CITY_CANVAS_PROBE_PREFIX}-width`);
+    host.removeAttribute(`${CITY_CANVAS_PROBE_PREFIX}-height`);
+    host.removeAttribute(`${CITY_CANVAS_PROBE_PREFIX}-scene-count`);
+    host.removeAttribute(`${CITY_CANVAS_PROBE_PREFIX}-rendered-count`);
+  }
+}
+
+function setCityCanvasReadyProbeState(host: HTMLDivElement, sceneCount: number) {
+  host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-state`, "ready");
+  host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-width`, String(CITY_CANVAS_WIDTH));
+  host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-height`, String(CITY_CANVAS_HEIGHT));
+  host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-scene-count`, String(sceneCount));
+  setCityCanvasRenderedCountProbeAttribute(host);
+
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(() => setCityCanvasRenderedCountProbeAttribute(host));
+  }
+}
+
+function setCityCanvasRenderedCountProbeAttribute(host: HTMLDivElement) {
+  host.setAttribute(
+    `${CITY_CANVAS_PROBE_PREFIX}-rendered-count`,
+    String(host.querySelectorAll("canvas").length),
+  );
 }

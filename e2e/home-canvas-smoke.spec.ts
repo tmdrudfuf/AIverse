@@ -30,6 +30,11 @@ test("home route boots the city canvas in Chromium without unexpected browser si
   const canvasHost = page.locator(".city-scene-canvas");
   await expect(canvasHost).toBeVisible();
   await expect(canvasHost.locator("canvas")).toBeVisible();
+  await expect(canvasHost).toHaveAttribute("data-aiverse-city-canvas-state", "ready");
+  await expect(canvasHost).toHaveAttribute("data-aiverse-city-canvas-width", "1200");
+  await expect(canvasHost).toHaveAttribute("data-aiverse-city-canvas-height", "720");
+  await expect(canvasHost).toHaveAttribute("data-aiverse-city-canvas-scene-count", "2");
+  await expect(canvasHost).toHaveAttribute("data-aiverse-city-canvas-rendered-count", "1");
 
   expect(browserSignals).toEqual([]);
 });
