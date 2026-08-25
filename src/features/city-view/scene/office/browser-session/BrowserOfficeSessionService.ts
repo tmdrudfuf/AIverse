@@ -64,6 +64,7 @@ export class BrowserOfficeSessionService {
     state.preparedWorkSessionResultCollections = clone(snapshot.preparedWorkSessionResultCollections);
     state.activeWorkSessionStartResultCollections = clone(snapshot.activeWorkSessionStartResultCollections);
     state.externalProjectDevelopmentRequestDrafts = clone(snapshot.externalProjectDevelopmentRequestDrafts ?? {});
+    state.externalProjectAdosRunPreparations = clone(snapshot.externalProjectAdosRunPreparations ?? {});
     state.workSessions = clone(snapshot.workSessions);
 
     const selectedIndex = state.projects.findIndex((project) => project.id === state.selectedProjectId);
@@ -96,6 +97,7 @@ export class BrowserOfficeSessionService {
       preparedWorkSessionResultCollections: clone(state.preparedWorkSessionResultCollections),
       activeWorkSessionStartResultCollections: clone(state.activeWorkSessionStartResultCollections),
       externalProjectDevelopmentRequestDrafts: clone(state.externalProjectDevelopmentRequestDrafts),
+      externalProjectAdosRunPreparations: clone(state.externalProjectAdosRunPreparations),
       workSessions: clone(state.workSessions),
     };
 
@@ -145,6 +147,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     isResultCollectionRecord(value.preparedWorkSessionResultCollections) &&
     isResultCollectionRecord(value.activeWorkSessionStartResultCollections) &&
     (value.externalProjectDevelopmentRequestDrafts === undefined || isRecordOfRecords(value.externalProjectDevelopmentRequestDrafts)) &&
+    (value.externalProjectAdosRunPreparations === undefined || isRecordOfRecords(value.externalProjectAdosRunPreparations)) &&
     isRecordOfArrays(value.workSessions)
   );
 }

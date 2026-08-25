@@ -299,6 +299,90 @@ describe("OfficeProjectPortalController project dashboard", () => {
     });
   });
 
+  it("creates an external project ADOS run preparation after the development request draft exists", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(Object.keys(state.externalProjectAdosRunPreparations)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
+    expect(state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      developmentRequestDraftId: `${EXTERNAL_PROJECT_DRAFT_ID}:external-development-request-draft`,
+      status: "Prepared",
+      featureBranch: "codex/128-external-project-ados-run-preparation",
+      authoritativeBaseSha: "3193608fd10aaa08cc0709f2be3a579b87f1d03c",
+      specPath: "specs/128-external-project-ados-run-preparation/spec.md",
+      reviewerCommand: "claude -p",
+      executionPolicyVersion: 1,
+    });
+    expect(state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.validationCommands).toContain("npm run test:e2e:home-canvas");
+    expect(state.repositorySyncSnapshots[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(state.issueSyncCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(state.validationRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(state.reviewerRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+  });
+
+  it("reuses the existing external project ADOS run preparation on repeated dashboard activation", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ enterPressed: true }));
+    const firstPreparation = state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(Object.keys(state.externalProjectAdosRunPreparations)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
+    expect(state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.id).toBe(firstPreparation?.id);
+    expect(state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.createdAt).toBe(firstPreparation?.createdAt);
+  });
+
+  it("persists external project ADOS run preparations through browser session state", () => {
+    const storage = createMemoryStorage();
+    const state = createProjectPortalState({ browserOfficeSessionService: false });
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.browserOfficeSessionService = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-08-24T00:00:00.000Z",
+    });
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    const restored = new BrowserOfficeSessionService({ storage }).restoreState(
+      createProjectPortalState({ browserOfficeSessionService: false }),
+    );
+    expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      status: "Prepared",
+      featureBranch: "codex/128-external-project-ados-run-preparation",
+      reviewerCommand: "claude -p",
+    });
+    expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.validationCommands).toHaveLength(6);
+    expect(restored.validationRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(restored.reviewerRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+  });
+
   it("opens a selected project dashboard from the Company Dashboard flow", async () => {
     const state = createProjectPortalState();
     state.isOpen = true;
