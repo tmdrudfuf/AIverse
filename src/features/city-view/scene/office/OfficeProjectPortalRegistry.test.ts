@@ -182,6 +182,28 @@ describe("createProjectPortalState", () => {
     expect(state.repositoryMappings.some((mapping) => mapping.projectId === EXTERNAL_PROJECT_DRAFT_ID)).toBe(false);
   });
 
+  it("applies external draft repository identity without changing the current project-list selection", () => {
+    const state = createProjectPortalState();
+
+    addExternalProjectDraftToState(state);
+    state.selectedProjectIndex = 0;
+    state.selectedProjectId = "daily-proof";
+
+    expect(applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree")).toBe(true);
+
+    expect(state.selectedProjectIndex).toBe(0);
+    expect(state.selectedProjectId).toBe("daily-proof");
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      localRepositoryLabel: "Bound (local)",
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
+  });
+
   it("returns independent state on every call", () => {
     const first = createProjectPortalState();
     const second = createProjectPortalState();

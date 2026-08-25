@@ -188,6 +188,35 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(restored.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)?.localRepositoryLabel).toBe("Bound (local)");
   });
 
+  it("applies external project repository identity from the dashboard without changing project-list selection", () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "repository-identity-edit";
+    state.selectedProjectIndex = 0;
+    state.selectedProjectId = "daily-proof";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    state.selectedRepositoryIdentityChoiceIndex = 0;
+    const controller = createControllerHarness(state);
+
+    controller.updateInput(createInput({ enterPressed: true }));
+
+    expect(state.viewMode).toBe("project-dashboard");
+    expect(state.selectedProjectDashboardProjectId).toBe(EXTERNAL_PROJECT_DRAFT_ID);
+    expect(state.selectedProjectIndex).toBe(0);
+    expect(state.selectedProjectId).toBe("daily-proof");
+    expect(state.projects.find((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID)).toMatchObject({
+      localRepositoryLabel: "Bound (local)",
+      repositoryIdentity: {
+        provider: "local",
+        owner: "AIverse",
+        name: "AIverse",
+        connectionState: "Configured",
+      },
+    });
+  });
+
   it("opens a selected project dashboard from the Company Dashboard flow", async () => {
     const state = createProjectPortalState();
     state.isOpen = true;

@@ -359,8 +359,6 @@ export function applyExternalProjectDraftRepositoryIdentityChoiceToState(
   });
   state.projects = state.projectRegistryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices()));
   state.repositoryMappings = createRepositoryMappings(state.projectRegistryEntries);
-  state.selectedProjectIndex = state.projects.findIndex((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID);
-  state.selectedProjectId = EXTERNAL_PROJECT_DRAFT_ID;
   return true;
 }
 

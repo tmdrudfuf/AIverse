@@ -990,7 +990,7 @@ function getRepositoryIdentityRepoText(identity: ProjectRegistryRepositoryIdenti
 
 function getRepositoryIdentityStatusText(identity: ProjectRegistryRepositoryIdentity) {
   if (!identity.defaultBranch) return `Status: ${identity.connectionState}`;
-  return `Default Branch: ${identity.defaultBranch} - Status: ${identity.connectionState}`;
+  return `Default Branch: ${identity.defaultBranch}  ·  Status: ${identity.connectionState}`;
 }
 
 
