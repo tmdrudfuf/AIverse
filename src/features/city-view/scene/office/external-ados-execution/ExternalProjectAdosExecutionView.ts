@@ -21,14 +21,15 @@ export function createExternalProjectAdosExecutionDisplayRows(
         `policy v${execution.executionPolicyVersion}`,
         execution.implementerStarted ? "implementer started" : "implementer not started",
       ].join("; "),
-      boundaryText: "Validation, review, GitHub, publish, merge, and deploy not started.",
+      boundaryText: "Validation, review, repository mutation, GitHub, publish, merge, and deploy not started.",
     };
   }
 
   return {
     statusText: `${result!.status} - ${result!.reasonCodes[0]}`,
     contextText: result!.preparationId ? `preparation ${result!.preparationId}` : "preparation missing",
-    boundaryText: "Provider not invoked; validation, review, GitHub, publish, merge, and deploy not started.",
+    boundaryText:
+      "Provider not invoked; validation, review, repository mutation, GitHub, publish, merge, and deploy not started.",
   };
 }
 

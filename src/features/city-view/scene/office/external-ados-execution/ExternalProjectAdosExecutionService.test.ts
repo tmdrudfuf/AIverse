@@ -1,10 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
-import type { ImplementerRuntimeProvider, ImplementerRuntimeProviderCommand } from "../implementer-runtime/ImplementerRuntimeProvider";
+import type {
+  ImplementerRuntimeProvider,
+  ImplementerRuntimeProviderCommand,
+  ImplementerRuntimeProviderResult,
+} from "../implementer-runtime/ImplementerRuntimeProvider";
 import type { ExternalProjectAdosRunPreparation } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationTypes";
 import { EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import { ExternalProjectAdosExecutionService } from "./ExternalProjectAdosExecutionService";
+
+type StubImplementerRuntimeProvider = ImplementerRuntimeProvider & {
+  invoke: Mock<(command: ImplementerRuntimeProviderCommand) => Promise<ImplementerRuntimeProviderResult>>;
+};
 
 describe("ExternalProjectAdosExecutionService", () => {
   it("starts the trusted local implementer provider from a prepared external ADOS run", async () => {
@@ -109,10 +117,10 @@ describe("ExternalProjectAdosExecutionService", () => {
 function createStubProvider(
   status: Awaited<ReturnType<ImplementerRuntimeProvider["invoke"]>>["status"],
   started: boolean,
-): ImplementerRuntimeProvider & { invoke: ReturnType<typeof vi.fn> } {
+): StubImplementerRuntimeProvider {
   return {
     providerId: "claude",
-    invoke: vi.fn(async (command: ImplementerRuntimeProviderCommand) => ({
+    invoke: vi.fn(async (command: ImplementerRuntimeProviderCommand): Promise<ImplementerRuntimeProviderResult> => ({
       status,
       evidence: {
         providerId: "claude",

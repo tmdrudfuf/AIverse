@@ -10,7 +10,7 @@ describe("ExternalProjectAdosExecutionView", () => {
     expect(rows).toEqual({
       statusText: "Completed - codex/129-trusted-local-ados-execution-bridge",
       contextText: "Ky-Project/AIverse-trusted-local-ados-execution-bridge; base 00f22e1; policy v1; implementer started",
-      boundaryText: "Validation, review, GitHub, publish, merge, and deploy not started.",
+      boundaryText: "Validation, review, repository mutation, GitHub, publish, merge, and deploy not started.",
     });
   });
 
