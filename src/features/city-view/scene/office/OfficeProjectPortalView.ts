@@ -1519,7 +1519,7 @@ function fitProjectDashboardLowerRows(
 function wrapText(text: string, maxLength: number) {
   if (text.length <= maxLength) return text;
 
-  const words = text.split(" ");
+  const words = createWrapTokens(text);
   const lines: string[] = [];
   let currentLine = "";
 
@@ -1543,6 +1543,26 @@ function wrapText(text: string, maxLength: number) {
 
   if (currentLine) lines.push(currentLine);
   return lines.join("\n");
+}
+
+function createWrapTokens(text: string) {
+  const words = text.split(" ");
+  const tokens: string[] = [];
+  const labelValueTokens = new Set(["branch", "worktree", "reason"]);
+
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const nextWord = words[index + 1];
+    if (nextWord && labelValueTokens.has(word)) {
+      tokens.push(`${word} ${nextWord}`);
+      index += 1;
+      continue;
+    }
+
+    tokens.push(word);
+  }
+
+  return tokens;
 }
 
 function wrapAndClampText(text: string, maxLength: number, maxLines: number) {
