@@ -1389,10 +1389,12 @@ function createProjectDashboardLowerRows(
 
   if (adosRunStatusRows) {
     const reasonText = adosRunStatusRows.reasonText ? `; ${adosRunStatusRows.reasonText}` : "";
+    const boundaryText = compactExternalAdosStatusBoundaryText(adosRunStatusRows.boundaryText);
+    const contextText = prioritizeExternalAdosStatusContextText(adosRunStatusRows.contextText);
     lowerRows.push({
-      text: `[ADOS STATUS] ${adosRunStatusRows.statusText}; ${adosRunStatusRows.contextText}${reasonText}; ${adosRunStatusRows.boundaryText}`,
+      text: `[ADOS STATUS] ${adosRunStatusRows.statusText}; ${boundaryText}${reasonText}; ${contextText}`,
       maxLines: 3,
-      dropPriority: 7,
+      dropPriority: 4,
       usePriorityFit: true,
     });
   }
@@ -1401,7 +1403,7 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[ADOS PREP] ${adosRunPreparationRows.statusText}; ${adosRunPreparationRows.contextText}; ${adosRunPreparationRows.boundaryText}`,
       maxLines: 2,
-      dropPriority: 8,
+      dropPriority: 4,
       usePriorityFit: true,
     });
   }
@@ -1410,7 +1412,7 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[ADOS EXEC] ${adosExecutionRows.statusText}; bridge; ${compactExternalAdosExecutionBoundaryText(adosExecutionRows.boundaryText)}; ${adosExecutionRows.contextText}`,
       maxLines: 3,
-      dropPriority: 8,
+      dropPriority: 4,
       usePriorityFit: true,
     });
   }
@@ -1635,6 +1637,22 @@ function compactExternalAdosExecutionBoundaryText(text: string) {
     .replace(/^Provider not invoked;\s*/, "")
     .replace(/^Validation, review, repository mutation, /, "")
     .replace(/\.$/, "");
+}
+
+function compactExternalAdosStatusBoundaryText(text: string) {
+  return text.replace(/ from status inspection$/, "");
+}
+
+function prioritizeExternalAdosStatusContextText(text: string) {
+  const parts = text.split("; ");
+  const sourcePart = parts.find((part) => part.startsWith("source "));
+  const worktreePart = parts.find((part) => part.startsWith("worktree "));
+  const branchPart = parts.find((part) => part.startsWith("branch "));
+  const preparationPart = parts.find((part) => part === "preparation recorded");
+  const prioritizedParts = [sourcePart, worktreePart, branchPart, preparationPart].filter(
+    (part): part is string => Boolean(part),
+  );
+  return prioritizedParts.join("; ") || text;
 }
 
 function compactExecutionPlanDetailText(text: string) {
