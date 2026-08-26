@@ -74,5 +74,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/128-external-project-ados-run-preparation/plan.md
+shell commands, and other important information, read specs/129-trusted-local-ados-execution-bridge/plan.md
 <!-- SPECKIT END -->

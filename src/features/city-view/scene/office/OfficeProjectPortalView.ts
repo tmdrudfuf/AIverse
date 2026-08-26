@@ -11,6 +11,10 @@ import {
   createExternalProjectAdosRunPreparationDisplayRows,
   type ExternalProjectAdosRunPreparationDisplayRows,
 } from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationView";
+import {
+  createExternalProjectAdosExecutionDisplayRows,
+  type ExternalProjectAdosExecutionDisplayRows,
+} from "./external-ados-execution/ExternalProjectAdosExecutionView";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
 import { resolveCurrentExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
@@ -590,6 +594,12 @@ export class OfficeProjectPortalView {
     const adosRunPreparationRows = createExternalProjectAdosRunPreparationDisplayRows(
       dashboardProjectId ? adosRunPreparations[dashboardProjectId] : undefined,
     );
+    const adosExecutions = state.externalProjectAdosExecutions ?? {};
+    const adosExecutionResults = state.externalProjectAdosExecutionResults ?? {};
+    const adosExecutionRows = createExternalProjectAdosExecutionDisplayRows(
+      dashboardProjectId ? adosExecutions[dashboardProjectId] : undefined,
+      dashboardProjectId ? adosExecutionResults[dashboardProjectId] : undefined,
+    );
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -614,6 +624,7 @@ export class OfficeProjectPortalView {
         postValidationReviewTargetRows,
         developmentRequestRows,
         adosRunPreparationRows,
+        adosExecutionRows,
         candidateTaskRows,
         candidateAssignmentRows,
         candidatePromotionRows,
@@ -1156,6 +1167,7 @@ function createProjectDashboardLowerRows(
   postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
   developmentRequestRows?: ExternalProjectDevelopmentRequestDisplayRows,
   adosRunPreparationRows?: ExternalProjectAdosRunPreparationDisplayRows,
+  adosExecutionRows?: ExternalProjectAdosExecutionDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
   candidateAssignmentRows?: CandidateAssignmentDisplayRows,
   candidatePromotionRows?: CandidatePromotionDisplayRows,
@@ -1366,6 +1378,15 @@ function createProjectDashboardLowerRows(
     });
   }
 
+  if (adosExecutionRows) {
+    lowerRows.push({
+      text: `[ADOS EXEC] ${adosExecutionRows.statusText}; bridge; ${compactExternalAdosExecutionBoundaryText(adosExecutionRows.boundaryText)}; ${adosExecutionRows.contextText}`,
+      maxLines: 3,
+      dropPriority: 8,
+      usePriorityFit: true,
+    });
+  }
+
   if (candidateTaskRows) {
     lowerRows.push({ text: `[CANDIDATE TASKS] ${candidateTaskRows.statusText}`, maxLines: 1, dropPriority: 24 });
     if (candidateTaskRows.topTaskText) {
@@ -1547,6 +1568,13 @@ function compactExecutionPlanResultText(text: string) {
     .replace(/^Execution Plan Exists [^;]+;/, "Execution Plan Exists;")
     .replace(/^Execution Plan Blocked [^;]+;/, "Execution Plan Blocked;")
     .replace(/^Execution Plan Failed [^;]+;/, "Execution Plan Failed;");
+}
+
+function compactExternalAdosExecutionBoundaryText(text: string) {
+  return text
+    .replace(/^Provider not invoked;\s*/, "")
+    .replace(/^Validation, review, repository mutation, /, "")
+    .replace(/\.$/, "");
 }
 
 function compactExecutionPlanDetailText(text: string) {

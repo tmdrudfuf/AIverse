@@ -65,6 +65,8 @@ export class BrowserOfficeSessionService {
     state.activeWorkSessionStartResultCollections = clone(snapshot.activeWorkSessionStartResultCollections);
     state.externalProjectDevelopmentRequestDrafts = clone(snapshot.externalProjectDevelopmentRequestDrafts ?? {});
     state.externalProjectAdosRunPreparations = clone(snapshot.externalProjectAdosRunPreparations ?? {});
+    state.externalProjectAdosExecutions = clone(snapshot.externalProjectAdosExecutions ?? {});
+    state.externalProjectAdosExecutionResults = clone(snapshot.externalProjectAdosExecutionResults ?? {});
     state.workSessions = clone(snapshot.workSessions);
 
     const selectedIndex = state.projects.findIndex((project) => project.id === state.selectedProjectId);
@@ -98,6 +100,8 @@ export class BrowserOfficeSessionService {
       activeWorkSessionStartResultCollections: clone(state.activeWorkSessionStartResultCollections),
       externalProjectDevelopmentRequestDrafts: clone(state.externalProjectDevelopmentRequestDrafts),
       externalProjectAdosRunPreparations: clone(state.externalProjectAdosRunPreparations),
+      externalProjectAdosExecutions: clone(state.externalProjectAdosExecutions),
+      externalProjectAdosExecutionResults: clone(state.externalProjectAdosExecutionResults),
       workSessions: clone(state.workSessions),
     };
 
@@ -148,6 +152,8 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     isResultCollectionRecord(value.activeWorkSessionStartResultCollections) &&
     (value.externalProjectDevelopmentRequestDrafts === undefined || isRecordOfRecords(value.externalProjectDevelopmentRequestDrafts)) &&
     (value.externalProjectAdosRunPreparations === undefined || isRecordOfRecords(value.externalProjectAdosRunPreparations)) &&
+    (value.externalProjectAdosExecutions === undefined || isRecordOfRecords(value.externalProjectAdosExecutions)) &&
+    (value.externalProjectAdosExecutionResults === undefined || isRecordOfRecords(value.externalProjectAdosExecutionResults)) &&
     isRecordOfArrays(value.workSessions)
   );
 }

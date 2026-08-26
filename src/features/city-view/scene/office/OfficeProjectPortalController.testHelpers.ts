@@ -36,6 +36,10 @@ import type {
 import type { ReviewFixRuntimeInput, ReviewFixRuntimeOutcome } from "./review-fix-runtime/ReviewFixRuntimeTypes";
 import type { ValidationRuntimeInput, ValidationRuntimeOutcome } from "./validation-runtime/ValidationRuntimeTypes";
 import type {
+  StartExternalProjectAdosExecutionInput,
+  StartExternalProjectAdosExecutionOutcome,
+} from "./external-ados-execution/ExternalProjectAdosExecutionService";
+import type {
   PostValidationReviewTargetInput,
   PostValidationReviewTargetOutcome,
 } from "./post-validation-review-target/PostValidationReviewTargetTypes";
@@ -102,6 +106,8 @@ export type ControllerInternals = {
     validationRuntimeResultCollections?: ProjectPortalState["validationRuntimeResultCollections"];
     postValidationReviewTargetCollections?: ProjectPortalState["postValidationReviewTargetCollections"];
     postValidationReviewTargetResultCollections?: ProjectPortalState["postValidationReviewTargetResultCollections"];
+    externalProjectAdosExecutions: ProjectPortalState["externalProjectAdosExecutions"];
+    externalProjectAdosExecutionResults: ProjectPortalState["externalProjectAdosExecutionResults"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     workSessions: Record<string, WorkSession[]>;
@@ -135,6 +141,9 @@ export type ControllerInternals = {
       input: ValidationRuntimeInput,
       command: { projectId: string; reviewFixRuntimeId: string; actor: string; startedAt: string },
     ) => Promise<ValidationRuntimeOutcome>;
+  };
+  externalProjectAdosExecutionService: {
+    start: (input: StartExternalProjectAdosExecutionInput) => Promise<StartExternalProjectAdosExecutionOutcome>;
   };
   postValidationReviewTargetService: {
     prepareTarget: (
