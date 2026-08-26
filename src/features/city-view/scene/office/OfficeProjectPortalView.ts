@@ -1380,8 +1380,8 @@ function createProjectDashboardLowerRows(
 
   if (adosExecutionRows) {
     lowerRows.push({
-      text: `[ADOS EXEC] ${adosExecutionRows.statusText}; ${adosExecutionRows.contextText}; ${adosExecutionRows.boundaryText}`,
-      maxLines: 2,
+      text: `[ADOS EXEC] ${adosExecutionRows.statusText}; bridge; ${compactExternalAdosExecutionBoundaryText(adosExecutionRows.boundaryText)}; ${adosExecutionRows.contextText}`,
+      maxLines: 3,
       dropPriority: 8,
       usePriorityFit: true,
     });
@@ -1568,6 +1568,13 @@ function compactExecutionPlanResultText(text: string) {
     .replace(/^Execution Plan Exists [^;]+;/, "Execution Plan Exists;")
     .replace(/^Execution Plan Blocked [^;]+;/, "Execution Plan Blocked;")
     .replace(/^Execution Plan Failed [^;]+;/, "Execution Plan Failed;");
+}
+
+function compactExternalAdosExecutionBoundaryText(text: string) {
+  return text
+    .replace(/^Provider not invoked;\s*/, "")
+    .replace(/^Validation, review, repository mutation, /, "")
+    .replace(/\.$/, "");
 }
 
 function compactExecutionPlanDetailText(text: string) {
