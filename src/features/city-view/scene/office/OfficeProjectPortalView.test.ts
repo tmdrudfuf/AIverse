@@ -1275,8 +1275,8 @@ describe("OfficeProjectPortalView", () => {
         projectId: "daily-proof",
         developmentRequestDraftId: "daily-proof:external-development-request-draft",
         status: "Prepared",
-        featureBranch: "codex/128-external-project-ados-run-preparation",
-        authoritativeBaseSha: "3193608fd10aaa08cc0709f2be3a579b87f1d03c",
+        featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+        authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
         specPath: "spec.md",
         validationCommands: [
           "npm test",
@@ -1297,11 +1297,73 @@ describe("OfficeProjectPortalView", () => {
     new OfficeProjectPortalView(scene, state);
 
     const adosPrepRow = findRenderedRow(renderedText, "[ADOS PREP]");
-    expect(adosPrepRow?.text).toContain("Prepared - codex/128-external-project-ados-run-preparation");
+    expect(adosPrepRow?.text).toContain("Prepared - codex/129-trusted-local-ados-execution-bridge");
     expect(adosPrepRow?.text).toContain("base");
-    expect(adosPrepRow?.text).toContain("3193608");
+    expect(adosPrepRow?.text).toContain("00f22e1");
     expect(adosPrepRow?.text).toContain("6 validation commands");
     expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
+  });
+
+  it("renders an external project ADOS execution row on the Project Dashboard", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.externalProjectAdosExecutions = {
+      "daily-proof": {
+        id: "daily-proof:external-ados-execution:daily-proof:external-ados-run-preparation:external-ados-execution-v1",
+        projectId: "daily-proof",
+        preparationId: "daily-proof:external-ados-run-preparation",
+        developmentRequestDraftId: "daily-proof:external-development-request-draft",
+        status: "Completed",
+        featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+        authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
+        specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+        repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
+        worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+        validationCommands: ["npm test"],
+        reviewerCommand: "claude -p",
+        executionPolicyVersion: 1,
+        trustedLocalExecutionApproved: true,
+        startedBy: "Local Human",
+        startedAt: "2026-08-25T00:00:00.000Z",
+        implementerStarted: true,
+        validationStarted: false,
+        reviewStarted: false,
+        repositoryMutationStarted: false,
+        githubMutationStarted: false,
+        publishStarted: false,
+        mergeStarted: false,
+        deployStarted: false,
+        evidence: {
+          providerId: "claude",
+          agentId: "Claude",
+          role: "Implementer",
+          commandDisplay: "claude --dangerously-skip-permissions -p {{prompt}}",
+          workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+          started: true,
+          completed: true,
+          timedOut: false,
+          cancelled: false,
+          exitCode: 0,
+          durationMs: 25,
+          stdoutSummary: "done",
+          stderrSummary: "",
+          outputTruncated: false,
+        },
+        rulesVersion: "external-ados-execution-v1",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const adosExecRow = findRenderedRow(renderedText, "[ADOS EXEC]");
+    expect(adosExecRow?.text).toContain("Completed - codex/129-trusted-local-ados-execution-bridge");
+    expect(adosExecRow?.text).toContain("AIverse-trusted-local-ados-execution-bridge");
+    expect(adosExecRow?.text).toContain("GitHub, publish, merge, and deploy not started");
   });
 
   it("renders decision controls in candidate detail for the selected Project Dashboard candidate", () => {
@@ -2397,6 +2459,8 @@ function createPortalState(options: {
     postValidationReviewTargetResultCollections: {},
     externalProjectDevelopmentRequestDrafts: {},
     externalProjectAdosRunPreparations: {},
+    externalProjectAdosExecutions: {},
+    externalProjectAdosExecutionResults: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

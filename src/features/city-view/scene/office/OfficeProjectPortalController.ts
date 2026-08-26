@@ -39,6 +39,7 @@ import {
   canCreateExternalProjectAdosRunPreparation,
   createExternalProjectAdosRunPreparation,
 } from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
+import { ExternalProjectAdosExecutionService } from "./external-ados-execution/ExternalProjectAdosExecutionService";
 import {
   canCreateExternalProjectDevelopmentRequestDraft,
   createExternalProjectDevelopmentRequestDraft,
@@ -343,6 +344,7 @@ export class OfficeProjectPortalController {
   private reviewFixRuntimeService: ReviewFixRuntimeService;
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
+  private externalProjectAdosExecutionService: ExternalProjectAdosExecutionService;
   private readonly activeValidationRuntimeKeys = new Set<string>();
   private postValidationReviewTargetService: PostValidationReviewTargetService;
   private readonly activePostValidationReviewKeys = new Set<string>();
@@ -415,6 +417,7 @@ export class OfficeProjectPortalController {
       new ImplementerReviewFixRuntimeProvider(new ClaudeImplementerRuntimeProvider()),
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
+    this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(new ClaudeImplementerRuntimeProvider());
     this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
@@ -1196,6 +1199,10 @@ export class OfficeProjectPortalController {
     if (input.actionPressed || input.enterPressed) {
       if (this.openExternalProjectRepositoryIdentityEdit()) {
         this.view.render(this.state);
+        return;
+      }
+
+      if (this.startExternalProjectAdosExecution()) {
         return;
       }
 
@@ -3821,6 +3828,36 @@ export class OfficeProjectPortalController {
       [EXTERNAL_PROJECT_DRAFT_ID]: preparation,
     };
     this.persistBrowserOfficeSession();
+    return true;
+  }
+
+  private startExternalProjectAdosExecution() {
+    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
+
+    const preparation = this.state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
+    if (!preparation) return false;
+
+    const project = this.state.projects.find((item) => item.id === EXTERNAL_PROJECT_DRAFT_ID);
+    void this.externalProjectAdosExecutionService.start({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      project,
+      preparation,
+      existingExecution: this.state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID],
+    }).then((outcome) => {
+      if (outcome.execution) {
+        this.state.externalProjectAdosExecutions = {
+          ...this.state.externalProjectAdosExecutions,
+          [EXTERNAL_PROJECT_DRAFT_ID]: outcome.execution,
+        };
+      }
+      this.state.externalProjectAdosExecutionResults = {
+        ...this.state.externalProjectAdosExecutionResults,
+        [EXTERNAL_PROJECT_DRAFT_ID]: outcome.result,
+      };
+      this.persistBrowserOfficeSession();
+      this.view.render(this.state);
+    });
+
     return true;
   }
 

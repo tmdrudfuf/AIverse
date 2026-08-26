@@ -6,6 +6,10 @@ import type { Employee } from "./employees/EmployeeTypes";
 import type { EmployeeRecruitmentResult } from "./employees/EmployeeRecruitmentService";
 import type { EmployeeSimulationSnapshot } from "./employees/EmployeeSimulationTypes";
 import type { ExternalProjectAdosRunPreparations } from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationTypes";
+import type {
+  ExternalProjectAdosExecutionResults,
+  ExternalProjectAdosExecutions,
+} from "./external-ados-execution/ExternalProjectAdosExecutionTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "./external-development-requests/ExternalProjectDevelopmentRequestTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
@@ -233,6 +237,8 @@ export type ProjectPortalState = {
   postValidationReviewTargetResultCollections: Record<string, PostValidationReviewTargetResultCollection>;
   externalProjectDevelopmentRequestDrafts: ExternalProjectDevelopmentRequestDrafts;
   externalProjectAdosRunPreparations: ExternalProjectAdosRunPreparations;
+  externalProjectAdosExecutions: ExternalProjectAdosExecutions;
+  externalProjectAdosExecutionResults: ExternalProjectAdosExecutionResults;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

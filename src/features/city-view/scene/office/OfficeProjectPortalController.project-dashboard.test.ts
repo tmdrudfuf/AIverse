@@ -22,6 +22,10 @@ import {
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
+import type {
+  StartExternalProjectAdosExecutionInput,
+  StartExternalProjectAdosExecutionOutcome,
+} from "./external-ados-execution/ExternalProjectAdosExecutionService";
 import { GitHubProjectDashboardProvider } from "./project-dashboard/GitHubProjectDashboardProvider";
 import { InternalSimulationProjectDashboardProvider } from "./project-dashboard/InternalSimulationProjectDashboardProvider";
 import { MockGitHubRepositoryProvider } from "./github/MockGitHubRepositoryProvider";
@@ -317,9 +321,9 @@ describe("OfficeProjectPortalController project dashboard", () => {
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       developmentRequestDraftId: `${EXTERNAL_PROJECT_DRAFT_ID}:external-development-request-draft`,
       status: "Prepared",
-      featureBranch: "codex/128-external-project-ados-run-preparation",
-      authoritativeBaseSha: "3193608fd10aaa08cc0709f2be3a579b87f1d03c",
-      specPath: "specs/128-external-project-ados-run-preparation/spec.md",
+      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+      authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
+      specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
       reviewerCommand: "claude -p",
       executionPolicyVersion: 1,
     });
@@ -375,12 +379,156 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Prepared",
-      featureBranch: "codex/128-external-project-ados-run-preparation",
+      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
       reviewerCommand: "claude -p",
     });
     expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.validationCommands).toHaveLength(6);
     expect(restored.validationRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
     expect(restored.reviewerRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+  });
+
+  it("starts trusted local external ADOS execution only after preparation exists", async () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    const start = vi.fn(async (input: StartExternalProjectAdosExecutionInput) => createExternalAdosExecutionOutcome(input));
+    internals.externalProjectAdosExecutionService = { start };
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+    expect(start).not.toHaveBeenCalled();
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    await flushPromises();
+
+    expect(start).toHaveBeenCalledOnce();
+    expect(start.mock.calls[0]?.[0]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      preparation: {
+        id: `${EXTERNAL_PROJECT_DRAFT_ID}:external-ados-run-preparation`,
+        featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+      },
+    });
+    expect(state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      status: "Completed",
+      trustedLocalExecutionApproved: true,
+      implementerStarted: true,
+      validationStarted: false,
+      reviewStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+    });
+    expect(state.externalProjectAdosExecutionResults[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      status: "Completed",
+      started: true,
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(state.validationRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(state.reviewerRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+  });
+
+  it("persists trusted local external ADOS execution through browser session state", async () => {
+    const storage = createMemoryStorage();
+    const state = createProjectPortalState({ browserOfficeSessionService: false });
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.browserOfficeSessionService = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-08-25T00:00:00.000Z",
+    });
+    internals.externalProjectAdosExecutionService = {
+      start: vi.fn(async (input: StartExternalProjectAdosExecutionInput) => createExternalAdosExecutionOutcome(input)),
+    };
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+    await flushPromises();
+
+    const restored = new BrowserOfficeSessionService({ storage }).restoreState(
+      createProjectPortalState({ browserOfficeSessionService: false }),
+    );
+    expect(restored.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      status: "Completed",
+      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+      reviewStarted: false,
+      githubMutationStarted: false,
+    });
+    expect(restored.externalProjectAdosExecutionResults[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      status: "Completed",
+      started: true,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+    });
+  });
+
+  it("records a blocked external ADOS execution result without creating an execution", async () => {
+    const state = createProjectPortalState();
+    addExternalProjectDraftToState(state);
+    applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
+    state.isOpen = true;
+    state.justOpened = false;
+    state.viewMode = "project-dashboard";
+    state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
+    const controller = createControllerHarness(state);
+    const internals = getControllerInternals(controller);
+    internals.externalProjectAdosExecutionService = {
+      start: vi.fn(async (input: StartExternalProjectAdosExecutionInput) => ({
+        result: {
+          id: `${input.projectId}:external-ados-execution-result:${input.preparation?.id}:external-ados-execution-v1`,
+          projectId: input.projectId,
+          preparationId: input.preparation?.id,
+          status: "Blocked",
+          reasonCodes: ["EXTERNAL_ADOS_EXECUTION_LOCAL_BINDING_MISSING"],
+          started: false,
+          duplicateExistingExecution: false,
+          implementerStarted: false,
+          validationStarted: false,
+          reviewStarted: false,
+          repositoryMutationStarted: false,
+          githubMutationStarted: false,
+          publishStarted: false,
+          mergeStarted: false,
+          deployStarted: false,
+          resultAt: "2026-08-25T00:00:00.000Z",
+          rulesVersion: "external-ados-execution-v1",
+        },
+      })),
+    };
+
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+    await flushPromises();
+
+    expect(state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
+    expect(state.externalProjectAdosExecutionResults[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      status: "Blocked",
+      reasonCodes: ["EXTERNAL_ADOS_EXECUTION_LOCAL_BINDING_MISSING"],
+      started: false,
+      validationStarted: false,
+      reviewStarted: false,
+      githubMutationStarted: false,
+    });
   });
 
   it("opens a selected project dashboard from the Company Dashboard flow", async () => {
@@ -1073,6 +1221,9 @@ type ControllerInternals = {
   companyInfluencePlanningService: CompanyInfluencePlanningService;
   aiService: ReturnType<typeof createMockAIService>;
   aiProjectManagerService: AIProjectManagerService;
+  externalProjectAdosExecutionService: {
+    start: ReturnType<typeof vi.fn>;
+  };
   browserOfficeSessionService?: BrowserOfficeSessionService;
   repositoryRequestVersion: number;
   repositorySyncRequestVersion: number;
@@ -1122,6 +1273,9 @@ function createControllerHarness(state: ProjectPortalState): OfficeProjectPortal
   harness.companyInfluencePlanningService = new CompanyInfluencePlanningService();
   harness.aiService = createMockAIService();
   harness.aiProjectManagerService = new AIProjectManagerService(harness.aiService);
+  harness.externalProjectAdosExecutionService = {
+    start: vi.fn(async (input: StartExternalProjectAdosExecutionInput) => createExternalAdosExecutionOutcome(input)),
+  };
   harness.repositoryRequestVersion = 0;
   harness.repositorySyncRequestVersion = 0;
   harness.issueSyncRequestVersion = 0;
@@ -1141,6 +1295,79 @@ function createMemoryStorage(): BrowserOfficeSessionStorage {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => {
       values.set(key, value);
+    },
+  };
+}
+
+function createExternalAdosExecutionOutcome(
+  input: StartExternalProjectAdosExecutionInput,
+): StartExternalProjectAdosExecutionOutcome {
+  const preparation = input.preparation!;
+  const binding = input.project!.localRepositoryBinding!;
+  const executionId = `${input.projectId}:external-ados-execution:${preparation.id}:external-ados-execution-v1`;
+  return {
+    execution: {
+      id: executionId,
+      projectId: input.projectId,
+      preparationId: preparation.id,
+      developmentRequestDraftId: preparation.developmentRequestDraftId,
+      status: "Completed",
+      featureBranch: preparation.featureBranch,
+      authoritativeBaseSha: preparation.authoritativeBaseSha,
+      specPath: preparation.specPath,
+      repositoryPath: binding.repositoryPath,
+      worktreePath: binding.worktreePath,
+      validationCommands: [...preparation.validationCommands],
+      reviewerCommand: preparation.reviewerCommand,
+      executionPolicyVersion: preparation.executionPolicyVersion,
+      trustedLocalExecutionApproved: true,
+      startedBy: "Local Human",
+      startedAt: "2026-08-25T00:00:00.000Z",
+      implementerStarted: true,
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      evidence: {
+        providerId: "claude",
+        agentId: "Claude",
+        role: "Implementer",
+        commandDisplay: "claude --dangerously-skip-permissions -p {{prompt}}",
+        workingDirectory: binding.worktreePath,
+        started: true,
+        completed: true,
+        timedOut: false,
+        cancelled: false,
+        exitCode: 0,
+        durationMs: 25,
+        stdoutSummary: "done",
+        stderrSummary: "",
+        outputTruncated: false,
+      },
+      rulesVersion: "external-ados-execution-v1",
+    },
+    result: {
+      id: `${input.projectId}:external-ados-execution-result:${preparation.id}:external-ados-execution-v1`,
+      projectId: input.projectId,
+      preparationId: preparation.id,
+      executionId,
+      status: "Completed",
+      reasonCodes: ["EXTERNAL_ADOS_EXECUTION_STARTED"],
+      started: true,
+      duplicateExistingExecution: false,
+      implementerStarted: true,
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      resultAt: "2026-08-25T00:00:00.000Z",
+      rulesVersion: "external-ados-execution-v1",
     },
   };
 }

@@ -251,6 +251,8 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     postValidationReviewTargetResultCollections: {},
     externalProjectDevelopmentRequestDrafts: {},
     externalProjectAdosRunPreparations: {},
+    externalProjectAdosExecutions: {},
+    externalProjectAdosExecutionResults: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
