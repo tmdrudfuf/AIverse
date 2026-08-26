@@ -5,9 +5,9 @@ export const EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_BOUNDARY =
   "Local preparation only; validation, review, runtime, repository, GitHub, publish, merge, and deploy are not started.";
 
 export const EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS = {
-  featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-  authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-  specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+  featureBranch: "codex/130-external-project-ados-run-status",
+  authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+  specPath: "specs/130-external-project-ados-run-status/spec.md",
   validationCommands: [
     "npm test",
     "npx tsc --noEmit",

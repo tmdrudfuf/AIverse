@@ -40,6 +40,7 @@ import {
   createExternalProjectAdosRunPreparation,
 } from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import { ExternalProjectAdosExecutionService } from "./external-ados-execution/ExternalProjectAdosExecutionService";
+import { deriveExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusService";
 import {
   canCreateExternalProjectDevelopmentRequestDraft,
   createExternalProjectDevelopmentRequestDraft,
@@ -3827,6 +3828,14 @@ export class OfficeProjectPortalController {
       ...this.state.externalProjectAdosRunPreparations,
       [EXTERNAL_PROJECT_DRAFT_ID]: preparation,
     };
+    this.state.externalProjectAdosRunStatuses = {
+      ...this.state.externalProjectAdosRunStatuses,
+      [EXTERNAL_PROJECT_DRAFT_ID]: deriveExternalProjectAdosRunStatus({
+        projectId: EXTERNAL_PROJECT_DRAFT_ID,
+        preparation,
+        persistedStatus: this.state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID],
+      })!,
+    };
     this.persistBrowserOfficeSession();
     return true;
   }
@@ -3853,6 +3862,16 @@ export class OfficeProjectPortalController {
       this.state.externalProjectAdosExecutionResults = {
         ...this.state.externalProjectAdosExecutionResults,
         [EXTERNAL_PROJECT_DRAFT_ID]: outcome.result,
+      };
+      this.state.externalProjectAdosRunStatuses = {
+        ...this.state.externalProjectAdosRunStatuses,
+        [EXTERNAL_PROJECT_DRAFT_ID]: deriveExternalProjectAdosRunStatus({
+          projectId: EXTERNAL_PROJECT_DRAFT_ID,
+          preparation,
+          execution: outcome.execution ?? this.state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID],
+          result: outcome.result,
+          persistedStatus: this.state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID],
+        })!,
       };
       this.persistBrowserOfficeSession();
       this.view.render(this.state);

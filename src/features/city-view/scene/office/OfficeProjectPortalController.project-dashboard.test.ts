@@ -246,8 +246,8 @@ describe("OfficeProjectPortalController project dashboard", () => {
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",
-      branchName: "codex/126-external-project-repository-identity-edit-overlay",
-      specPath: "specs/126-external-project-repository-identity-edit-overlay/spec.md",
+      branchName: "codex/130-external-project-ados-run-status",
+      specPath: "specs/130-external-project-ados-run-status/spec.md",
     });
     expect(state.viewMode).toBe("project-dashboard");
     expect(state.repositorySyncSnapshots[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
@@ -321,11 +321,23 @@ describe("OfficeProjectPortalController project dashboard", () => {
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       developmentRequestDraftId: `${EXTERNAL_PROJECT_DRAFT_ID}:external-development-request-draft`,
       status: "Prepared",
-      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-      authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-      specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+      featureBranch: "codex/130-external-project-ados-run-status",
+      authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+      specPath: "specs/130-external-project-ados-run-status/spec.md",
       reviewerCommand: "claude -p",
       executionPolicyVersion: 1,
+    });
+    expect(state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      stage: "Prepared",
+      source: "preparation",
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
     });
     expect(state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.validationCommands).toContain("npm run test:e2e:home-canvas");
     expect(state.repositorySyncSnapshots[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
@@ -379,8 +391,15 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Prepared",
-      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+      featureBranch: "codex/130-external-project-ados-run-status",
       reviewerCommand: "claude -p",
+    });
+    expect(restored.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      stage: "Prepared",
+      source: "preparation",
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
     });
     expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]?.validationCommands).toHaveLength(6);
     expect(restored.validationRuntimeCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
@@ -412,7 +431,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       preparation: {
         id: `${EXTERNAL_PROJECT_DRAFT_ID}:external-ados-run-preparation`,
-        featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+        featureBranch: "codex/130-external-project-ados-run-status",
       },
     });
     expect(state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
@@ -468,13 +487,25 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(restored.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Completed",
-      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+      featureBranch: "codex/130-external-project-ados-run-status",
       reviewStarted: false,
       githubMutationStarted: false,
     });
     expect(restored.externalProjectAdosExecutionResults[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       status: "Completed",
       started: true,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+    });
+    expect(restored.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      stage: "Completed",
+      source: "result",
+      reasonCodes: ["EXTERNAL_ADOS_EXECUTION_STARTED"],
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
       publishStarted: false,
       mergeStarted: false,
       deployStarted: false,
@@ -528,6 +559,18 @@ describe("OfficeProjectPortalController project dashboard", () => {
       validationStarted: false,
       reviewStarted: false,
       githubMutationStarted: false,
+    });
+    expect(state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+      stage: "Blocked",
+      source: "result",
+      reasonCodes: ["EXTERNAL_ADOS_EXECUTION_LOCAL_BINDING_MISSING"],
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
     });
   });
 

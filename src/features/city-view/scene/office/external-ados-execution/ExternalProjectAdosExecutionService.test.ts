@@ -28,7 +28,7 @@ describe("ExternalProjectAdosExecutionService", () => {
     expect(provider.invoke.mock.calls[0]?.[0]).toMatchObject({
       command: "claude",
       inputMode: "argument",
-      workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+      workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
     });
     expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Do not start review.");
     expect(outcome.execution).toMatchObject({
@@ -155,7 +155,7 @@ function createProject(overrides: Partial<ProjectPortalProject> = {}): ProjectPo
     localRepositoryBinding: {
       projectId: "external-project-draft",
       repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
-      worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+      worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
       branchName: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch,
       specPath: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.specPath,
       source: "manual",
@@ -165,7 +165,7 @@ function createProject(overrides: Partial<ProjectPortalProject> = {}): ProjectPo
       provider: "local",
       owner: "AIverse",
       name: "AIverse",
-      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+      localPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
       connectionState: "Configured",
     },
     ...overrides,

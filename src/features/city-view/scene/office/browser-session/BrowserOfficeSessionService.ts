@@ -13,6 +13,10 @@ import {
   type BrowserOfficeSessionState,
   type BrowserOfficeSessionStorage,
 } from "./BrowserOfficeSessionTypes";
+import type {
+  ExternalProjectAdosRunStatus,
+  ExternalProjectAdosRunStatuses,
+} from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 
 export type BrowserOfficeSessionServiceOptions = {
   storage?: BrowserOfficeSessionStorage;
@@ -67,6 +71,7 @@ export class BrowserOfficeSessionService {
     state.externalProjectAdosRunPreparations = clone(snapshot.externalProjectAdosRunPreparations ?? {});
     state.externalProjectAdosExecutions = clone(snapshot.externalProjectAdosExecutions ?? {});
     state.externalProjectAdosExecutionResults = clone(snapshot.externalProjectAdosExecutionResults ?? {});
+    state.externalProjectAdosRunStatuses = cloneValidExternalProjectAdosRunStatuses(snapshot.externalProjectAdosRunStatuses);
     state.workSessions = clone(snapshot.workSessions);
 
     const selectedIndex = state.projects.findIndex((project) => project.id === state.selectedProjectId);
@@ -102,6 +107,7 @@ export class BrowserOfficeSessionService {
       externalProjectAdosRunPreparations: clone(state.externalProjectAdosRunPreparations),
       externalProjectAdosExecutions: clone(state.externalProjectAdosExecutions),
       externalProjectAdosExecutionResults: clone(state.externalProjectAdosExecutionResults),
+      externalProjectAdosRunStatuses: clone(state.externalProjectAdosRunStatuses),
       workSessions: clone(state.workSessions),
     };
 
@@ -154,6 +160,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     (value.externalProjectAdosRunPreparations === undefined || isRecordOfRecords(value.externalProjectAdosRunPreparations)) &&
     (value.externalProjectAdosExecutions === undefined || isRecordOfRecords(value.externalProjectAdosExecutions)) &&
     (value.externalProjectAdosExecutionResults === undefined || isRecordOfRecords(value.externalProjectAdosExecutionResults)) &&
+    (value.externalProjectAdosRunStatuses === undefined || isRecord(value.externalProjectAdosRunStatuses)) &&
     isRecordOfArrays(value.workSessions)
   );
 }
@@ -183,6 +190,57 @@ function isResultCollectionRecord(value: unknown) {
     isRecord(collection) &&
     Array.isArray(collection.results)
   ));
+}
+
+function cloneValidExternalProjectAdosRunStatuses(value: unknown): ExternalProjectAdosRunStatuses {
+  if (!isRecord(value)) return {};
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter((entry): entry is [string, ExternalProjectAdosRunStatus] =>
+        isExternalProjectAdosRunStatus(entry[1])
+      )
+      .map(([projectId, status]) => [projectId, clone(status)]),
+  );
+}
+
+function isExternalProjectAdosRunStatus(status: unknown): status is ExternalProjectAdosRunStatus {
+  return (
+    isRecord(status) &&
+    isNonEmptyString(status.id) &&
+    isNonEmptyString(status.projectId) &&
+    isExternalProjectAdosRunStatusStage(status.stage) &&
+    typeof status.status === "string" &&
+    (status.source === "preparation" || status.source === "execution" || status.source === "result") &&
+    isOptionalString(status.preparationId) &&
+    isOptionalString(status.executionId) &&
+    Array.isArray(status.reasonCodes) &&
+    status.reasonCodes.every((reasonCode) => typeof reasonCode === "string") &&
+    isOptionalString(status.featureBranch) &&
+    isOptionalString(status.worktreePath) &&
+    typeof status.updatedAt === "string" &&
+    status.validationStarted === false &&
+    status.reviewStarted === false &&
+    status.repositoryMutationStarted === false &&
+    status.githubMutationStarted === false &&
+    status.publishStarted === false &&
+    status.mergeStarted === false &&
+    status.deployStarted === false &&
+    typeof status.rulesVersion === "string"
+  );
+}
+
+function isExternalProjectAdosRunStatusStage(value: unknown) {
+  return (
+    value === "NotPrepared" ||
+    value === "Prepared" ||
+    value === "Started" ||
+    value === "Completed" ||
+    value === "Blocked" ||
+    value === "Failed" ||
+    value === "TimedOut" ||
+    value === "Cancelled"
+  );
 }
 
 function isOptionalString(value: unknown) {

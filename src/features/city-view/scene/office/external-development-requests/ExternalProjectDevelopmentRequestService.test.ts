@@ -25,8 +25,8 @@ describe("ExternalProjectDevelopmentRequestService", () => {
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",
-      branchName: "codex/126-external-project-repository-identity-edit-overlay",
-      specPath: "specs/126-external-project-repository-identity-edit-overlay/spec.md",
+      branchName: "codex/130-external-project-ados-run-status",
+      specPath: "specs/130-external-project-ados-run-status/spec.md",
     });
     expect(draft.sideEffectBoundary).toContain("no runtime");
   });

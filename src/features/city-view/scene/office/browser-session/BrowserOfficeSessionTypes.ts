@@ -21,6 +21,7 @@ import type {
   ExternalProjectAdosExecutionResults,
   ExternalProjectAdosExecutions,
 } from "../external-ados-execution/ExternalProjectAdosExecutionTypes";
+import type { ExternalProjectAdosRunStatuses } from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
 
 export const BROWSER_OFFICE_SESSION_STORAGE_KEY = "aiverse.office.session";
@@ -50,6 +51,7 @@ export type BrowserOfficeSessionSnapshot = {
   externalProjectAdosRunPreparations?: ExternalProjectAdosRunPreparations;
   externalProjectAdosExecutions?: ExternalProjectAdosExecutions;
   externalProjectAdosExecutionResults?: ExternalProjectAdosExecutionResults;
+  externalProjectAdosRunStatuses?: ExternalProjectAdosRunStatuses;
   workSessions: Record<string, WorkSession[]>;
 };
 
@@ -82,5 +84,6 @@ export type BrowserOfficeSessionState = Pick<
   | "externalProjectAdosRunPreparations"
   | "externalProjectAdosExecutions"
   | "externalProjectAdosExecutionResults"
+  | "externalProjectAdosRunStatuses"
   | "workSessions"
 >;

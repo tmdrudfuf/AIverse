@@ -15,6 +15,11 @@ import {
   createExternalProjectAdosExecutionDisplayRows,
   type ExternalProjectAdosExecutionDisplayRows,
 } from "./external-ados-execution/ExternalProjectAdosExecutionView";
+import { deriveExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusService";
+import {
+  createExternalProjectAdosRunStatusDisplayRows,
+  type ExternalProjectAdosRunStatusDisplayRows,
+} from "./external-ados-run-status/ExternalProjectAdosRunStatusView";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
 import { resolveCurrentExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
@@ -600,6 +605,17 @@ export class OfficeProjectPortalView {
       dashboardProjectId ? adosExecutions[dashboardProjectId] : undefined,
       dashboardProjectId ? adosExecutionResults[dashboardProjectId] : undefined,
     );
+    const adosRunStatuses = state.externalProjectAdosRunStatuses ?? {};
+    const adosRunStatus = dashboardProjectId
+      ? deriveExternalProjectAdosRunStatus({
+        projectId: dashboardProjectId,
+        preparation: adosRunPreparations[dashboardProjectId],
+        execution: adosExecutions[dashboardProjectId],
+        result: adosExecutionResults[dashboardProjectId],
+        persistedStatus: adosRunStatuses[dashboardProjectId],
+      })
+      : undefined;
+    const adosRunStatusRows = createExternalProjectAdosRunStatusDisplayRows(adosRunStatus);
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -623,6 +639,7 @@ export class OfficeProjectPortalView {
         validationRuntimeRows,
         postValidationReviewTargetRows,
         developmentRequestRows,
+        adosRunStatusRows,
         adosRunPreparationRows,
         adosExecutionRows,
         candidateTaskRows,
@@ -1166,6 +1183,7 @@ function createProjectDashboardLowerRows(
   validationRuntimeRows?: ValidationRuntimeDisplayRows,
   postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
   developmentRequestRows?: ExternalProjectDevelopmentRequestDisplayRows,
+  adosRunStatusRows?: ExternalProjectAdosRunStatusDisplayRows,
   adosRunPreparationRows?: ExternalProjectAdosRunPreparationDisplayRows,
   adosExecutionRows?: ExternalProjectAdosExecutionDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
@@ -1365,6 +1383,16 @@ function createProjectDashboardLowerRows(
       text: `[DEV REQUEST] ${developmentRequestRows.statusText}; ${developmentRequestRows.contextText}; ${developmentRequestRows.boundaryText}`,
       maxLines: 2,
       dropPriority: 8,
+      usePriorityFit: true,
+    });
+  }
+
+  if (adosRunStatusRows) {
+    const reasonText = adosRunStatusRows.reasonText ? `; ${adosRunStatusRows.reasonText}` : "";
+    lowerRows.push({
+      text: `[ADOS STATUS] ${adosRunStatusRows.statusText}; ${adosRunStatusRows.contextText}${reasonText}; ${adosRunStatusRows.boundaryText}`,
+      maxLines: 3,
+      dropPriority: 7,
       usePriorityFit: true,
     });
   }
