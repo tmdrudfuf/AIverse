@@ -1553,6 +1553,18 @@ function createWrapTokens(text: string) {
   for (let index = 0; index < words.length; index += 1) {
     const word = words[index];
     const nextWord = words[index + 1];
+    if (
+      word === "no"
+      && nextWord === "validation,"
+      && words[index + 2] === "review,"
+      && words[index + 3] === "repository"
+      && words[index + 4]?.startsWith("mutation")
+    ) {
+      tokens.push(words.slice(index, index + 5).join(" "));
+      index += 4;
+      continue;
+    }
+
     if (nextWord && labelValueTokens.has(word)) {
       tokens.push(`${word} ${nextWord}`);
       index += 1;
