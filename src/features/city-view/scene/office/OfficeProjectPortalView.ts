@@ -1194,10 +1194,15 @@ function createProjectDashboardLowerRows(
   preparedWorkSessionRows?: PreparedWorkSessionDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
+  const hasExternalAdosRunRows = Boolean(adosRunStatusRows || adosRunPreparationRows || adosExecutionRows);
   const lowerRows: ProjectDashboardLowerRow[] = [
     { text: `[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, maxLines: 1, dropPriority: 0 },
     { text: `[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, maxLines: 1, dropPriority: 0 },
-    { text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`, maxLines: 2, dropPriority: 0 },
+    {
+      text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`,
+      maxLines: hasExternalAdosRunRows ? 1 : 2,
+      dropPriority: 0,
+    },
     { text: `[ATTENTION] ${rows.advisoryNextText.replace("Next attention: ", "")}`, maxLines: 1, dropPriority: 0 },
   ];
 
@@ -1219,7 +1224,10 @@ function createProjectDashboardLowerRows(
     lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 29 });
   }
 
-  if (issueSyncRows) {
+  const shouldRenderIssueSyncRows = Boolean(issueSyncRows)
+    && !(hasExternalAdosRunRows && issueSyncRows?.statusText === "No repository identity");
+
+  if (shouldRenderIssueSyncRows && issueSyncRows) {
     lowerRows.push({ text: `[ISSUES] ${issueSyncRows.statusText}`, maxLines: 1, dropPriority: 10 });
     if (issueSyncRows.issueListText) {
       lowerRows.push({ text: `[ISSUE LIST] ${issueSyncRows.issueListText}`, maxLines: 1, dropPriority: 10 });
@@ -1389,11 +1397,11 @@ function createProjectDashboardLowerRows(
 
   if (adosRunStatusRows) {
     const reasonText = adosRunStatusRows.reasonText ? `; ${adosRunStatusRows.reasonText}` : "";
-    const boundaryText = compactExternalAdosStatusBoundaryText(adosRunStatusRows.boundaryText);
     const contextText = prioritizeExternalAdosStatusContextText(adosRunStatusRows.contextText);
+    const boundaryText = compactExternalAdosStatusBoundaryText(adosRunStatusRows.boundaryText);
     lowerRows.push({
-      text: `[ADOS STATUS] ${adosRunStatusRows.statusText}; ${boundaryText}${reasonText}; ${contextText}`,
-      maxLines: 3,
+      text: `[ADOS STATUS] ${adosRunStatusRows.statusText} ${boundaryText}${reasonText} ${contextText}`,
+      maxLines: 2,
       dropPriority: 4,
       usePriorityFit: true,
     });
@@ -1640,16 +1648,17 @@ function compactExternalAdosExecutionBoundaryText(text: string) {
 }
 
 function compactExternalAdosStatusBoundaryText(text: string) {
-  return text.replace(/ from status inspection$/, "");
+  return text
+    .replace(/, GitHub mutation, publish, merge, or deploy from status inspection$/, "")
+    .replace(/ from status inspection$/, "");
 }
 
 function prioritizeExternalAdosStatusContextText(text: string) {
   const parts = text.split("; ");
-  const sourcePart = parts.find((part) => part.startsWith("source "));
   const worktreePart = parts.find((part) => part.startsWith("worktree "));
   const branchPart = parts.find((part) => part.startsWith("branch "));
   const preparationPart = parts.find((part) => part === "preparation recorded");
-  const prioritizedParts = [sourcePart, worktreePart, branchPart, preparationPart].filter(
+  const prioritizedParts = (worktreePart ? [worktreePart] : [branchPart, preparationPart]).filter(
     (part): part is string => Boolean(part),
   );
   return prioritizedParts.join("; ") || text;
