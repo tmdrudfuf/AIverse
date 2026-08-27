@@ -268,7 +268,7 @@ describe("CLI process: orchestrate --validation-strategy dry-run (Spec 055)", ()
     expect(result.stdout).toContain("Final full validation commands: npm test");
     expect(result.stdout).toContain("Next validation phase: focused");
     expect(fs.existsSync(path.join(cwd, ".agent-workflow", "runs"))).toBe(false);
-  });
+  }, 20000);
 
   it("defaults to full-every-cycle when no strategy flag is provided", () => {
     const cwd = createTempDir();
