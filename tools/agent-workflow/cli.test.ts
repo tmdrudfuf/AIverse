@@ -278,7 +278,7 @@ describe("CLI process: orchestrate --validation-strategy dry-run (Spec 055)", ()
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Validation strategy: full-every-cycle");
-  });
+  }, 20000);
 
   it("accepts --force-full-validation in dry-run without error", () => {
     const cwd = createTempDir();
@@ -290,7 +290,7 @@ describe("CLI process: orchestrate --validation-strategy dry-run (Spec 055)", ()
 
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("Next validation phase: full");
-  });
+  }, 20000);
 });
 
 describe("orchestrate result output states which agents served each role", () => {

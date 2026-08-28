@@ -15,6 +15,7 @@ export class CameraController {
     const deltaSeconds = deltaMs / 1000;
     this.applyZoomIntent(intent, deltaSeconds);
     this.updateZoom();
+    this.applyPanIntent(intent);
     this.applyActiveCameraTarget();
   }
 
@@ -43,6 +44,10 @@ export class CameraController {
     };
 
     if (options.preferredZoom !== undefined) this.setZoomTarget(options.preferredZoom);
+  }
+
+  clearFocusTarget() {
+    this.state.activeCameraTarget = undefined;
   }
 
   destroy() {
@@ -75,6 +80,22 @@ export class CameraController {
     const nextX = center.x - camera.width / (2 * nextZoom);
     const nextY = center.y - camera.height / (2 * nextZoom);
     const clamped = clampCameraScroll(nextX, nextY, this.state.bounds, camera.width, camera.height, nextZoom);
+    camera.setScroll(clamped.x, clamped.y);
+  }
+
+  private applyPanIntent(intent: NavigationIntent) {
+    if (!intent.isPanning) return;
+
+    this.clearFocusTarget();
+    const camera = this.scene.cameras.main;
+    const clamped = clampCameraScroll(
+      camera.scrollX + intent.panDeltaX / camera.zoom,
+      camera.scrollY + intent.panDeltaY / camera.zoom,
+      this.state.bounds,
+      camera.width,
+      camera.height,
+      camera.zoom,
+    );
     camera.setScroll(clamped.x, clamped.y);
   }
 

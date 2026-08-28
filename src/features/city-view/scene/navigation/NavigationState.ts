@@ -4,8 +4,11 @@ import type { NavigationIntent, NavigationState } from "./navigationTypes";
 export const NEUTRAL_NAVIGATION_INTENT: NavigationIntent = {
   directionX: 0,
   directionY: 0,
+  panDeltaX: 0,
+  panDeltaY: 0,
   zoomDelta: 0,
   isMoving: false,
+  isPanning: false,
   source: "none",
 };
 
