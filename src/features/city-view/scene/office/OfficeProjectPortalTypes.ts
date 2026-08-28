@@ -10,6 +10,7 @@ import type {
   ExternalProjectAdosExecutionResults,
   ExternalProjectAdosExecutions,
 } from "./external-ados-execution/ExternalProjectAdosExecutionTypes";
+import type { ExternalProjectAdosRunStatuses } from "./external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "./external-development-requests/ExternalProjectDevelopmentRequestTypes";
 import type { GitHubRepositorySummary } from "./github/GitHubRepositoryTypes";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
@@ -239,6 +240,7 @@ export type ProjectPortalState = {
   externalProjectAdosRunPreparations: ExternalProjectAdosRunPreparations;
   externalProjectAdosExecutions: ExternalProjectAdosExecutions;
   externalProjectAdosExecutionResults: ExternalProjectAdosExecutionResults;
+  externalProjectAdosRunStatuses: ExternalProjectAdosRunStatuses;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

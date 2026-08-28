@@ -8,8 +8,8 @@ describe("ExternalProjectAdosExecutionView", () => {
     const rows = createExternalProjectAdosExecutionDisplayRows(createExecution(), undefined);
 
     expect(rows).toEqual({
-      statusText: "Completed - codex/129-trusted-local-ados-execution-bridge",
-      contextText: "Ky-Project/AIverse-trusted-local-ados-execution-bridge; base 00f22e1; policy v1; implementer started",
+      statusText: "Completed - codex/130-external-project-ados-run-status",
+      contextText: "Ky-Project/AIverse-external-project-ados-run-status; base 7570ef9; policy v1; implementer started",
       boundaryText: "Validation, review, repository mutation, GitHub, publish, merge, and deploy not started.",
     });
   });
@@ -34,11 +34,11 @@ function createExecution(): ExternalProjectAdosExecution {
     preparationId: "external-project-draft:external-ados-run-preparation",
     developmentRequestDraftId: "external-project-draft:external-development-request-draft",
     status: "Completed",
-    featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-    authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-    specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+    featureBranch: "codex/130-external-project-ados-run-status",
+    authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+    specPath: "specs/130-external-project-ados-run-status/spec.md",
     repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
-    worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+    worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
     validationCommands: ["npm test"],
     reviewerCommand: "claude -p",
     executionPolicyVersion: 1,
@@ -58,7 +58,7 @@ function createExecution(): ExternalProjectAdosExecution {
       agentId: "Claude",
       role: "Implementer",
       commandDisplay: "claude -p",
-      workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+      workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
       started: true,
       completed: true,
       timedOut: false,

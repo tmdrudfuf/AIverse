@@ -6,8 +6,8 @@ import { createExternalProjectAdosRunPreparationDisplayRows } from "./ExternalPr
 describe("ExternalProjectAdosRunPreparationView", () => {
   it("formats compact preparation display rows", () => {
     expect(createExternalProjectAdosRunPreparationDisplayRows(createPreparation())).toEqual({
-      statusText: "Prepared - codex/129-trusted-local-ados-execution-bridge",
-      contextText: "base 00f22e1; specs/129-trusted-local-ados-execution-bridge/spec.md; 6 validation commands; reviewer claude -p; policy v1",
+      statusText: "Prepared - codex/130-external-project-ados-run-status",
+      contextText: "base 7570ef9; specs/130-external-project-ados-run-status/spec.md; 6 validation commands; reviewer claude -p; policy v1",
       boundaryText: "Local preparation only.",
     });
   });
@@ -23,9 +23,9 @@ function createPreparation(): ExternalProjectAdosRunPreparation {
     projectId: "external-project-draft",
     developmentRequestDraftId: "external-project-draft:external-development-request-draft",
     status: "Prepared",
-    featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-    authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-    specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+    featureBranch: "codex/130-external-project-ados-run-status",
+    authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+    specPath: "specs/130-external-project-ados-run-status/spec.md",
     validationCommands: [
       "npm test",
       "npx tsc --noEmit",

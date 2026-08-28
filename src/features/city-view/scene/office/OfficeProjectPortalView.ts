@@ -15,6 +15,11 @@ import {
   createExternalProjectAdosExecutionDisplayRows,
   type ExternalProjectAdosExecutionDisplayRows,
 } from "./external-ados-execution/ExternalProjectAdosExecutionView";
+import { deriveExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusService";
+import {
+  createExternalProjectAdosRunStatusDisplayRows,
+  type ExternalProjectAdosRunStatusDisplayRows,
+} from "./external-ados-run-status/ExternalProjectAdosRunStatusView";
 import { createExecutionPlanDisplayRows, type ExecutionPlanDisplayRows } from "./execution-plans/ExecutionPlanView";
 import { resolveCurrentExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
 import { createExecutionReadinessDisplayRows, type ExecutionReadinessDisplayRows } from "./execution-readiness/ExecutionReadinessView";
@@ -600,6 +605,17 @@ export class OfficeProjectPortalView {
       dashboardProjectId ? adosExecutions[dashboardProjectId] : undefined,
       dashboardProjectId ? adosExecutionResults[dashboardProjectId] : undefined,
     );
+    const adosRunStatuses = state.externalProjectAdosRunStatuses ?? {};
+    const adosRunStatus = dashboardProjectId
+      ? deriveExternalProjectAdosRunStatus({
+        projectId: dashboardProjectId,
+        preparation: adosRunPreparations[dashboardProjectId],
+        execution: adosExecutions[dashboardProjectId],
+        result: adosExecutionResults[dashboardProjectId],
+        persistedStatus: adosRunStatuses[dashboardProjectId],
+      })
+      : undefined;
+    const adosRunStatusRows = createExternalProjectAdosRunStatusDisplayRows(adosRunStatus);
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -623,6 +639,7 @@ export class OfficeProjectPortalView {
         validationRuntimeRows,
         postValidationReviewTargetRows,
         developmentRequestRows,
+        adosRunStatusRows,
         adosRunPreparationRows,
         adosExecutionRows,
         candidateTaskRows,
@@ -1166,6 +1183,7 @@ function createProjectDashboardLowerRows(
   validationRuntimeRows?: ValidationRuntimeDisplayRows,
   postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
   developmentRequestRows?: ExternalProjectDevelopmentRequestDisplayRows,
+  adosRunStatusRows?: ExternalProjectAdosRunStatusDisplayRows,
   adosRunPreparationRows?: ExternalProjectAdosRunPreparationDisplayRows,
   adosExecutionRows?: ExternalProjectAdosExecutionDisplayRows,
   candidateTaskRows?: CandidateTaskDisplayRows,
@@ -1176,10 +1194,15 @@ function createProjectDashboardLowerRows(
   preparedWorkSessionRows?: PreparedWorkSessionDisplayRows,
 ): ProjectDashboardLowerRow[] {
   const sourceSignalRows = rows.sourceSignalRows;
+  const hasExternalAdosRunRows = Boolean(adosRunStatusRows || adosRunPreparationRows || adosExecutionRows);
   const lowerRows: ProjectDashboardLowerRow[] = [
     { text: `[RISK] ${rows.blockerText.replace("Blocker: ", "")}`, maxLines: 1, dropPriority: 0 },
     { text: `[ACTIVITY] ${rows.activityText.replace("Activity: ", "")}`, maxLines: 1, dropPriority: 0 },
-    { text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`, maxLines: 2, dropPriority: 0 },
+    {
+      text: `[ADVISORY] ${rows.advisoryText.replace("Advisory: ", "")}`,
+      maxLines: hasExternalAdosRunRows ? 1 : 2,
+      dropPriority: 0,
+    },
     { text: `[ATTENTION] ${rows.advisoryNextText.replace("Next attention: ", "")}`, maxLines: 1, dropPriority: 0 },
   ];
 
@@ -1201,7 +1224,10 @@ function createProjectDashboardLowerRows(
     lowerRows.push({ text: `[REPO-SYNC] ${repositorySyncRows[0]}`, maxLines: 1, dropPriority: 29 });
   }
 
-  if (issueSyncRows) {
+  const shouldRenderIssueSyncRows = Boolean(issueSyncRows)
+    && !(hasExternalAdosRunRows && issueSyncRows?.statusText === "No repository identity");
+
+  if (shouldRenderIssueSyncRows && issueSyncRows) {
     lowerRows.push({ text: `[ISSUES] ${issueSyncRows.statusText}`, maxLines: 1, dropPriority: 10 });
     if (issueSyncRows.issueListText) {
       lowerRows.push({ text: `[ISSUE LIST] ${issueSyncRows.issueListText}`, maxLines: 1, dropPriority: 10 });
@@ -1369,11 +1395,23 @@ function createProjectDashboardLowerRows(
     });
   }
 
+  if (adosRunStatusRows) {
+    const reasonText = adosRunStatusRows.reasonText ? `; ${adosRunStatusRows.reasonText}` : "";
+    const contextText = prioritizeExternalAdosStatusContextText(adosRunStatusRows.contextText);
+    const boundaryText = compactExternalAdosStatusBoundaryText(adosRunStatusRows.boundaryText);
+    lowerRows.push({
+      text: `[ADOS STATUS] ${adosRunStatusRows.statusText} ${boundaryText}${reasonText} ${contextText}`,
+      maxLines: 2,
+      dropPriority: 4,
+      usePriorityFit: true,
+    });
+  }
+
   if (adosRunPreparationRows) {
     lowerRows.push({
       text: `[ADOS PREP] ${adosRunPreparationRows.statusText}; ${adosRunPreparationRows.contextText}; ${adosRunPreparationRows.boundaryText}`,
       maxLines: 2,
-      dropPriority: 8,
+      dropPriority: 4,
       usePriorityFit: true,
     });
   }
@@ -1382,7 +1420,7 @@ function createProjectDashboardLowerRows(
     lowerRows.push({
       text: `[ADOS EXEC] ${adosExecutionRows.statusText}; bridge; ${compactExternalAdosExecutionBoundaryText(adosExecutionRows.boundaryText)}; ${adosExecutionRows.contextText}`,
       maxLines: 3,
-      dropPriority: 8,
+      dropPriority: 4,
       usePriorityFit: true,
     });
   }
@@ -1491,7 +1529,7 @@ function fitProjectDashboardLowerRows(
 function wrapText(text: string, maxLength: number) {
   if (text.length <= maxLength) return text;
 
-  const words = text.split(" ");
+  const words = createWrapTokens(text);
   const lines: string[] = [];
   let currentLine = "";
 
@@ -1515,6 +1553,38 @@ function wrapText(text: string, maxLength: number) {
 
   if (currentLine) lines.push(currentLine);
   return lines.join("\n");
+}
+
+function createWrapTokens(text: string) {
+  const words = text.split(" ");
+  const tokens: string[] = [];
+  const labelValueTokens = new Set(["branch", "worktree", "reason"]);
+
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const nextWord = words[index + 1];
+    if (
+      word === "no"
+      && nextWord === "validation,"
+      && words[index + 2] === "review,"
+      && words[index + 3] === "repository"
+      && words[index + 4]?.startsWith("mutation")
+    ) {
+      tokens.push(words.slice(index, index + 5).join(" "));
+      index += 4;
+      continue;
+    }
+
+    if (nextWord && labelValueTokens.has(word)) {
+      tokens.push(`${word} ${nextWord}`);
+      index += 1;
+      continue;
+    }
+
+    tokens.push(word);
+  }
+
+  return tokens;
 }
 
 function wrapAndClampText(text: string, maxLength: number, maxLines: number) {
@@ -1575,6 +1645,23 @@ function compactExternalAdosExecutionBoundaryText(text: string) {
     .replace(/^Provider not invoked;\s*/, "")
     .replace(/^Validation, review, repository mutation, /, "")
     .replace(/\.$/, "");
+}
+
+function compactExternalAdosStatusBoundaryText(text: string) {
+  return text
+    .replace(/, GitHub mutation, publish, merge, or deploy from status inspection$/, "")
+    .replace(/ from status inspection$/, "");
+}
+
+function prioritizeExternalAdosStatusContextText(text: string) {
+  const parts = text.split("; ");
+  const worktreePart = parts.find((part) => part.startsWith("worktree "));
+  const branchPart = parts.find((part) => part.startsWith("branch "));
+  const preparationPart = parts.find((part) => part === "preparation recorded");
+  const prioritizedParts = (worktreePart ? [worktreePart] : [branchPart, preparationPart]).filter(
+    (part): part is string => Boolean(part),
+  );
+  return prioritizedParts.join("; ") || text;
 }
 
 function compactExecutionPlanDetailText(text: string) {

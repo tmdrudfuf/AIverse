@@ -88,9 +88,9 @@ describe("BrowserOfficeSessionService", () => {
       projectId: "external-crm",
       developmentRequestDraftId: "external-crm:external-development-request-draft",
       status: "Prepared",
-      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-      authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-      specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+      featureBranch: "codex/130-external-project-ados-run-status",
+      authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+      specPath: "specs/130-external-project-ados-run-status/spec.md",
       validationCommands: ["npm test", "npx tsc --noEmit"],
       reviewerCommand: "claude -p",
       executionPolicyVersion: 1,
@@ -104,9 +104,9 @@ describe("BrowserOfficeSessionService", () => {
       preparationId: "external-crm:external-ados-run-preparation",
       developmentRequestDraftId: "external-crm:external-development-request-draft",
       status: "Completed",
-      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-      authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-      specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+      featureBranch: "codex/130-external-project-ados-run-status",
+      authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+      specPath: "specs/130-external-project-ados-run-status/spec.md",
       repositoryPath: "C:/repo/external-crm",
       worktreePath: "C:/worktrees/external-crm",
       validationCommands: ["npm test", "npx tsc --noEmit"],
@@ -161,6 +161,27 @@ describe("BrowserOfficeSessionService", () => {
       resultAt: "2026-08-25T00:00:00.000Z",
       rulesVersion: "external-ados-execution-v1",
     };
+    source.externalProjectAdosRunStatuses["external-crm"] = {
+      id: "external-crm:external-ados-run-status:external-ados-run-status-v1",
+      projectId: "external-crm",
+      stage: "Completed",
+      status: "Completed",
+      source: "result",
+      preparationId: "external-crm:external-ados-run-preparation",
+      executionId: "external-crm:external-ados-execution:external-crm:external-ados-run-preparation:external-ados-execution-v1",
+      reasonCodes: ["EXTERNAL_ADOS_EXECUTION_STARTED"],
+      featureBranch: "codex/130-external-project-ados-run-status",
+      worktreePath: "C:/worktrees/external-crm",
+      updatedAt: "2026-08-25T00:00:00.000Z",
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      rulesVersion: "external-ados-run-status-v1",
+    };
 
     expect(service.saveState(source)).toBe(true);
 
@@ -190,7 +211,7 @@ describe("BrowserOfficeSessionService", () => {
     expect(restored.externalProjectAdosRunPreparations["external-crm"]).toMatchObject({
       projectId: "external-crm",
       status: "Prepared",
-      featureBranch: "codex/129-trusted-local-ados-execution-bridge",
+      featureBranch: "codex/130-external-project-ados-run-status",
       reviewerCommand: "claude -p",
     });
     expect(restored.externalProjectAdosExecutions["external-crm"]).toMatchObject({
@@ -203,6 +224,18 @@ describe("BrowserOfficeSessionService", () => {
     expect(restored.externalProjectAdosExecutionResults["external-crm"]).toMatchObject({
       status: "Completed",
       started: true,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+    });
+    expect(restored.externalProjectAdosRunStatuses["external-crm"]).toMatchObject({
+      stage: "Completed",
+      source: "result",
+      reasonCodes: ["EXTERNAL_ADOS_EXECUTION_STARTED"],
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
       publishStarted: false,
       mergeStarted: false,
       deployStarted: false,
@@ -293,6 +326,50 @@ describe("BrowserOfficeSessionService", () => {
 
     expect(() => service.restoreState(state)).not.toThrow();
     expect(service.saveState(state)).toBe(false);
+  });
+
+  it("ignores malformed persisted external ADOS run statuses", () => {
+    const storage = createMemoryStorage();
+    storage.setItem(BROWSER_OFFICE_SESSION_STORAGE_KEY, JSON.stringify({
+      version: BROWSER_OFFICE_SESSION_SCHEMA_VERSION,
+      savedAt: "2026-08-25T00:00:00.000Z",
+      candidateTaskCollections: {},
+      candidateAssignmentCollections: {},
+      candidatePromotionReviewCollections: {},
+      candidatePromotionDecisionRecords: {},
+      candidateProjectTaskPromotionResultCollections: {},
+      taskCollections: {},
+      employees: [],
+      confirmedEmployeeAssignmentRecords: {},
+      confirmedEmployeeAssignmentResultCollections: {},
+      preparedWorkSessionRecords: {},
+      preparedWorkSessionResultCollections: {},
+      activeWorkSessionStartResultCollections: {},
+      externalProjectAdosRunStatuses: {
+        "external-crm": {
+          id: "external-crm:external-ados-run-status:external-ados-run-status-v1",
+          projectId: "external-crm",
+          stage: "Failed",
+          status: "Failed",
+          source: "result",
+          reasonCodes: ["EXTERNAL_ADOS_EXECUTION_SPAWN_FAILED"],
+          updatedAt: "2026-08-25T00:00:00.000Z",
+          validationStarted: true,
+          reviewStarted: false,
+          repositoryMutationStarted: false,
+          githubMutationStarted: false,
+          publishStarted: false,
+          mergeStarted: false,
+          deployStarted: false,
+          rulesVersion: "external-ados-run-status-v1",
+        },
+      },
+      workSessions: {},
+    }));
+
+    const restored = new BrowserOfficeSessionService({ storage }).restoreState(createProjectPortalState({ browserOfficeSessionService: false }));
+
+    expect(restored.externalProjectAdosRunStatuses).toEqual({});
   });
 
   it("ignores malformed persisted project registry entries while restoring defaults", () => {

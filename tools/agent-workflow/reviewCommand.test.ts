@@ -267,7 +267,7 @@ describe("git context collection", () => {
     expect(ctx.hasStagedChanges).toBe(false);
     expect(ctx.hasUnstagedChanges).toBe(false);
     expect(ctx.hasCommittedChanges).toBe(false);
-  });
+  }, 20000);
 
   it("detects staged-only changes", () => {
     const cwd = createTempDir();

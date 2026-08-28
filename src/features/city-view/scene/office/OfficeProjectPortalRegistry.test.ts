@@ -144,8 +144,8 @@ describe("createProjectPortalState", () => {
       },
       localRepositoryBinding: {
         projectId: EXTERNAL_PROJECT_DRAFT_ID,
-        worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-repository-identity-edit-overlay",
-        branchName: "codex/126-external-project-repository-identity-edit-overlay",
+        worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
+        branchName: "codex/130-external-project-ados-run-status",
       },
       repositoryIdentity: {
         provider: "local",

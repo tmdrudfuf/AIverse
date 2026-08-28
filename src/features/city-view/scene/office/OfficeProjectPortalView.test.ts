@@ -1259,6 +1259,7 @@ describe("OfficeProjectPortalView", () => {
     expect(renderedText.map((item) => item.text)).toContain("Daily Proof");
     expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
     expect(findRenderedRow(renderedText, "[ADOS PREP]")).toBeUndefined();
+    expect(findRenderedRow(renderedText, "[ADOS STATUS]")).toBeUndefined();
   });
 
   it("renders an external project ADOS run preparation row on the Project Dashboard", () => {
@@ -1275,8 +1276,8 @@ describe("OfficeProjectPortalView", () => {
         projectId: "daily-proof",
         developmentRequestDraftId: "daily-proof:external-development-request-draft",
         status: "Prepared",
-        featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-        authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
+        featureBranch: "codex/130-external-project-ados-run-status",
+        authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
         specPath: "spec.md",
         validationCommands: [
           "npm test",
@@ -1297,9 +1298,14 @@ describe("OfficeProjectPortalView", () => {
     new OfficeProjectPortalView(scene, state);
 
     const adosPrepRow = findRenderedRow(renderedText, "[ADOS PREP]");
-    expect(adosPrepRow?.text).toContain("Prepared - codex/129-trusted-local-ados-execution-bridge");
+    const adosStatusRow = findRenderedRow(renderedText, "[ADOS STATUS]");
+    expect(adosStatusRow?.text).toContain("Prepared - Prepared");
+    expect(adosStatusRow?.text).toContain("branch codex/130-external-project-ados-run-status");
+    expect(adosStatusRow?.text).toContain("preparation recorded");
+    expect(adosStatusRow?.text).toContain("no validation, review, repository mutation");
+    expect(adosPrepRow?.text).toContain("Prepared - codex/130-external-project-ados-run-status");
     expect(adosPrepRow?.text).toContain("base");
-    expect(adosPrepRow?.text).toContain("00f22e1");
+    expect(adosPrepRow?.text).toContain("7570ef9");
     expect(adosPrepRow?.text).toContain("6 validation commands");
     expect(findRenderedRow(renderedText, "[IMPLEMENTER RUNTIME]")).toBeDefined();
   });
@@ -1319,11 +1325,11 @@ describe("OfficeProjectPortalView", () => {
         preparationId: "daily-proof:external-ados-run-preparation",
         developmentRequestDraftId: "daily-proof:external-development-request-draft",
         status: "Completed",
-        featureBranch: "codex/129-trusted-local-ados-execution-bridge",
-        authoritativeBaseSha: "00f22e1997979c087a1d85f9a6b01fe5450bfdf5",
-        specPath: "specs/129-trusted-local-ados-execution-bridge/spec.md",
+        featureBranch: "codex/130-external-project-ados-run-status",
+        authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+        specPath: "specs/130-external-project-ados-run-status/spec.md",
         repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
-        worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+        worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
         validationCommands: ["npm test"],
         reviewerCommand: "claude -p",
         executionPolicyVersion: 1,
@@ -1343,7 +1349,7 @@ describe("OfficeProjectPortalView", () => {
           agentId: "Claude",
           role: "Implementer",
           commandDisplay: "claude --dangerously-skip-permissions -p {{prompt}}",
-          workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-trusted-local-ados-execution-bridge",
+          workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
           started: true,
           completed: true,
           timedOut: false,
@@ -1361,9 +1367,70 @@ describe("OfficeProjectPortalView", () => {
     new OfficeProjectPortalView(scene, state);
 
     const adosExecRow = findRenderedRow(renderedText, "[ADOS EXEC]");
-    expect(adosExecRow?.text).toContain("Completed - codex/129-trusted-local-ados-execution-bridge");
-    expect(adosExecRow?.text).toContain("AIverse-trusted-local-ados-execution-bridge");
+    const adosStatusRow = findRenderedRow(renderedText, "[ADOS STATUS]");
+    expect(adosStatusRow?.text).toContain("Completed - Completed");
+    expect(adosStatusRow?.text).toContain("worktree Ky-Project/AIverse-external-project-ados-run-status");
+    expect(adosStatusRow?.text).toContain("no validation, review, repository mutation");
+    expect(adosExecRow?.text).toContain("Completed - codex/130-external-project-ados-run-status");
+    expect(adosExecRow?.text).toContain("AIverse-external-project-ados-run-status");
     expect(adosExecRow?.text).toContain("GitHub, publish, merge, and deploy not started");
+  });
+
+  it("renders the latest external ADOS execution result instead of stale persisted status", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({
+      viewMode: "project-dashboard",
+      projectDashboardSnapshot: createProjectDashboardSnapshot({ externalSources: [] }),
+    });
+    state.selectedProjectDashboardProjectId = "daily-proof";
+    state.externalProjectAdosRunStatuses = {
+      "daily-proof": {
+        id: "daily-proof:external-ados-run-status:stale",
+        projectId: "daily-proof",
+        stage: "Prepared",
+        status: "Prepared",
+        source: "preparation",
+        reasonCodes: [],
+        updatedAt: "2026-08-24T00:00:00.000Z",
+        validationStarted: false,
+        reviewStarted: false,
+        repositoryMutationStarted: false,
+        githubMutationStarted: false,
+        publishStarted: false,
+        mergeStarted: false,
+        deployStarted: false,
+        rulesVersion: "stale",
+      },
+    };
+    state.externalProjectAdosExecutionResults = {
+      "daily-proof": {
+        id: "daily-proof:external-ados-execution-result",
+        projectId: "daily-proof",
+        preparationId: "daily-proof:external-ados-run-preparation",
+        status: "Blocked",
+        reasonCodes: ["EXTERNAL_ADOS_EXECUTION_LOCAL_BINDING_MISSING"],
+        started: false,
+        duplicateExistingExecution: false,
+        implementerStarted: false,
+        validationStarted: false,
+        reviewStarted: false,
+        repositoryMutationStarted: false,
+        githubMutationStarted: false,
+        publishStarted: false,
+        mergeStarted: false,
+        deployStarted: false,
+        resultAt: "2026-08-25T00:00:00.000Z",
+        rulesVersion: "external-ados-execution-v1",
+      },
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const adosStatusRow = findRenderedRow(renderedText, "[ADOS STATUS]");
+    expect(adosStatusRow?.text).toContain("Blocked - Blocked");
+    expect(adosStatusRow?.text).toContain("reason EXTERNAL_ADOS_EXECUTION_LOCAL_BINDING_MISSING");
+    expect(adosStatusRow?.text).not.toContain("Prepared - Prepared");
   });
 
   it("renders decision controls in candidate detail for the selected Project Dashboard candidate", () => {
@@ -2461,6 +2528,7 @@ function createPortalState(options: {
     externalProjectAdosRunPreparations: {},
     externalProjectAdosExecutions: {},
     externalProjectAdosExecutionResults: {},
+    externalProjectAdosRunStatuses: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
