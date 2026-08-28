@@ -11,16 +11,34 @@ describe("OfficeVisualLayer", () => {
       createObject("desk-1", { x: 120, y: 0, width: 80, height: 60 }, { type: "desk", action: "inspect" }),
     ]);
 
-    expect(containers).toHaveLength(3);
+    expect(containers).toHaveLength(5);
 
     layer.refreshInteractiveObjects(scene, [
       createObject("computer-2", { x: 200, y: 0, width: 80, height: 60 }),
       createObject("disabled-computer", { x: 300, y: 0, width: 80, height: 60 }, { enabled: false }),
     ]);
 
-    expect(containers[1].destroyedWithChildren).toBe(true);
-    expect(containers[2].destroyedWithChildren).toBe(true);
-    expect(containers).toHaveLength(4);
+    expect(containers[0].destroyedWithChildren).toBe(false);
+    expect(containers[1].destroyedWithChildren).toBe(false);
+    expect(containers[3].destroyedWithChildren).toBe(true);
+    expect(containers[4].destroyedWithChildren).toBe(true);
+    expect(containers).toHaveLength(6);
+
+    layer.destroy();
+
+    expect(containers.every((container) => container.destroyedWithChildren)).toBe(true);
+  });
+
+  it("renders normally when an office has no interior foundation", () => {
+    const { scene, containers } = createSceneStub();
+    const office = createOffice();
+    delete office.interiorFoundation;
+
+    const layer = new OfficeVisualLayer(scene, office, [
+      createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
+    ]);
+
+    expect(containers).toHaveLength(2);
 
     layer.destroy();
 
@@ -107,6 +125,26 @@ function createOffice(): OfficeDefinition {
     walkableBounds: { x: 0, y: 0, width: 960, height: 640 },
     founderSpawn: { x: 10, y: 10 },
     exitZone: { x: 20, y: 20, width: 80, height: 40 },
+    interiorFoundation: {
+      zones: [
+        {
+          id: "reception",
+          label: "Reception",
+          role: "reception",
+          bounds: { x: 100, y: 80, width: 120, height: 40 },
+          accentColor: 0x5f7f8d,
+          enabled: true,
+        },
+        {
+          id: "workspace",
+          label: "Workspace",
+          role: "workspace",
+          bounds: { x: 300, y: 160, width: 120, height: 40 },
+          accentColor: 0x9de2e4,
+          enabled: true,
+        },
+      ],
+    },
     tilemap: {
       mapKey: "office-map",
       mapUrl: "/office.json",

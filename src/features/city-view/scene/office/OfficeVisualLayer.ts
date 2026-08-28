@@ -1,13 +1,16 @@
 import type { PhaserScene } from "../shared/phaserTypes";
 import type { OfficeDefinition, OfficeInteractiveObject } from "./officeTypes";
+import { getEnabledInteriorZones } from "./OfficeInteriorFoundation";
 
 const OFFICE_OVERLAY_DEPTH = 20;
 const EXIT_MARKER_DEPTH = 8;
+const INTERIOR_ZONE_DEPTH = 5;
 const INTERACTIVE_OBJECT_DEPTH = 7;
 
 export class OfficeVisualLayer {
   private readonly title: Phaser.GameObjects.Text;
   private readonly exitMarker: Phaser.GameObjects.Container;
+  private readonly interiorZoneMarkers: Phaser.GameObjects.Container[];
   private interactiveObjectMarkers: Phaser.GameObjects.Container[] = [];
 
   constructor(
@@ -27,6 +30,7 @@ export class OfficeVisualLayer {
       .setOrigin(0.5, 0)
       .setDepth(OFFICE_OVERLAY_DEPTH);
 
+    this.interiorZoneMarkers = getEnabledInteriorZones(office).map((zone) => createInteriorZoneMarker(scene, zone));
     this.exitMarker = createExitMarker(scene, office);
     this.refreshInteractiveObjects(scene, interactiveObjects);
   }
@@ -41,8 +45,35 @@ export class OfficeVisualLayer {
   destroy() {
     this.title.destroy();
     this.exitMarker.destroy(true);
+    this.interiorZoneMarkers.forEach((marker) => marker.destroy(true));
     this.interactiveObjectMarkers.forEach((marker) => marker.destroy(true));
   }
+}
+
+function createInteriorZoneMarker(scene: PhaserScene, zone: ReturnType<typeof getEnabledInteriorZones>[number]) {
+  const marker = scene.add.container(0, 0).setDepth(INTERIOR_ZONE_DEPTH);
+  const graphics = scene.add.graphics();
+  const centerX = zone.bounds.x + zone.bounds.width / 2;
+  const labelY = zone.bounds.y + Math.min(18, zone.bounds.height / 2);
+
+  graphics.fillStyle(zone.accentColor, 0.16);
+  graphics.fillRoundedRect(zone.bounds.x, zone.bounds.y, zone.bounds.width, zone.bounds.height, 8);
+  graphics.lineStyle(2, zone.accentColor, 0.72);
+  graphics.strokeRoundedRect(zone.bounds.x + 1, zone.bounds.y + 1, zone.bounds.width - 2, zone.bounds.height - 2, 8);
+
+  const label = scene.add
+    .text(centerX, labelY, zone.label.toUpperCase(), {
+      backgroundColor: "rgba(248, 250, 252, 0.88)",
+      color: "#253247",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "11px",
+      fontStyle: "700",
+      padding: { x: 7, y: 3 },
+    })
+    .setOrigin(0.5, 0.5);
+
+  marker.add([graphics, label]);
+  return marker;
 }
 
 function createComputerMarker(scene: PhaserScene, object: OfficeInteractiveObject) {
