@@ -52,6 +52,22 @@ export type OfficeInteractionResult = {
   message: string;
 };
 
+export type OfficeInteriorZoneRole = "reception" | "founder-desk" | "workspace" | "employee-desk";
+
+export type OfficeInteriorZone = {
+  id: string;
+  label: string;
+  role: OfficeInteriorZoneRole;
+  bounds: Rect;
+  accentColor: number;
+  enabled: boolean;
+  markerId?: string;
+};
+
+export type OfficeInteriorFoundation = {
+  zones: OfficeInteriorZone[];
+};
+
 export type OfficeDefinition = {
   sceneKey: string;
   buildingId: string;
@@ -61,6 +77,7 @@ export type OfficeDefinition = {
   founderSpawn: Point;
   exitZone: Rect;
   tilemap: OfficeTilemapDefinition;
+  interiorFoundation?: OfficeInteriorFoundation;
 };
 
 export type OfficeSpawnRequest = {
