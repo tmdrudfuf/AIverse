@@ -104,6 +104,19 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionController?.update(this.founderEntity.position);
       const activeBuilding = this.buildingInteractionController?.getActiveBuilding();
       this.buildingInteractionPrompt?.update(activeBuilding);
+      const clickedBuilding = this.buildingInteractionController?.consumeClickedBuilding();
+      if (clickedBuilding) {
+        const entryRequest = this.buildingTransitionController?.createEntryRequest(
+          clickedBuilding,
+          clickedBuilding.entrancePoint,
+          this.founderEntity.state.facing,
+        );
+
+        if (entryRequest) {
+          this.scene.start(entryRequest.officeSceneKey, entryRequest);
+          return;
+        }
+      }
 
       if (this.buildingInteractionController?.consumeInteractionPressed(activeBuilding) && activeBuilding) {
         const entryRequest = this.buildingTransitionController?.createEntryRequest(
@@ -118,7 +131,9 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         }
       }
 
-      this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
+      if (intent.isMoving || intent.source === "keyboard") {
+        this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
+      }
       this.cameraController?.update(delta, intent);
       this.synchronizeWorldState();
     }

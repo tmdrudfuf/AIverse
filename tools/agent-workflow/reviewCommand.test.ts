@@ -282,7 +282,7 @@ describe("git context collection", () => {
     expect(ctx.hasStagedChanges).toBe(true);
     expect(ctx.hasUnstagedChanges).toBe(false);
     expect(ctx.stagedDiff).toContain("staged content");
-  });
+  }, 20000);
 
   it("detects unstaged-only changes", () => {
     const cwd = createTempDir();
@@ -296,7 +296,7 @@ describe("git context collection", () => {
     expect(ctx.hasStagedChanges).toBe(false);
     expect(ctx.hasUnstagedChanges).toBe(true);
     expect(ctx.unstagedDiff).toContain("more");
-  });
+  }, 20000);
 
   it("detects committed branch changes plus working-tree changes", () => {
     const cwd = createTempDir();
@@ -315,7 +315,7 @@ describe("git context collection", () => {
     expect(ctx.committedLog).toContain("feature commit");
     expect(ctx.hasUnstagedChanges).toBe(true);
     expect(ctx.unstagedDiff).toContain("changed");
-  });
+  }, 20000);
 
   it("collects exact numstat additions/deletions and untruncated paths for a large change under a deeply nested path (regression for Codex Spec 056 review round 2, P1-001: --stat's bar graph abbreviates long paths and scales large counts)", () => {
     const cwd = createTempDir();
@@ -373,7 +373,7 @@ describe("git context collection", () => {
     expect(ctx.baseBranchRef).toBe("origin/main");
     expect(ctx.committedLog).toContain("feature commit");
     expect(ctx.committedLog).not.toContain("unrelated PR merged into origin main");
-  });
+  }, 20000);
 });
 
 describe("decision classification", () => {

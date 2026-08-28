@@ -104,6 +104,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       if (this.spawnRequest?.returnFacing) this.founderEntity.setFacing(this.spawnRequest.returnFacing);
 
       this.officeInteractionController = new OfficeInteractionController(this.officeInteractiveObjectRegistry);
+      this.officeInteractionController.setup(this);
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
       this.officeProgressionVisualStateLayer = new OfficeProgressionVisualStateLayer(this);
       this.officeLevelUpReactionLayer = new OfficeLevelUpReactionLayer(this);
@@ -151,6 +152,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const startPostValidationReviewPressed = this.officeActionInputController?.consumeStartPostValidationReviewPressed() ?? false;
 
       if (this.officeProjectPortalController?.isOpen()) {
+        this.navigationInputController?.setPointerNavigationEnabled(false);
+        this.officeInteractionController?.setPointerInteractionEnabled(false);
         this.officeProjectPortalController.updateInput({
           actionPressed,
           escapePressed,
@@ -177,6 +180,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         this.refreshOfficeProgressionVisualState();
         return;
       }
+      this.navigationInputController?.setPointerNavigationEnabled(true);
+      this.officeInteractionController?.setPointerInteractionEnabled(true);
 
       const intent = this.navigationInputController?.getIntent();
       if (!intent) return;
@@ -190,7 +195,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeInteractionPrompt?.update(activeObject);
       this.refreshEmployeeInsightOverlay();
 
-      if (actionPressed) {
+      const clickedInteractionResult = this.officeInteractionController?.consumeClickedInteraction();
+      if (clickedInteractionResult && opensProjectWorkspace(clickedInteractionResult.action)) {
+        this.officeInteractionPrompt?.update(undefined);
+        this.officeProjectPortalController?.open();
+        this.employeeConversationBubbleOverlay?.hide();
+      } else if (actionPressed) {
         const growthLoop = this.officeProjectPortalController?.getCompanyGrowthGameplayLoopResult();
         const returnPayload = this.officeExitController?.createReturnPayload(
           this.founderEntity.state.facing,
@@ -213,7 +223,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         }
       }
 
-      this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
+      if (intent.isMoving || intent.source === "keyboard") {
+        this.cameraController?.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
+      }
       this.cameraController?.update(delta, intent);
       this.refreshEmployeeNpcRenderer();
       this.refreshEmployeeInsightOverlay();
@@ -337,7 +349,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController?.destroy();
       this.founderEntity?.destroy();
       this.officeActionInputController?.destroy(this);
-      this.officeInteractionController?.destroy();
+      this.officeInteractionController?.destroy(this);
       this.officeInteractionPrompt?.destroy();
       this.officeProgressionVisualStateLayer?.destroy();
       this.officeLevelUpReactionLayer?.destroy();
