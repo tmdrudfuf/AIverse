@@ -80,8 +80,8 @@ describe("OfficeProjectPortalController employee insight integration", () => {
       },
     });
     expect(workingSource?.movementPosition).toMatchObject({
-      x: 248,
-      y: 182,
+      x: 136,
+      y: 206,
       positionHint: { zone: "workstation", slot: 0 },
     });
     expect(workingSource?.aiSnapshot?.contextSummary).toMatchObject({

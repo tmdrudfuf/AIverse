@@ -12,8 +12,8 @@ describe("EmployeeConversationBubbleOverlay", () => {
 
     expect(rectangles[0]).toMatchObject({
       visible: true,
-      x: 248,
-      y: 104,
+      x: 136,
+      y: 128,
     });
     expect(texts.map((text) => text.text)).toEqual([
       "Alex",
