@@ -819,6 +819,7 @@ describe("run-review --implementer support", () => {
     const spy = createSpyAdapter({ stdout: "should not run" });
     const preview = previewIndependentReview(createRoleSelectionState(), {
       cwd,
+      gitAdapter: createFakeGitAdapter(),
       processAdapter: spy,
       implementerAgentId: "claude",
     } as never);
@@ -977,7 +978,11 @@ describe("run-review --implementer support", () => {
     commitAll(cwd, "init");
 
     const spy = createSpyAdapter({ stdout: "should not run" });
-    const preview = previewIndependentReview(createState(), { cwd, processAdapter: spy } as never);
+    const preview = previewIndependentReview(createState(), {
+      cwd,
+      gitAdapter: createFakeGitAdapter(),
+      processAdapter: spy,
+    } as never);
 
     expect(preview.roleSource).toBe("default");
   });
