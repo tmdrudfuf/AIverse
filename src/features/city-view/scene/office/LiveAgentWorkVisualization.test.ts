@@ -8,6 +8,7 @@ describe("deriveLiveAgentWorkState", () => {
     ["implementer", "implementation", "engineering", "Implementing", { zone: "workstation", slot: 0 }],
     ["validation", "validation", "validation-qa", "Validating", { zone: "workstation", slot: 4 }],
     ["reviewer", "review", "review", "Reviewing", { zone: "review", slot: 0 }],
+    ["pr", "publication", "project-status-operations", "Publishing", { zone: "meetingArea", slot: 0 }],
     ["publication_gate", "publication", "project-status-operations", "Publishing", { zone: "meetingArea", slot: 0 }],
   ] as const)("maps %s state to semantic office work", (rawStage, stage, department, statusLabel, positionHint) => {
     const state = deriveLiveAgentWorkState(portalState({
@@ -48,6 +49,82 @@ describe("deriveLiveAgentWorkState", () => {
       statusLabel: "Blocked: EXTERNAL ADOS EXECUTION LOCAL BINDING MISSING",
     });
     expect(state.projectStatus.pipeline.some((item) => item.state === "blocked")).toBe(true);
+  });
+
+  it.each([
+    ["reviewer", "reviewer", "review", { zone: "review", slot: 0 }],
+    ["validation", "validator", "validation-qa", { zone: "workstation", slot: 4 }],
+  ] as const)("keeps blocked %s work associated with its semantic department", (rawStage, role, department, positionHint) => {
+    const state = deriveLiveAgentWorkState(portalState({
+      externalProjectAdosRunStatuses: {
+        alpha: status({
+          stage: "Blocked",
+          status: `${rawStage} blocked`,
+          reasonCodes: ["EXTERNAL_ADOS_EXECUTION_PROVIDER_UNAVAILABLE"],
+        }),
+      },
+    }));
+
+    expect(state).toMatchObject({
+      lifecycle: "blocked",
+      stage: "blocked",
+    });
+    expect(state.assignments[0]).toMatchObject({
+      role,
+      department,
+      positionHint,
+      visualTone: "warning",
+    });
+  });
+
+  it("does not derive whole-run complete from a completed implementer runtime result", () => {
+    const state = deriveLiveAgentWorkState(portalState({
+      implementerRuntimeResultCollections: {
+        alpha: {
+          projectId: "alpha",
+          results: [{
+            id: "alpha:implementer-runtime-result:runtime-1:claude-implementer-v1",
+            projectId: "alpha",
+            runtimeStartId: "runtime-1",
+            executionPlanId: "plan-1",
+            implementerRuntimeId: "implementer-runtime-1",
+            status: "Completed",
+            reasonCodes: [],
+            started: true,
+            duplicateActiveAttempt: false,
+            agentStarted: true,
+            implementerStarted: true,
+            reviewerStarted: false,
+            validationStarted: false,
+            repositoryMutationStarted: false,
+            githubMutationStarted: false,
+            resultAt: "2026-08-29T02:00:00.000Z",
+            rulesVersion: "claude-implementer-v1",
+          }],
+          resultCount: 1,
+          generatedAt: "2026-08-29T02:00:00.000Z",
+          rulesVersion: "claude-implementer-v1",
+        },
+      } as ProjectPortalState["implementerRuntimeResultCollections"],
+    }));
+
+    expect(state).toMatchObject({
+      projectId: "alpha",
+      lifecycle: "active",
+      stage: "implementation",
+      stageLabel: "Implementing",
+    });
+    expect(state.assignments[0]).toMatchObject({
+      role: "implementer",
+      department: "engineering",
+      statusLabel: "Implementing",
+      visualTone: "active",
+    });
+    expect(state.projectStatus.summary).toContain("Implementing");
+    expect(state.projectStatus.tone).toBe("active");
+    expect(state.projectStatus.pipeline.find((item) => item.id === "implementation")).toMatchObject({
+      state: "current",
+    });
   });
 
   it.each(["validation_recovery_implementer", "review_fix"] as const)(

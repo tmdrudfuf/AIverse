@@ -102,8 +102,10 @@ export function deriveLiveAgentWorkState(state: Pick<
   const lifecycle = resolveLifecycle(stage, runStatus, latestFact);
   const stageLabel = getStageLabel(stage, lifecycle);
   const reasonText = createReasonText(runStatus, latestFact);
+  const blockedStage = stage === "blocked" ? resolveBlockedSourceStage(rawStatus, latestFact) : undefined;
   const assignment = createAssignment({
     stage,
+    blockedStage,
     lifecycle,
     employees: state.employees,
     providerLabel: latestFact?.providerLabel ?? getExternalProviderLabel(state, projectId),
@@ -240,16 +242,29 @@ function resolveStage(
   const terminal = normalize(latestFact?.status);
 
   if (isHardBlockedStatus(raw) || isHardBlockedStatus(terminal)) return "blocked";
-  if (runStatus?.stage === "Completed" || isCompletedStatus(terminal)) return "complete";
+  if (runStatus?.stage === "Completed") return "complete";
   if (hasToken(raw, IMPLEMENTATION_RECOVERY_STAGE_TOKENS)) return "implementation";
   if (isRecoveryStatus(raw) || isRecoveryStatus(terminal)) return "blocked";
   if (hasToken(raw, ["validation", "validating", "qa", "testing"])) return "validation";
   if (hasToken(raw, ["reviewer", "reviewing", "review"])) return "review";
-  if (hasToken(raw, ["exact_head", "push", "pr_refresh", "publication_gate", "publication", "publish", "merge", "cleanup", "pull_request"])) return "publication";
+  if (hasToken(raw, ["exact_head", "push", "pr", "pr_refresh", "publication_gate", "publication", "publish", "merge", "cleanup", "pull_request"])) return "publication";
   if (runStatus?.stage === "Started") return "implementation";
   if (hasToken(raw, ["implementer", "implementation", "started"])) return "implementation";
-  if (latestFact && !isCompletedStatus(terminal) && latestFact.kind !== "prepared") return latestFact.kind;
+  if (latestFact && latestFact.kind !== "prepared") return latestFact.kind;
   return "idle";
+}
+
+function resolveBlockedSourceStage(rawStatus: string | undefined, latestFact: LatestFact | undefined): LiveAgentWorkStage | undefined {
+  if (latestFact?.kind && latestFact.kind !== "blocked" && latestFact.kind !== "complete" && latestFact.kind !== "idle" && latestFact.kind !== "prepared") {
+    return latestFact.kind;
+  }
+
+  const raw = normalize(rawStatus);
+  if (hasToken(raw, IMPLEMENTATION_RECOVERY_STAGE_TOKENS) || hasToken(raw, ["implementer", "implementation"])) return "implementation";
+  if (hasToken(raw, ["validation", "validating", "qa", "testing"])) return "validation";
+  if (hasToken(raw, ["reviewer", "reviewing", "review"])) return "review";
+  if (hasToken(raw, ["exact_head", "push", "pr", "pr_refresh", "publication_gate", "publication", "publish", "merge", "cleanup", "pull_request"])) return "publication";
+  return undefined;
 }
 
 function resolveLifecycle(
@@ -266,12 +281,14 @@ function resolveLifecycle(
 
 function createAssignment(input: {
   stage: LiveAgentWorkStage;
+  blockedStage?: LiveAgentWorkStage;
   lifecycle: LiveAgentWorkLifecycle;
   employees: ReadonlyArray<EmployeeLike>;
   providerLabel?: string;
   reasonText?: string;
 }): LiveAgentWorkAssignment | undefined {
-  const role = getRoleForStage(input.stage);
+  const effectiveStage = input.stage === "blocked" ? input.blockedStage ?? input.stage : input.stage;
+  const role = getRoleForStage(effectiveStage);
   if (role === "idle" && input.lifecycle !== "complete") return undefined;
 
   const employee = selectEmployeeForRole(input.employees, role);
@@ -286,8 +303,8 @@ function createAssignment(input: {
     displayName: employee?.name ?? input.providerLabel ?? getFallbackRoleName(role),
     providerLabel: input.providerLabel,
     statusLabel,
-    department: getDepartmentForRole(role, input.stage),
-    positionHint: getPositionHintForRole(role, input.stage),
+    department: getDepartmentForRole(role, effectiveStage),
+    positionHint: getPositionHintForRole(role, effectiveStage),
     visualTone,
   };
 }
@@ -483,7 +500,8 @@ function isCompletedStatus(value: string) {
 }
 
 function hasToken(value: string, tokens: ReadonlyArray<string>) {
-  return tokens.some((token) => value.includes(token));
+  const parts = value.split("_").filter(Boolean);
+  return tokens.some((token) => token.length <= 2 ? parts.includes(token) : value.includes(token));
 }
 
 function normalize(value: string | undefined) {
