@@ -13,6 +13,7 @@ import { OfficeActionInputController } from "./OfficeActionInputController";
 import { OfficeCollisionMap } from "./OfficeCollisionMap";
 import { OfficeExitController } from "./OfficeExitController";
 import { validateInteriorFoundation } from "./OfficeInteriorFoundation";
+import { validateVisualEnvironment } from "./OfficeVisualEnvironment";
 import { EmployeeConversationBubbleOverlay } from "./conversations/EmployeeConversationBubbleOverlay";
 import { EmployeeInsightOverlay } from "./insight/EmployeeInsightOverlay";
 import { EmployeeInsightService } from "./insight/EmployeeInsightService";
@@ -98,6 +99,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         exitZone: this.officeTilemapLayers.markers.exitZone,
       };
       validateInteriorFoundation(this.office);
+      validateVisualEnvironment(this.office);
       validateOfficeLayout(this.office, this.officeCollisionMap);
 
       this.officeInteractiveObjectRegistry = OfficeInteractiveObjectRegistry.fromTilemapLayers(configuredOffice, this.officeTilemapLayers);

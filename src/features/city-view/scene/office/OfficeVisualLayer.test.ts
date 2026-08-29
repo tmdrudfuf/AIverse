@@ -11,7 +11,7 @@ describe("OfficeVisualLayer", () => {
       createObject("desk-1", { x: 120, y: 0, width: 80, height: 60 }, { type: "desk", action: "inspect" }),
     ]);
 
-    expect(containers).toHaveLength(5);
+    expect(containers).toHaveLength(7);
 
     layer.refreshInteractiveObjects(scene, [
       createObject("computer-2", { x: 200, y: 0, width: 80, height: 60 }),
@@ -20,9 +20,11 @@ describe("OfficeVisualLayer", () => {
 
     expect(containers[0].destroyedWithChildren).toBe(false);
     expect(containers[1].destroyedWithChildren).toBe(false);
-    expect(containers[3].destroyedWithChildren).toBe(true);
-    expect(containers[4].destroyedWithChildren).toBe(true);
-    expect(containers).toHaveLength(6);
+    expect(containers[2].destroyedWithChildren).toBe(false);
+    expect(containers[3].destroyedWithChildren).toBe(false);
+    expect(containers[5].destroyedWithChildren).toBe(true);
+    expect(containers[6].destroyedWithChildren).toBe(true);
+    expect(containers).toHaveLength(8);
 
     layer.destroy();
 
@@ -38,7 +40,23 @@ describe("OfficeVisualLayer", () => {
       createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
     ]);
 
-    expect(containers).toHaveLength(2);
+    expect(containers).toHaveLength(4);
+
+    layer.destroy();
+
+    expect(containers.every((container) => container.destroyedWithChildren)).toBe(true);
+  });
+
+  it("renders normally when an office has no visual environment", () => {
+    const { scene, containers } = createSceneStub();
+    const office = createOffice();
+    delete office.visualEnvironment;
+
+    const layer = new OfficeVisualLayer(scene, office, [
+      createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
+    ]);
+
+    expect(containers).toHaveLength(4);
 
     layer.destroy();
 
@@ -141,6 +159,26 @@ function createOffice(): OfficeDefinition {
           role: "workspace",
           bounds: { x: 300, y: 160, width: 120, height: 40 },
           accentColor: 0x9de2e4,
+          enabled: true,
+        },
+      ],
+    },
+    visualEnvironment: {
+      details: [
+        {
+          id: "proof-wall",
+          kind: "brand-sign",
+          label: "Proof Wall",
+          bounds: { x: 100, y: 130, width: 120, height: 24 },
+          accentColor: 0x253247,
+          enabled: true,
+        },
+        {
+          id: "plant",
+          kind: "plant",
+          label: "Plant",
+          bounds: { x: 300, y: 210, width: 48, height: 48 },
+          accentColor: 0x4f9f67,
           enabled: true,
         },
       ],

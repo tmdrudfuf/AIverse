@@ -68,6 +68,22 @@ export type OfficeInteriorFoundation = {
   zones: OfficeInteriorZone[];
 };
 
+export type OfficeEnvironmentDetailKind = "brand-sign" | "plant" | "lighting" | "collaboration-board" | "storage";
+
+export type OfficeEnvironmentDetail = {
+  id: string;
+  kind: OfficeEnvironmentDetailKind;
+  label: string;
+  bounds: Rect;
+  accentColor: number;
+  enabled: boolean;
+  markerId?: string;
+};
+
+export type OfficeVisualEnvironment = {
+  details: OfficeEnvironmentDetail[];
+};
+
 export type OfficeDefinition = {
   sceneKey: string;
   buildingId: string;
@@ -78,6 +94,7 @@ export type OfficeDefinition = {
   exitZone: Rect;
   tilemap: OfficeTilemapDefinition;
   interiorFoundation?: OfficeInteriorFoundation;
+  visualEnvironment?: OfficeVisualEnvironment;
 };
 
 export type OfficeSpawnRequest = {
