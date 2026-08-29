@@ -123,6 +123,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       void this.officeProjectPortalController.initializeEmployeeSimulationSnapshots().then(() => {
         this.refreshEmployeeNpcRenderer();
         this.refreshEmployeeInsightOverlay();
+        this.refreshLiveAgentWorkVisualization();
       });
       this.officeMovementResolver = new OfficeTileMovementResolver(this.officeCollisionMap);
       this.founderMovementController = new FounderMovementController(this.founderEntity, this.officeMovementResolver);
@@ -131,6 +132,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController.update(0, this.navigationState.currentIntent);
       this.refreshOfficeProgressionVisualState();
+      this.refreshLiveAgentWorkVisualization();
     }
 
     update(_: number, delta: number) {
@@ -179,6 +181,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           startPostValidationReviewPressed,
         });
         this.refreshEmployeeNpcRenderer();
+        this.refreshLiveAgentWorkVisualization();
         this.refreshEmployeeInsightOverlay({ isBlockingOverlayOpen: true });
         this.employeeConversationBubbleOverlay?.hide();
         this.refreshOfficeProgressionVisualState();
@@ -232,6 +235,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       }
       this.cameraController?.update(delta, intent);
       this.refreshEmployeeNpcRenderer();
+      this.refreshLiveAgentWorkVisualization();
       this.refreshEmployeeInsightOverlay();
       this.employeeConversationBubbleOverlay?.update(this.time.now);
       this.refreshOfficeProgressionVisualState();
@@ -285,6 +289,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private refreshEmployeeNpcRenderer() {
       const viewModels = this.officeProjectPortalController?.getEmployeeNpcViewModels() ?? [];
       this.officeEmployeeNpcRenderer?.render(viewModels);
+    }
+
+    private refreshLiveAgentWorkVisualization() {
+      const workState = this.officeProjectPortalController?.getLiveAgentWorkState();
+      this.officeVisualLayer?.updateLiveAgentWorkState(workState);
     }
 
     private refreshEmployeeInsightOverlay(options: { isBlockingOverlayOpen?: boolean } = {}) {

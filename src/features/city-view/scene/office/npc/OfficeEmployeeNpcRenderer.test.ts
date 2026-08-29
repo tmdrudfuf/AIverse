@@ -91,6 +91,52 @@ describe("OfficeEmployeeNpcRenderer", () => {
       { x: 738, y: 470 },
     ]);
   });
+
+  it("uses warning and complete tones without depending on provider-specific labels", () => {
+    const { scene, rectangles, texts } = createSceneStub();
+    const renderer = new OfficeEmployeeNpcRenderer(scene);
+
+    renderer.render([
+      createViewModel({
+        employeeId: "future-reviewer",
+        displayName: "Reviewer Agent",
+        displayLabel: "Blocked",
+        semanticRole: "reviewer",
+        visualTone: "warning",
+        positionHint: { zone: "review", slot: 0 },
+        workAnimation: undefined,
+      }),
+    ]);
+
+    expect(rectangles[1]).toMatchObject({
+      visible: true,
+      fillColor: 0xf59e0b,
+    });
+    expect(texts.map((text) => text.text)).toEqual([
+      "Reviewer Agent",
+      "Blocked",
+    ]);
+    expect(texts[1].style.backgroundColor).toBe("#7f1d1d");
+
+    renderer.render([
+      createViewModel({
+        employeeId: "future-reviewer",
+        displayName: "Reviewer Agent",
+        displayLabel: "Complete",
+        semanticRole: "reviewer",
+        visualTone: "complete",
+        positionHint: { zone: "idleSpot", slot: 0 },
+        workAnimation: undefined,
+      }),
+    ]);
+
+    expect(rectangles[1]).toMatchObject({
+      visible: true,
+      fillColor: 0x38bdf8,
+    });
+    expect(texts[1].text).toBe("Complete");
+    expect(texts[1].style.backgroundColor).toBe("#164e63");
+  });
 });
 
 function createViewModel(overrides: Partial<EmployeeNpcViewModel> = {}): EmployeeNpcViewModel {
@@ -182,6 +228,13 @@ function createTextStub(text: string) {
     x: 0,
     y: 0,
     color: "",
+    style: {
+      backgroundColor: "",
+      setBackgroundColor(nextBackgroundColor: string) {
+        this.backgroundColor = nextBackgroundColor;
+        return this;
+      },
+    },
     setOrigin() {
       return this;
     },

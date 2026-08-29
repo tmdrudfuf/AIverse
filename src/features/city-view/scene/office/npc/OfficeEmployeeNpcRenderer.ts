@@ -17,6 +17,25 @@ const DEFAULT_STYLE = {
   labelColor: "#f8fafc",
 };
 
+const TONE_STYLE = {
+  active: {
+    stateBackground: "#14532d",
+    indicatorColor: 0x22c55e,
+  },
+  warning: {
+    stateBackground: "#7f1d1d",
+    indicatorColor: 0xf59e0b,
+  },
+  complete: {
+    stateBackground: "#164e63",
+    indicatorColor: 0x38bdf8,
+  },
+  idle: {
+    stateBackground: "#1e293b",
+    indicatorColor: 0x94a3b8,
+  },
+};
+
 export class OfficeEmployeeNpcRenderer {
   private readonly renderedNpcs = new Map<string, RenderedEmployeeNpc>();
 
@@ -64,6 +83,7 @@ export class OfficeEmployeeNpcRenderer {
     renderedNpc.stateText.setPosition(labelOffset.x, labelOffset.y + 14);
     renderedNpc.stateText.setText(formatStateLabel(viewModel));
     renderedNpc.stateText.setColor(style.labelColor);
+    setTextBackground(renderedNpc.stateText, TONE_STYLE[viewModel.visualTone ?? "idle"].stateBackground);
   }
 
   private createNpc(viewModel: EmployeeNpcViewModel) {
@@ -145,6 +165,10 @@ function interpolatePosition(currentX: number, currentY: number, target: { x: nu
 }
 
 function formatStateLabel(viewModel: EmployeeNpcViewModel) {
+  if (viewModel.visualTone) {
+    return viewModel.displayLabel;
+  }
+
   if (viewModel.currentTaskTitle) {
     return `${viewModel.displayLabel}: ${truncate(viewModel.currentTaskTitle, 24)}`;
   }
@@ -157,18 +181,20 @@ function updateWorkIndicator(
   viewModel: EmployeeNpcViewModel,
   sceneTimeMs: number,
 ) {
-  if (!viewModel.workAnimation?.active) {
+  const tone = viewModel.visualTone ?? (viewModel.workAnimation?.active ? "active" : "idle");
+  const shouldShowToneIndicator = tone === "warning" || tone === "complete";
+  if (!viewModel.workAnimation?.active && !shouldShowToneIndicator) {
     workIndicator.setVisible(false);
     workIndicator.setFillStyle(0x22c55e, 0);
     return;
   }
 
   const pulseSeed = getStablePulseSeed(viewModel.employeeId);
-  const alpha = 0.55 + Math.abs(Math.sin((sceneTimeMs + pulseSeed) / 180)) * 0.35;
+  const alpha = shouldShowToneIndicator ? 0.9 : 0.55 + Math.abs(Math.sin((sceneTimeMs + pulseSeed) / 180)) * 0.35;
   workIndicator
     .setPosition(14, -10)
     .setVisible(true)
-    .setFillStyle(0x22c55e, alpha);
+    .setFillStyle(TONE_STYLE[tone].indicatorColor, alpha);
 }
 
 function getSceneTime(scene: PhaserScene) {
@@ -182,4 +208,9 @@ function getStablePulseSeed(value: string) {
 function truncate(value: string, maxLength: number) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(maxLength - 1, 0))}...`;
+}
+
+function setTextBackground(text: Phaser.GameObjects.Text, backgroundColor: string) {
+  const style = text.style as { setBackgroundColor?: (value: string) => unknown } | undefined;
+  style?.setBackgroundColor?.(backgroundColor);
 }

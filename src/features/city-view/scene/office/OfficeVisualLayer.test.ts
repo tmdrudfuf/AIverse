@@ -72,6 +72,50 @@ describe("OfficeVisualLayer", () => {
 
     expect(containers.every((container) => container.destroyedWithChildren)).toBe(true);
   });
+
+  it("renders selected-project live ADOS state into the Project Status area", () => {
+    const { scene, texts } = createSceneStub();
+    const layer = new OfficeVisualLayer(scene, createOffice());
+
+    layer.updateLiveAgentWorkState({
+      projectId: "external-crm",
+      projectName: "External CRM",
+      lifecycle: "active",
+      stage: "publication",
+      stageLabel: "Publishing",
+      rawStatus: "publication_gate",
+      featureBranch: "codex/136-live-agent-work-visualization",
+      specPath: "specs/136-live-agent-work-visualization/spec.md",
+      updatedAt: "2026-08-29T00:00:00.000Z",
+      assignments: [],
+      projectStatus: {
+        title: "External CRM",
+        summary: "Publishing - publication_gate",
+        tone: "active",
+        rows: [
+          "Spec 136-live-agent-work-visualization",
+          "Branch codex/136-live-agent-work-visualization",
+          "Run publication_gate",
+        ],
+        pipeline: [
+          { id: "implementation", label: "Implementation", state: "complete" },
+          { id: "validation", label: "Validation", state: "complete" },
+          { id: "review", label: "Review", state: "complete" },
+          { id: "publication", label: "Publication", state: "current" },
+        ],
+      },
+    });
+
+    expect(texts.map((text) => text.text)).toEqual(expect.arrayContaining([
+      "EXTERNAL CRM",
+      "Publishing - publication_gate",
+      "> Publication",
+      "Run publication_gate",
+    ]));
+    expect(texts.find((text) => text.text === "EXTERNAL CRM")?.color).toBe("#bbf7d0");
+
+    layer.destroy();
+  });
 });
 
 function createSceneStub() {
@@ -127,10 +171,26 @@ function createContainerStub() {
 function createTextStub(text: string) {
   return {
     text,
+    color: "",
+    style: {
+      backgroundColor: "",
+      setBackgroundColor(nextBackgroundColor: string) {
+        this.backgroundColor = nextBackgroundColor;
+        return this;
+      },
+    },
     setOrigin() {
       return this;
     },
     setDepth() {
+      return this;
+    },
+    setText(nextText: string) {
+      this.text = nextText;
+      return this;
+    },
+    setColor(nextColor: string) {
+      this.color = nextColor;
       return this;
     },
     destroy() {
