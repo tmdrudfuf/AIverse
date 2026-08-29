@@ -26,6 +26,8 @@ export type EmployeeNpcWorkAnimation = {
   taskTitle?: string;
 };
 
+export type EmployeeNpcVisualTone = "active" | "warning" | "complete" | "idle";
+
 export type EmployeeNpcViewModel = {
   employeeId: string;
   displayName: string;
@@ -39,4 +41,6 @@ export type EmployeeNpcViewModel = {
   targetMovementPosition?: EmployeeNpcMovementPosition;
   spriteKey?: string;
   placeholderStyle?: EmployeeNpcPlaceholderStyle;
+  semanticRole?: string;
+  visualTone?: EmployeeNpcVisualTone;
 };

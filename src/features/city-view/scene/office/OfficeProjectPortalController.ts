@@ -134,6 +134,7 @@ import type { EmployeeInsightSource, EmployeeInsightTarget } from "./insight/Emp
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import type { CompanyFocusId, CompanyFocusSummary } from "./influence/CompanyInfluencePlanningTypes";
 import type { EmployeeKnowledgeSource } from "./knowledge/EmployeeKnowledgeTypes";
+import { deriveLiveAgentWorkState, type LiveAgentWorkState } from "./LiveAgentWorkVisualization";
 import { OfficeLayoutService } from "./layout/OfficeLayoutService";
 import type { OfficeLayoutPositionHint, OfficeLayoutSnapshot, OfficeLayoutZone } from "./layout/OfficeLayoutTypes";
 import {
@@ -786,6 +787,10 @@ export class OfficeProjectPortalController {
     return this.getEmployeeNpcViewModelsWithSchedule();
   }
 
+  getLiveAgentWorkState(): LiveAgentWorkState {
+    return deriveLiveAgentWorkState(this.state);
+  }
+
   getEmployeeNpcViewModelsWithSchedule(): EmployeeNpcViewModel[] {
     return this.getEmployeeNpcViewModelsWithWorkstations();
   }
@@ -808,9 +813,21 @@ export class OfficeProjectPortalController {
     const workstationTargetHints = createWorkstationTargetHints(workstationSnapshots);
     const scheduleSnapshots = this.getEmployeeDailyScheduleSnapshots();
     const scheduleTargetHints = createScheduleTargetHints(scheduleSnapshots, visibleEmployees, workstationTargetHints);
+    const liveAgentWorkState = this.getLiveAgentWorkState();
+    const liveAssignmentByEmployeeId = new Map(
+      liveAgentWorkState.assignments
+        .filter((assignment) => assignment.employeeId)
+        .map((assignment) => [assignment.employeeId!, assignment]),
+    );
+    const liveTargetHints = Object.fromEntries(
+      liveAgentWorkState.assignments
+        .filter((assignment) => assignment.employeeId)
+        .map((assignment) => [assignment.employeeId!, assignment.positionHint]),
+    );
     const targetPositionHints = {
       ...scheduleTargetHints,
       ...workstationTargetHints,
+      ...liveTargetHints,
     };
     const movementByEmployeeId = new Map(
       this.getEmployeeMovementSnapshots(targetPositionHints).map((snapshot) => [snapshot.employeeId, snapshot]),
@@ -821,14 +838,20 @@ export class OfficeProjectPortalController {
         const employee = employeesById.get(snapshot.employeeId);
         const currentTask = snapshot.currentTaskId ? tasksById.get(snapshot.currentTaskId) : undefined;
         const movementSnapshot = movementByEmployeeId.get(snapshot.employeeId);
+        const liveAssignment = liveAssignmentByEmployeeId.get(snapshot.employeeId);
 
         return {
           employeeId: snapshot.employeeId,
           displayName: employee?.name ?? snapshot.employeeId,
-          displayLabel: snapshot.displayLabel,
+          displayLabel: liveAssignment?.statusLabel ?? snapshot.displayLabel,
           state: snapshot.currentState,
-          currentTaskTitle: currentTask?.title,
-          workAnimation: createNpcWorkAnimation(snapshot, currentTask, movementSnapshot),
+          currentTaskTitle: liveAssignment ? undefined : currentTask?.title,
+          workAnimation: liveAssignment?.visualTone === "active"
+            ? {
+                kind: "workstationTask",
+                active: true,
+              }
+            : createNpcWorkAnimation(snapshot, currentTask, movementSnapshot),
           positionHint: movementSnapshot?.positionHint ?? {
             zone: getNpcPositionZone(snapshot.currentState),
             slot: index,
@@ -841,6 +864,8 @@ export class OfficeProjectPortalController {
             borderColor: 0xf8fafc,
             labelColor: "#f8fafc",
           },
+          semanticRole: liveAssignment?.role,
+          visualTone: liveAssignment?.visualTone,
         };
       });
   }

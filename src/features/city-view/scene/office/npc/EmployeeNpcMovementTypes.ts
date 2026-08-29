@@ -1,4 +1,4 @@
-export type OfficeNpcLogicalPosition = "entrance" | "workstation" | "meetingArea" | "breakArea" | "idleSpot";
+export type OfficeNpcLogicalPosition = "entrance" | "workstation" | "review" | "meetingArea" | "breakArea" | "idleSpot";
 
 export type EmployeeNpcMovementState = "idle" | "moving" | "arrived";
 

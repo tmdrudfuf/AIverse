@@ -53,6 +53,13 @@ import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 
 type ProjectPortalProjectLike = {
   id: string;
+  name?: string;
+  status?: string;
+  type?: string;
+  enabled?: boolean;
+  description?: string;
+  linkedServices?: unknown[];
+  nextAction?: unknown;
   repositoryIdentity?: unknown;
 };
 
@@ -60,6 +67,8 @@ export type ControllerInternals = {
   state: {
     viewMode: string;
     selectedProjectDashboardProjectId: string | undefined;
+    selectedProjectId: string;
+    selectedProjectIndex: number;
     selectedTaskProjectId: string | undefined;
     selectedTaskId: string | undefined;
     selectedTaskIndex: number;
@@ -106,10 +115,13 @@ export type ControllerInternals = {
     validationRuntimeResultCollections?: ProjectPortalState["validationRuntimeResultCollections"];
     postValidationReviewTargetCollections?: ProjectPortalState["postValidationReviewTargetCollections"];
     postValidationReviewTargetResultCollections?: ProjectPortalState["postValidationReviewTargetResultCollections"];
+    externalProjectAdosRunPreparations: ProjectPortalState["externalProjectAdosRunPreparations"];
     externalProjectAdosExecutions: ProjectPortalState["externalProjectAdosExecutions"];
     externalProjectAdosExecutionResults: ProjectPortalState["externalProjectAdosExecutionResults"];
+    externalProjectAdosRunStatuses: ProjectPortalState["externalProjectAdosRunStatuses"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
+    employeeSimulations: ProjectPortalState["employeeSimulations"];
     workSessions: Record<string, WorkSession[]>;
   };
   activeWorkSessionStartService: ActiveWorkSessionStartService;

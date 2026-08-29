@@ -336,18 +336,26 @@ describe("orchestrate workflow", () => {
 
   it("runs one fix cycle and reaches approval", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: actionableChanges },
-      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      {
+        stdout: "fixed",
+        mutate: () => gitAdapter.setState({
+          statusPorcelain: " M tracked.txt",
+          unstagedDiffStat: " tracked.txt | 2 +-",
+          unstagedDiff: "diff --git a/tracked.txt b/tracked.txt\n-fixed\n+fixed\n",
+          unstagedDiffNumstat: "1\t1\ttracked.txt",
+        }),
+      },
       { stdout: "revalidation passed" },
       { stdout: approvedReview },
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.fixCycleCount).toBe(1);
@@ -390,20 +398,28 @@ describe("orchestrate workflow", () => {
 
   it("runs question loop then starts existing fix cycle after final Changes Requested", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSequenceAdapter([
       { stdout: "implemented" },
       { stdout: "validation passed" },
       { stdout: structuredQuestionsReview },
       { stdout: structuredAnswers },
       { stdout: structuredActionableChanges },
-      { stdout: "fixed", mutate: (repo) => fs.writeFileSync(path.join(repo, "tracked.txt"), "fixed\n") },
+      {
+        stdout: "fixed",
+        mutate: () => gitAdapter.setState({
+          statusPorcelain: " M tracked.txt",
+          unstagedDiffStat: " tracked.txt | 2 +-",
+          unstagedDiff: "diff --git a/tracked.txt b/tracked.txt\n-fixed\n+fixed\n",
+          unstagedDiffNumstat: "1\t1\ttracked.txt",
+        }),
+      },
       { stdout: "revalidation passed" },
       { stdout: structuredResolvedApproval },
       { stdout: "final validation passed" },
     ], cwd);
 
-    const run = await runOrchestration(createState(), { cwd, processAdapter: adapter, maxFixCycles: 2 });
+    const run = await runOrchestration(createState(), { cwd, gitAdapter, processAdapter: adapter, maxFixCycles: 2 });
 
     expect(run.decision).toBe("Ready for human merge decision");
     expect(run.state.questionCycle).toBe(1);

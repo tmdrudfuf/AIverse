@@ -74,5 +74,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/135-rendered-project-company-office/plan.md
+shell commands, and other important information, read specs/136-live-agent-work-visualization/plan.md
 <!-- SPECKIT END -->

@@ -1,4 +1,5 @@
 import type { PhaserScene } from "../shared/phaserTypes";
+import type { LiveAgentProjectStatusDisplay, LiveAgentWorkState } from "./LiveAgentWorkVisualization";
 import {
   createRenderedOfficeComposition,
   type RenderedOfficeDepartment,
@@ -42,6 +43,7 @@ export class OfficeVisualLayer {
   private readonly title: Phaser.GameObjects.Text;
   private readonly officeComposition: Phaser.GameObjects.Container;
   private readonly exitMarker: Phaser.GameObjects.Container;
+  private readonly projectStatusTexts: Phaser.GameObjects.Text[] = [];
   private interactiveObjectMarkers: Phaser.GameObjects.Container[] = [];
 
   constructor(
@@ -64,7 +66,25 @@ export class OfficeVisualLayer {
       .setDepth(OFFICE_OVERLAY_DEPTH);
 
     this.exitMarker = createExitMarker(scene, office);
+    this.projectStatusTexts = createProjectStatusTexts(scene);
     this.refreshInteractiveObjects(scene, interactiveObjects);
+  }
+
+  updateLiveAgentWorkState(workState: LiveAgentWorkState | undefined) {
+    const display = workState?.projectStatus ?? createEmptyProjectStatusDisplay();
+    const lines = [
+      display.title.toUpperCase(),
+      display.summary,
+      ...display.pipeline.map((item) => `${getPipelineMarker(item.state)} ${item.label}`),
+      ...display.rows,
+    ].slice(0, this.projectStatusTexts.length);
+    const color = getStatusTextColor(display.tone);
+
+    this.projectStatusTexts.forEach((text, index) => {
+      text
+        .setText(lines[index] ?? "")
+        .setColor(color);
+    });
   }
 
   refreshInteractiveObjects(scene: PhaserScene, interactiveObjects: ReadonlyArray<OfficeInteractiveObject> = []) {
@@ -78,6 +98,7 @@ export class OfficeVisualLayer {
     this.title.destroy();
     this.officeComposition.destroy(true);
     this.exitMarker.destroy(true);
+    this.projectStatusTexts.forEach((text) => text.destroy());
     this.interactiveObjectMarkers.forEach((marker) => marker.destroy(true));
   }
 }
@@ -334,6 +355,46 @@ function createExitMarker(scene: PhaserScene, office: OfficeDefinition) {
 
   marker.add([graphics, label]);
   return marker;
+}
+
+function createProjectStatusTexts(scene: PhaserScene) {
+  return Array.from({ length: 10 }, (_, index) => scene.add
+    .text(664, 326 + index * 15, "", {
+      color: "#e0f2fe",
+      fontFamily: "monospace",
+      fontSize: index === 0 ? "10px" : "9px",
+      fontStyle: index === 0 ? "700" : "400",
+    })
+    .setDepth(OFFICE_OVERLAY_DEPTH - 1));
+}
+
+function createEmptyProjectStatusDisplay(): LiveAgentProjectStatusDisplay {
+  return {
+    title: "Project Status",
+    summary: "Idle",
+    tone: "idle",
+    rows: ["Run No active ADOS run"],
+    pipeline: [
+      { id: "implementation", label: "Implementation", state: "idle" },
+      { id: "validation", label: "Validation", state: "idle" },
+      { id: "review", label: "Review", state: "idle" },
+      { id: "publication", label: "Publication", state: "idle" },
+    ],
+  };
+}
+
+function getPipelineMarker(state: LiveAgentProjectStatusDisplay["pipeline"][number]["state"]) {
+  if (state === "current") return ">";
+  if (state === "complete") return "x";
+  if (state === "blocked") return "!";
+  return "-";
+}
+
+function getStatusTextColor(tone: LiveAgentProjectStatusDisplay["tone"]) {
+  if (tone === "warning") return "#fecaca";
+  if (tone === "complete") return "#bae6fd";
+  if (tone === "active") return "#bbf7d0";
+  return "#e0f2fe";
 }
 
 function getDepartmentFloorColor(kind: RenderedOfficeDepartment["kind"]) {
