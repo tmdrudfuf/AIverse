@@ -152,6 +152,12 @@ type LatestFact = {
   reasonCodes?: string[];
 };
 
+const IMPLEMENTATION_RECOVERY_STAGE_TOKENS = [
+  "validation_recovery_implementer",
+  "implementer_fix",
+  "review_fix",
+];
+
 function getLatestProjectFact(state: Parameters<typeof deriveLiveAgentWorkState>[0], projectId: string): LatestFact | undefined {
   const facts: LatestFact[] = [];
   const implementerRuntime = latestByTimestamp(state.implementerRuntimeCollections[projectId]?.runtimes, "startedAt");
@@ -233,13 +239,15 @@ function resolveStage(
   const raw = normalize(rawStatus);
   const terminal = normalize(latestFact?.status);
 
-  if (isBlockedStatus(raw) || isBlockedStatus(terminal)) return "blocked";
+  if (isHardBlockedStatus(raw) || isHardBlockedStatus(terminal)) return "blocked";
+  if (runStatus?.stage === "Completed" || isCompletedStatus(terminal)) return "complete";
+  if (hasToken(raw, IMPLEMENTATION_RECOVERY_STAGE_TOKENS)) return "implementation";
+  if (isRecoveryStatus(raw) || isRecoveryStatus(terminal)) return "blocked";
   if (hasToken(raw, ["validation", "validating", "qa", "testing"])) return "validation";
   if (hasToken(raw, ["reviewer", "reviewing", "review"])) return "review";
   if (hasToken(raw, ["exact_head", "push", "pr_refresh", "publication_gate", "publication", "publish", "merge", "cleanup", "pull_request"])) return "publication";
   if (runStatus?.stage === "Started") return "implementation";
-  if (runStatus?.stage === "Completed" || hasToken(raw, ["complete", "completed"]) || isCompletedStatus(terminal)) return "complete";
-  if (hasToken(raw, ["validation_recovery_implementer", "implementer_fix", "review_fix", "implementer", "implementation", "started"])) return "implementation";
+  if (hasToken(raw, ["implementer", "implementation", "started"])) return "implementation";
   if (latestFact && !isCompletedStatus(terminal) && latestFact.kind !== "prepared") return latestFact.kind;
   return "idle";
 }
@@ -459,7 +467,15 @@ function compareTimestamp(left: string | undefined, right: string | undefined) {
 }
 
 function isBlockedStatus(value: string) {
-  return hasToken(value, ["blocked", "failed", "timedout", "timed_out", "cancelled", "recovery", "intervention", "spawn_failed", "provider_unavailable"]);
+  return isHardBlockedStatus(value) || isRecoveryStatus(value);
+}
+
+function isHardBlockedStatus(value: string) {
+  return hasToken(value, ["blocked", "failed", "timedout", "timed_out", "cancelled", "intervention", "spawn_failed", "provider_unavailable"]);
+}
+
+function isRecoveryStatus(value: string) {
+  return hasToken(value, ["recovery"]);
 }
 
 function isCompletedStatus(value: string) {

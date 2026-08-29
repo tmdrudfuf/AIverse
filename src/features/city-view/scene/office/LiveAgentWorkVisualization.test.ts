@@ -50,6 +50,29 @@ describe("deriveLiveAgentWorkState", () => {
     expect(state.projectStatus.pipeline.some((item) => item.state === "blocked")).toBe(true);
   });
 
+  it.each(["validation_recovery_implementer", "review_fix"] as const)(
+    "maps %s recovery stages to implementation before broad validation or review matching",
+    (rawStage) => {
+      const state = deriveLiveAgentWorkState(portalState({
+        externalProjectAdosRunStatuses: {
+          alpha: status({ stage: "Started", status: rawStage }),
+        },
+      }));
+
+      expect(state).toMatchObject({
+        stage: "implementation",
+        lifecycle: "active",
+        stageLabel: "Implementing",
+      });
+      expect(state.assignments[0]).toMatchObject({
+        role: "implementer",
+        department: "engineering",
+        statusLabel: "Implementing",
+        positionHint: { zone: "workstation", slot: 0 },
+      });
+    },
+  );
+
   it("clears stale active work for complete states", () => {
     const state = deriveLiveAgentWorkState(portalState({
       externalProjectAdosRunStatuses: {
