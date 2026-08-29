@@ -22,19 +22,30 @@ const LAYOUTS_BY_ID: Record<string, OfficeLayoutSnapshot> = {
     stage: "garageStartup",
     floorId: "garage-startup-floor-1",
     zones: [
-      zone("garage-entrance", "entrance", "Garage Entrance", true, 0.12, 0.86),
-      zone("garage-workspace", "workspace", "Shared Workspace", true, 0.48, 0.48),
-      zone("garage-workstations", "workstationArea", "Desk Cluster", true, 0.52, 0.42),
-      zone("garage-meeting", "meetingArea", "Small Planning Table", true, 0.76, 0.34),
-      zone("garage-break", "breakArea", "Coffee Corner", true, 0.24, 0.26),
+      zone("office-entrance", "entrance", "Reception Entrance", true, 0.5, 0.86),
+      zone("office-shared", "workspace", "Shared Company Space", true, 0.5, 0.58),
+      zone("office-engineering", "workstationArea", "Engineering", true, 0.22, 0.36),
+      zone("office-review", "meetingArea", "Review", true, 0.53, 0.27),
+      zone("office-validation", "workstationArea", "Validation / QA", true, 0.8, 0.27),
+      zone("office-operations", "meetingArea", "Project Status", true, 0.78, 0.7),
+      zone("office-lounge", "breakArea", "Lounge", true, 0.24, 0.76),
+      zone("office-reception", "reception", "Reception", true, 0.5, 0.82),
     ],
-    workstationCount: 5,
-    meetingCount: 1,
-    breakAreaCount: 1,
+    workstationCount: 8,
+    meetingCount: 2,
+    breakAreaCount: 2,
     furnitureSlots: [
-      furniture("garage-desk-bank", "garage-workstations", "desk", "Desk Bank", 4, 0.52, 0.42),
-      furniture("garage-planning-table", "garage-meeting", "table", "Planning Table", 4, 0.76, 0.34),
-      furniture("garage-coffee-counter", "garage-break", "counter", "Coffee Counter", 2, 0.24, 0.26),
+      furniture("engineering-desk-bank", "office-engineering", "desk", "Engineering Desk Bank", 4, 0.22, 0.36),
+      furniture("review-desk", "office-review", "desk", "Reviewer Desk", 1, 0.53, 0.27),
+      furniture("validation-test-benches", "office-validation", "table", "Validation Test Benches", 2, 0.8, 0.27),
+      furniture("operations-status-table", "office-operations", "table", "Operations Planning Table", 4, 0.78, 0.7),
+      furniture("lounge-coffee-counter", "office-lounge", "counter", "Lounge Coffee Counter", 3, 0.24, 0.76),
+    ],
+    departmentAreas: [
+      department("engineering", "Engineering", "office-engineering", 0.22, 0.36, [1, 2, 3, 4], [1], true),
+      department("review", "Review", "office-review", 0.53, 0.27, [5], [1], true),
+      department("validation-qa", "Validation / QA", "office-validation", 0.8, 0.27, [6, 7], [2], true),
+      department("project-status-operations", "Project Status / Operations", "office-operations", 0.78, 0.7, [8], [2], true),
     ],
   }),
   "small-office-level-2": createLayout({
@@ -293,6 +304,7 @@ function department(
   yWeight: number,
   workstationIndexes: number[],
   meetingIndexes: number[],
+  isUnlocked = false,
 ): OfficeDepartmentArea {
   return {
     departmentId: `growing-company-${departmentKind}`,
@@ -303,7 +315,7 @@ function department(
     positionHint: createPositionHint(zoneId, "workspace", "", undefined, label, xWeight, yWeight),
     workstationSlotIds: workstationIndexes.map((index) => `workstation-${index}`),
     meetingSlotIds: meetingIndexes.map((index) => `meeting-${index}`),
-    isUnlocked: false,
+    isUnlocked,
   };
 }
 

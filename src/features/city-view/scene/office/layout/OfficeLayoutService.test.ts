@@ -51,17 +51,16 @@ describe("OfficeLayoutService", () => {
     ]);
   });
 
-  it("keeps the active startup layout free of department areas", () => {
+  it("keeps the active startup layout populated with physical office slots", () => {
     const service = new OfficeLayoutService();
     const layout = service.getActiveLayout();
 
     expect(layout.stage).toBe("garageStartup");
-    expect(layout.zones).toHaveLength(5);
-    expect(layout.workstationSlots).toHaveLength(5);
-    expect(layout.meetingSlots).toHaveLength(1);
+    expect(layout.zones).toHaveLength(8);
+    expect(layout.workstationSlots).toHaveLength(8);
+    expect(layout.meetingSlots).toHaveLength(2);
     expect(layout.entryExitPoints).toHaveLength(1);
-    expect(layout.departmentAreas).toEqual([]);
-    expect(service.getDepartmentAreas()).toEqual([]);
+    expect(service.getDepartmentAreas()).toHaveLength(4);
   });
 
   it("returns defensive department area copies", () => {
@@ -81,3 +80,32 @@ describe("OfficeLayoutService", () => {
     });
   });
 });
+  it("exposes active rendered project-company departments for Spec 135", () => {
+    const service = new OfficeLayoutService();
+    const layout = service.getActiveLayout();
+
+    expect(layout.stage).toBe("garageStartup");
+    expect(layout.departmentAreas.map((area) => area.departmentKind)).toEqual([
+      "engineering",
+      "review",
+      "validation-qa",
+      "project-status-operations",
+    ]);
+    expect(layout.departmentAreas.every((area) => area.isUnlocked)).toBe(true);
+    expect(layout.departmentAreas[0]).toMatchObject({
+      label: "Engineering",
+      workstationSlotIds: ["workstation-1", "workstation-2", "workstation-3", "workstation-4"],
+    });
+    expect(layout.departmentAreas[1]).toMatchObject({
+      label: "Review",
+      workstationSlotIds: ["workstation-5"],
+    });
+    expect(layout.departmentAreas[2]).toMatchObject({
+      label: "Validation / QA",
+      workstationSlotIds: ["workstation-6", "workstation-7"],
+    });
+    expect(layout.departmentAreas[3]).toMatchObject({
+      label: "Project Status / Operations",
+      workstationSlotIds: ["workstation-8"],
+    });
+  });

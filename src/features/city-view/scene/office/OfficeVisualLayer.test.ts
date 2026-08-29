@@ -4,14 +4,26 @@ import { OfficeVisualLayer } from "./OfficeVisualLayer";
 import type { OfficeDefinition, OfficeInteractiveObject } from "./officeTypes";
 
 describe("OfficeVisualLayer", () => {
-  it("refreshes interactive markers from the current enabled computer and desk objects", () => {
-    const { scene, containers } = createSceneStub();
+  it("renders a physical office composition and refreshes interactive workstation markers", () => {
+    const { scene, containers, texts, graphics } = createSceneStub();
     const layer = new OfficeVisualLayer(scene, createOffice(), [
       createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
       createObject("desk-1", { x: 120, y: 0, width: 80, height: 60 }, { type: "desk", action: "inspect" }),
     ]);
 
-    expect(containers).toHaveLength(7);
+    expect(containers).toHaveLength(4);
+    expect(texts.map((text) => text.text)).toEqual(
+      expect.arrayContaining([
+        "Daily Proof - Autonomous AI Software Company",
+        "ENGINEERING",
+        "REVIEW",
+        "VALIDATION / QA",
+        "PROJECT STATUS",
+        "DAILY PROOF",
+        "EXIT",
+      ]),
+    );
+    expect(graphics.some((item) => item.fillRects.length > 80)).toBe(true);
 
     layer.refreshInteractiveObjects(scene, [
       createObject("computer-2", { x: 200, y: 0, width: 80, height: 60 }),
@@ -20,43 +32,41 @@ describe("OfficeVisualLayer", () => {
 
     expect(containers[0].destroyedWithChildren).toBe(false);
     expect(containers[1].destroyedWithChildren).toBe(false);
-    expect(containers[2].destroyedWithChildren).toBe(false);
-    expect(containers[3].destroyedWithChildren).toBe(false);
-    expect(containers[5].destroyedWithChildren).toBe(true);
-    expect(containers[6].destroyedWithChildren).toBe(true);
-    expect(containers).toHaveLength(8);
+    expect(containers[2].destroyedWithChildren).toBe(true);
+    expect(containers[3].destroyedWithChildren).toBe(true);
+    expect(containers).toHaveLength(5);
 
     layer.destroy();
 
     expect(containers.every((container) => container.destroyedWithChildren)).toBe(true);
   });
 
-  it("renders normally when an office has no interior foundation", () => {
+  it("renders dynamic company signage without relying on Daily Proof text", () => {
+    const { scene, texts } = createSceneStub();
+    const office = createOffice();
+    office.companyName = "Northstar Tools";
+
+    const layer = new OfficeVisualLayer(scene, office);
+
+    expect(texts.map((text) => text.text)).toEqual(expect.arrayContaining([
+      "Northstar Tools - Autonomous AI Software Company",
+      "NORTHSTAR TOOLS",
+    ]));
+    expect(texts.map((text) => text.text)).not.toContain("DAILY PROOF");
+    layer.destroy();
+  });
+
+  it("renders normally when legacy metadata is absent", () => {
     const { scene, containers } = createSceneStub();
     const office = createOffice();
     delete office.interiorFoundation;
-
-    const layer = new OfficeVisualLayer(scene, office, [
-      createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
-    ]);
-
-    expect(containers).toHaveLength(4);
-
-    layer.destroy();
-
-    expect(containers.every((container) => container.destroyedWithChildren)).toBe(true);
-  });
-
-  it("renders normally when an office has no visual environment", () => {
-    const { scene, containers } = createSceneStub();
-    const office = createOffice();
     delete office.visualEnvironment;
 
     const layer = new OfficeVisualLayer(scene, office, [
       createObject("computer-1", { x: 0, y: 0, width: 80, height: 60 }),
     ]);
 
-    expect(containers).toHaveLength(4);
+    expect(containers).toHaveLength(3);
 
     layer.destroy();
 
@@ -66,12 +76,22 @@ describe("OfficeVisualLayer", () => {
 
 function createSceneStub() {
   const containers: ContainerStub[] = [];
+  const texts: TextStub[] = [];
+  const graphics: GraphicsStub[] = [];
 
   return {
     scene: {
       add: {
-        text: () => createTextStub(),
-        graphics: () => createGraphicsStub(),
+        text: (_x: number, _y: number, text: string) => {
+          const textStub = createTextStub(text);
+          texts.push(textStub);
+          return textStub;
+        },
+        graphics: () => {
+          const graphicsStub = createGraphicsStub();
+          graphics.push(graphicsStub);
+          return graphicsStub;
+        },
         container: () => {
           const container = createContainerStub();
           containers.push(container);
@@ -80,10 +100,14 @@ function createSceneStub() {
       },
     } as unknown as ConstructorParameters<typeof OfficeVisualLayer>[0],
     containers,
+    texts,
+    graphics,
   };
 }
 
 type ContainerStub = ReturnType<typeof createContainerStub>;
+type TextStub = ReturnType<typeof createTextStub>;
+type GraphicsStub = ReturnType<typeof createGraphicsStub>;
 
 function createContainerStub() {
   return {
@@ -100,8 +124,9 @@ function createContainerStub() {
   };
 }
 
-function createTextStub() {
+function createTextStub(text: string) {
   return {
+    text,
     setOrigin() {
       return this;
     },
@@ -116,6 +141,7 @@ function createTextStub() {
 
 function createGraphicsStub() {
   return {
+    fillRects: [] as Array<{ x: number; y: number; width: number; height: number }>,
     fillStyle() {
       return this;
     },
@@ -128,7 +154,14 @@ function createGraphicsStub() {
     strokeRoundedRect() {
       return this;
     },
-    fillRect() {
+    fillRect(x: number, y: number, width: number, height: number) {
+      this.fillRects.push({ x, y, width, height });
+      return this;
+    },
+    strokeRect() {
+      return this;
+    },
+    lineBetween() {
       return this;
     },
   };
