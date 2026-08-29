@@ -1,9 +1,11 @@
 import type { PhaserScene } from "../shared/phaserTypes";
 import type { OfficeDefinition, OfficeInteractiveObject } from "./officeTypes";
 import { getEnabledInteriorZones } from "./OfficeInteriorFoundation";
+import { getEnabledEnvironmentDetails } from "./OfficeVisualEnvironment";
 
 const OFFICE_OVERLAY_DEPTH = 20;
 const EXIT_MARKER_DEPTH = 8;
+const ENVIRONMENT_DETAIL_DEPTH = 6;
 const INTERIOR_ZONE_DEPTH = 5;
 const INTERACTIVE_OBJECT_DEPTH = 7;
 
@@ -11,6 +13,7 @@ export class OfficeVisualLayer {
   private readonly title: Phaser.GameObjects.Text;
   private readonly exitMarker: Phaser.GameObjects.Container;
   private readonly interiorZoneMarkers: Phaser.GameObjects.Container[];
+  private readonly environmentDetailMarkers: Phaser.GameObjects.Container[];
   private interactiveObjectMarkers: Phaser.GameObjects.Container[] = [];
 
   constructor(
@@ -31,6 +34,7 @@ export class OfficeVisualLayer {
       .setDepth(OFFICE_OVERLAY_DEPTH);
 
     this.interiorZoneMarkers = getEnabledInteriorZones(office).map((zone) => createInteriorZoneMarker(scene, zone));
+    this.environmentDetailMarkers = getEnabledEnvironmentDetails(office).map((detail) => createEnvironmentDetailMarker(scene, detail));
     this.exitMarker = createExitMarker(scene, office);
     this.refreshInteractiveObjects(scene, interactiveObjects);
   }
@@ -46,6 +50,7 @@ export class OfficeVisualLayer {
     this.title.destroy();
     this.exitMarker.destroy(true);
     this.interiorZoneMarkers.forEach((marker) => marker.destroy(true));
+    this.environmentDetailMarkers.forEach((marker) => marker.destroy(true));
     this.interactiveObjectMarkers.forEach((marker) => marker.destroy(true));
   }
 }
@@ -69,6 +74,46 @@ function createInteriorZoneMarker(scene: PhaserScene, zone: ReturnType<typeof ge
       fontSize: "11px",
       fontStyle: "700",
       padding: { x: 7, y: 3 },
+    })
+    .setOrigin(0.5, 0.5);
+
+  marker.add([graphics, label]);
+  return marker;
+}
+
+function createEnvironmentDetailMarker(scene: PhaserScene, detail: ReturnType<typeof getEnabledEnvironmentDetails>[number]) {
+  const marker = scene.add.container(0, 0).setDepth(ENVIRONMENT_DETAIL_DEPTH);
+  const graphics = scene.add.graphics();
+  const centerX = detail.bounds.x + detail.bounds.width / 2;
+  const centerY = detail.bounds.y + detail.bounds.height / 2;
+
+  graphics.fillStyle(detail.accentColor, 0.88);
+  graphics.fillRoundedRect(detail.bounds.x, detail.bounds.y, detail.bounds.width, detail.bounds.height, 6);
+  graphics.lineStyle(2, 0x253247, 0.84);
+  graphics.strokeRoundedRect(detail.bounds.x + 1, detail.bounds.y + 1, detail.bounds.width - 2, detail.bounds.height - 2, 6);
+
+  if (detail.kind === "lighting") {
+    graphics.fillStyle(0xf8fafc, 0.48);
+    graphics.fillRoundedRect(detail.bounds.x + 8, detail.bounds.y + 8, detail.bounds.width - 16, detail.bounds.height - 16, 5);
+  } else if (detail.kind === "plant") {
+    graphics.fillStyle(0xf8fafc, 0.44);
+    graphics.fillRoundedRect(centerX - 8, detail.bounds.y + 10, 16, detail.bounds.height - 20, 8);
+  } else if (detail.kind === "collaboration-board") {
+    graphics.fillStyle(0xf8fafc, 0.82);
+    graphics.fillRoundedRect(detail.bounds.x + 8, detail.bounds.y + 8, detail.bounds.width - 16, detail.bounds.height - 16, 3);
+  } else if (detail.kind === "storage") {
+    graphics.fillStyle(0x253247, 0.24);
+    graphics.fillRoundedRect(detail.bounds.x + 8, centerY - 3, detail.bounds.width - 16, 6, 2);
+  }
+
+  const label = scene.add
+    .text(centerX, centerY, detail.label.toUpperCase(), {
+      backgroundColor: "rgba(248, 250, 252, 0.9)",
+      color: "#253247",
+      fontFamily: "Arial, sans-serif",
+      fontSize: "10px",
+      fontStyle: "700",
+      padding: { x: 6, y: 2 },
     })
     .setOrigin(0.5, 0.5);
 
