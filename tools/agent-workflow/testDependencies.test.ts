@@ -111,7 +111,7 @@ describe("createFakeGitAdapter", () => {
     const gitAdapter = createFakeGitAdapter();
     collectGitContext({ cwd: "/fake", baseBranch: "main", gitAdapter });
     expect(gitAdapter.calls.length).toBeGreaterThan(0);
-    expect(gitAdapter.calls.some((call) => call.args.join(" ") === "status --porcelain")).toBe(true);
+    expect(gitAdapter.calls.some((call) => call.args.join(" ") === "status --porcelain=v1 -b")).toBe(true);
   });
 
   it("allows setState to simulate a tree mutation between two collectGitContext calls", () => {

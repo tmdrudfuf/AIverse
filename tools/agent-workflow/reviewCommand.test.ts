@@ -17,6 +17,7 @@ import {
 import { writeState } from "./agentWorkflow.js";
 import { CLAUDE_FULL_ACCESS_ARGS, CODEX_FULL_ACCESS_ARGS } from "./agentRunner.js";
 import { buildChangedFileInventory } from "./reviewCoverage.js";
+import { createFakeGitAdapter } from "./testDependencies.js";
 
 type WorkflowState = {
   featureId: string;
@@ -567,9 +568,7 @@ describe("independent review execution", () => {
 
   it("preserves Markdown-only review output without writing a structured artifact", async () => {
     const cwd = createTempDir();
-    initRepo(cwd);
-    fs.writeFileSync(path.join(cwd, "file.txt"), "hello\n");
-    commitAll(cwd, "init");
+    const gitAdapter = createFakeGitAdapter();
     const adapter = createSpyAdapter({
       stdout: "# Review Decision: Approved\n\n## Blocking Findings\n(none)",
       exitCode: 0,
@@ -577,6 +576,7 @@ describe("independent review execution", () => {
 
     const run = await runIndependentReview(createState(), {
       cwd,
+      gitAdapter,
       processAdapter: adapter,
       now: () => "2026-07-23T00:00:00.000Z",
     });

@@ -127,15 +127,23 @@ function collectGitContext(options = {}) {
   const cwd = options.cwd || process.cwd();
   const gitAdapter = options.gitAdapter || createDefaultGitAdapter();
 
-  const repositoryPath = gitAdapter.run(["rev-parse", "--show-toplevel"], cwd) || cwd;
-  const currentBranch = gitAdapter.run(["rev-parse", "--abbrev-ref", "HEAD"], cwd) || "unknown-branch";
-  const headCommit = gitAdapter.run(["rev-parse", "HEAD"], cwd) || "";
+  const revParseLines = gitAdapter.run(["rev-parse", "--show-toplevel", "HEAD"], cwd)
+    .split(/\r?\n/)
+    .filter(Boolean);
+  const repositoryPath = revParseLines[0] || cwd;
+  const headCommit = revParseLines[1] || "";
+  const statusWithBranch = gitAdapter.run(["status", "--porcelain=v1", "-b"], cwd);
+  const statusLines = String(statusWithBranch || "").split(/\r?\n/);
+  const branchLine = statusLines[0] && statusLines[0].startsWith("## ") ? statusLines[0].slice(3).trim() : "";
+  const currentBranch = parseStatusBranch(branchLine);
+  const statusPorcelain = (branchLine ? statusLines.slice(1) : statusLines)
+    .filter((line) => line.length > 0)
+    .join("\n");
   const baseBranchInput = options.baseBranch || "main";
   const baseBranchRef = resolveBaseBranchRef(gitAdapter, cwd, baseBranchInput);
   const mergeBase = gitAdapter.verify(baseBranchRef, cwd)
     ? gitAdapter.run(["merge-base", "HEAD", baseBranchRef], cwd)
     : "";
-  const statusPorcelain = gitAdapter.run(["status", "--porcelain"], cwd);
   const stagedStatusChanged = hasStagedStatusChange(statusPorcelain);
   const unstagedStatusChanged = hasUnstagedStatusChange(statusPorcelain);
 
@@ -179,6 +187,13 @@ function collectGitContext(options = {}) {
     hasUnstagedChanges: Boolean(unstagedDiffStat),
     hasCommittedChanges: Boolean(committedLog),
   };
+}
+
+function parseStatusBranch(branchLine) {
+  if (!branchLine) return "unknown-branch";
+  if (branchLine.startsWith("No commits yet on ")) return branchLine.slice("No commits yet on ".length).trim() || "unknown-branch";
+  if (branchLine.startsWith("HEAD ")) return "HEAD";
+  return branchLine.split("...")[0].trim() || "unknown-branch";
 }
 
 function hasStagedStatusChange(statusPorcelain) {

@@ -42,6 +42,7 @@ function createFakeGitAdapter(config = {}) {
   function run(args, cwd) {
     calls.push({ args: [...args], cwd });
     const key = args.join(" ");
+    if (key === "rev-parse --show-toplevel HEAD") return `${state.repositoryPath}\n${state.headCommit}`;
     if (key === "rev-parse --show-toplevel") return state.repositoryPath;
     if (key === "rev-parse --abbrev-ref HEAD") return state.currentBranch;
     if (key === "rev-parse HEAD") return state.headCommit;
@@ -57,6 +58,9 @@ function createFakeGitAdapter(config = {}) {
     if (args[0] === "diff" && args.length === 3 && args[2] === "--numstat") return state.committedDiffNumstat;
     if (args[0] === "diff" && args.length === 2) return state.committedDiff;
     if (key === "status --porcelain") return state.statusPorcelain;
+    if (key === "status --porcelain=v1 -b") {
+      return [`## ${state.currentBranch}`, state.statusPorcelain].filter(Boolean).join("\n");
+    }
     return "";
   }
 
