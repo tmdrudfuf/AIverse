@@ -121,6 +121,7 @@ function createLayoutSnapshot(): OfficeLayoutSnapshot {
     workstationSlots: [],
     meetingSlots: [],
     breakAreaSlots: [],
+    departmentAreas: [],
     entryExitPoints: [],
   };
 }

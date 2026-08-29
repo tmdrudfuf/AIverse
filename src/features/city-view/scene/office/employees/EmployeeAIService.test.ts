@@ -296,6 +296,7 @@ function createContext(options: {
           workstationSlots: [],
           meetingSlots: [],
           breakAreaSlots: [],
+          departmentAreas: [],
           entryExitPoints: [],
         }
       : undefined,

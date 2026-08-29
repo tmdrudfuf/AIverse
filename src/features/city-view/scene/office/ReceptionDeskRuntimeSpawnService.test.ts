@@ -111,6 +111,7 @@ function createLayout(zones: OfficeLayoutZone[] = [zone("small-office-reception"
     workstationSlots: [],
     meetingSlots: [],
     breakAreaSlots: [],
+    departmentAreas: [],
     entryExitPoints: [],
   };
 }

@@ -1,6 +1,8 @@
 import type { CompanyStage } from "../progression/CompanyProgressionTypes";
 import type {
   OfficeBreakAreaSlot,
+  OfficeDepartmentArea,
+  OfficeDepartmentKind,
   OfficeEntryExitPoint,
   OfficeFurnitureSlot,
   OfficeLayoutPositionHint,
@@ -72,6 +74,12 @@ const LAYOUTS_BY_ID: Record<string, OfficeLayoutSnapshot> = {
     meetingCount: 2,
     breakAreaCount: 2,
     furnitureSlots: [],
+    departmentAreas: [
+      department("frontend-engineering", "Frontend Engineering", "growing-company-workspace", 0.36, 0.42, [1, 2, 3, 4], [1]),
+      department("backend-engineering", "Backend Engineering", "growing-company-workstations", 0.58, 0.42, [5, 6, 7, 8], [1]),
+      department("design", "Design Studio", "growing-company-workspace", 0.36, 0.58, [9, 10, 11], [2]),
+      department("qa", "QA Lab", "growing-company-workstations", 0.62, 0.58, [12, 13, 14], [2]),
+    ],
   }),
   "headquarters-level-4": createLayout({
     layoutId: "headquarters-level-4",
@@ -137,6 +145,10 @@ export class OfficeLayoutService {
   getFurnitureSlots(layoutId = ACTIVE_LAYOUT_ID): OfficeFurnitureSlot[] {
     return this.getActiveLayout(layoutId).furnitureSlots;
   }
+
+  getDepartmentAreas(layoutId = ACTIVE_LAYOUT_ID): OfficeDepartmentArea[] {
+    return this.getActiveLayout(layoutId).departmentAreas;
+  }
 }
 
 type LayoutConfig = {
@@ -148,6 +160,7 @@ type LayoutConfig = {
   meetingCount: number;
   breakAreaCount: number;
   furnitureSlots: OfficeFurnitureSlot[];
+  departmentAreas?: OfficeDepartmentArea[];
   extraEntryExitPoints?: OfficeEntryExitPoint[];
 };
 
@@ -173,6 +186,7 @@ function createLayout(config: LayoutConfig): OfficeLayoutSnapshot {
     breakAreaSlots: Array.from({ length: config.breakAreaCount }, (_, index) =>
       breakAreaSlot(breakZone, index, config.floorId),
     ),
+    departmentAreas: (config.departmentAreas ?? []).map((area) => withDepartmentFloor(area, zones, config.floorId)),
     entryExitPoints: [
       entryExit(
         `${entranceZone.zoneId}-entry`,
@@ -184,6 +198,22 @@ function createLayout(config: LayoutConfig): OfficeLayoutSnapshot {
       ),
       ...(config.extraEntryExitPoints ?? []),
     ],
+  };
+}
+
+function withDepartmentFloor(area: OfficeDepartmentArea, zones: OfficeLayoutZone[], floorId: string): OfficeDepartmentArea {
+  const zoneSnapshot = zones.find((item) => item.zoneId === area.zoneId);
+
+  return {
+    ...area,
+    floorId,
+    positionHint: {
+      ...area.positionHint,
+      floorId,
+      zoneType: zoneSnapshot?.type ?? area.positionHint.zoneType,
+    },
+    workstationSlotIds: [...area.workstationSlotIds],
+    meetingSlotIds: [...area.meetingSlotIds],
   };
 }
 
@@ -252,6 +282,28 @@ function furniture(
   return {
     ...slot(slotId, zoneId, "workspace", 0, label, capacity, xWeight, yWeight),
     furnitureType,
+  };
+}
+
+function department(
+  departmentKind: OfficeDepartmentKind,
+  label: string,
+  zoneId: string,
+  xWeight: number,
+  yWeight: number,
+  workstationIndexes: number[],
+  meetingIndexes: number[],
+): OfficeDepartmentArea {
+  return {
+    departmentId: `growing-company-${departmentKind}`,
+    departmentKind,
+    label,
+    floorId: "",
+    zoneId,
+    positionHint: createPositionHint(zoneId, "workspace", "", undefined, label, xWeight, yWeight),
+    workstationSlotIds: workstationIndexes.map((index) => `workstation-${index}`),
+    meetingSlotIds: meetingIndexes.map((index) => `meeting-${index}`),
+    isUnlocked: false,
   };
 }
 
@@ -356,6 +408,12 @@ function cloneLayout(layout: OfficeLayoutSnapshot): OfficeLayoutSnapshot {
     workstationSlots: layout.workstationSlots.map((slotSnapshot) => ({ ...cloneSlot(slotSnapshot), workstationIndex: slotSnapshot.workstationIndex })),
     meetingSlots: layout.meetingSlots.map((slotSnapshot) => ({ ...cloneSlot(slotSnapshot), meetingType: slotSnapshot.meetingType })),
     breakAreaSlots: layout.breakAreaSlots.map((slotSnapshot) => ({ ...cloneSlot(slotSnapshot), breakAreaType: slotSnapshot.breakAreaType })),
+    departmentAreas: layout.departmentAreas.map((area) => ({
+      ...area,
+      positionHint: { ...area.positionHint },
+      workstationSlotIds: [...area.workstationSlotIds],
+      meetingSlotIds: [...area.meetingSlotIds],
+    })),
     entryExitPoints: layout.entryExitPoints.map((point) => ({ ...point, positionHint: { ...point.positionHint } })),
   };
 }
