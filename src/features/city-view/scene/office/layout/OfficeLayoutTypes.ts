@@ -55,6 +55,20 @@ export type OfficeBreakAreaSlot = OfficeLayoutSlot & {
   breakAreaType: "snack" | "coffee" | "lounge";
 };
 
+export type OfficeDepartmentKind = "frontend-engineering" | "backend-engineering" | "design" | "qa";
+
+export type OfficeDepartmentArea = {
+  departmentId: string;
+  departmentKind: OfficeDepartmentKind;
+  label: string;
+  floorId: string;
+  zoneId: string;
+  positionHint: OfficeLayoutPositionHint;
+  workstationSlotIds: string[];
+  meetingSlotIds: string[];
+  isUnlocked: boolean;
+};
+
 export type OfficeEntryExitPoint = {
   pointId: string;
   label: string;
@@ -72,5 +86,6 @@ export type OfficeLayoutSnapshot = {
   workstationSlots: OfficeWorkstationSlot[];
   meetingSlots: OfficeMeetingSlot[];
   breakAreaSlots: OfficeBreakAreaSlot[];
+  departmentAreas: OfficeDepartmentArea[];
   entryExitPoints: OfficeEntryExitPoint[];
 };
