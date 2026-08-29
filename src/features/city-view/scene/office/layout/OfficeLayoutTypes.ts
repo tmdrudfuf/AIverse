@@ -55,7 +55,15 @@ export type OfficeBreakAreaSlot = OfficeLayoutSlot & {
   breakAreaType: "snack" | "coffee" | "lounge";
 };
 
-export type OfficeDepartmentKind = "frontend-engineering" | "backend-engineering" | "design" | "qa";
+export type OfficeDepartmentKind =
+  | "frontend-engineering"
+  | "backend-engineering"
+  | "design"
+  | "qa"
+  | "engineering"
+  | "review"
+  | "validation-qa"
+  | "project-status-operations";
 
 export type OfficeDepartmentArea = {
   departmentId: string;

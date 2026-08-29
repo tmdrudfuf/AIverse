@@ -5,7 +5,7 @@ import { OfficeEmployeeNpcRenderer } from "./OfficeEmployeeNpcRenderer";
 
 describe("OfficeEmployeeNpcRenderer", () => {
   it("shows a visible work indicator for active workstation task animation", () => {
-    const { scene, rectangles, texts } = createSceneStub();
+    const { scene, rectangles, texts, containers } = createSceneStub();
     const renderer = new OfficeEmployeeNpcRenderer(scene);
 
     renderer.render([createViewModel({
@@ -18,6 +18,10 @@ describe("OfficeEmployeeNpcRenderer", () => {
     })]);
 
     expect(rectangles).toHaveLength(2);
+    expect(containers[0]).toMatchObject({
+      x: 136,
+      y: 206,
+    });
     expect(rectangles[1]).toMatchObject({
       visible: true,
       fillColor: 0x22c55e,
@@ -71,6 +75,21 @@ describe("OfficeEmployeeNpcRenderer", () => {
 
     expect(containers[0].destroyed).toBe(true);
     expect(containers[0].destroyChildren).toBe(true);
+  });
+
+  it("places review and operations NPCs on the rendered department anchors", () => {
+    const { scene, containers } = createSceneStub();
+    const renderer = new OfficeEmployeeNpcRenderer(scene);
+
+    renderer.render([
+      createViewModel({ employeeId: "reviewer", positionHint: { zone: "review", slot: 0 } }),
+      createViewModel({ employeeId: "operator", positionHint: { zone: "meetingArea", slot: 0 } }),
+    ]);
+
+    expect(containers.map((container) => ({ x: container.x, y: container.y }))).toEqual([
+      { x: 510, y: 200 },
+      { x: 738, y: 470 },
+    ]);
   });
 });
 
