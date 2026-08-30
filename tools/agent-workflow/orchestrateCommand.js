@@ -1006,12 +1006,12 @@ function inferNextValidationStage(currentStage) {
 
 function previewOrchestration(state, options = {}) {
   const cwd = options.cwd || process.cwd();
-  const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch, gitAdapter: options.gitAdapter });
   const roleResolution = resolveOrchestrationRoles(state, options);
   const implementer = resolveAgentConfig(state, roleResolution.roles.implementer);
   const reviewer = resolveAgentConfig(state, roleResolution.roles.reviewer);
   assertSafeCommand(implementer);
   assertSafeCommand(reviewer);
+  const gitContext = collectGitContext({ cwd, baseBranch: options.baseBranch || state.baseBranch, gitAdapter: options.gitAdapter });
   const maxFixCycles = normalizeMaxFixCycles(options.maxFixCycles ?? state.maxFixCycles);
   const maxQuestionCycles = normalizeMaxQuestionCycles(options.maxQuestionCycles ?? state.maxQuestionCycles);
   const currentStage = getCurrentStage(state);
