@@ -250,9 +250,9 @@ describe("OfficeProjectPortalController project dashboard", () => {
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",
-      branchName: "codex/130-external-project-ados-run-status",
-      specPath: "specs/130-external-project-ados-run-status/spec.md",
     });
+    expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.branchName).toBeUndefined();
+    expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.specPath).toBeUndefined();
     expect(state.viewMode).toBe("project-dashboard");
     expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.requirementsArtifactContent).toContain(
       "Also verify no shell syntax runs: && Remove-Item C:/x",
@@ -324,16 +324,18 @@ describe("OfficeProjectPortalController project dashboard", () => {
     controller.updateInput(createInput({ actionPressed: true }));
 
     expect(Object.keys(state.externalProjectAdosRunPreparations)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
-    expect(state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+    const preparation = state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
+    expect(preparation).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       developmentRequestDraftId: `${EXTERNAL_PROJECT_DRAFT_ID}:external-development-request-draft`,
       status: "Prepared",
-      featureBranch: "codex/130-external-project-ados-run-status",
       authoritativeBaseSha: "runtime-derived",
-      specPath: "specs/130-external-project-ados-run-status/spec.md",
       reviewerCommand: "claude -p",
       executionPolicyVersion: 1,
     });
+    expect(preparation?.featureId).toMatch(/^\d{12}-create-a-development-request-for-external-projec$/);
+    expect(preparation?.featureBranch).toBe(`codex/${preparation?.featureId}`);
+    expect(preparation?.specPath).toBe(`specs/${preparation?.featureId}/spec.md`);
     expect(state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       stage: "Prepared",
@@ -395,12 +397,13 @@ describe("OfficeProjectPortalController project dashboard", () => {
     const restored = new BrowserOfficeSessionService({ storage }).restoreState(
       createProjectPortalState({ browserOfficeSessionService: false }),
     );
-    expect(restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+    const restoredPreparation = restored.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
+    expect(restoredPreparation).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Prepared",
-      featureBranch: "codex/130-external-project-ados-run-status",
       reviewerCommand: "claude -p",
     });
+    expect(restoredPreparation?.featureBranch).toBe(`codex/${restoredPreparation?.featureId}`);
     expect(restored.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       stage: "Prepared",
       source: "preparation",
@@ -434,11 +437,12 @@ describe("OfficeProjectPortalController project dashboard", () => {
     await flushPromises();
 
     expect(start).toHaveBeenCalledOnce();
+    const preparation = state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
     expect(start.mock.calls[0]?.[0]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       preparation: {
         id: `${EXTERNAL_PROJECT_DRAFT_ID}:external-ados-run-preparation`,
-        featureBranch: "codex/130-external-project-ados-run-status",
+        featureBranch: preparation?.featureBranch,
       },
     });
     expect(state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
@@ -491,13 +495,14 @@ describe("OfficeProjectPortalController project dashboard", () => {
     const restored = new BrowserOfficeSessionService({ storage }).restoreState(
       createProjectPortalState({ browserOfficeSessionService: false }),
     );
-    expect(restored.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
+    const restoredExecution = restored.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID];
+    expect(restoredExecution).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Completed",
-      featureBranch: "codex/130-external-project-ados-run-status",
       reviewStarted: false,
       githubMutationStarted: false,
     });
+    expect(restoredExecution?.featureBranch).toMatch(/^codex\/\d{12}-create-a-development-request-for-external-projec$/);
     expect(restored.externalProjectAdosExecutionResults[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       status: "Completed",
       started: true,

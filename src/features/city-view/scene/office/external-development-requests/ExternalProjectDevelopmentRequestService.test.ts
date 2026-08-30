@@ -32,9 +32,9 @@ describe("ExternalProjectDevelopmentRequestService", () => {
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",
-      branchName: "codex/130-external-project-ados-run-status",
-      specPath: "specs/130-external-project-ados-run-status/spec.md",
     });
+    expect(draft.branchName).toBeUndefined();
+    expect(draft.specPath).toBeUndefined();
     expect(draft.sideEffectBoundary).toContain("no runtime");
     expect(draft.requirementsArtifactContent).toContain("Target project id: external-project-draft");
     expect(draft.requirementsArtifactContent).toContain("Create a development request for External Project Draft.");

@@ -37,6 +37,8 @@ export function createExternalProjectDevelopmentRequestDraft(
         requestText,
         timestamp: input.existingDraft.createdAt,
       }),
+      branchName: undefined,
+      specPath: undefined,
       updatedAt: timestamp,
     };
   }
@@ -67,8 +69,6 @@ export function createExternalProjectDevelopmentRequestDraft(
     repositoryProvider: identity?.provider ?? "unknown",
     repositoryOwner: identity?.owner,
     repositoryName: identity?.name,
-    branchName: input.project.localRepositoryBinding?.branchName ?? identity?.defaultBranch,
-    specPath: input.project.localRepositoryBinding?.specPath,
     createdAt: timestamp,
     updatedAt: timestamp,
     sideEffectBoundary: EXTERNAL_PROJECT_DEVELOPMENT_REQUEST_BOUNDARY,

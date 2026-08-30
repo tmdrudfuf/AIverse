@@ -20,9 +20,9 @@ describe("ExternalProjectAdosRunPreparationService", () => {
       developmentRequestDraftId: "external-project-draft:external-development-request-draft",
       status: "Prepared",
       featureId: "202608240100-development-request-for-external-project-draft",
-      featureBranch: "codex/130-external-project-ados-run-status",
+      featureBranch: "codex/202608240100-development-request-for-external-project-draft",
       authoritativeBaseSha: "runtime-derived",
-      specPath: "specs/130-external-project-ados-run-status/spec.md",
+      specPath: "specs/202608240100-development-request-for-external-project-draft/spec.md",
       requirementsFilePath: ".agent-workflow/external-requests/external-project-draft/20260824T0000000-requirements.md",
       requirementsFileContent: "# Development Request\n\nFull request body",
       reviewerCommand: "claude -p",
@@ -91,6 +91,38 @@ describe("ExternalProjectAdosRunPreparationService", () => {
     expect(preparation?.featureId).toBe("202608291234-add-billing-audit-trail");
     expect(preparation?.featureBranch).toBe("codex/202608291234-add-billing-audit-trail");
     expect(preparation?.specPath).toBe("specs/202608291234-add-billing-audit-trail/spec.md");
+  });
+
+  it("does not inherit a target project's stale bound branch or spec for a new request", () => {
+    const billingPreparation = createExternalProjectAdosRunPreparation({
+      projectId: "daily-proof",
+      developmentRequestDraft: createDevelopmentRequestDraft({
+        id: "daily-proof:external-development-request-draft",
+        projectId: "daily-proof",
+        projectName: "Daily Proof Inc.",
+        title: "Add a billing export feature",
+        branchName: "codex/103-daily-proof-configured-runtime-repository-context",
+        specPath: "specs/103-daily-proof-configured-runtime-repository-context/spec.md",
+      }),
+      now: "2026-08-29T12:34:00.000Z",
+    });
+    const darkModePreparation = createExternalProjectAdosRunPreparation({
+      projectId: "daily-proof",
+      developmentRequestDraft: createDevelopmentRequestDraft({
+        id: "daily-proof:external-development-request-draft",
+        projectId: "daily-proof",
+        projectName: "Daily Proof Inc.",
+        title: "Add a dark mode toggle",
+        branchName: "codex/103-daily-proof-configured-runtime-repository-context",
+        specPath: "specs/103-daily-proof-configured-runtime-repository-context/spec.md",
+      }),
+      now: "2026-08-29T12:35:00.000Z",
+    });
+
+    expect(billingPreparation?.featureBranch).toBe("codex/202608291234-add-a-billing-export-feature");
+    expect(billingPreparation?.specPath).toBe("specs/202608291234-add-a-billing-export-feature/spec.md");
+    expect(darkModePreparation?.featureBranch).toBe("codex/202608291235-add-a-dark-mode-toggle");
+    expect(darkModePreparation?.specPath).toBe("specs/202608291235-add-a-dark-mode-toggle/spec.md");
   });
 });
 
