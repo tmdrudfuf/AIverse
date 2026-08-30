@@ -44,6 +44,7 @@ import { deriveExternalProjectAdosRunStatus } from "./external-ados-run-status/E
 import {
   canCreateExternalProjectDevelopmentRequestDraft,
   createExternalProjectDevelopmentRequestDraft,
+  resolveDevelopmentRequestTargetProject,
 } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
 import { ExecutionPlanService } from "./execution-plans/ExecutionPlanService";
 import { createExecutionPlanCollection, resolveCurrentExecutionPlan, type ExecutionPlan } from "./execution-plans/ExecutionPlanTypes";
@@ -309,6 +310,7 @@ export type OfficeProjectPortalInput = {
   startValidationRuntimePressed: boolean;
   preparePostValidationReviewTargetPressed: boolean;
   startPostValidationReviewPressed: boolean;
+  developmentRequestText?: string;
 };
 
 export type OfficeProjectPortalControllerOptions = {
@@ -323,6 +325,7 @@ export class OfficeProjectPortalController {
   private readonly maxEmployeeConversationDistance = 48;
   private readonly state: ProjectPortalState;
   private readonly view: OfficeProjectPortalView;
+  private pendingDevelopmentRequestText = "";
   private readonly browserOfficeSessionService?: BrowserOfficeSessionService;
   private readonly repositoryService: GitHubRepositoryService;
   private readonly repositorySyncService: RepositorySyncService;
@@ -351,6 +354,7 @@ export class OfficeProjectPortalController {
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
   private externalProjectAdosExecutionService: ExternalProjectAdosExecutionService;
+  private readonly activeExternalProjectAdosExecutionKeys = new Set<string>();
   private readonly activeValidationRuntimeKeys = new Set<string>();
   private postValidationReviewTargetService: PostValidationReviewTargetService;
   private readonly activePostValidationReviewKeys = new Set<string>();
@@ -471,6 +475,9 @@ export class OfficeProjectPortalController {
   }
 
   updateInput(input: OfficeProjectPortalInput) {
+    if (typeof input.developmentRequestText === "string") {
+      this.pendingDevelopmentRequestText = input.developmentRequestText;
+    }
     if (!this.state.isOpen) return;
 
     if (this.state.justOpened) {
@@ -707,7 +714,7 @@ export class OfficeProjectPortalController {
         workstationState: workstationSnapshot?.state,
         workstationSnapshot,
         companyProgression: previewState.companyProgression,
-      };
+      }
     });
   }
 
@@ -3842,16 +3849,16 @@ export class OfficeProjectPortalController {
   }
 
   private createExternalProjectDevelopmentRequestDraft() {
-    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
-
-    const project = this.state.projects.find((item) => item.id === EXTERNAL_PROJECT_DRAFT_ID);
+    const project = this.getDevelopmentRequestTargetProject();
     if (!project || !canCreateExternalProjectDevelopmentRequestDraft(project)) return false;
 
     this.state.externalProjectDevelopmentRequestDrafts = {
       ...this.state.externalProjectDevelopmentRequestDrafts,
-      [EXTERNAL_PROJECT_DRAFT_ID]: createExternalProjectDevelopmentRequestDraft({
+      [project.id]: createExternalProjectDevelopmentRequestDraft({
         project,
-        existingDraft: this.state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID],
+        activeProjectCompanyContext: this.state.activeProjectCompanyContext,
+        requestText: this.pendingDevelopmentRequestText,
+        existingDraft: this.state.externalProjectDevelopmentRequestDrafts[project.id],
       }),
     };
     this.persistBrowserOfficeSession();
@@ -3859,28 +3866,37 @@ export class OfficeProjectPortalController {
   }
 
   private createExternalProjectAdosRunPreparation() {
-    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
+    const project = this.getDevelopmentRequestTargetProject();
+    if (!project) return false;
 
-    const developmentRequestDraft = this.state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID];
+    const developmentRequestDraft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
     if (!canCreateExternalProjectAdosRunPreparation(developmentRequestDraft)) return false;
 
     const preparation = createExternalProjectAdosRunPreparation({
-      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      projectId: project.id,
       developmentRequestDraft,
-      existingPreparation: this.state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID],
+      existingPreparation: this.state.externalProjectAdosRunPreparations[project.id],
     });
     if (!preparation) return false;
 
     this.state.externalProjectAdosRunPreparations = {
       ...this.state.externalProjectAdosRunPreparations,
-      [EXTERNAL_PROJECT_DRAFT_ID]: preparation,
+      [project.id]: preparation,
+    };
+    this.state.externalProjectDevelopmentRequestDrafts = {
+      ...this.state.externalProjectDevelopmentRequestDrafts,
+      [project.id]: {
+        ...developmentRequestDraft!,
+        status: "Prepared",
+        updatedAt: preparation.updatedAt,
+      },
     };
     this.state.externalProjectAdosRunStatuses = {
       ...this.state.externalProjectAdosRunStatuses,
-      [EXTERNAL_PROJECT_DRAFT_ID]: deriveExternalProjectAdosRunStatus({
-        projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      [project.id]: deriveExternalProjectAdosRunStatus({
+        projectId: project.id,
         preparation,
-        persistedStatus: this.state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID],
+        persistedStatus: this.state.externalProjectAdosRunStatuses[project.id],
       })!,
     };
     this.persistBrowserOfficeSession();
@@ -3888,43 +3904,90 @@ export class OfficeProjectPortalController {
   }
 
   private startExternalProjectAdosExecution() {
-    if (this.state.selectedProjectDashboardProjectId !== EXTERNAL_PROJECT_DRAFT_ID) return false;
+    const project = this.getDevelopmentRequestTargetProject();
+    if (!project) return false;
 
-    const preparation = this.state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
+    const preparation = this.state.externalProjectAdosRunPreparations[project.id];
     if (!preparation) return false;
+    if (this.activeExternalProjectAdosExecutionKeys.has(project.id)) return true;
 
-    const project = this.state.projects.find((item) => item.id === EXTERNAL_PROJECT_DRAFT_ID);
+    this.activeExternalProjectAdosExecutionKeys.add(project.id);
+    const existingDraft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
+    if (existingDraft) {
+      this.state.externalProjectDevelopmentRequestDrafts = {
+        ...this.state.externalProjectDevelopmentRequestDrafts,
+        [project.id]: {
+          ...existingDraft,
+          status: this.state.externalProjectAdosExecutions[project.id] ? "AlreadyActive" : "Submitting",
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      this.persistBrowserOfficeSession();
+      this.view.render(this.state);
+    }
     void this.externalProjectAdosExecutionService.start({
-      projectId: EXTERNAL_PROJECT_DRAFT_ID,
+      projectId: project.id,
       project,
       preparation,
-      existingExecution: this.state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID],
+      existingExecution: this.state.externalProjectAdosExecutions[project.id],
     }).then((outcome) => {
       if (outcome.execution) {
         this.state.externalProjectAdosExecutions = {
           ...this.state.externalProjectAdosExecutions,
-          [EXTERNAL_PROJECT_DRAFT_ID]: outcome.execution,
+          [project.id]: outcome.execution,
         };
       }
       this.state.externalProjectAdosExecutionResults = {
         ...this.state.externalProjectAdosExecutionResults,
-        [EXTERNAL_PROJECT_DRAFT_ID]: outcome.result,
+        [project.id]: outcome.result,
+      };
+      const draft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
+      if (draft) {
+        this.state.externalProjectDevelopmentRequestDrafts = {
+          ...this.state.externalProjectDevelopmentRequestDrafts,
+          [project.id]: {
+            ...draft,
+            status: outcome.result.duplicateExistingExecution
+              ? "AlreadyActive"
+              : outcome.result.started
+                ? "Started"
+                : outcome.result.status === "Failed"
+                  ? "Failed"
+                  : outcome.result.status === "Blocked"
+                    ? "Blocked"
+                    : outcome.result.status === "Completed"
+                      ? "Completed"
+                      : draft.status,
+            adosRunId: outcome.execution?.id ?? draft.adosRunId,
+            updatedAt: outcome.result.resultAt,
+          },
+        };
       };
       this.state.externalProjectAdosRunStatuses = {
         ...this.state.externalProjectAdosRunStatuses,
-        [EXTERNAL_PROJECT_DRAFT_ID]: deriveExternalProjectAdosRunStatus({
-          projectId: EXTERNAL_PROJECT_DRAFT_ID,
+        [project.id]: deriveExternalProjectAdosRunStatus({
+          projectId: project.id,
           preparation,
-          execution: outcome.execution ?? this.state.externalProjectAdosExecutions[EXTERNAL_PROJECT_DRAFT_ID],
+          execution: outcome.execution ?? this.state.externalProjectAdosExecutions[project.id],
           result: outcome.result,
-          persistedStatus: this.state.externalProjectAdosRunStatuses[EXTERNAL_PROJECT_DRAFT_ID],
+          persistedStatus: this.state.externalProjectAdosRunStatuses[project.id],
         })!,
       };
       this.persistBrowserOfficeSession();
       this.view.render(this.state);
+    }).finally(() => {
+      this.activeExternalProjectAdosExecutionKeys.delete(project.id);
     });
 
     return true;
+  }
+
+  private getDevelopmentRequestTargetProject() {
+    return resolveDevelopmentRequestTargetProject({
+      activeProjectCompanyContext: this.state.activeProjectCompanyContext,
+      selectedProjectId: this.state.selectedProjectDashboardProjectId ?? this.state.selectedProjectId,
+      projects: this.state.projects,
+    });
   }
 
   private moveWorkspaceSelection(delta: number) {

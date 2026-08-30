@@ -5,9 +5,7 @@ export const EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_BOUNDARY =
   "Local preparation only; validation, review, runtime, repository, GitHub, publish, merge, and deploy are not started.";
 
 export const EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS = {
-  featureBranch: "codex/130-external-project-ados-run-status",
-  authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
-  specPath: "specs/130-external-project-ados-run-status/spec.md",
+  authoritativeBaseSha: "runtime-derived",
   validationCommands: [
     "npm test",
     "npx tsc --noEmit",
@@ -46,15 +44,19 @@ export function createExternalProjectAdosRunPreparation(
       updatedAt: timestamp,
     };
   }
+  const featureId = createAdosFeatureId(input.developmentRequestDraft, timestamp);
 
   return {
     id: `${input.projectId}:external-ados-run-preparation`,
     projectId: input.projectId,
     developmentRequestDraftId: input.developmentRequestDraft.id,
     status: "Prepared",
-    featureBranch: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch,
+    featureId,
+    featureBranch: input.developmentRequestDraft.branchName ?? `codex/${featureId}`,
     authoritativeBaseSha: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.authoritativeBaseSha,
-    specPath: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.specPath,
+    specPath: input.developmentRequestDraft.specPath ?? `specs/${featureId}/spec.md`,
+    requirementsFilePath: input.developmentRequestDraft.requirementsArtifactPath,
+    requirementsPreview: compactRequirements(input.developmentRequestDraft.requirementsArtifactContent ?? input.developmentRequestDraft.requestText ?? ""),
     validationCommands: [...EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.validationCommands],
     reviewerCommand: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.reviewerCommand,
     executionPolicyVersion: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.executionPolicyVersion,
@@ -62,4 +64,15 @@ export function createExternalProjectAdosRunPreparation(
     updatedAt: timestamp,
     sideEffectBoundary: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_BOUNDARY,
   };
+}
+
+function createAdosFeatureId(draft: ExternalProjectDevelopmentRequestDraft, timestamp: string) {
+  const datePrefix = timestamp.replace(/[^0-9]/g, "").slice(0, 12) || "request";
+  const slugSource = draft.title || draft.projectName || draft.projectId;
+  const slug = slugSource.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48) || "development-request";
+  return `${datePrefix}-${slug}`;
+}
+
+function compactRequirements(content: string) {
+  return content.length <= 500 ? content : `${content.slice(0, 497)}...`;
 }

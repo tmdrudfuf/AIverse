@@ -16,11 +16,13 @@ export function createExternalProjectAdosExecutionDisplayRows(
     return {
       statusText: `${execution.status} - ${execution.featureBranch}`,
       contextText: [
+        execution.featureId,
         compactPath(execution.worktreePath),
+        execution.requirementsFilePath ? `requirements ${compactPath(execution.requirementsFilePath)}` : undefined,
         `base ${execution.authoritativeBaseSha.slice(0, 7)}`,
         `policy v${execution.executionPolicyVersion}`,
         execution.implementerStarted ? "implementer started" : "implementer not started",
-      ].join("; "),
+      ].filter((item): item is string => Boolean(item)).join("; "),
       boundaryText: "Validation, review, repository mutation, GitHub, publish, merge, and deploy not started.",
     };
   }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { deriveLiveAgentWorkState } from "./LiveAgentWorkVisualization";
 import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
+import type { Employee } from "./employees/EmployeeTypes";
 
 describe("deriveLiveAgentWorkState", () => {
   it.each([
@@ -223,6 +224,63 @@ describe("deriveLiveAgentWorkState", () => {
       department: "engineering",
     });
   });
+
+  it("shows submitted request identity and run id in Project Status", () => {
+    const state = deriveLiveAgentWorkState(portalState({
+      externalProjectDevelopmentRequestDrafts: {
+        alpha: {
+          id: "alpha:external-development-request-draft",
+          projectId: "alpha",
+          projectName: "Alpha Tools",
+          status: "Started",
+          title: "Add audit history",
+          summary: "Add audit history",
+          requestText: "Add audit history",
+          targetProjectIdentity: "alpha (Alpha Tools; local:alpha)",
+          requirementsArtifactPath: ".aiverse/ados-requests/alpha/req.md",
+          requirementsArtifactContent: "Add audit history",
+          adosRunId: "alpha:run:1234567890",
+          repositoryProvider: "local",
+          createdAt: "2026-08-29T00:00:00.000Z",
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          sideEffectBoundary: "Local draft only.",
+        },
+      },
+      externalProjectAdosRunStatuses: {
+        alpha: status({ stage: "Started", status: "implementer" }),
+      },
+    }));
+
+    expect(state.projectStatus.rows).toContain("Request Add audit history");
+    expect(state.projectStatus.rows.some((row) => row.startsWith("Run id alpha:run"))).toBe(true);
+  });
+
+  it("does not select an employee assigned to another project when scoped or shared workers exist", () => {
+    const state = deriveLiveAgentWorkState(portalState({
+      activeProjectCompanyContext: {
+        binding: {
+          bindingId: "alpha-building",
+          buildingId: "alpha-building",
+          projectId: "alpha",
+          companyName: "Alpha Tools",
+          status: "bound",
+        },
+        projectId: "alpha",
+        displayName: "Alpha Tools",
+        companyName: "Alpha Tools",
+        status: "bound",
+      },
+      externalProjectAdosRunStatuses: {
+        alpha: status({ stage: "Started", status: "implementer" }),
+      },
+      employees: [
+        { ...employee("other", "Other Engineer", "Engineer", ["Coding"]), currentProjectId: "beta" },
+        { ...employee("shared", "Shared Engineer", "Engineer", ["Coding"]), currentProjectId: undefined },
+      ],
+    }));
+
+    expect(state.assignments[0]?.employeeId).toBe("shared");
+  });
 });
 
 function portalState(overrides: Partial<ProjectPortalState> = {}): ProjectPortalState {
@@ -238,10 +296,11 @@ function portalState(overrides: Partial<ProjectPortalState> = {}): ProjectPortal
     externalProjectAdosExecutions: {},
     externalProjectAdosExecutionResults: {},
     externalProjectAdosRunStatuses: {},
+    externalProjectDevelopmentRequestDrafts: {},
     employees: [
       employee("engineer", "Riley Engineer", "Engineer", ["Coding"]),
       employee("qa", "Quinn QA", "QA", ["Testing"]),
-      employee("reviewer", "Casey Reviewer", "Reviewer", ["Review"]),
+      employee("reviewer", "Casey Reviewer", "CTO", ["Review"]),
       employee("ops", "Morgan Ops", "CTO", ["Planning"]),
     ],
     implementerRuntimeCollections: {},
@@ -273,7 +332,12 @@ function project(id: string, name: string) {
   };
 }
 
-function employee(id: string, name: string, role: string, capabilities: string[]) {
+function employee(
+  id: string,
+  name: string,
+  role: ProjectPortalState["employees"][number]["role"],
+  capabilities: string[],
+): Employee {
   return {
     id,
     name,

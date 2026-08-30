@@ -153,9 +153,11 @@ function validateInput(input: StartExternalProjectAdosExecutionInput): ExternalP
 
 function preparationMatchesTrustedPolicy(preparation: ExternalProjectAdosRunPreparation) {
   return (
-    preparation.featureBranch === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch &&
     preparation.authoritativeBaseSha === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.authoritativeBaseSha &&
-    preparation.specPath === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.specPath &&
+    Boolean(preparation.featureId?.trim()) &&
+    Boolean(preparation.featureBranch?.trim()) &&
+    Boolean(preparation.specPath?.trim()) &&
+    Boolean(preparation.requirementsFilePath?.trim()) &&
     preparation.reviewerCommand === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.reviewerCommand &&
     preparation.executionPolicyVersion === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.executionPolicyVersion &&
     sameOrderedStrings(preparation.validationCommands, EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.validationCommands)
@@ -188,11 +190,19 @@ function createExternalAdosImplementerPrompt(
     `Project: ${project.name}`,
     `Feature branch: ${preparation.featureBranch}`,
     `Authoritative base SHA: ${preparation.authoritativeBaseSha}`,
-    `Spec: ${preparation.specPath}`,
+    `Spec: ${preparation.featureId}`,
+    `Spec path: ${preparation.specPath}`,
+    `Requirements file: ${preparation.requirementsFilePath}`,
     `Worktree: ${worktreePath}`,
     `Execution policy version: ${preparation.executionPolicyVersion}`,
     `Validation commands: ${preparation.validationCommands.join(", ")}`,
     `Reviewer: ${preparation.reviewerCommand}`,
+    "",
+    "Use the provided requirements file as the authoritative requirements source for this run.",
+    "Do not replace the detailed requirements with only a short feature title.",
+    "",
+    "Requirements preview:",
+    preparation.requirementsPreview,
     "",
     "Implement the prepared external project ADOS feature in this local worktree only.",
     "Do not run validation from this bridge.",
@@ -216,9 +226,11 @@ function createExecution(input: {
     preparationId: input.preparation.id,
     developmentRequestDraftId: input.preparation.developmentRequestDraftId,
     status: input.status,
+    featureId: input.preparation.featureId,
     featureBranch: input.preparation.featureBranch,
     authoritativeBaseSha: input.preparation.authoritativeBaseSha,
     specPath: input.preparation.specPath,
+    requirementsFilePath: input.preparation.requirementsFilePath,
     repositoryPath: binding.repositoryPath,
     worktreePath: binding.worktreePath,
     validationCommands: [...input.preparation.validationCommands],

@@ -5,9 +5,12 @@ export type ExternalProjectAdosRunPreparation = {
   projectId: string;
   developmentRequestDraftId: string;
   status: ExternalProjectAdosRunPreparationStatus;
+  featureId?: string;
   featureBranch: string;
   authoritativeBaseSha: string;
   specPath: string;
+  requirementsFilePath?: string;
+  requirementsPreview?: string;
   validationCommands: string[];
   reviewerCommand: string;
   executionPolicyVersion: number;
