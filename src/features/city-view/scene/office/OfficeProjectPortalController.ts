@@ -809,7 +809,6 @@ export class OfficeProjectPortalController {
   }
 
   getLiveAgentWorkState(): LiveAgentWorkState {
-    this.applyActiveProjectContextSelection();
     return deriveLiveAgentWorkState(this.state);
   }
 

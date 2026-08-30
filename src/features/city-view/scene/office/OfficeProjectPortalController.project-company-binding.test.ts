@@ -6,7 +6,7 @@ import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import type { ExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
-import { createSceneStub, employee, getControllerInternals } from "./OfficeProjectPortalController.testHelpers";
+import { createInput, createSceneStub, employee, getControllerInternals } from "./OfficeProjectPortalController.testHelpers";
 
 describe("OfficeProjectPortalController project-company binding", () => {
   it("entering Company A activates Project A", () => {
@@ -46,6 +46,31 @@ describe("OfficeProjectPortalController project-company binding", () => {
       lifecycle: "no-active-run",
       stage: "idle",
     });
+  });
+
+  it("live work and employee reads do not reset portal project browsing to the active company binding", () => {
+    const controller = new OfficeProjectPortalController(createSceneStub(), {
+      activeProjectId: "daily-proof",
+      activeProjectBuildingId: "daily-proof-inc",
+      activeProjectBindingId: "daily-proof-inc",
+    });
+    const internals = getControllerInternals(controller);
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    controller.updateInput(createInput({ downPressed: true }));
+
+    expect(internals.state.selectedProjectId).toBe("portfolio");
+    expect(internals.state.selectedProjectIndex).toBe(internals.state.projects.findIndex((project) => project.id === "portfolio"));
+
+    expect(controller.getLiveAgentWorkState().projectId).toBe("portfolio");
+    expect(internals.state.selectedProjectId).toBe("portfolio");
+    expect(internals.state.selectedProjectIndex).toBe(internals.state.projects.findIndex((project) => project.id === "portfolio"));
+
+    controller.getEmployeeNpcViewModels();
+
+    expect(internals.state.selectedProjectId).toBe("portfolio");
+    expect(internals.state.selectedProjectIndex).toBe(internals.state.projects.findIndex((project) => project.id === "portfolio"));
   });
 
   it("does not show Project A validation activity in Project B no-active-run office", () => {
