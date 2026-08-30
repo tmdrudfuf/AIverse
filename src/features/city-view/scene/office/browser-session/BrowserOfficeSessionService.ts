@@ -6,6 +6,7 @@ import type {
   ProjectRegistryRepositoryConnectionState,
   ProjectRegistryRepositoryIdentity,
 } from "../project-registry/ProjectRegistryTypes";
+import type { ProjectCompanyBinding } from "../project-company-binding/ProjectCompanyBindingTypes";
 import {
   BROWSER_OFFICE_SESSION_SCHEMA_VERSION,
   BROWSER_OFFICE_SESSION_STORAGE_KEY,
@@ -55,6 +56,7 @@ export class BrowserOfficeSessionService {
     state.selectedProjectDashboardActiveWorkIndex = clampIndex(snapshot.selectedProjectDashboardActiveWorkIndex);
     state.selectedWorkSessionId = snapshot.selectedWorkSessionId;
     restoreProjectRegistryEntries(state, snapshot.projectRegistryEntries);
+    state.projectCompanyBindings = cloneValidProjectCompanyBindings(snapshot.projectCompanyBindings ?? state.projectCompanyBindings);
     state.candidateTaskCollections = clone(snapshot.candidateTaskCollections);
     state.candidateAssignmentCollections = clone(snapshot.candidateAssignmentCollections);
     state.candidatePromotionReviewCollections = clone(snapshot.candidatePromotionReviewCollections);
@@ -91,6 +93,7 @@ export class BrowserOfficeSessionService {
       selectedProjectDashboardActiveWorkIndex: clampIndex(state.selectedProjectDashboardActiveWorkIndex),
       selectedWorkSessionId: state.selectedWorkSessionId,
       projectRegistryEntries: cloneProjectRegistryEntries(state.projectRegistryEntries),
+      projectCompanyBindings: cloneValidProjectCompanyBindings(state.projectCompanyBindings),
       candidateTaskCollections: clone(state.candidateTaskCollections),
       candidateAssignmentCollections: clone(state.candidateAssignmentCollections),
       candidatePromotionReviewCollections: clone(state.candidatePromotionReviewCollections),
@@ -143,6 +146,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     isOptionalString(value.selectedWorkSessionId) &&
     (value.selectedProjectDashboardActiveWorkIndex === undefined || typeof value.selectedProjectDashboardActiveWorkIndex === "number") &&
     (value.projectRegistryEntries === undefined || Array.isArray(value.projectRegistryEntries)) &&
+    (value.projectCompanyBindings === undefined || Array.isArray(value.projectCompanyBindings)) &&
     isRecordOfRecords(value.candidateTaskCollections) &&
     isRecordOfRecords(value.candidateAssignmentCollections) &&
     isRecordOfRecords(value.candidatePromotionReviewCollections) &&
@@ -271,6 +275,23 @@ function restoreProjectRegistryEntries(
 
 function cloneProjectRegistryEntries(entries: ReadonlyArray<ProjectRegistryEntry>): ProjectRegistryEntry[] {
   return entries.map(cloneProjectRegistryEntry);
+}
+
+function cloneValidProjectCompanyBindings(value: unknown): ProjectCompanyBinding[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isProjectCompanyBinding).map((binding) => ({ ...binding }));
+}
+
+function isProjectCompanyBinding(value: unknown): value is ProjectCompanyBinding {
+  if (!isRecord(value)) return false;
+  return (
+    isNonEmptyString(value.bindingId) &&
+    isNonEmptyString(value.buildingId) &&
+    isNonEmptyString(value.projectId) &&
+    isNonEmptyString(value.companyName) &&
+    (value.status === "bound" || value.status === "unavailable") &&
+    (value.unavailableReason === undefined || value.unavailableReason === "MissingProject" || value.unavailableReason === "MissingLocalPath")
+  );
 }
 
 function cloneProjectRegistryEntry(entry: ProjectRegistryEntry): ProjectRegistryEntry {

@@ -1,5 +1,7 @@
 import { OFFICE_DEFINITIONS } from "./officeConfig";
 import type { OfficeDefinition, OfficeSpawnRequest } from "./officeTypes";
+import { ProjectRegistryService } from "./project-registry/ProjectRegistryService";
+import { ProjectCompanyBindingService } from "./project-company-binding/ProjectCompanyBindingService";
 
 export type OfficeSpawnResolution = {
   office: OfficeDefinition;
@@ -13,7 +15,38 @@ export class OfficeSpawnManager {
     }
 
     const office = getOfficeDefinition(request);
-    return { office, spawnRequest: request };
+    const context = request.projectId
+      ? new ProjectCompanyBindingService().resolveProjectBinding({
+        bindingId: request.projectBindingId ?? request.buildingId,
+        buildingId: request.buildingId,
+        projectId: request.projectId,
+        fallbackCompanyName: request.companyName,
+        projects: new ProjectRegistryService().getAllProjects(),
+      })
+      : undefined;
+
+    const boundOffice = context
+      ? {
+        ...office,
+        buildingId: request.buildingId,
+        companyName: context.companyName,
+        interiorFoundation: office.interiorFoundation
+          ? {
+            zones: office.interiorFoundation.zones.map((zone) => ({ ...zone })),
+          }
+          : undefined,
+        visualEnvironment: office.visualEnvironment
+          ? {
+            details: office.visualEnvironment.details.map((detail) =>
+              detail.kind === "brand-sign"
+                ? { ...detail, label: context.companyName }
+                : { ...detail },
+            ),
+          }
+          : undefined,
+      }
+      : office;
+    return { office: boundOffice, spawnRequest: { ...request, companyName: boundOffice.companyName } };
   }
 }
 

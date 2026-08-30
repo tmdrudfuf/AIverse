@@ -16,6 +16,8 @@ export class BuildingTransitionController {
     this.lastEntryRequest = {
       buildingId: building.id,
       companyName: building.name,
+      projectId: building.projectBinding?.projectId,
+      projectBindingId: building.projectBinding?.bindingId ?? building.id,
       officeSceneKey: building.destination.sceneKey,
       returnSceneKey: CITY_WORLD_SCENE_KEY,
       returnPosition: { ...returnPosition },

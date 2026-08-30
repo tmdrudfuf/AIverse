@@ -89,6 +89,7 @@ import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTyp
 import type { ReceptionDeskUpgradeBenefits } from "./ReceptionDeskUpgradeBenefitsService";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
+import type { ActiveProjectCompanyContext, ProjectCompanyBinding } from "./project-company-binding/ProjectCompanyBindingTypes";
 
 export type ProjectPortalProjectStatus = "Active" | "Planned" | "Coming Soon";
 
@@ -190,9 +191,11 @@ export type ProjectPortalState = {
   selectedCandidateTaskId?: string;
   selectedInfluenceFocusIndex: number;
   selectedWorkSessionId?: string;
+  activeProjectCompanyContext?: ActiveProjectCompanyContext;
   lastPlaceholderAction?: ProjectPortalPlaceholderAction;
   projects: ProjectPortalProject[];
   projectRegistryEntries: ProjectRegistryEntry[];
+  projectCompanyBindings?: ProjectCompanyBinding[];
   services: ProjectPortalServiceStatus[];
   workspaces: Record<string, ProjectWorkspace>;
   repositoryMappings: AIverseProjectRepositoryMapping[];

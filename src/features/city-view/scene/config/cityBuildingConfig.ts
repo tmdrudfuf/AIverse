@@ -14,6 +14,10 @@ export const CITY_BUILDINGS: CityBuildingDefinition[] = [
       routeId: "daily-proof-lobby",
       enabled: true,
     },
+    projectBinding: {
+      bindingId: "daily-proof-inc",
+      projectId: "daily-proof",
+    },
     active: true,
     visual: {
       wall: 0xe76f51,
@@ -30,11 +34,15 @@ export const CITY_BUILDINGS: CityBuildingDefinition[] = [
     interactionZone: { x: 838, y: 246, width: 120, height: 104 },
     entrancePoint: { x: 898, y: 276 },
     destination: {
-      sceneKey: "office-ai-lab",
+      sceneKey: "office-daily-proof",
       routeId: "ai-lab-lobby",
-      enabled: false,
+      enabled: true,
     },
-    active: false,
+    projectBinding: {
+      bindingId: "ai-lab",
+      projectId: "ai-lab",
+    },
+    active: true,
     visual: {
       wall: 0x7397c2,
       roof: 0x34465b,
@@ -50,11 +58,15 @@ export const CITY_BUILDINGS: CityBuildingDefinition[] = [
     interactionZone: { x: 875, y: 660, width: 120, height: 112 },
     entrancePoint: { x: 935, y: 690 },
     destination: {
-      sceneKey: "office-portfolio-studio",
+      sceneKey: "office-daily-proof",
       routeId: "portfolio-studio-lobby",
-      enabled: false,
+      enabled: true,
     },
-    active: false,
+    projectBinding: {
+      bindingId: "portfolio-studio",
+      projectId: "portfolio",
+    },
+    active: true,
     visual: {
       wall: 0xa67bb8,
       roof: 0x493c5a,

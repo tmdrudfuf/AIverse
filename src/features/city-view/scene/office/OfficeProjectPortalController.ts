@@ -313,6 +313,10 @@ export type OfficeProjectPortalInput = {
 
 export type OfficeProjectPortalControllerOptions = {
   browserOfficeSessionService?: BrowserOfficeSessionService;
+  activeProjectId?: string;
+  activeProjectBindingId?: string;
+  activeProjectBuildingId?: string;
+  activeProjectCompanyName?: string;
 };
 
 export class OfficeProjectPortalController {
@@ -382,7 +386,14 @@ export class OfficeProjectPortalController {
 
   constructor(scene: PhaserScene, options: OfficeProjectPortalControllerOptions = {}) {
     this.browserOfficeSessionService = options.browserOfficeSessionService ?? createBrowserOfficeSessionService();
-    this.state = createProjectPortalState({ browserOfficeSessionService: this.browserOfficeSessionService });
+    this.state = createProjectPortalState({
+      browserOfficeSessionService: this.browserOfficeSessionService,
+      activeProjectId: options.activeProjectId,
+      activeProjectBindingId: options.activeProjectBindingId,
+      activeProjectBuildingId: options.activeProjectBuildingId,
+      activeProjectCompanyName: options.activeProjectCompanyName,
+    });
+    this.applyActiveProjectContextSelection();
     this.view = new OfficeProjectPortalView(scene, this.state);
     this.repositoryService = new GitHubRepositoryService(
       new CachedGitHubRepositoryProvider(
@@ -451,6 +462,7 @@ export class OfficeProjectPortalController {
     this.state.isOpen = true;
     this.state.justOpened = true;
     this.state.viewMode = "list";
+    this.applyActiveProjectContextSelection();
     this.state.selectedProjectIndex = clamp(this.state.selectedProjectIndex, -3, this.state.projects.length - 1);
     this.state.selectedProjectId = this.state.projects[this.state.selectedProjectIndex]?.id ?? "";
     this.refreshCompanyDashboardSnapshot();
@@ -546,7 +558,16 @@ export class OfficeProjectPortalController {
   }
 
   getVisibleOfficeEmployees(): ReadonlyArray<EmployeeSimulationSnapshot> {
-    return this.getEmployeeSimulationSnapshots();
+    const activeProjectId = this.getActiveProjectId();
+    if (!activeProjectId) return this.getEmployeeSimulationSnapshots();
+    return this.getEmployeeSimulationSnapshots().filter((snapshot) => {
+      const employee = this.state.employees.find((item) => item.id === snapshot.employeeId);
+      return (
+        snapshot.currentProjectId === activeProjectId ||
+        employee?.currentProjectId === activeProjectId ||
+        (!snapshot.currentProjectId && !employee?.currentProjectId)
+      );
+    });
   }
 
   getWorkstationSnapshots(): ReadonlyArray<WorkstationSnapshot> {
@@ -788,6 +809,7 @@ export class OfficeProjectPortalController {
   }
 
   getLiveAgentWorkState(): LiveAgentWorkState {
+    this.applyActiveProjectContextSelection();
     return deriveLiveAgentWorkState(this.state);
   }
 
@@ -1481,6 +1503,7 @@ export class OfficeProjectPortalController {
   }
 
   private async openProjectDashboard(projectId: string) {
+    this.applyActiveProjectContextSelection(projectId);
     this.state.selectedProjectDashboardProjectId = projectId;
     this.state.selectedProjectDashboardActiveWorkIndex = 0;
     this.state.selectedCandidatePromotionIndex = 0;
@@ -4029,6 +4052,20 @@ export class OfficeProjectPortalController {
       repositorySummaries: this.state.repositorySummaries,
       projectManagementSuggestions: this.state.projectManagementSuggestions,
     };
+  }
+
+  private getActiveProjectId() {
+    return this.state.activeProjectCompanyContext?.projectId ?? this.state.selectedProjectId;
+  }
+
+  private applyActiveProjectContextSelection(projectId = this.state.activeProjectCompanyContext?.projectId) {
+    if (!projectId) return;
+
+    this.state.selectedProjectId = projectId;
+    const selectedProjectIndex = this.state.projects.findIndex((project) => project.id === projectId);
+    if (selectedProjectIndex >= 0) {
+      this.state.selectedProjectIndex = selectedProjectIndex;
+    }
   }
 
   private mergeGitHubProjectDashboardSource(
