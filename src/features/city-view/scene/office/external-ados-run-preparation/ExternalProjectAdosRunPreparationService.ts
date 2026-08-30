@@ -56,6 +56,7 @@ export function createExternalProjectAdosRunPreparation(
     authoritativeBaseSha: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.authoritativeBaseSha,
     specPath: input.developmentRequestDraft.specPath ?? `specs/${featureId}/spec.md`,
     requirementsFilePath: input.developmentRequestDraft.requirementsArtifactPath,
+    requirementsFileContent: input.developmentRequestDraft.requirementsArtifactContent,
     requirementsPreview: compactRequirements(input.developmentRequestDraft.requirementsArtifactContent ?? input.developmentRequestDraft.requestText ?? ""),
     validationCommands: [...EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.validationCommands],
     reviewerCommand: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.reviewerCommand,

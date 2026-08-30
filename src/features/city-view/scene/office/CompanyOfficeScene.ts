@@ -59,6 +59,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private currentEmployeeInsightTarget?: EmployeeInsightTarget;
     private employeeKnowledgeService?: EmployeeKnowledgeService;
     private employeeKnowledgeOverlay?: EmployeeKnowledgeOverlay;
+    private developmentRequestTextArea?: HTMLTextAreaElement;
     private officeTilemapLayers?: OfficeTilemapLayers;
     private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
@@ -165,6 +166,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       if (this.officeProjectPortalController?.isOpen()) {
         this.navigationInputController?.setPointerNavigationEnabled(false);
         this.officeInteractionController?.setPointerInteractionEnabled(false);
+        const developmentRequestText = this.officeProjectPortalController.shouldShowDevelopmentRequestInput()
+          ? this.syncDevelopmentRequestTextArea()
+          : this.hideDevelopmentRequestTextArea();
         this.officeProjectPortalController.updateInput({
           actionPressed,
           escapePressed,
@@ -184,6 +188,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           startValidationRuntimePressed,
           preparePostValidationReviewTargetPressed,
           startPostValidationReviewPressed,
+          developmentRequestText,
         });
         this.refreshEmployeeNpcRenderer();
         this.refreshLiveAgentWorkVisualization();
@@ -192,6 +197,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         this.refreshOfficeProgressionVisualState();
         return;
       }
+      this.hideDevelopmentRequestTextArea();
       this.navigationInputController?.setPointerNavigationEnabled(true);
       this.officeInteractionController?.setPointerInteractionEnabled(true);
 
@@ -400,6 +406,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.employeeKnowledgeOverlay = undefined;
       this.officeExitController = undefined;
       this.officeVisualLayer = undefined;
+      this.destroyDevelopmentRequestTextArea();
       this.officeTilemapLayers = undefined;
       this.officeCollisionMap = undefined;
       this.office = undefined;
@@ -408,7 +415,65 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.receptionDeskRuntimeSpawnSignature = undefined;
       this.navigationState = undefined;
     }
+
+    private syncDevelopmentRequestTextArea() {
+      const textArea = this.getDevelopmentRequestTextArea();
+      const canvasBounds = this.game.canvas.getBoundingClientRect();
+      const width = Math.min(520, Math.max(280, canvasBounds.width - 160));
+      const height = 76;
+      textArea.style.left = `${canvasBounds.left + (canvasBounds.width - width) / 2}px`;
+      textArea.style.top = `${canvasBounds.top + Math.max(92, canvasBounds.height - 172)}px`;
+      textArea.style.width = `${width}px`;
+      textArea.style.height = `${height}px`;
+      textArea.style.display = "block";
+      return textArea.value;
+    }
+
+    private getDevelopmentRequestTextArea() {
+      if (this.developmentRequestTextArea) return this.developmentRequestTextArea;
+
+      const textArea = document.createElement("textarea");
+      textArea.setAttribute("aria-label", "Development request");
+      textArea.placeholder = "Enter development request for this project...";
+      textArea.spellcheck = true;
+      Object.assign(textArea.style, {
+        position: "fixed",
+        zIndex: "3100",
+        display: "none",
+        resize: "none",
+        border: "1px solid #cbd5e1",
+        borderRadius: "6px",
+        background: "#020617",
+        color: "#f8fafc",
+        padding: "10px",
+        font: "13px Courier New, monospace",
+        outline: "none",
+        boxSizing: "border-box",
+      });
+      textArea.addEventListener("keydown", stopPortalShortcutPropagation);
+      textArea.addEventListener("keyup", stopPortalShortcutPropagation);
+      document.body.appendChild(textArea);
+      this.developmentRequestTextArea = textArea;
+      return textArea;
+    }
+
+    private hideDevelopmentRequestTextArea() {
+      if (this.developmentRequestTextArea) this.developmentRequestTextArea.style.display = "none";
+      return undefined;
+    }
+
+    private destroyDevelopmentRequestTextArea() {
+      if (!this.developmentRequestTextArea) return;
+      this.developmentRequestTextArea.removeEventListener("keydown", stopPortalShortcutPropagation);
+      this.developmentRequestTextArea.removeEventListener("keyup", stopPortalShortcutPropagation);
+      this.developmentRequestTextArea.remove();
+      this.developmentRequestTextArea = undefined;
+    }
   };
+}
+
+function stopPortalShortcutPropagation(event: KeyboardEvent) {
+  event.stopPropagation();
 }
 
 function opensProjectWorkspace(action: OfficeInteractiveAction) {

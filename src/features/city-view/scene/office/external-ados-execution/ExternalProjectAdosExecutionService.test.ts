@@ -31,6 +31,10 @@ describe("ExternalProjectAdosExecutionService", () => {
       command: "claude",
       inputMode: "argument",
       workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
+      files: [{
+        relativePath: ".agent-workflow/external-requests/external-project-draft/20260825T0000000-requirements.md",
+        content: "# Development Request\n\nFull docs request && Remove-Item C:/x",
+      }],
     });
     expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Do not start review.");
     expect(outcome.execution).toMatchObject({
@@ -38,7 +42,7 @@ describe("ExternalProjectAdosExecutionService", () => {
       status: "Completed",
       featureId: "202608250000-add-safe-docs",
       featureBranch: FEATURE_BRANCH,
-      requirementsFilePath: ".aiverse/ados-requests/external-project-draft/20260825T0000000-requirements.md",
+      requirementsFilePath: ".agent-workflow/external-requests/external-project-draft/20260825T0000000-requirements.md",
       trustedLocalExecutionApproved: true,
       implementerStarted: true,
       validationStarted: false,
@@ -49,8 +53,8 @@ describe("ExternalProjectAdosExecutionService", () => {
       deployStarted: false,
     });
     expect(provider.invoke.mock.calls[0]?.[0]?.arguments.join(" ")).not.toContain("Remove-Item");
-    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Requirements file: .aiverse/ados-requests/external-project-draft/20260825T0000000-requirements.md");
-    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Full docs request && Remove-Item C:/x");
+    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Requirements file: .agent-workflow/external-requests/external-project-draft/20260825T0000000-requirements.md");
+    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).not.toContain("Full docs request && Remove-Item C:/x");
     expect(outcome.result).toMatchObject({
       status: "Completed",
       reasonCodes: ["EXTERNAL_ADOS_EXECUTION_STARTED"],
@@ -189,7 +193,8 @@ function createPreparation(overrides: Partial<ExternalProjectAdosRunPreparation>
     featureBranch: FEATURE_BRANCH,
     authoritativeBaseSha: "runtime-derived",
     specPath: SPEC_PATH,
-    requirementsFilePath: ".aiverse/ados-requests/external-project-draft/20260825T0000000-requirements.md",
+    requirementsFilePath: ".agent-workflow/external-requests/external-project-draft/20260825T0000000-requirements.md",
+    requirementsFileContent: "# Development Request\n\nFull docs request && Remove-Item C:/x",
     requirementsPreview: "Full docs request && Remove-Item C:/x",
     validationCommands: [
       "npm test",

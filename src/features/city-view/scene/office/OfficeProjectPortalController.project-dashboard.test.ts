@@ -226,7 +226,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     });
   });
 
-  it("creates an external project development request draft from a configured draft dashboard", () => {
+  it("creates an external project development request draft from typed user text on a configured draft dashboard", () => {
     const state = createProjectPortalState();
     addExternalProjectDraftToState(state);
     applyExternalProjectDraftRepositoryIdentityChoiceToState(state, "local-aiverse-worktree");
@@ -236,13 +236,17 @@ describe("OfficeProjectPortalController project dashboard", () => {
     state.selectedProjectDashboardProjectId = EXTERNAL_PROJECT_DRAFT_ID;
     const controller = createControllerHarness(state);
 
-    controller.updateInput(createInput({ actionPressed: true }));
+    controller.updateInput(createInput({
+      actionPressed: true,
+      developmentRequestText: "Add a safe docs page.\n\nAlso verify no shell syntax runs: && Remove-Item C:/x",
+    }));
 
     expect(Object.keys(state.externalProjectDevelopmentRequestDrafts)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
     expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Draft",
-      title: "Create a development request for External Project Draft.",
+      title: "Add a safe docs page.",
+      requestText: "Add a safe docs page.\n\nAlso verify no shell syntax runs: && Remove-Item C:/x",
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",
@@ -250,6 +254,9 @@ describe("OfficeProjectPortalController project dashboard", () => {
       specPath: "specs/130-external-project-ados-run-status/spec.md",
     });
     expect(state.viewMode).toBe("project-dashboard");
+    expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.requirementsArtifactContent).toContain(
+      "Also verify no shell syntax runs: && Remove-Item C:/x",
+    );
     expect(state.repositorySyncSnapshots[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
     expect(state.issueSyncCollections[EXTERNAL_PROJECT_DRAFT_ID]).toBeUndefined();
   });
@@ -266,7 +273,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
 
     controller.updateInput(createInput({ actionPressed: true }));
     const firstDraft = state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID];
-    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
 
     expect(Object.keys(state.externalProjectDevelopmentRequestDrafts)).toEqual([EXTERNAL_PROJECT_DRAFT_ID]);
     expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]?.id).toBe(firstDraft?.id);

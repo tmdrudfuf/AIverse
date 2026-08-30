@@ -92,6 +92,23 @@ export class ClaudeImplementerRuntimeProvider implements ImplementerRuntimeProvi
       };
     }
 
+    const fileWriteResult = await writeCommandFiles(command);
+    if (!fileWriteResult.ok) {
+      return {
+        status: "Failed",
+        evidence: createEvidence(command, commandDisplay, {
+          started: false,
+          completed: false,
+          timedOut: false,
+          cancelled: false,
+          durationMs: 0,
+          stdoutSummary: "",
+          stderrSummary: fileWriteResult.message,
+          outputTruncated: false,
+        }),
+      };
+    }
+
     const resolvedArguments = substitutePromptPlaceholder(command.arguments, command.prompt, command.inputMode);
     const startedAt = Date.now();
 
@@ -260,7 +277,9 @@ function truncateOutput(text: string) {
 export function isSafeImplementerCommand(command: ImplementerRuntimeProviderCommand) {
   const joined = [command.command, ...command.arguments].join(" ");
   if (!isSafeCommandLine(joined)) return false;
-  return isSafeImplementerCommandLine(joined) && !hasPathTraversal(command.workingDirectory);
+  return isSafeImplementerCommandLine(joined) &&
+    !hasPathTraversal(command.workingDirectory) &&
+    (command.files ?? []).every((file) => isSafeRelativeArtifactPath(file.relativePath));
 }
 
 export function isSafeImplementerCommandLine(commandLine: string) {
@@ -276,4 +295,50 @@ export function isSafeImplementerCommandLine(commandLine: string) {
 
 export function hasPathTraversal(value: string) {
   return /\.\.[\\/]/.test(value);
+}
+
+async function writeCommandFiles(command: ImplementerRuntimeProviderCommand): Promise<{ ok: true } | { ok: false; message: string }> {
+  const files = command.files ?? [];
+  if (files.length === 0) return { ok: true };
+
+  try {
+    const nodeFs = await import("node:fs");
+    const nodePath = await import("node:path");
+    const workingDirectory = nodePath.resolve(command.workingDirectory);
+
+    for (const file of files) {
+      if (!isSafeRelativeArtifactPath(file.relativePath)) {
+        return { ok: false, message: "Prepared requirements artifact path failed safety validation." };
+      }
+
+      const targetPath = nodePath.resolve(workingDirectory, file.relativePath);
+      if (!isPathInsideDirectory(targetPath, workingDirectory)) {
+        return { ok: false, message: "Prepared requirements artifact path escapes the trusted worktree." };
+      }
+
+      nodeFs.mkdirSync(nodePath.dirname(targetPath), { recursive: true });
+      nodeFs.writeFileSync(targetPath, file.content, "utf8");
+    }
+  } catch {
+    return { ok: false, message: "Prepared requirements artifact could not be written before runtime start." };
+  }
+
+  return { ok: true };
+}
+
+function isSafeRelativeArtifactPath(value: string) {
+  return Boolean(value.trim()) &&
+    !/^[a-zA-Z]:[\\/]/.test(value) &&
+    !value.startsWith("/") &&
+    !value.startsWith("\\") &&
+    !hasPathTraversal(value) &&
+    !/[<>:"|?*\u0000-\u001f]/.test(value);
+}
+
+function isPathInsideDirectory(targetPath: string, directoryPath: string) {
+  const normalizedTarget = targetPath.toLowerCase();
+  const normalizedDirectory = directoryPath.toLowerCase().replace(/[\\/]+$/, "");
+  return normalizedTarget === normalizedDirectory ||
+    normalizedTarget.startsWith(`${normalizedDirectory}\\`) ||
+    normalizedTarget.startsWith(`${normalizedDirectory}/`);
 }

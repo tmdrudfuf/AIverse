@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import {
   ClaudeImplementerRuntimeProvider,
@@ -179,6 +182,44 @@ describe("ClaudeImplementerRuntimeProvider", () => {
     expect(spawnSync).not.toHaveBeenCalled();
   });
 
+  it("writes prepared files inside the trusted working directory before spawning", async () => {
+    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "aiverse-ados-provider-"));
+    const spawnSync = createSpawnSyncStub({ status: 0 });
+    const provider = new ClaudeImplementerRuntimeProvider(spawnSync);
+    const requirementsPath = ".agent-workflow/external-requests/project-a/request-requirements.md";
+    const requirementsContent = "Full user request && Remove-Item C:/x";
+
+    const result = await provider.invoke(createCommand({
+      workingDirectory: worktree,
+      files: [{
+        relativePath: requirementsPath,
+        content: requirementsContent,
+      }],
+    }));
+
+    expect(result.status).toBe("Completed");
+    expect(spawnSync).toHaveBeenCalledTimes(1);
+    expect(fs.readFileSync(path.join(worktree, requirementsPath), "utf8")).toBe(requirementsContent);
+  });
+
+  it("rejects prepared files that would escape the trusted working directory", async () => {
+    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "aiverse-ados-provider-"));
+    const spawnSync = createSpawnSyncStub({ status: 0 });
+    const provider = new ClaudeImplementerRuntimeProvider(spawnSync);
+
+    const result = await provider.invoke(createCommand({
+      workingDirectory: worktree,
+      files: [{
+        relativePath: "../request-requirements.md",
+        content: "do not write",
+      }],
+    }));
+
+    expect(result.status).toBe("Blocked");
+    expect(spawnSync).not.toHaveBeenCalled();
+    expect(fs.existsSync(path.join(worktree, "..", "request-requirements.md"))).toBe(false);
+  });
+
   it("does not bypass safety validation via a harmless --version probe substitution -- it validates the exact configured command", async () => {
     const spawnSync = createSpawnSyncStub({ status: 0 });
     const provider = new ClaudeImplementerRuntimeProvider(spawnSync);
@@ -262,6 +303,15 @@ describe("ClaudeImplementerRuntimeProvider", () => {
   describe("isSafeImplementerCommand", () => {
     it("rejects when the underlying reused isSafeCommandLine check fails", () => {
       expect(isSafeImplementerCommand(createCommand({ command: "git", arguments: ["commit"] }))).toBe(false);
+    });
+
+    it("rejects unsafe prepared file paths", () => {
+      expect(isSafeImplementerCommand(createCommand({
+        files: [{
+          relativePath: "C:/outside.md",
+          content: "outside",
+        }],
+      }))).toBe(false);
     });
   });
 });

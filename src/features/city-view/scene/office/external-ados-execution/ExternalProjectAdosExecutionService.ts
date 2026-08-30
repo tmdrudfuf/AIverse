@@ -158,6 +158,7 @@ function preparationMatchesTrustedPolicy(preparation: ExternalProjectAdosRunPrep
     Boolean(preparation.featureBranch?.trim()) &&
     Boolean(preparation.specPath?.trim()) &&
     Boolean(preparation.requirementsFilePath?.trim()) &&
+    Boolean(preparation.requirementsFileContent?.trim()) &&
     preparation.reviewerCommand === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.reviewerCommand &&
     preparation.executionPolicyVersion === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.executionPolicyVersion &&
     sameOrderedStrings(preparation.validationCommands, EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.validationCommands)
@@ -175,6 +176,12 @@ function createProviderCommand(
     inputMode: DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG.inputMode,
     workingDirectory: binding.worktreePath,
     prompt: createExternalAdosImplementerPrompt(project, preparation, binding.worktreePath),
+    files: preparation.requirementsFilePath && preparation.requirementsFileContent
+      ? [{
+        relativePath: preparation.requirementsFilePath,
+        content: preparation.requirementsFileContent,
+      }]
+      : undefined,
     timeoutMs: EXTERNAL_ADOS_EXECUTION_TIMEOUT_MS,
   };
 }
@@ -200,9 +207,7 @@ function createExternalAdosImplementerPrompt(
     "",
     "Use the provided requirements file as the authoritative requirements source for this run.",
     "Do not replace the detailed requirements with only a short feature title.",
-    "",
-    "Requirements preview:",
-    preparation.requirementsPreview,
+    "Do not rely on this prompt for the detailed request body; read the requirements file.",
     "",
     "Implement the prepared external project ADOS feature in this local worktree only.",
     "Do not run validation from this bridge.",

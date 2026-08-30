@@ -542,6 +542,12 @@ export class OfficeProjectPortalController {
     return this.state.isOpen;
   }
 
+  shouldShowDevelopmentRequestInput() {
+    return this.state.isOpen &&
+      this.state.viewMode === "project-dashboard" &&
+      Boolean(this.getDevelopmentRequestTargetProject());
+  }
+
   async initializeEmployeeSimulationSnapshots() {
     if (this.state.employees.length > 0) {
       this.refreshEmployeeSimulationSnapshots();

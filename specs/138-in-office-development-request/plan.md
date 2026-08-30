@@ -6,7 +6,7 @@
 
 ## Summary
 
-Create a real in-office development request flow for the active bound project company. Reuse the existing project-company binding, portal development request, ADOS preparation/execution/status, browser session persistence, Project Status, and Spec 136 live visualization systems. Replace older hard-coded external-project defaults with request-bound durable requirements metadata and deterministic project-scoped feature identity.
+Create a real in-office development request flow for the active bound project company. Reuse the existing project-company binding, portal development request, ADOS preparation/execution/status, browser session persistence, Project Status, and Spec 136 live visualization systems. Replace older hard-coded external-project defaults with request-bound durable requirements-file preparation and deterministic project-scoped feature identity.
 
 ## Technical Context
 
@@ -14,7 +14,7 @@ Create a real in-office development request flow for the active bound project co
 
 **Primary Dependencies**: Existing AIverse office portal, project registry, BrowserOfficeSessionService, active project-company binding, external development request, external ADOS preparation/execution/status, and live visualization modules
 
-**Storage**: Existing browser office session persistence and project-scoped state records
+**Storage**: Existing browser office session persistence for request/run records, plus trusted Node-side requirements-file materialization under the target worktree's existing `.agent-workflow/external-requests/<project>/<request>-requirements.md` artifact area before ADOS spawn.
 
 **Testing**: Vitest targeted tests; ADOS will run the full configured validation pipeline outside this runtime
 

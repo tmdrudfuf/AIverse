@@ -6,6 +6,10 @@ export type ImplementerRuntimeProviderCommand = {
   inputMode: "argument" | "stdin";
   workingDirectory: string;
   prompt: string;
+  files?: ReadonlyArray<{
+    relativePath: string;
+    content: string;
+  }>;
   timeoutMs: number;
 };
 

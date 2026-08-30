@@ -65,7 +65,7 @@
 
 - [X] T019 Run targeted tests for modified modules
 - [X] T020 Run git diff --check and git diff --cached --check
-- [X] T021 Document runtime verification limits in final handoff
+- [X] T021 Document runtime verification limits in specs/138-in-office-development-request/runtime-verification.md
 
 ## Dependencies & Execution Order
 

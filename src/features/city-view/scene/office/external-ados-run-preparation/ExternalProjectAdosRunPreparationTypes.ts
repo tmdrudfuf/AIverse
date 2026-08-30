@@ -10,6 +10,7 @@ export type ExternalProjectAdosRunPreparation = {
   authoritativeBaseSha: string;
   specPath: string;
   requirementsFilePath?: string;
+  requirementsFileContent?: string;
   requirementsPreview?: string;
   validationCommands: string[];
   reviewerCommand: string;

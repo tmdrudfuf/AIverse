@@ -102,7 +102,7 @@ function createTargetProjectIdentity(project: ProjectPortalProject) {
 function createRequirementsArtifactPath(projectId: string, timestamp: string) {
   const safeProjectId = sanitizePathSegment(projectId) || "project";
   const safeTimestamp = timestamp.replace(/[^0-9a-zA-Z]/g, "").slice(0, 17);
-  return `.aiverse/ados-requests/${safeProjectId}/${safeTimestamp || "request"}-requirements.md`;
+  return `.agent-workflow/external-requests/${safeProjectId}/${safeTimestamp || "request"}-requirements.md`;
 }
 
 function createRequirementsArtifactContent(input: {

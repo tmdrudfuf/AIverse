@@ -110,4 +110,4 @@ The request flow fails safely when runtime prerequisites are unavailable, when a
 
 - The existing project registry and active project-company context from Spec 137 are the authoritative source of project binding.
 - The existing trusted local runtime provider remains the execution boundary.
-- Authoritative requirements can be represented durably as request-bound content/path metadata in AIverse state for browser builds, with the real ADOS runner consuming the equivalent requirements-file path when the trusted local runtime is enabled.
+- Browser state persists request metadata/content for re-entry, but trusted local execution must materialize a real request-bound requirements file at the prepared requirements path before spawning ADOS. Browser-only execution remains blocked when that trusted filesystem/runtime boundary is unavailable.
