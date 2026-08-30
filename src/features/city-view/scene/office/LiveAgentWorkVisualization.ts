@@ -61,6 +61,7 @@ type EmployeeLike = ProjectPortalState["employees"][number];
 
 export function deriveLiveAgentWorkState(state: Pick<
   ProjectPortalState,
+  | "activeProjectCompanyContext"
   | "projects"
   | "selectedProjectIndex"
   | "selectedProjectId"
@@ -140,8 +141,15 @@ export function deriveLiveAgentWorkState(state: Pick<
   };
 }
 
-function getSelectedProject(state: Pick<ProjectPortalState, "projects" | "selectedProjectDashboardProjectId" | "selectedProjectId" | "selectedProjectIndex">): ProjectLike | undefined {
-  const selectedId = state.selectedProjectDashboardProjectId ?? state.selectedProjectId;
+function getSelectedProject(state: Pick<
+  ProjectPortalState,
+  | "activeProjectCompanyContext"
+  | "projects"
+  | "selectedProjectDashboardProjectId"
+  | "selectedProjectId"
+  | "selectedProjectIndex"
+>): ProjectLike | undefined {
+  const selectedId = state.activeProjectCompanyContext?.projectId ?? state.selectedProjectDashboardProjectId ?? state.selectedProjectId;
   if (selectedId) return state.projects.find((project) => project.id === selectedId);
   return state.projects[state.selectedProjectIndex];
 }

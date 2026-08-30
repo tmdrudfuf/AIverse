@@ -48,7 +48,7 @@ describe("OfficeProjectPortalController project-company binding", () => {
     });
   });
 
-  it("live work and employee reads do not reset portal project browsing to the active company binding", () => {
+  it("live work and employee reads stay scoped to the active company while portal browsing changes", () => {
     const controller = new OfficeProjectPortalController(createSceneStub(), {
       activeProjectId: "daily-proof",
       activeProjectBuildingId: "daily-proof-inc",
@@ -63,7 +63,10 @@ describe("OfficeProjectPortalController project-company binding", () => {
     expect(internals.state.selectedProjectId).toBe("portfolio");
     expect(internals.state.selectedProjectIndex).toBe(internals.state.projects.findIndex((project) => project.id === "portfolio"));
 
-    expect(controller.getLiveAgentWorkState().projectId).toBe("portfolio");
+    const workState = controller.getLiveAgentWorkState();
+
+    expect(workState.projectId).toBe("daily-proof");
+    expect(workState.projectStatus.title).toBe("Daily Proof Inc.");
     expect(internals.state.selectedProjectId).toBe("portfolio");
     expect(internals.state.selectedProjectIndex).toBe(internals.state.projects.findIndex((project) => project.id === "portfolio"));
 
