@@ -14,6 +14,11 @@ export type CityBuildingDestination = {
   enabled: boolean;
 };
 
+export type CityBuildingProjectBinding = {
+  projectId: string;
+  bindingId?: string;
+};
+
 export type CityBuildingVisual = {
   wall: number;
   roof: number;
@@ -32,6 +37,7 @@ export type CityBuildingDefinition = {
   interactionZone: Rect;
   entrancePoint: Point;
   destination: CityBuildingDestination;
+  projectBinding?: CityBuildingProjectBinding;
   active: boolean;
   visual: CityBuildingVisual;
 };
@@ -39,6 +45,8 @@ export type CityBuildingDefinition = {
 export type BuildingEntryRequest = {
   buildingId: string;
   companyName: string;
+  projectId?: string;
+  projectBindingId?: string;
   officeSceneKey: string;
   returnSceneKey: string;
   returnPosition: Point;

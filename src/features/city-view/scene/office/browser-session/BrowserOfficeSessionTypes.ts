@@ -13,6 +13,7 @@ import type {
 } from "../prepared-work-sessions/PreparedWorkSessionTypes";
 import type { ProjectPortalState } from "../OfficeProjectPortalTypes";
 import type { ProjectRegistryEntry } from "../project-registry/ProjectRegistryTypes";
+import type { ProjectCompanyBinding } from "../project-company-binding/ProjectCompanyBindingTypes";
 import type { TaskCollection } from "../tasks/ProjectTaskTypes";
 import type { WorkSession } from "../work-sessions/WorkSessionTypes";
 import type { Employee } from "../employees/EmployeeTypes";
@@ -35,6 +36,7 @@ export type BrowserOfficeSessionSnapshot = {
   selectedProjectDashboardActiveWorkIndex?: number;
   selectedWorkSessionId?: string;
   projectRegistryEntries?: ProjectRegistryEntry[];
+  projectCompanyBindings?: ProjectCompanyBinding[];
   candidateTaskCollections: Record<string, CandidateTaskCollection>;
   candidateAssignmentCollections: Record<string, CandidateAssignmentRecommendationCollection>;
   candidatePromotionReviewCollections: Record<string, CandidatePromotionReviewCollection>;
@@ -68,6 +70,7 @@ export type BrowserOfficeSessionState = Pick<
   | "selectedProjectDashboardActiveWorkIndex"
   | "selectedWorkSessionId"
   | "projectRegistryEntries"
+  | "projectCompanyBindings"
   | "candidateTaskCollections"
   | "candidateAssignmentCollections"
   | "candidatePromotionReviewCollections"

@@ -100,6 +100,8 @@ export type OfficeDefinition = {
 export type OfficeSpawnRequest = {
   buildingId: string;
   companyName: string;
+  projectId?: string;
+  projectBindingId?: string;
   officeSceneKey: string;
   returnSceneKey: string;
   returnPosition: Point;

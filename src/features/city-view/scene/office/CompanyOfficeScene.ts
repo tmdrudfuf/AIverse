@@ -112,7 +112,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeInteractionPrompt = new OfficeInteractionPrompt(this);
       this.officeProgressionVisualStateLayer = new OfficeProgressionVisualStateLayer(this);
       this.officeLevelUpReactionLayer = new OfficeLevelUpReactionLayer(this);
-      this.officeProjectPortalController = new OfficeProjectPortalController(this);
+      this.officeProjectPortalController = new OfficeProjectPortalController(this, {
+        activeProjectId: this.spawnRequest?.projectId,
+        activeProjectBindingId: this.spawnRequest?.projectBindingId,
+        activeProjectBuildingId: this.spawnRequest?.buildingId,
+        activeProjectCompanyName: this.spawnRequest?.companyName,
+      });
       this.receptionDeskRuntimeSpawnService = new ReceptionDeskRuntimeSpawnService();
       this.officeEmployeeNpcRenderer = new OfficeEmployeeNpcRenderer(this);
       this.employeeConversationBubbleOverlay = new EmployeeConversationBubbleOverlay(this);

@@ -9,6 +9,8 @@ import {
 } from "./browser-session/BrowserOfficeSessionService";
 import { CompanyInfluencePlanningService } from "./influence/CompanyInfluencePlanningService";
 import type { AIverseProjectRepositoryMapping } from "./github/GitHubRepositoryTypes";
+import { CITY_BUILDINGS } from "../config/cityBuildingConfig";
+import { ProjectCompanyBindingService } from "./project-company-binding/ProjectCompanyBindingService";
 import { toProjectPortalProject, toRepositoryMapping } from "./project-registry/ProjectRegistryAdapters";
 import { ProjectRegistryService } from "./project-registry/ProjectRegistryService";
 import type {
@@ -179,6 +181,10 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
 export type CreateProjectPortalStateOptions = {
   localRepositoryBindings?: ReadonlyArray<LocalProjectRepositoryBinding>;
   browserOfficeSessionService?: BrowserOfficeSessionService | false;
+  activeProjectId?: string;
+  activeProjectBindingId?: string;
+  activeProjectBuildingId?: string;
+  activeProjectCompanyName?: string;
 };
 
 export function createProjectPortalState(options: CreateProjectPortalStateOptions = {}): ProjectPortalState {
@@ -188,13 +194,28 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     options.localRepositoryBindings ?? DEFAULT_LOCAL_REPOSITORY_BINDINGS,
   );
   const registryEntries = projectRegistryService.getAllProjects();
+  const bindingService = new ProjectCompanyBindingService();
+  const activeBuilding = options.activeProjectId
+    ? CITY_BUILDINGS.find((building) => building.projectBinding?.projectId === options.activeProjectId || building.id === options.activeProjectBuildingId)
+    : undefined;
+  const activeContext = options.activeProjectId
+    ? bindingService.resolveProjectBinding({
+      bindingId: options.activeProjectBindingId ?? activeBuilding?.projectBinding?.bindingId ?? options.activeProjectBuildingId ?? options.activeProjectId,
+      buildingId: options.activeProjectBuildingId ?? activeBuilding?.id ?? options.activeProjectId,
+      projectId: options.activeProjectId,
+      fallbackCompanyName: options.activeProjectCompanyName ?? activeBuilding?.name ?? options.activeProjectId,
+      projects: registryEntries,
+    })
+    : undefined;
+  const selectedProjectId = activeContext?.projectId ?? registryEntries[0].id;
+  const selectedProjectIndex = registryEntries.findIndex((entry) => entry.id === selectedProjectId);
 
   const state: ProjectPortalState = {
     isOpen: false,
     justOpened: false,
     viewMode: "list",
-    selectedProjectIndex: 0,
-    selectedProjectId: registryEntries[0].id,
+    selectedProjectIndex: selectedProjectIndex >= 0 ? selectedProjectIndex : 0,
+    selectedProjectId,
     selectedWorkspaceSectionIndex: 0,
     selectedRepositoryIdentityChoiceIndex: 0,
     selectedTaskIndex: 0,
@@ -206,6 +227,8 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     selectedInfluenceFocusIndex: 0,
     projects: registryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices())),
     projectRegistryEntries: registryEntries,
+    projectCompanyBindings: bindingService.createBindings(CITY_BUILDINGS, registryEntries),
+    activeProjectCompanyContext: activeContext,
     services: createLinkedServices(),
     workspaces: createWorkspaces(),
     repositoryMappings: createRepositoryMappings(registryEntries),
@@ -316,6 +339,7 @@ export function addExternalProjectDraftToState(state: ProjectPortalState): Proje
     owner: { ...entry.owner },
   }));
   state.projects = state.projectRegistryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices()));
+  state.projectCompanyBindings = new ProjectCompanyBindingService().createBindings(CITY_BUILDINGS, state.projectRegistryEntries);
   state.repositoryMappings = createRepositoryMappings(state.projectRegistryEntries);
   state.selectedProjectIndex = state.projects.findIndex((project) => project.id === EXTERNAL_PROJECT_DRAFT_ID);
   state.selectedProjectId = EXTERNAL_PROJECT_DRAFT_ID;
@@ -363,6 +387,7 @@ export function applyExternalProjectDraftRepositoryIdentityChoiceToState(
     };
   });
   state.projects = state.projectRegistryEntries.map((entry) => toProjectPortalProject(entry, createLinkedServices()));
+  state.projectCompanyBindings = new ProjectCompanyBindingService().createBindings(CITY_BUILDINGS, state.projectRegistryEntries);
   state.repositoryMappings = createRepositoryMappings(state.projectRegistryEntries);
   return true;
 }
