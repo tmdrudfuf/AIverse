@@ -354,7 +354,7 @@ export class OfficeProjectPortalController {
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
   private externalProjectAdosExecutionService: ExternalProjectAdosExecutionService;
-  private readonly activeExternalProjectAdosExecutionKeys = new Set<string>();
+  private activeExternalProjectAdosExecutionKeys?: Set<string> = new Set<string>();
   private readonly activeValidationRuntimeKeys = new Set<string>();
   private postValidationReviewTargetService: PostValidationReviewTargetService;
   private readonly activePostValidationReviewKeys = new Set<string>();
@@ -1256,21 +1256,21 @@ export class OfficeProjectPortalController {
         return;
       }
 
-      if (this.startExternalProjectAdosExecution()) {
-        return;
-      }
-
-      if (this.createExternalProjectAdosRunPreparation()) {
-        this.view.render(this.state);
-        return;
-      }
-
-      if (this.createExternalProjectDevelopmentRequestDraft()) {
-        this.view.render(this.state);
-        return;
-      }
-
       if (this.openSelectedProjectDashboardActiveWorkTask()) {
+        this.view.render(this.state);
+        return;
+      }
+
+      if (input.actionPressed && this.startExternalProjectAdosExecution()) {
+        return;
+      }
+
+      if (input.actionPressed && this.createExternalProjectAdosRunPreparation()) {
+        this.view.render(this.state);
+        return;
+      }
+
+      if (input.actionPressed && this.createExternalProjectDevelopmentRequestDraft()) {
         this.view.render(this.state);
         return;
       }
@@ -3909,9 +3909,10 @@ export class OfficeProjectPortalController {
 
     const preparation = this.state.externalProjectAdosRunPreparations[project.id];
     if (!preparation) return false;
-    if (this.activeExternalProjectAdosExecutionKeys.has(project.id)) return true;
+    const activeExecutionKeys = this.getActiveExternalProjectAdosExecutionKeys();
+    if (activeExecutionKeys.has(project.id)) return true;
 
-    this.activeExternalProjectAdosExecutionKeys.add(project.id);
+    activeExecutionKeys.add(project.id);
     const existingDraft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
     if (existingDraft) {
       this.state.externalProjectDevelopmentRequestDrafts = {
@@ -3976,10 +3977,15 @@ export class OfficeProjectPortalController {
       this.persistBrowserOfficeSession();
       this.view.render(this.state);
     }).finally(() => {
-      this.activeExternalProjectAdosExecutionKeys.delete(project.id);
+      this.getActiveExternalProjectAdosExecutionKeys().delete(project.id);
     });
 
     return true;
+  }
+
+  private getActiveExternalProjectAdosExecutionKeys() {
+    this.activeExternalProjectAdosExecutionKeys ??= new Set<string>();
+    return this.activeExternalProjectAdosExecutionKeys;
   }
 
   private getDevelopmentRequestTargetProject() {

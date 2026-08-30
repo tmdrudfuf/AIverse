@@ -242,7 +242,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     expect(state.externalProjectDevelopmentRequestDrafts[EXTERNAL_PROJECT_DRAFT_ID]).toMatchObject({
       projectId: EXTERNAL_PROJECT_DRAFT_ID,
       status: "Draft",
-      title: "Development request for External Project Draft",
+      title: "Create a development request for External Project Draft.",
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",
@@ -322,7 +322,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
       developmentRequestDraftId: `${EXTERNAL_PROJECT_DRAFT_ID}:external-development-request-draft`,
       status: "Prepared",
       featureBranch: "codex/130-external-project-ados-run-status",
-      authoritativeBaseSha: "7570ef96767957102b992e68b4df87e7d70ce5cb",
+      authoritativeBaseSha: "runtime-derived",
       specPath: "specs/130-external-project-ados-run-status/spec.md",
       reviewerCommand: "claude -p",
       executionPolicyVersion: 1,
@@ -357,7 +357,7 @@ describe("OfficeProjectPortalController project dashboard", () => {
     const controller = createControllerHarness(state);
 
     controller.updateInput(createInput({ actionPressed: true }));
-    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
     const firstPreparation = state.externalProjectAdosRunPreparations[EXTERNAL_PROJECT_DRAFT_ID];
     controller.updateInput(createInput({ actionPressed: true }));
 
