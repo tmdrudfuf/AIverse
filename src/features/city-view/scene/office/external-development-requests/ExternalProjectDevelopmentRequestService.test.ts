@@ -28,7 +28,7 @@ describe("ExternalProjectDevelopmentRequestService", () => {
       status: "Draft",
       requestText: "Create a development request for External Project Draft.",
       targetProjectIdentity: "external-project-draft (External Project Draft; local:AIverse/AIverse)",
-      requirementsArtifactPath: ".agent-workflow/external-requests/external-project-draft/20260824T00000000-requirements.md",
+      requirementsArtifactPath: ".aiverse/external-requests/external-project-draft/20260824T00000000-requirements.md",
       repositoryProvider: "local",
       repositoryOwner: "AIverse",
       repositoryName: "AIverse",

@@ -1,6 +1,7 @@
 import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import type { ActiveProjectCompanyContext } from "../project-company-binding/ProjectCompanyBindingTypes";
 import type { ExternalProjectDevelopmentRequestDraft } from "./ExternalProjectDevelopmentRequestTypes";
+import { createExternalProjectRequirementsArtifactPath } from "./ExternalProjectRequirementsArtifactStore";
 
 export const EXTERNAL_PROJECT_DEVELOPMENT_REQUEST_BOUNDARY =
   "Local draft only; no runtime, repository, GitHub, validation, publish, merge, or deploy side effects.";
@@ -47,7 +48,7 @@ export function createExternalProjectDevelopmentRequestDraft(
   const companyName = input.activeProjectCompanyContext?.companyName ?? input.project.ownerCompany;
   const localProjectPath = input.project.localRepositoryBinding?.worktreePath ?? identity?.localPath;
   const targetProjectIdentity = createTargetProjectIdentity(input.project);
-  const requirementsArtifactPath = createRequirementsArtifactPath(input.project.id, timestamp);
+  const requirementsArtifactPath = createExternalProjectRequirementsArtifactPath(input.project.id, timestamp);
   return {
     id: `${input.project.id}:external-development-request-draft`,
     projectId: input.project.id,
@@ -99,12 +100,6 @@ function createTargetProjectIdentity(project: ProjectPortalProject) {
   return `${project.id} (${project.name}; ${repository})`;
 }
 
-function createRequirementsArtifactPath(projectId: string, timestamp: string) {
-  const safeProjectId = sanitizePathSegment(projectId) || "project";
-  const safeTimestamp = timestamp.replace(/[^0-9a-zA-Z]/g, "").slice(0, 17);
-  return `.agent-workflow/external-requests/${safeProjectId}/${safeTimestamp || "request"}-requirements.md`;
-}
-
 function createRequirementsArtifactContent(input: {
   project: ProjectPortalProject;
   activeProjectCompanyContext?: ActiveProjectCompanyContext;
@@ -130,8 +125,4 @@ function createRequestTitle(projectName: string, requestText: string) {
   const firstLine = requestText.split(/\r?\n/).find((line) => line.trim())?.trim();
   if (!firstLine) return `Development request for ${projectName}`;
   return firstLine.length <= 64 ? firstLine : `${firstLine.slice(0, 61)}...`;
-}
-
-function sanitizePathSegment(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
 }

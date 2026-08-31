@@ -237,7 +237,7 @@ describe("deriveLiveAgentWorkState", () => {
           summary: "Add audit history",
           requestText: "Add audit history",
           targetProjectIdentity: "alpha (Alpha Tools; local:alpha)",
-          requirementsArtifactPath: ".agent-workflow/external-requests/alpha/req.md",
+          requirementsArtifactPath: ".aiverse/external-requests/alpha/req.md",
           requirementsArtifactContent: "Add audit history",
           adosRunId: "alpha:run:1234567890",
           repositoryProvider: "local",

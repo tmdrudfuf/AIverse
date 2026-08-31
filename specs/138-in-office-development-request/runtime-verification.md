@@ -4,8 +4,8 @@ Date: 2026-08-30
 
 ## Verified in This Runtime
 
-- Targeted automated tests passed for development request entry, project-scoped targeting, requirements preparation, structured execution safety, duplicate execution reuse, and provider-side requirements file materialization.
-- `npx tsc --noEmit` passed.
+- Targeted automated tests passed for development request entry, project-scoped targeting, requirements preparation, structured execution safety, duplicate execution reuse, and provider-side requirements file materialization outside the target checkout.
+- Full configured validation, including `npx tsc --noEmit`, was not run in this fix runtime because the handoff delegates authoritative validation to ADOS.
 - `git diff --check` and `git diff --cached --check` passed.
 
 ## Real ADOS Child Run

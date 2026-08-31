@@ -1,4 +1,5 @@
 import { isSafeCommandLine } from "../runtime-preflight/RuntimePreflightProvider";
+import { isExternalProjectRequirementsArtifactPath } from "../external-development-requests/ExternalProjectRequirementsArtifactStore";
 import type {
   ImplementerRuntimeProvider,
   ImplementerRuntimeProviderCommand,
@@ -279,7 +280,7 @@ export function isSafeImplementerCommand(command: ImplementerRuntimeProviderComm
   if (!isSafeCommandLine(joined)) return false;
   return isSafeImplementerCommandLine(joined) &&
     !hasPathTraversal(command.workingDirectory) &&
-    (command.files ?? []).every((file) => isSafeRelativeArtifactPath(file.relativePath));
+    (command.files ?? []).every(isSafeCommandFile);
 }
 
 export function isSafeImplementerCommandLine(commandLine: string) {
@@ -305,15 +306,17 @@ async function writeCommandFiles(command: ImplementerRuntimeProviderCommand): Pr
     const nodeFs = await import("node:fs");
     const nodePath = await import("node:path");
     const workingDirectory = nodePath.resolve(command.workingDirectory);
+    const applicationRoot = nodePath.resolve(process.cwd());
 
     for (const file of files) {
-      if (!isSafeRelativeArtifactPath(file.relativePath)) {
+      if (!isSafeCommandFile(file)) {
         return { ok: false, message: "Prepared requirements artifact path failed safety validation." };
       }
 
-      const targetPath = nodePath.resolve(workingDirectory, file.relativePath);
-      if (!isPathInsideDirectory(targetPath, workingDirectory)) {
-        return { ok: false, message: "Prepared requirements artifact path escapes the trusted worktree." };
+      const baseDirectory = file.baseDirectory === "applicationRoot" ? applicationRoot : workingDirectory;
+      const targetPath = nodePath.resolve(baseDirectory, file.relativePath);
+      if (!isPathInsideDirectory(targetPath, baseDirectory)) {
+        return { ok: false, message: "Prepared requirements artifact path escapes the trusted artifact store." };
       }
 
       nodeFs.mkdirSync(nodePath.dirname(targetPath), { recursive: true });
@@ -333,6 +336,12 @@ function isSafeRelativeArtifactPath(value: string) {
     !value.startsWith("\\") &&
     !hasPathTraversal(value) &&
     !/[<>:"|?*\u0000-\u001f]/.test(value);
+}
+
+function isSafeCommandFile(file: NonNullable<ImplementerRuntimeProviderCommand["files"]>[number]) {
+  if (!isSafeRelativeArtifactPath(file.relativePath)) return false;
+  if (!file.baseDirectory || file.baseDirectory === "workingDirectory") return true;
+  return file.baseDirectory === "applicationRoot" && isExternalProjectRequirementsArtifactPath(file.relativePath);
 }
 
 function isPathInsideDirectory(targetPath: string, directoryPath: string) {

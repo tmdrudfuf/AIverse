@@ -186,7 +186,7 @@ describe("ClaudeImplementerRuntimeProvider", () => {
     const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "aiverse-ados-provider-"));
     const spawnSync = createSpawnSyncStub({ status: 0 });
     const provider = new ClaudeImplementerRuntimeProvider(spawnSync);
-    const requirementsPath = ".agent-workflow/external-requests/project-a/request-requirements.md";
+    const requirementsPath = ".aiverse/external-requests/project-a/request-requirements.md";
     const requirementsContent = "Full user request && Remove-Item C:/x";
 
     const result = await provider.invoke(createCommand({
@@ -200,6 +200,35 @@ describe("ClaudeImplementerRuntimeProvider", () => {
     expect(result.status).toBe("Completed");
     expect(spawnSync).toHaveBeenCalledTimes(1);
     expect(fs.readFileSync(path.join(worktree, requirementsPath), "utf8")).toBe(requirementsContent);
+  });
+
+  it("writes application-root requirements artifacts outside the target worktree before spawning", async () => {
+    const applicationRoot = fs.mkdtempSync(path.join(os.tmpdir(), "aiverse-app-root-"));
+    const worktree = fs.mkdtempSync(path.join(os.tmpdir(), "aiverse-target-worktree-"));
+    const originalCwd = process.cwd();
+    const spawnSync = createSpawnSyncStub({ status: 0 });
+    const provider = new ClaudeImplementerRuntimeProvider(spawnSync);
+    const requirementsPath = ".aiverse/external-requests/project-a/request-requirements.md";
+    const requirementsContent = "Full user request && Remove-Item C:/x";
+
+    process.chdir(applicationRoot);
+    try {
+      const result = await provider.invoke(createCommand({
+        workingDirectory: worktree,
+        files: [{
+          relativePath: requirementsPath,
+          baseDirectory: "applicationRoot",
+          content: requirementsContent,
+        }],
+      }));
+
+      expect(result.status).toBe("Completed");
+      expect(spawnSync).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(path.join(applicationRoot, requirementsPath), "utf8")).toBe(requirementsContent);
+      expect(fs.existsSync(path.join(worktree, requirementsPath))).toBe(false);
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 
   it("rejects prepared files that would escape the trusted working directory", async () => {
@@ -309,6 +338,16 @@ describe("ClaudeImplementerRuntimeProvider", () => {
       expect(isSafeImplementerCommand(createCommand({
         files: [{
           relativePath: "C:/outside.md",
+          content: "outside",
+        }],
+      }))).toBe(false);
+    });
+
+    it("rejects application-root files outside the external request artifact store", () => {
+      expect(isSafeImplementerCommand(createCommand({
+        files: [{
+          relativePath: "package.json",
+          baseDirectory: "applicationRoot",
           content: "outside",
         }],
       }))).toBe(false);

@@ -2,6 +2,9 @@ import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import { DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG } from "../implementer-runtime/ImplementerRuntimeService";
 import type { ImplementerRuntimeProvider, ImplementerRuntimeProviderCommand } from "../implementer-runtime/ImplementerRuntimeProvider";
 import { isSafeImplementerCommand } from "../implementer-runtime/ClaudeImplementerRuntimeProvider";
+import {
+  resolveExternalProjectRequirementsArtifactPath,
+} from "../external-development-requests/ExternalProjectRequirementsArtifactStore";
 import type { ExternalProjectAdosRunPreparation } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationTypes";
 import { EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import {
@@ -179,6 +182,7 @@ function createProviderCommand(
     files: preparation.requirementsFilePath && preparation.requirementsFileContent
       ? [{
         relativePath: preparation.requirementsFilePath,
+        baseDirectory: "applicationRoot",
         content: preparation.requirementsFileContent,
       }]
       : undefined,
@@ -199,7 +203,7 @@ function createExternalAdosImplementerPrompt(
     `Authoritative base SHA: ${preparation.authoritativeBaseSha}`,
     `Spec: ${preparation.featureId}`,
     `Spec path: ${preparation.specPath}`,
-    `Requirements file: ${preparation.requirementsFilePath}`,
+    `Requirements file: ${resolveExternalProjectRequirementsArtifactPath(preparation.requirementsFilePath ?? "")}`,
     `Worktree: ${worktreePath}`,
     `Execution policy version: ${preparation.executionPolicyVersion}`,
     `Validation commands: ${preparation.validationCommands.join(", ")}`,

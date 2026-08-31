@@ -8,6 +8,7 @@ export type ImplementerRuntimeProviderCommand = {
   prompt: string;
   files?: ReadonlyArray<{
     relativePath: string;
+    baseDirectory?: "workingDirectory" | "applicationRoot";
     content: string;
   }>;
   timeoutMs: number;
