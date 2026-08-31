@@ -1,4 +1,8 @@
 import type { CityBuildingType } from "../buildings/buildingTypes";
+import type {
+  CityProjectOperationStatusStage,
+  CityProjectOperationStatusTone,
+} from "../CityProjectOperationsStatusService";
 import type { FounderFacingDirection } from "../founder/founderTypes";
 import type { Point, WorldBounds } from "../shared/geometry";
 
@@ -19,6 +23,11 @@ export type WorldBuildingState = {
   destinationEnabled: boolean;
   companyId?: string;
   projectId?: string;
+  operationStage?: CityProjectOperationStatusStage;
+  operationLabel?: string;
+  operationTone?: CityProjectOperationStatusTone;
+  operationReasonText?: string;
+  mutationDisabled?: boolean;
 };
 
 export type WorldActorState = {

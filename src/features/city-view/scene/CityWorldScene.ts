@@ -3,6 +3,10 @@ import { BuildingInteractionPrompt } from "./buildings/BuildingInteractionPrompt
 import { BuildingRegistry } from "./buildings/BuildingRegistry";
 import { BuildingTransitionController } from "./buildings/BuildingTransitionController";
 import type { CityBuildingDefinition } from "./buildings/buildingTypes";
+import {
+  createCityProjectOperationStatusesFromBrowserSession,
+  type CityProjectOperationStatusMap,
+} from "./CityProjectOperationsStatusService";
 import { CITY_BUILDINGS } from "./config/cityBuildingConfig";
 import { CITY_COLORS, CITY_NAVIGATION_BOUNDS, CITY_WORLD_SCENE_KEY } from "./config/cityWorldConfig";
 import { FOUNDER_INITIAL_POSITION, FOUNDER_SPAWN_SEARCH_RADIUS_TILES } from "./config/founderConfig";
@@ -40,6 +44,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
     private worldStateSynchronizer?: WorldStateSynchronizer;
     private progressionEventFeedPanel?: ProgressionEventFeedPanel;
     private progressionRewardPresentationPanel?: ProgressionRewardPresentationPanel;
+    private cityProjectOperationStatuses?: CityProjectOperationStatusMap;
     private returnPayload?: CityReturnPayload;
 
     constructor() {
@@ -73,9 +78,10 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       const cityCollisionMap = new CityCollisionMap(tilemapLayers.collision);
       this.navigationMovementResolver = new NavigationMovementResolver(cityCollisionMap);
       validateBuildingInteractionZones(CITY_BUILDINGS, cityCollisionMap);
+      this.cityProjectOperationStatuses = createCityProjectOperationStatusesFromBrowserSession(CITY_BUILDINGS);
 
       const graphics = this.add.graphics();
-      createCityBuildingLayer(this, graphics);
+      createCityBuildingLayer(this, graphics, this.cityProjectOperationStatuses);
       createCityDecorationLayer(this, graphics);
 
       const founderSpawn = resolveFounderSpawn(cityCollisionMap, this.returnPayload);
@@ -145,6 +151,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         sceneKey: CITY_WORLD_SCENE_KEY,
         bounds: CITY_NAVIGATION_BOUNDS,
         buildings: CITY_BUILDINGS,
+        cityProjectOperationStatuses: this.cityProjectOperationStatuses,
         founderState: this.founderEntity?.state,
         effects: this.returnPayload?.worldEffects,
         rewards: this.returnPayload?.rewards,
@@ -174,6 +181,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingTransitionController = undefined;
       this.progressionEventFeedPanel = undefined;
       this.progressionRewardPresentationPanel = undefined;
+      this.cityProjectOperationStatuses = undefined;
       this.returnPayload = undefined;
       this.navigationState = undefined;
     }

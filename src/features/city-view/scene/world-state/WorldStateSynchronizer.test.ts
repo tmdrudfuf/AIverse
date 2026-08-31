@@ -44,6 +44,7 @@ describe("WorldStateSynchronizer", () => {
       type: "company",
       active: true,
       destinationEnabled: true,
+      projectId: "daily-proof",
     });
     expect(snapshot.buildings[1]).toMatchObject({
       id: "portfolio-studio",
@@ -64,6 +65,58 @@ describe("WorldStateSynchronizer", () => {
 
     expect(snapshot.buildings[0].position).toEqual({ x: 72, y: 72 });
     expect(snapshot.actors[0].position).toEqual({ x: 240, y: 280 });
+  });
+
+  it("stores distinct project-scoped operation statuses on city buildings", () => {
+    const snapshot = createSucceededWorldStateSnapshot({
+      worldId: AI_CITY_WORLD_ID,
+      activeWorldSpaceId: CITY_WORLD_SPACE_ID,
+      sceneKey: "city-world",
+      bounds: BOUNDS,
+      buildings: createBuildings(),
+      cityProjectOperationStatuses: {
+        "daily-proof-inc": {
+          buildingId: "daily-proof-inc",
+          projectId: "daily-proof",
+          projectName: "Daily Proof",
+          companyName: "Daily Proof Inc.",
+          stage: "implementation",
+          label: "IMPLEMENTATION",
+          tone: "active",
+          mutationDisabled: false,
+        },
+        "portfolio-studio": {
+          buildingId: "portfolio-studio",
+          projectId: "portfolio",
+          projectName: "Portfolio",
+          companyName: "Portfolio Studio",
+          stage: "review",
+          label: "REVIEW",
+          tone: "active",
+          mutationDisabled: false,
+        },
+      },
+      syncedAt: "2026-08-31T00:00:00.000Z",
+    });
+
+    expect(snapshot.buildings).toMatchObject([
+      {
+        id: "daily-proof-inc",
+        projectId: "daily-proof",
+        operationStage: "implementation",
+        operationLabel: "IMPLEMENTATION",
+        operationTone: "active",
+        mutationDisabled: false,
+      },
+      {
+        id: "portfolio-studio",
+        projectId: "portfolio",
+        operationStage: "review",
+        operationLabel: "REVIEW",
+        operationTone: "active",
+        mutationDisabled: false,
+      },
+    ]);
   });
 
   it("reuses the previous snapshot when semantic world facts are unchanged", () => {
@@ -399,6 +452,10 @@ function createBuildings(): CityBuildingDefinition[] {
         routeId: "daily-proof-lobby",
         enabled: true,
       },
+      projectBinding: {
+        bindingId: "daily-proof-inc",
+        projectId: "daily-proof",
+      },
       active: true,
       visual: {
         wall: 0xe76f51,
@@ -418,6 +475,10 @@ function createBuildings(): CityBuildingDefinition[] {
         sceneKey: "office-portfolio-studio",
         routeId: "portfolio-studio-lobby",
         enabled: false,
+      },
+      projectBinding: {
+        bindingId: "portfolio-studio",
+        projectId: "portfolio",
       },
       active: false,
       visual: {
