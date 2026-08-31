@@ -74,6 +74,14 @@ export class BrowserOfficeSessionService {
     state.externalProjectAdosExecutions = clone(snapshot.externalProjectAdosExecutions ?? {});
     state.externalProjectAdosExecutionResults = clone(snapshot.externalProjectAdosExecutionResults ?? {});
     state.externalProjectAdosRunStatuses = cloneValidExternalProjectAdosRunStatuses(snapshot.externalProjectAdosRunStatuses);
+    state.reviewerRuntimeCollections = clone(snapshot.reviewerRuntimeCollections ?? {});
+    state.reviewerRuntimeResultCollections = clone(snapshot.reviewerRuntimeResultCollections ?? {});
+    state.reviewPromotionCollections = clone(snapshot.reviewPromotionCollections ?? {});
+    state.reviewPromotionResultCollections = clone(snapshot.reviewPromotionResultCollections ?? {});
+    state.validationRuntimeCollections = clone(snapshot.validationRuntimeCollections ?? {});
+    state.validationRuntimeResultCollections = clone(snapshot.validationRuntimeResultCollections ?? {});
+    state.postValidationReviewTargetCollections = clone(snapshot.postValidationReviewTargetCollections ?? {});
+    state.postValidationReviewTargetResultCollections = clone(snapshot.postValidationReviewTargetResultCollections ?? {});
     state.workSessions = clone(snapshot.workSessions);
 
     const selectedIndex = state.projects.findIndex((project) => project.id === state.selectedProjectId);
@@ -111,6 +119,14 @@ export class BrowserOfficeSessionService {
       externalProjectAdosExecutions: clone(state.externalProjectAdosExecutions),
       externalProjectAdosExecutionResults: clone(state.externalProjectAdosExecutionResults),
       externalProjectAdosRunStatuses: clone(state.externalProjectAdosRunStatuses),
+      reviewerRuntimeCollections: clone(state.reviewerRuntimeCollections),
+      reviewerRuntimeResultCollections: clone(state.reviewerRuntimeResultCollections),
+      reviewPromotionCollections: clone(state.reviewPromotionCollections),
+      reviewPromotionResultCollections: clone(state.reviewPromotionResultCollections),
+      validationRuntimeCollections: clone(state.validationRuntimeCollections),
+      validationRuntimeResultCollections: clone(state.validationRuntimeResultCollections),
+      postValidationReviewTargetCollections: clone(state.postValidationReviewTargetCollections),
+      postValidationReviewTargetResultCollections: clone(state.postValidationReviewTargetResultCollections),
       workSessions: clone(state.workSessions),
     };
 
@@ -165,6 +181,14 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     (value.externalProjectAdosExecutions === undefined || isRecordOfRecords(value.externalProjectAdosExecutions)) &&
     (value.externalProjectAdosExecutionResults === undefined || isRecordOfRecords(value.externalProjectAdosExecutionResults)) &&
     (value.externalProjectAdosRunStatuses === undefined || isRecord(value.externalProjectAdosRunStatuses)) &&
+    (value.reviewerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.reviewerRuntimeCollections)) &&
+    (value.reviewerRuntimeResultCollections === undefined || isResultCollectionRecord(value.reviewerRuntimeResultCollections)) &&
+    (value.reviewPromotionCollections === undefined || isPromotionCollectionRecord(value.reviewPromotionCollections)) &&
+    (value.reviewPromotionResultCollections === undefined || isResultCollectionRecord(value.reviewPromotionResultCollections)) &&
+    (value.validationRuntimeCollections === undefined || isRuntimeCollectionRecord(value.validationRuntimeCollections)) &&
+    (value.validationRuntimeResultCollections === undefined || isResultCollectionRecord(value.validationRuntimeResultCollections)) &&
+    (value.postValidationReviewTargetCollections === undefined || isTargetCollectionRecord(value.postValidationReviewTargetCollections)) &&
+    (value.postValidationReviewTargetResultCollections === undefined || isResultCollectionRecord(value.postValidationReviewTargetResultCollections)) &&
     isRecordOfArrays(value.workSessions)
   );
 }
@@ -193,6 +217,27 @@ function isResultCollectionRecord(value: unknown) {
   return isRecord(value) && Object.values(value).every((collection) => (
     isRecord(collection) &&
     Array.isArray(collection.results)
+  ));
+}
+
+function isRuntimeCollectionRecord(value: unknown) {
+  return isRecord(value) && Object.values(value).every((collection) => (
+    isRecord(collection) &&
+    Array.isArray(collection.runtimes)
+  ));
+}
+
+function isPromotionCollectionRecord(value: unknown) {
+  return isRecord(value) && Object.values(value).every((collection) => (
+    isRecord(collection) &&
+    Array.isArray(collection.promotions)
+  ));
+}
+
+function isTargetCollectionRecord(value: unknown) {
+  return isRecord(value) && Object.values(value).every((collection) => (
+    isRecord(collection) &&
+    Array.isArray(collection.targets)
   ));
 }
 

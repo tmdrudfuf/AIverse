@@ -17,8 +17,12 @@ describe("deriveCityProjectOperationStatuses", () => {
     const result = deriveCityProjectOperationStatuses({
       buildings: createBuildings(),
       state: createState({
-        "project-a": status({ projectId: "project-a", stage: "Started", status: "Started", updatedAt: "2026-08-31T01:00:00.000Z" }),
-        "project-b": status({ projectId: "project-b", stage: "Started", status: "Reviewer Started", updatedAt: "2026-08-31T00:30:00.000Z" }),
+        externalProjectAdosRunStatuses: {
+          "project-a": status({ projectId: "project-a", stage: "Started", status: "Started", updatedAt: "2026-08-31T01:00:00.000Z" }),
+        },
+        reviewerRuntimeCollections: {
+          "project-b": reviewerRuntimeCollection("project-b", "2026-08-31T01:30:00.000Z"),
+        },
       }),
     });
 
@@ -38,11 +42,39 @@ describe("deriveCityProjectOperationStatuses", () => {
     });
   });
 
+  it("derives validation and publication city stages from real project-scoped runtime collections", () => {
+    const [companyA, companyB] = createBuildings();
+    const result = deriveCityProjectOperationStatuses({
+      buildings: [companyA, companyB],
+      state: createState({
+        validationRuntimeCollections: {
+          "project-a": validationRuntimeCollection("project-a", "2026-08-31T02:00:00.000Z"),
+        },
+        reviewPromotionCollections: {
+          "project-b": reviewPromotionCollection("project-b", "2026-08-31T02:30:00.000Z"),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      stage: "validation",
+      label: "VALIDATION",
+    });
+    expect(result["company-b"]).toMatchObject({
+      projectId: "project-b",
+      stage: "publication",
+      label: "PUBLICATION",
+    });
+  });
+
   it("does not let the latest global run override a bound project's own missing run", () => {
     const result = deriveCityProjectOperationStatuses({
       buildings: createBuildings(),
       state: createState({
-        "project-a": status({ projectId: "project-a", stage: "Started", status: "Started", updatedAt: "2026-08-31T02:00:00.000Z" }),
+        externalProjectAdosRunStatuses: {
+          "project-a": status({ projectId: "project-a", stage: "Started", status: "Started", updatedAt: "2026-08-31T02:00:00.000Z" }),
+        },
       }),
     });
 
@@ -57,13 +89,15 @@ describe("deriveCityProjectOperationStatuses", () => {
     const result = deriveCityProjectOperationStatuses({
       buildings: createBuildings(),
       state: createState({
-        "project-a": status({
-          projectId: "project-a",
-          stage: "Failed",
-          status: "Validation Failed",
-          reasonCodes: ["EXTERNAL_ADOS_EXECUTION_SPAWN_FAILED"],
-        }),
-        "project-b": status({ projectId: "project-b", stage: "Completed", status: "Completed" }),
+        externalProjectAdosRunStatuses: {
+          "project-a": status({
+            projectId: "project-a",
+            stage: "Failed",
+            status: "Failed",
+            reasonCodes: ["EXTERNAL_ADOS_EXECUTION_SPAWN_FAILED"],
+          }),
+          "project-b": status({ projectId: "project-b", stage: "Completed", status: "Completed" }),
+        },
       }),
     });
 
@@ -89,6 +123,14 @@ describe("deriveCityProjectOperationStatuses", () => {
         externalProjectAdosRunStatuses: {
           "project-a": status({ projectId: "project-a", stage: "Started", status: "Started" }),
         },
+        reviewerRuntimeCollections: {},
+        reviewerRuntimeResultCollections: {},
+        reviewPromotionCollections: {},
+        reviewPromotionResultCollections: {},
+        validationRuntimeCollections: {},
+        validationRuntimeResultCollections: {},
+        postValidationReviewTargetCollections: {},
+        postValidationReviewTargetResultCollections: {},
       },
     });
 
@@ -115,7 +157,9 @@ describe("deriveCityProjectOperationStatuses", () => {
       source.projectRegistryEntries = createProjectEntries();
       source.externalProjectAdosRunStatuses = {
         "project-a": status({ projectId: "project-a", stage: "Started", status: "Started" }),
-        "project-b": status({ projectId: "project-b", stage: "Started", status: "Reviewer Started" }),
+      };
+      source.reviewerRuntimeCollections = {
+        "project-b": reviewerRuntimeCollection("project-b", "2026-08-31T01:30:00.000Z"),
       };
 
       expect(new BrowserOfficeSessionService({ storage }).saveState(source)).toBe(true);
@@ -134,10 +178,30 @@ describe("deriveCityProjectOperationStatuses", () => {
   });
 });
 
-function createState(statuses: ProjectPortalState["externalProjectAdosRunStatuses"]) {
+function createState(overrides: Partial<Pick<
+  ProjectPortalState,
+  | "externalProjectAdosRunStatuses"
+  | "reviewerRuntimeCollections"
+  | "reviewerRuntimeResultCollections"
+  | "reviewPromotionCollections"
+  | "reviewPromotionResultCollections"
+  | "validationRuntimeCollections"
+  | "validationRuntimeResultCollections"
+  | "postValidationReviewTargetCollections"
+  | "postValidationReviewTargetResultCollections"
+>> = {}) {
   return {
     projectRegistryEntries: createProjectEntries(),
-    externalProjectAdosRunStatuses: statuses,
+    externalProjectAdosRunStatuses: {},
+    reviewerRuntimeCollections: {},
+    reviewerRuntimeResultCollections: {},
+    reviewPromotionCollections: {},
+    reviewPromotionResultCollections: {},
+    validationRuntimeCollections: {},
+    validationRuntimeResultCollections: {},
+    postValidationReviewTargetCollections: {},
+    postValidationReviewTargetResultCollections: {},
+    ...overrides,
   };
 }
 
@@ -229,6 +293,49 @@ function status(overrides: Partial<ExternalProjectAdosRunStatus> & Pick<External
     deployStarted: false,
     rulesVersion: "external-ados-run-status-v1",
     ...rest,
+  };
+}
+
+function reviewerRuntimeCollection(projectId: string, startedAt: string): ProjectPortalState["reviewerRuntimeCollections"][string] {
+  return {
+    projectId,
+    runtimes: [{
+      projectId,
+      status: "Completed",
+      startedAt,
+      reviewerStarted: true,
+      reviewer: "codex",
+    } as unknown as ProjectPortalState["reviewerRuntimeCollections"][string]["runtimes"][number]],
+    runtimeCount: 1,
+    rulesVersion: "codex-reviewer-v1",
+  };
+}
+
+function validationRuntimeCollection(projectId: string, startedAt: string): ProjectPortalState["validationRuntimeCollections"][string] {
+  return {
+    projectId,
+    runtimes: [{
+      projectId,
+      status: "Completed",
+      startedAt,
+      validationRuntimeStarted: true,
+      validationStarted: true,
+    } as unknown as ProjectPortalState["validationRuntimeCollections"][string]["runtimes"][number]],
+    runtimeCount: 1,
+    rulesVersion: "validation-runtime-v1",
+  };
+}
+
+function reviewPromotionCollection(projectId: string, promotedAt: string): ProjectPortalState["reviewPromotionCollections"][string] {
+  return {
+    projectId,
+    promotions: [{
+      projectId,
+      decision: "Approved",
+      promotedAt,
+    } as unknown as ProjectPortalState["reviewPromotionCollections"][string]["promotions"][number]],
+    promotionCount: 1,
+    rulesVersion: "review-promotion-v1",
   };
 }
 
