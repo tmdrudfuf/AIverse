@@ -24,9 +24,11 @@ export type ExternalProjectAdosExecution = {
   preparationId: string;
   developmentRequestDraftId: string;
   status: ExternalProjectAdosExecutionStatus;
+  featureId?: string;
   featureBranch: string;
   authoritativeBaseSha: string;
   specPath: string;
+  requirementsFilePath?: string;
   repositoryPath: string;
   worktreePath: string;
   validationCommands: string[];

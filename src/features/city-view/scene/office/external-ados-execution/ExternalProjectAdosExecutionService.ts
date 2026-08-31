@@ -2,6 +2,9 @@ import type { ProjectPortalProject } from "../OfficeProjectPortalTypes";
 import { DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG } from "../implementer-runtime/ImplementerRuntimeService";
 import type { ImplementerRuntimeProvider, ImplementerRuntimeProviderCommand } from "../implementer-runtime/ImplementerRuntimeProvider";
 import { isSafeImplementerCommand } from "../implementer-runtime/ClaudeImplementerRuntimeProvider";
+import {
+  resolveExternalProjectRequirementsArtifactPath,
+} from "../external-development-requests/ExternalProjectRequirementsArtifactStore";
 import type { ExternalProjectAdosRunPreparation } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationTypes";
 import { EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import {
@@ -153,9 +156,12 @@ function validateInput(input: StartExternalProjectAdosExecutionInput): ExternalP
 
 function preparationMatchesTrustedPolicy(preparation: ExternalProjectAdosRunPreparation) {
   return (
-    preparation.featureBranch === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch &&
     preparation.authoritativeBaseSha === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.authoritativeBaseSha &&
-    preparation.specPath === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.specPath &&
+    Boolean(preparation.featureId?.trim()) &&
+    Boolean(preparation.featureBranch?.trim()) &&
+    Boolean(preparation.specPath?.trim()) &&
+    Boolean(preparation.requirementsFilePath?.trim()) &&
+    Boolean(preparation.requirementsFileContent?.trim()) &&
     preparation.reviewerCommand === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.reviewerCommand &&
     preparation.executionPolicyVersion === EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.executionPolicyVersion &&
     sameOrderedStrings(preparation.validationCommands, EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.validationCommands)
@@ -173,6 +179,13 @@ function createProviderCommand(
     inputMode: DEFAULT_IMPLEMENTER_RUNTIME_COMMAND_CONFIG.inputMode,
     workingDirectory: binding.worktreePath,
     prompt: createExternalAdosImplementerPrompt(project, preparation, binding.worktreePath),
+    files: preparation.requirementsFilePath && preparation.requirementsFileContent
+      ? [{
+        relativePath: preparation.requirementsFilePath,
+        baseDirectory: "applicationRoot",
+        content: preparation.requirementsFileContent,
+      }]
+      : undefined,
     timeoutMs: EXTERNAL_ADOS_EXECUTION_TIMEOUT_MS,
   };
 }
@@ -188,11 +201,17 @@ function createExternalAdosImplementerPrompt(
     `Project: ${project.name}`,
     `Feature branch: ${preparation.featureBranch}`,
     `Authoritative base SHA: ${preparation.authoritativeBaseSha}`,
-    `Spec: ${preparation.specPath}`,
+    `Spec: ${preparation.featureId}`,
+    `Spec path: ${preparation.specPath}`,
+    `Requirements file: ${resolveExternalProjectRequirementsArtifactPath(preparation.requirementsFilePath ?? "")}`,
     `Worktree: ${worktreePath}`,
     `Execution policy version: ${preparation.executionPolicyVersion}`,
     `Validation commands: ${preparation.validationCommands.join(", ")}`,
     `Reviewer: ${preparation.reviewerCommand}`,
+    "",
+    "Use the provided requirements file as the authoritative requirements source for this run.",
+    "Do not replace the detailed requirements with only a short feature title.",
+    "Do not rely on this prompt for the detailed request body; read the requirements file.",
     "",
     "Implement the prepared external project ADOS feature in this local worktree only.",
     "Do not run validation from this bridge.",
@@ -216,9 +235,11 @@ function createExecution(input: {
     preparationId: input.preparation.id,
     developmentRequestDraftId: input.preparation.developmentRequestDraftId,
     status: input.status,
+    featureId: input.preparation.featureId,
     featureBranch: input.preparation.featureBranch,
     authoritativeBaseSha: input.preparation.authoritativeBaseSha,
     specPath: input.preparation.specPath,
+    requirementsFilePath: input.preparation.requirementsFilePath,
     repositoryPath: binding.repositoryPath,
     worktreePath: binding.worktreePath,
     validationCommands: [...input.preparation.validationCommands],

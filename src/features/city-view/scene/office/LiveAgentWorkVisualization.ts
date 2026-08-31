@@ -70,6 +70,7 @@ export function deriveLiveAgentWorkState(state: Pick<
   | "externalProjectAdosExecutions"
   | "externalProjectAdosExecutionResults"
   | "externalProjectAdosRunStatuses"
+  | "externalProjectDevelopmentRequestDrafts"
   | "employees"
   | "implementerRuntimeCollections"
   | "implementerRuntimeResultCollections"
@@ -105,6 +106,7 @@ export function deriveLiveAgentWorkState(state: Pick<
   const reasonText = createReasonText(runStatus, latestFact);
   const blockedStage = stage === "blocked" ? resolveBlockedSourceStage(rawStatus, latestFact) : undefined;
   const assignment = createAssignment({
+    projectId,
     stage,
     blockedStage,
     lifecycle,
@@ -137,6 +139,8 @@ export function deriveLiveAgentWorkState(state: Pick<
       specPath: getSpecPath(state, projectId),
       featureBranch: runStatus?.featureBranch ?? state.externalProjectAdosRunPreparations[projectId]?.featureBranch,
       updatedAt: latestTimestamp(runStatus?.updatedAt, latestFact?.updatedAt),
+      requestTitle: state.externalProjectDevelopmentRequestDrafts[projectId]?.title,
+      runId: state.externalProjectDevelopmentRequestDrafts[projectId]?.adosRunId ?? runStatus?.executionId,
     }),
   };
 }
@@ -289,6 +293,7 @@ function resolveLifecycle(
 }
 
 function createAssignment(input: {
+  projectId?: string;
   stage: LiveAgentWorkStage;
   blockedStage?: LiveAgentWorkStage;
   lifecycle: LiveAgentWorkLifecycle;
@@ -300,7 +305,7 @@ function createAssignment(input: {
   const role = getRoleForStage(effectiveStage);
   if (role === "idle" && input.lifecycle !== "complete") return undefined;
 
-  const employee = selectEmployeeForRole(input.employees, role);
+  const employee = selectEmployeeForRole(input.employees, role, input.projectId);
   const visualTone = getVisualTone(input.lifecycle);
   const statusLabel = input.stage === "blocked" && input.reasonText
     ? `Blocked: ${input.reasonText}`
@@ -318,9 +323,22 @@ function createAssignment(input: {
   };
 }
 
-function selectEmployeeForRole(employees: ReadonlyArray<EmployeeLike>, role: LiveAgentSemanticRole): EmployeeLike | undefined {
-  const candidates = employees.filter((employee) => matchesRole(employee, role));
-  return candidates[0] ?? employees[0];
+function selectEmployeeForRole(
+  employees: ReadonlyArray<EmployeeLike>,
+  role: LiveAgentSemanticRole,
+  projectId: string | undefined,
+): EmployeeLike | undefined {
+  const scopedEmployees = projectId
+    ? employees.filter((employee) => employee.currentProjectId === projectId)
+    : [];
+  const sharedEmployees = employees.filter((employee) => employee.currentProjectId === undefined);
+  const eligibleEmployees = scopedEmployees.length > 0
+    ? scopedEmployees
+    : projectId
+      ? sharedEmployees
+      : employees;
+  const roleCandidates = eligibleEmployees.filter((employee) => matchesRole(employee, role));
+  return roleCandidates[0] ?? eligibleEmployees[0];
 }
 
 function matchesRole(employee: EmployeeLike, role: LiveAgentSemanticRole) {
@@ -398,10 +416,14 @@ function createProjectStatusDisplay(input: {
   specPath?: string;
   featureBranch?: string;
   updatedAt?: string;
+  requestTitle?: string;
+  runId?: string;
 }): LiveAgentProjectStatusDisplay {
   const rows = [
+    input.requestTitle ? `Request ${compact(input.requestTitle, 38)}` : undefined,
     input.specPath ? `Spec ${compactSpecPath(input.specPath)}` : undefined,
     input.featureBranch ? `Branch ${compact(input.featureBranch, 34)}` : undefined,
+    input.runId ? `Run id ${compact(input.runId, 36)}` : undefined,
     input.rawStatus ? `Run ${compact(input.rawStatus, 42)}` : "Run No active ADOS run",
     input.reasonText ? `Reason ${compact(input.reasonText, 40)}` : undefined,
     input.updatedAt ? `Updated ${input.updatedAt}` : undefined,

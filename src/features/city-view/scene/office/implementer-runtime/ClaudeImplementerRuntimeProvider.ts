@@ -1,4 +1,5 @@
 import { isSafeCommandLine } from "../runtime-preflight/RuntimePreflightProvider";
+import { isExternalProjectRequirementsArtifactPath } from "../external-development-requests/ExternalProjectRequirementsArtifactStore";
 import type {
   ImplementerRuntimeProvider,
   ImplementerRuntimeProviderCommand,
@@ -87,6 +88,23 @@ export class ClaudeImplementerRuntimeProvider implements ImplementerRuntimeProvi
           durationMs: 0,
           stdoutSummary: "",
           stderrSummary: message,
+          outputTruncated: false,
+        }),
+      };
+    }
+
+    const fileWriteResult = await writeCommandFiles(command);
+    if (!fileWriteResult.ok) {
+      return {
+        status: "Failed",
+        evidence: createEvidence(command, commandDisplay, {
+          started: false,
+          completed: false,
+          timedOut: false,
+          cancelled: false,
+          durationMs: 0,
+          stdoutSummary: "",
+          stderrSummary: fileWriteResult.message,
           outputTruncated: false,
         }),
       };
@@ -260,7 +278,9 @@ function truncateOutput(text: string) {
 export function isSafeImplementerCommand(command: ImplementerRuntimeProviderCommand) {
   const joined = [command.command, ...command.arguments].join(" ");
   if (!isSafeCommandLine(joined)) return false;
-  return isSafeImplementerCommandLine(joined) && !hasPathTraversal(command.workingDirectory);
+  return isSafeImplementerCommandLine(joined) &&
+    !hasPathTraversal(command.workingDirectory) &&
+    (command.files ?? []).every(isSafeCommandFile);
 }
 
 export function isSafeImplementerCommandLine(commandLine: string) {
@@ -276,4 +296,58 @@ export function isSafeImplementerCommandLine(commandLine: string) {
 
 export function hasPathTraversal(value: string) {
   return /\.\.[\\/]/.test(value);
+}
+
+async function writeCommandFiles(command: ImplementerRuntimeProviderCommand): Promise<{ ok: true } | { ok: false; message: string }> {
+  const files = command.files ?? [];
+  if (files.length === 0) return { ok: true };
+
+  try {
+    const nodeFs = await import("node:fs");
+    const nodePath = await import("node:path");
+    const workingDirectory = nodePath.resolve(command.workingDirectory);
+    const applicationRoot = nodePath.resolve(process.cwd());
+
+    for (const file of files) {
+      if (!isSafeCommandFile(file)) {
+        return { ok: false, message: "Prepared requirements artifact path failed safety validation." };
+      }
+
+      const baseDirectory = file.baseDirectory === "applicationRoot" ? applicationRoot : workingDirectory;
+      const targetPath = nodePath.resolve(baseDirectory, file.relativePath);
+      if (!isPathInsideDirectory(targetPath, baseDirectory)) {
+        return { ok: false, message: "Prepared requirements artifact path escapes the trusted artifact store." };
+      }
+
+      nodeFs.mkdirSync(nodePath.dirname(targetPath), { recursive: true });
+      nodeFs.writeFileSync(targetPath, file.content, "utf8");
+    }
+  } catch {
+    return { ok: false, message: "Prepared requirements artifact could not be written before runtime start." };
+  }
+
+  return { ok: true };
+}
+
+function isSafeRelativeArtifactPath(value: string) {
+  return Boolean(value.trim()) &&
+    !/^[a-zA-Z]:[\\/]/.test(value) &&
+    !value.startsWith("/") &&
+    !value.startsWith("\\") &&
+    !hasPathTraversal(value) &&
+    !/[<>:"|?*\u0000-\u001f]/.test(value);
+}
+
+function isSafeCommandFile(file: NonNullable<ImplementerRuntimeProviderCommand["files"]>[number]) {
+  if (!isSafeRelativeArtifactPath(file.relativePath)) return false;
+  if (!file.baseDirectory || file.baseDirectory === "workingDirectory") return true;
+  return file.baseDirectory === "applicationRoot" && isExternalProjectRequirementsArtifactPath(file.relativePath);
+}
+
+function isPathInsideDirectory(targetPath: string, directoryPath: string) {
+  const normalizedTarget = targetPath.toLowerCase();
+  const normalizedDirectory = directoryPath.toLowerCase().replace(/[\\/]+$/, "");
+  return normalizedTarget === normalizedDirectory ||
+    normalizedTarget.startsWith(`${normalizedDirectory}\\`) ||
+    normalizedTarget.startsWith(`${normalizedDirectory}/`);
 }

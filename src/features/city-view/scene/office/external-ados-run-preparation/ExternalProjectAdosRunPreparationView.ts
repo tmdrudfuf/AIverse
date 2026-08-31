@@ -14,12 +14,14 @@ export function createExternalProjectAdosRunPreparationDisplayRows(
   return {
     statusText: `${preparation.status} - ${preparation.featureBranch}`,
     contextText: [
+      preparation.featureId,
       `base ${preparation.authoritativeBaseSha.slice(0, 7)}`,
       preparation.specPath,
+      preparation.requirementsFilePath ? `requirements ${preparation.requirementsFilePath}` : undefined,
       `${preparation.validationCommands.length} validation commands`,
       `reviewer ${preparation.reviewerCommand}`,
       `policy v${preparation.executionPolicyVersion}`,
-    ].join("; "),
+    ].filter((item): item is string => Boolean(item)).join("; "),
     boundaryText: preparation.sideEffectBoundary,
   };
 }

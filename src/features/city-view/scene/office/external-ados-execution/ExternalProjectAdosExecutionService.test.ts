@@ -7,8 +7,10 @@ import type {
   ImplementerRuntimeProviderResult,
 } from "../implementer-runtime/ImplementerRuntimeProvider";
 import type { ExternalProjectAdosRunPreparation } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationTypes";
-import { EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import { ExternalProjectAdosExecutionService } from "./ExternalProjectAdosExecutionService";
+
+const FEATURE_BRANCH = "codex/202608250000-add-safe-docs";
+const SPEC_PATH = "specs/202608250000-add-safe-docs/spec.md";
 
 type StubImplementerRuntimeProvider = ImplementerRuntimeProvider & {
   invoke: Mock<(command: ImplementerRuntimeProviderCommand) => Promise<ImplementerRuntimeProviderResult>>;
@@ -29,12 +31,19 @@ describe("ExternalProjectAdosExecutionService", () => {
       command: "claude",
       inputMode: "argument",
       workingDirectory: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
+      files: [{
+        relativePath: ".aiverse/external-requests/external-project-draft/20260825T0000000-requirements.md",
+        baseDirectory: "applicationRoot",
+        content: "# Development Request\n\nFull docs request && Remove-Item C:/x",
+      }],
     });
     expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Do not start review.");
     expect(outcome.execution).toMatchObject({
       projectId: "external-project-draft",
       status: "Completed",
-      featureBranch: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch,
+      featureId: "202608250000-add-safe-docs",
+      featureBranch: FEATURE_BRANCH,
+      requirementsFilePath: ".aiverse/external-requests/external-project-draft/20260825T0000000-requirements.md",
       trustedLocalExecutionApproved: true,
       implementerStarted: true,
       validationStarted: false,
@@ -44,6 +53,11 @@ describe("ExternalProjectAdosExecutionService", () => {
       mergeStarted: false,
       deployStarted: false,
     });
+    expect(provider.invoke.mock.calls[0]?.[0]?.arguments.join(" ")).not.toContain("Remove-Item");
+    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("Requirements file:");
+    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain(".aiverse");
+    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).toContain("external-project-draft");
+    expect(provider.invoke.mock.calls[0]?.[0]?.prompt).not.toContain("Full docs request && Remove-Item C:/x");
     expect(outcome.result).toMatchObject({
       status: "Completed",
       reasonCodes: ["EXTERNAL_ADOS_EXECUTION_STARTED"],
@@ -60,7 +74,7 @@ describe("ExternalProjectAdosExecutionService", () => {
     const outcome = await new ExternalProjectAdosExecutionService(provider).start({
       projectId: "external-project-draft",
       project: createProject(),
-      preparation: createPreparation({ featureBranch: "codex/old-feature" }),
+      preparation: createPreparation({ requirementsFilePath: "" }),
       now: "2026-08-25T00:00:00.000Z",
     });
 
@@ -156,8 +170,8 @@ function createProject(overrides: Partial<ProjectPortalProject> = {}): ProjectPo
       projectId: "external-project-draft",
       repositoryPath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse",
       worktreePath: "C:/Users/tmdru/Desktop/Ky-Project/AIverse-external-project-ados-run-status",
-      branchName: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch,
-      specPath: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.specPath,
+      branchName: FEATURE_BRANCH,
+      specPath: SPEC_PATH,
       source: "manual",
       boundAt: "2026-08-25T00:00:00.000Z",
     },
@@ -178,12 +192,23 @@ function createPreparation(overrides: Partial<ExternalProjectAdosRunPreparation>
     projectId: "external-project-draft",
     developmentRequestDraftId: "external-project-draft:external-development-request-draft",
     status: "Prepared",
-    featureBranch: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.featureBranch,
-    authoritativeBaseSha: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.authoritativeBaseSha,
-    specPath: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.specPath,
-    validationCommands: [...EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.validationCommands],
-    reviewerCommand: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.reviewerCommand,
-    executionPolicyVersion: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_DEFAULTS.executionPolicyVersion,
+    featureId: "202608250000-add-safe-docs",
+    featureBranch: FEATURE_BRANCH,
+    authoritativeBaseSha: "runtime-derived",
+    specPath: SPEC_PATH,
+    requirementsFilePath: ".aiverse/external-requests/external-project-draft/20260825T0000000-requirements.md",
+    requirementsFileContent: "# Development Request\n\nFull docs request && Remove-Item C:/x",
+    requirementsPreview: "Full docs request && Remove-Item C:/x",
+    validationCommands: [
+      "npm test",
+      "npx tsc --noEmit",
+      "npm run build",
+      "npm run test:e2e:home-canvas",
+      "git diff --check",
+      "git diff --cached --check",
+    ],
+    reviewerCommand: "claude -p",
+    executionPolicyVersion: 1,
     createdAt: "2026-08-25T00:00:00.000Z",
     updatedAt: "2026-08-25T00:00:00.000Z",
     sideEffectBoundary: "Local preparation only.",

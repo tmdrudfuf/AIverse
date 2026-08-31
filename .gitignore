@@ -9,4 +9,5 @@ npm-debug.log*
 *.log
 *.tsbuildinfo
 .agent-workflow/
+.aiverse/
 test-results/

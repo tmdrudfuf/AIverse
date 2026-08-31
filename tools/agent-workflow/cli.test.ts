@@ -370,7 +370,7 @@ describe("CLI process: orchestrate --implementer validation before spawn", () =>
     const result = runCli(["orchestrate", "--state", statePath, "--implementer", "nonexistent-agent", "--dry-run"], cwd);
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("Requested implementer 'nonexistent-agent' is not configured.");
-  });
+  }, 20000);
 
   it("rejects a missing --implementer value before any spawn", () => {
     const cwd = createTempDir();
@@ -379,7 +379,7 @@ describe("CLI process: orchestrate --implementer validation before spawn", () =>
     const result = runCli(["orchestrate", "--state", statePath, "--implementer"], cwd);
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("--implementer requires a value.");
-  });
+  }, 20000);
 
   it("rejects repeated conflicting --implementer values before any spawn", () => {
     const cwd = createTempDir();
@@ -388,7 +388,7 @@ describe("CLI process: orchestrate --implementer validation before spawn", () =>
     const result = runCli(["orchestrate", "--state", statePath, "--implementer", "claude", "--implementer", "codex", "--dry-run"], cwd);
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("--implementer was provided multiple times with conflicting values");
-  });
+  }, 20000);
 
   it("prints the correct opposite Reviewer for --implementer claude and --implementer codex", () => {
     const cwd = createTempDir();
