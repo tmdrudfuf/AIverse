@@ -26,8 +26,8 @@ describe("createCityBuildingLayer", () => {
       strokeRect: () => graphics,
     };
     const statuses: CityProjectOperationStatusMap = {
-      "daily-proof-inc": status("daily-proof-inc", "daily-proof", "implementation", "IMPLEMENTATION", "active"),
-      "ai-lab": status("ai-lab", "ai-lab", "review", "REVIEW", "active"),
+      "daily-proof-inc": status("daily-proof-inc", "daily-proof", "implementation", "ACTIVE", "active"),
+      "ai-lab": status("ai-lab", "ai-lab", "review", "ACTIVE", "active"),
       "portfolio-studio": status("portfolio-studio", "portfolio", "idle", "IDLE", "idle"),
     };
 
@@ -35,13 +35,13 @@ describe("createCityBuildingLayer", () => {
 
     expect(textCalls.map((call) => call.text)).toEqual(expect.arrayContaining([
       "DAILY PROOF INC.",
-      "IMPLEMENTATION",
+      "ACTIVE",
       "AI LAB",
-      "REVIEW",
+      "ACTIVE",
       "PORTFOLIO STUDIO",
       "IDLE",
     ]));
-    expect(textCalls.find((call) => call.text === "IMPLEMENTATION")?.style.backgroundColor).toBe("#f4c85d");
+    expect(textCalls.find((call) => call.text === "ACTIVE")?.style.backgroundColor).toBe("#f4c85d");
     expect(textCalls.find((call) => call.text === "IDLE")?.style.backgroundColor).toBe("#596171");
   });
 
@@ -96,11 +96,23 @@ function status(
   return {
     buildingId,
     projectId,
-    projectName: projectId,
-    companyName: projectId,
-    stage,
-    label,
-    tone,
-    mutationDisabled: false,
-  };
+      projectName: projectId,
+      companyName: projectId,
+      stage,
+      label,
+      tone,
+      mutationDisabled: false,
+      portfolioSummary: {
+        buildingId,
+        projectId,
+        projectName: projectId,
+        companyName: projectId,
+        bindingStatus: "bound",
+        workflowStage: stage,
+        attentionState: label === "IDLE" ? "idle" : label === "BLOCKED" ? "blocked" : "active",
+        attentionLabel: label,
+        tone,
+        operatorActionAvailable: true,
+      },
+    };
 }

@@ -109,13 +109,14 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.founderMovementController?.update(delta, intent);
       this.buildingInteractionController?.update(this.founderEntity.position);
       const activeBuilding = this.buildingInteractionController?.getActiveBuilding();
-      this.buildingInteractionPrompt?.update(activeBuilding);
+      this.buildingInteractionPrompt?.update(activeBuilding, activeBuilding ? this.cityProjectOperationStatuses?.[activeBuilding.id] : undefined);
       const clickedBuilding = this.buildingInteractionController?.consumeClickedBuilding();
       if (clickedBuilding) {
         const entryRequest = this.buildingTransitionController?.createEntryRequest(
           clickedBuilding,
           clickedBuilding.entrancePoint,
           this.founderEntity.state.facing,
+          this.cityProjectOperationStatuses?.[clickedBuilding.id],
         );
 
         if (entryRequest) {
@@ -129,6 +130,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
           activeBuilding,
           this.founderEntity.position,
           this.founderEntity.state.facing,
+          this.cityProjectOperationStatuses?.[activeBuilding.id],
         );
 
         if (entryRequest) {

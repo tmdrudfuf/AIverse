@@ -29,14 +29,14 @@ describe("deriveCityProjectOperationStatuses", () => {
     expect(result["company-a"]).toMatchObject({
       projectId: "project-a",
       stage: "implementation",
-      label: "IMPLEMENTATION",
+      label: "ACTIVE",
       tone: "active",
       mutationDisabled: false,
     });
     expect(result["company-b"]).toMatchObject({
       projectId: "project-b",
       stage: "review",
-      label: "REVIEW",
+      label: "ACTIVE",
       tone: "active",
       mutationDisabled: false,
     });
@@ -59,12 +59,12 @@ describe("deriveCityProjectOperationStatuses", () => {
     expect(result["company-a"]).toMatchObject({
       projectId: "project-a",
       stage: "validation",
-      label: "VALIDATION",
+      label: "ACTIVE",
     });
     expect(result["company-b"]).toMatchObject({
       projectId: "project-b",
       stage: "publication",
-      label: "PUBLICATION",
+      label: "ACTIVE",
     });
   });
 
@@ -90,7 +90,7 @@ describe("deriveCityProjectOperationStatuses", () => {
     expect(result["company-a"]).toMatchObject({
       projectId: "project-a",
       stage: "implementation",
-      label: "IMPLEMENTATION",
+      label: "ACTIVE",
       tone: "active",
     });
     expect(result["company-b"]).toMatchObject({
@@ -116,7 +116,7 @@ describe("deriveCityProjectOperationStatuses", () => {
     expect(result["company-a"]).toMatchObject({
       projectId: "project-a",
       stage: "preparing",
-      label: "PREPARING",
+      label: "ACTIVE",
       tone: "active",
     });
   });
@@ -162,7 +162,7 @@ describe("deriveCityProjectOperationStatuses", () => {
     });
     expect(result["company-b"]).toMatchObject({
       stage: "complete",
-      label: "COMPLETE",
+      label: "RECENTLY COMPLETED",
       tone: "complete",
     });
   });
@@ -193,7 +193,7 @@ describe("deriveCityProjectOperationStatuses", () => {
       label: "DISCONNECTED",
       tone: "disconnected",
       mutationDisabled: true,
-      reasonText: "Missing Project",
+      reasonText: "MISSING PROJECT",
     });
   });
 
