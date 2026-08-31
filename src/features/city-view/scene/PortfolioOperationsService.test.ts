@@ -34,7 +34,7 @@ describe("derivePortfolioOperations", () => {
               decision: "ChangesRequested",
               blockingFindingCount: 1,
               nonBlockingFindingCount: 0,
-              reasonCodes: ["REVIEWER_RUNTIME_DECISION_UNKNOWN"],
+              reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
               started: true,
               duplicateActiveAttempt: false,
               agentStarted: true,
@@ -64,7 +64,7 @@ describe("derivePortfolioOperations", () => {
       projectId: "project-b",
       attentionState: "needs-attention",
       attentionLabel: "NEEDS ATTENTION",
-      blockedReasonSummary: "REVIEWER RUNTIME DECISION UNKNOWN",
+      blockedReasonSummary: "CHANGES REQUESTED",
     });
     expect(result["company-c"]).toMatchObject({
       projectId: "project-c",
@@ -84,6 +84,104 @@ describe("derivePortfolioOperations", () => {
       attentionState: "disconnected",
       operatorActionAvailable: false,
       blockedReasonSummary: "MISSING PROJECT",
+    });
+  });
+
+  it("keeps approved review results active even when the persisted reason code contains review", () => {
+    const result = derivePortfolioOperations({
+      buildings: createBuildings().slice(0, 1),
+      state: createState({
+        reviewerRuntimeResultCollections: {
+          "project-a": reviewerRuntimeResultCollection({
+            projectId: "project-a",
+            decision: "Approved",
+            reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
+          }),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      workflowStage: "review",
+      attentionState: "active",
+      attentionLabel: "ACTIVE",
+    });
+  });
+
+  it("keeps completed validation results active even when the persisted reason code contains validation", () => {
+    const result = derivePortfolioOperations({
+      buildings: createBuildings().slice(0, 1),
+      state: createState({
+        validationRuntimeResultCollections: {
+          "project-a": validationRuntimeResultCollection({
+            projectId: "project-a",
+            status: "Completed",
+            reasonCodes: ["VALIDATION_RUNTIME_STARTED"],
+          }),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      workflowStage: "validation",
+      attentionState: "active",
+      attentionLabel: "ACTIVE",
+    });
+  });
+
+  it("maps real changes-requested review decisions to needs attention without relying on reason-code text", () => {
+    const result = derivePortfolioOperations({
+      buildings: createBuildings().slice(0, 1),
+      state: createState({
+        reviewerRuntimeResultCollections: {
+          "project-a": reviewerRuntimeResultCollection({
+            projectId: "project-a",
+            decision: "ChangesRequested",
+            reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
+          }),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      workflowStage: "review",
+      attentionState: "needs-attention",
+      attentionLabel: "NEEDS ATTENTION",
+      blockedReasonSummary: "CHANGES REQUESTED",
+    });
+  });
+
+  it("does not let an older negative validation result override a newer approved review fact", () => {
+    const result = derivePortfolioOperations({
+      buildings: createBuildings().slice(0, 1),
+      state: createState({
+        validationRuntimeResultCollections: {
+          "project-a": validationRuntimeResultCollection({
+            projectId: "project-a",
+            status: "Failed",
+            reasonCodes: ["VALIDATION_RUNTIME_COMMAND_FAILED"],
+            resultAt: "2026-08-31T02:00:00.000Z",
+          }),
+        },
+        reviewerRuntimeResultCollections: {
+          "project-a": reviewerRuntimeResultCollection({
+            projectId: "project-a",
+            decision: "Approved",
+            reasonCodes: ["REVIEWER_RUNTIME_STARTED"],
+            resultAt: "2026-08-31T03:00:00.000Z",
+          }),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      workflowStage: "review",
+      attentionState: "active",
+      attentionLabel: "ACTIVE",
     });
   });
 
@@ -309,6 +407,80 @@ function status(overrides: Partial<ExternalProjectAdosRunStatus> & Pick<External
     deployStarted: false,
     rulesVersion: "external-ados-run-status-v1",
     ...rest,
+  };
+}
+
+function reviewerRuntimeResultCollection(input: {
+  projectId: string;
+  decision: "Approved" | "ChangesRequested" | "Unknown";
+  reasonCodes: ProjectPortalState["reviewerRuntimeResultCollections"][string]["results"][number]["reasonCodes"];
+  status?: ProjectPortalState["reviewerRuntimeResultCollections"][string]["results"][number]["status"];
+  resultAt?: string;
+}): ProjectPortalState["reviewerRuntimeResultCollections"][string] {
+  return {
+    projectId: input.projectId,
+    results: [{
+      id: `${input.projectId}:review-result`,
+      projectId: input.projectId,
+      status: input.status ?? "Completed",
+      decision: input.decision,
+      blockingFindingCount: input.decision === "ChangesRequested" ? 1 : 0,
+      nonBlockingFindingCount: 0,
+      reasonCodes: input.reasonCodes,
+      started: true,
+      duplicateActiveAttempt: false,
+      agentStarted: true,
+      implementerStarted: true,
+      reviewerStarted: true,
+      validationStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      resultAt: input.resultAt ?? "2026-08-31T02:00:00.000Z",
+      rulesVersion: "codex-reviewer-v1",
+    }],
+    resultCount: 1,
+    rulesVersion: "codex-reviewer-v1",
+  };
+}
+
+function validationRuntimeResultCollection(input: {
+  projectId: string;
+  status: ProjectPortalState["validationRuntimeResultCollections"][string]["results"][number]["status"];
+  reasonCodes: ProjectPortalState["validationRuntimeResultCollections"][string]["results"][number]["reasonCodes"];
+  resultAt?: string;
+}): ProjectPortalState["validationRuntimeResultCollections"][string] {
+  return {
+    projectId: input.projectId,
+    results: [{
+      id: `${input.projectId}:validation-result`,
+      projectId: input.projectId,
+      status: input.status,
+      reasonCodes: input.reasonCodes,
+      started: true,
+      alreadyCompleted: false,
+      commandCount: 1,
+      completedCommandCount: input.status === "Completed" ? 1 : 0,
+      failedCommandCount: input.status === "Failed" ? 1 : 0,
+      timedOutCommandCount: input.status === "TimedOut" ? 1 : 0,
+      validationRuntimeStarted: true,
+      validationStarted: true,
+      commandExecutionStarted: true,
+      reviewerStarted: false,
+      reviewTargetCreated: false,
+      promotionStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      pushStarted: false,
+      prStarted: false,
+      readyForReviewStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      branchDeletionStarted: false,
+      resultAt: input.resultAt ?? "2026-08-31T02:00:00.000Z",
+      rulesVersion: "validation-runtime-v1",
+    }],
+    resultCount: 1,
+    rulesVersion: "validation-runtime-v1",
   };
 }
 
