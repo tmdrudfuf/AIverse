@@ -10,6 +10,7 @@ export type CreateExternalProjectDevelopmentRequestDraftInput = {
   project: ProjectPortalProject;
   activeProjectCompanyContext?: ActiveProjectCompanyContext;
   requestText?: string;
+  sourceBacklogTaskId?: string;
   existingDraft?: ExternalProjectDevelopmentRequestDraft;
   now?: string;
 };
@@ -32,10 +33,12 @@ export function createExternalProjectDevelopmentRequestDraft(
       ...input.existingDraft,
       status: input.existingDraft.status === "Draft" ? "Draft" : input.existingDraft.status,
       requestText,
+      sourceBacklogTaskId: input.sourceBacklogTaskId ?? input.existingDraft.sourceBacklogTaskId,
       requirementsArtifactContent: createRequirementsArtifactContent({
         project: input.project,
         activeProjectCompanyContext: input.activeProjectCompanyContext,
         requestText,
+        sourceBacklogTaskId: input.sourceBacklogTaskId ?? input.existingDraft.sourceBacklogTaskId,
         timestamp: input.existingDraft.createdAt,
       }),
       branchName: undefined,
@@ -58,6 +61,7 @@ export function createExternalProjectDevelopmentRequestDraft(
     title: createRequestTitle(input.project.name, requestText),
     summary: requestText,
     requestText,
+    sourceBacklogTaskId: input.sourceBacklogTaskId,
     targetProjectIdentity,
     localProjectPath,
     requirementsArtifactPath,
@@ -65,6 +69,7 @@ export function createExternalProjectDevelopmentRequestDraft(
       project: input.project,
       activeProjectCompanyContext: input.activeProjectCompanyContext,
       requestText,
+      sourceBacklogTaskId: input.sourceBacklogTaskId,
       timestamp,
     }),
     repositoryProvider: identity?.provider ?? "unknown",
@@ -104,6 +109,7 @@ function createRequirementsArtifactContent(input: {
   project: ProjectPortalProject;
   activeProjectCompanyContext?: ActiveProjectCompanyContext;
   requestText: string;
+  sourceBacklogTaskId?: string;
   timestamp: string;
 }) {
   const companyName = input.activeProjectCompanyContext?.companyName ?? input.project.ownerCompany ?? input.project.name;
@@ -114,6 +120,7 @@ function createRequirementsArtifactContent(input: {
     `Target project name: ${input.project.name}`,
     `Company context: ${companyName}`,
     `Created at: ${input.timestamp}`,
+    ...(input.sourceBacklogTaskId ? [`Source backlog task id: ${input.sourceBacklogTaskId}`] : []),
     "",
     "## Authoritative Requirements",
     "",

@@ -18,6 +18,7 @@ export type ExternalProjectDevelopmentRequestDraft = {
   title: string;
   summary: string;
   requestText?: string;
+  sourceBacklogTaskId?: string;
   targetProjectIdentity?: string;
   localProjectPath?: string;
   requirementsArtifactPath?: string;

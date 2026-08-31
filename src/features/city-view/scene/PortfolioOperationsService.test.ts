@@ -247,6 +247,10 @@ describe("derivePortfolioOperations", () => {
           tasks: [
             backlogTask("project-a", "a-ready", "A ready", "ready"),
             backlogTask("project-a", "a-blocked", "A blocked", "blocked"),
+            {
+              ...backlogTask("project-a", "a-dev", "A in development", "in_progress"),
+              executionRunId: "run-a",
+            },
           ],
         },
         "project-b": {
@@ -263,8 +267,9 @@ describe("derivePortfolioOperations", () => {
 
     expect(result["company-a"].backlogSummary).toMatchObject({
       projectId: "project-a",
-      totalTaskCount: 2,
+      totalTaskCount: 3,
       readyTaskCount: 1,
+      inDevelopmentTaskCount: 1,
       blockedTaskCount: 1,
       indicatorText: "1 Blocked task",
     });
@@ -525,7 +530,7 @@ function backlogTask(
   projectId: string,
   id: string,
   title: string,
-  status: "backlog" | "ready" | "blocked",
+  status: "backlog" | "ready" | "blocked" | "in_progress",
 ) {
   return {
     id,

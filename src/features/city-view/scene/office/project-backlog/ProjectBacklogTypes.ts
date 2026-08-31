@@ -18,8 +18,11 @@ export type ProjectBacklogTask = {
   createdAt: string;
   updatedAt: string;
   blockedReason?: string;
+  sourceBacklogTaskId?: string;
   developmentRequestId?: string;
+  executionPreparationId?: string;
   executionRunId?: string;
+  executionAcceptedAt?: string;
 };
 
 export type ProjectBacklogCollection = {
@@ -33,13 +36,15 @@ export type ProjectBacklogSummary = {
   projectId: string;
   totalTaskCount: number;
   readyTaskCount: number;
+  inDevelopmentTaskCount: number;
+  executionBlockedTaskCount: number;
   blockedTaskCount: number;
   completedTaskCount: number;
   indicatorText: string;
   hasPlanningBlockedTasks: boolean;
+  hasExecutionBlockedTasks: boolean;
 };
 
 export type ProjectBacklogMutationResult =
   | { ok: true; collection: ProjectBacklogCollection; task: ProjectBacklogTask }
   | { ok: false; reason: "MissingProject" | "UnavailableProject" | "TaskNotFound" | "ProjectMismatch" | "InvalidInput" };
-

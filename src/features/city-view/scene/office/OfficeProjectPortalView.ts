@@ -86,6 +86,7 @@ import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPo
 import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPortalRegistry";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
+import { canCreateExternalProjectDevelopmentRequestDraft } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
 import { createRepositorySyncDisplayRows } from "./repository-sync/RepositorySyncView";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
@@ -809,8 +810,22 @@ export class OfficeProjectPortalView {
     const collection = projectId
       ? new ProjectBacklogService().getOrderedCollection(state.projectBacklogCollections, projectId)
       : undefined;
-    const selectedTask = collection?.tasks[state.selectedBacklogTaskIndex];
+    const selectedTaskId = state.selectedBacklogTaskId;
+    const selectedTask = selectedTaskId
+      ? collection?.tasks.find((task) => task.id === selectedTaskId)
+      : collection?.tasks[state.selectedBacklogTaskIndex];
     const canMutate = Boolean(project && project.enabled);
+    const runStatus = projectId ? state.externalProjectAdosRunStatuses[projectId] : undefined;
+    const canStartDevelopment = Boolean(
+      project &&
+      selectedTask &&
+      selectedTask.projectId === project.id &&
+      selectedTask.status === "ready" &&
+      selectedTask.title.trim() &&
+      selectedTask.description.trim() &&
+      !selectedTask.developmentRequestId &&
+      canCreateExternalProjectDevelopmentRequestDraft(project),
+    );
     const title = project ? `${project.name} Planning` : "Project Planning";
 
     this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(title, 46), titleStyle());
@@ -846,21 +861,36 @@ export class OfficeProjectPortalView {
       });
     }
 
-    this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 230);
-    this.addText(this.panelX + 368, this.panelY + 138, "Create / Edit", headingStyle());
-    this.addText(this.panelX + 376, this.panelY + 172, "Title and description fields appear below.", mutedStyle());
-    this.addText(this.panelX + 376, this.panelY + 198, "Priority and status stay operator-controlled.", mutedStyle());
-    this.addText(this.panelX + 376, this.panelY + 224, "Ready only means eligible for future development.", mutedStyle());
-    this.addText(this.panelX + 376, this.panelY + 250, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
+    this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 258);
+    this.addText(this.panelX + 368, this.panelY + 138, "Task Development", headingStyle());
+    this.addText(this.panelX + 376, this.panelY + 168, compactTextLine(`Target: ${project?.name ?? "Unavailable project"}`, 32), mutedStyle());
+    this.addText(this.panelX + 376, this.panelY + 194, compactTextLine(`Project id: ${projectId ?? "Unavailable"}`, 32), mutedStyle());
     if (selectedTask) {
-      this.addText(this.panelX + 376, this.panelY + 288, compactTextLine(`Selected: ${selectedTask.title}`, 32), bodyStyle());
-      this.addText(this.panelX + 376, this.panelY + 314, wrapAndClampText(selectedTask.description, 32, 2), projectMutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 224, compactTextLine(`Selected: ${selectedTask.title}`, 32), bodyStyle());
+      this.addText(this.panelX + 376, this.panelY + 250, wrapAndClampText(selectedTask.description, 32, 2), projectMutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 302, compactTextLine(`Priority: ${selectedTask.priority}  Planning: ${selectedTask.status}`, 32), mutedStyle());
+      const executionText = selectedTask.executionRunId
+        ? `Execution: ${runStatus?.stage ?? "Associated"}`
+        : runStatus
+          ? `Active project run: ${runStatus.stage}`
+          : "Execution: Not started";
+      this.addText(this.panelX + 376, this.panelY + 328, compactTextLine(executionText, 32), mutedStyle());
+      const requestText = selectedTask.developmentRequestId
+        ? `Request: ${selectedTask.developmentRequestId}`
+        : canStartDevelopment
+          ? "Start Development"
+          : getBacklogDevelopmentDisabledText(selectedTask, project);
+      this.addText(this.panelX + 376, this.panelY + 354, compactTextLine(requestText, 32), canStartDevelopment ? projectStatusStyle() : mutedStyle());
+    } else {
+      this.addText(this.panelX + 376, this.panelY + 224, "No task selected", mutedStyle());
     }
+    this.addText(this.panelX + 376, this.panelY + 384, "Ready only means eligible for future development.", mutedStyle());
+    this.addText(this.panelX + 376, this.panelY + 410, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
 
     this.addText(
       this.panelX + this.panelWidth - 28,
       this.panelY + this.panelHeight - 34,
-      "Esc back  Up/Down select  Form buttons create/update",
+      "Esc back  Up/Down select  Enter/Space Start Development",
       instructionStyle(),
     ).setOrigin(1, 0.5);
   }
@@ -1826,6 +1856,17 @@ function compactRuntimeStartText(text: string) {
     .replace("Execution Not Started", "Not started")
     .replace("Agents Not Started", "Agents not started")
     .replace("Awaiting Implementer Start", "Awaiting implementer");
+}
+
+function getBacklogDevelopmentDisabledText(
+  task: { status: string; title: string; description: string; developmentRequestId?: string },
+  project: ProjectPortalState["projects"][number] | undefined,
+) {
+  if (!project || !canCreateExternalProjectDevelopmentRequestDraft(project)) return "Start disabled: project unavailable";
+  if (task.developmentRequestId) return "Development already associated";
+  if (task.status !== "ready") return "Start disabled: task is not Ready";
+  if (!task.title.trim() || !task.description.trim()) return "Start disabled: task content missing";
+  return "Start disabled";
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

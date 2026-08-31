@@ -147,7 +147,8 @@ import {
 } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
-import type { ProjectBacklogPlanningStatus, ProjectBacklogPriority } from "./project-backlog/ProjectBacklogTypes";
+import { ProjectBacklogDevelopmentBridgeService } from "./project-backlog/ProjectBacklogDevelopmentBridgeService";
+import type { ProjectBacklogPlanningStatus, ProjectBacklogPriority, ProjectBacklogTask } from "./project-backlog/ProjectBacklogTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
@@ -361,6 +362,7 @@ export class OfficeProjectPortalController {
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
   private readonly projectBacklogService: ProjectBacklogService;
+  private readonly projectBacklogDevelopmentBridgeService: ProjectBacklogDevelopmentBridgeService;
   private externalProjectAdosExecutionService: ExternalProjectAdosExecutionService;
   private activeExternalProjectAdosExecutionKeys?: Set<string> = new Set<string>();
   private readonly activeValidationRuntimeKeys = new Set<string>();
@@ -443,6 +445,7 @@ export class OfficeProjectPortalController {
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
     this.projectBacklogService = new ProjectBacklogService();
+    this.projectBacklogDevelopmentBridgeService = new ProjectBacklogDevelopmentBridgeService();
     this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(new ClaudeImplementerRuntimeProvider());
     this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
@@ -572,6 +575,7 @@ export class OfficeProjectPortalController {
       ? this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId)
       : undefined;
     const selectedTask = this.getSelectedBacklogTask();
+    const preview = this.getSelectedBacklogDevelopmentPreview();
     return {
       viewMode: this.state.isOpen ? this.state.viewMode : "",
       projectId: projectId ?? "",
@@ -582,6 +586,13 @@ export class OfficeProjectPortalController {
       selectedTaskStatus: selectedTask?.status ?? "",
       selectedTaskPriority: selectedTask?.priority ?? "",
       selectedTaskBlockedReason: selectedTask?.blockedReason ?? "",
+      developmentEligible: preview?.eligible ?? false,
+      developmentEligibilityReason: preview?.reason ?? "",
+      associatedDevelopmentRequestId: preview?.associatedDevelopmentRequestId ?? "",
+      associatedPreparationId: preview?.associatedPreparationId ?? "",
+      associatedExecutionRunId: preview?.associatedExecutionRunId ?? "",
+      executionStage: preview?.executionStage ?? "",
+      hasActiveProjectRun: preview?.hasActiveProjectRun ?? false,
     };
   }
 
@@ -635,6 +646,110 @@ export class OfficeProjectPortalController {
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
     return true;
+  }
+
+  async startSelectedBacklogTaskDevelopment() {
+    const project = this.getSelectedBacklogProject();
+    const task = this.getSelectedBacklogTask();
+    const context = this.getBacklogMutationContext();
+    if (!project || !task || !context) return false;
+
+    const bridgeOutcome = this.projectBacklogDevelopmentBridgeService.createRequestAndPreparation({
+      project,
+      task,
+      activeProjectCompanyContext: this.state.activeProjectCompanyContext,
+      existingDraft: this.getAssociatedDevelopmentRequestDraft(task),
+      existingPreparation: this.getAssociatedAdosRunPreparation(task),
+      existingExecution: this.getAssociatedAdosExecution(task),
+      existingRunStatus: this.state.externalProjectAdosRunStatuses[project.id],
+    });
+    if (!bridgeOutcome.ok) return false;
+
+    this.state.externalProjectDevelopmentRequestDrafts = {
+      ...this.state.externalProjectDevelopmentRequestDrafts,
+      [project.id]: bridgeOutcome.draft,
+    };
+    this.state.externalProjectAdosRunPreparations = {
+      ...this.state.externalProjectAdosRunPreparations,
+      [project.id]: bridgeOutcome.preparation,
+    };
+    this.state.externalProjectAdosRunStatuses = {
+      ...this.state.externalProjectAdosRunStatuses,
+      [project.id]: deriveExternalProjectAdosRunStatus({
+        projectId: project.id,
+        preparation: bridgeOutcome.preparation,
+        persistedStatus: this.state.externalProjectAdosRunStatuses[project.id],
+      })!,
+    };
+    this.projectBacklogService.updateTask(this.state.projectBacklogCollections, context, task.id, bridgeOutcome.taskPatch);
+    this.syncBacklogSelectionToTaskId(task.id);
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+
+    const associatedExecution = this.getAssociatedAdosExecution(this.getSelectedBacklogTask() ?? task);
+    if (associatedExecution) return true;
+
+    const activeExecutionKeys = this.getActiveExternalProjectAdosExecutionKeys();
+    const executionKey = `${project.id}:${task.id}`;
+    if (activeExecutionKeys.has(executionKey)) return true;
+    activeExecutionKeys.add(executionKey);
+
+    try {
+      const outcome = await this.externalProjectAdosExecutionService.start({
+        projectId: project.id,
+        project,
+        preparation: bridgeOutcome.preparation,
+        existingExecution: this.getAssociatedAdosExecution(task),
+      });
+      if (outcome.execution) {
+        this.state.externalProjectAdosExecutions = {
+          ...this.state.externalProjectAdosExecutions,
+          [project.id]: outcome.execution,
+        };
+      }
+      this.state.externalProjectAdosExecutionResults = {
+        ...this.state.externalProjectAdosExecutionResults,
+        [project.id]: outcome.result,
+      };
+      this.state.externalProjectAdosRunStatuses = {
+        ...this.state.externalProjectAdosRunStatuses,
+        [project.id]: deriveExternalProjectAdosRunStatus({
+          projectId: project.id,
+          preparation: bridgeOutcome.preparation,
+          execution: outcome.execution ?? this.state.externalProjectAdosExecutions[project.id],
+          result: outcome.result,
+          persistedStatus: this.state.externalProjectAdosRunStatuses[project.id],
+        })!,
+      };
+      this.updateBacklogTaskAfterExecutionOutcome(context, task, outcome.result.resultAt, outcome.execution?.id, outcome.result.started || outcome.result.duplicateExistingExecution);
+      const draft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
+      if (draft) {
+        this.state.externalProjectDevelopmentRequestDrafts = {
+          ...this.state.externalProjectDevelopmentRequestDrafts,
+          [project.id]: {
+            ...draft,
+            status: outcome.result.duplicateExistingExecution
+              ? "AlreadyActive"
+              : outcome.result.started
+                ? "Started"
+                : outcome.result.status === "Blocked"
+                  ? "Blocked"
+                  : outcome.result.status === "Failed"
+                    ? "Failed"
+                    : draft.status,
+            adosRunId: outcome.execution?.id ?? draft.adosRunId,
+            updatedAt: outcome.result.resultAt,
+          },
+        };
+      }
+      this.persistBrowserOfficeSession();
+      this.refreshCompanyDashboardSnapshot();
+      this.view.render(this.state);
+      return outcome.result.started || outcome.result.duplicateExistingExecution;
+    } finally {
+      this.getActiveExternalProjectAdosExecutionKeys().delete(executionKey);
+    }
   }
 
   async initializeEmployeeSimulationSnapshots() {
@@ -1492,7 +1607,9 @@ export class OfficeProjectPortalController {
           description,
           priority: input.backlogTaskPriority,
         });
+        return;
       }
+      void this.startSelectedBacklogTaskDevelopment();
     }
   }
 
@@ -4137,6 +4254,57 @@ export class OfficeProjectPortalController {
       selectedProjectId: this.state.selectedProjectDashboardProjectId ?? this.state.selectedProjectId,
       projects: this.state.projects,
     });
+  }
+
+  private getSelectedBacklogDevelopmentPreview() {
+    const project = this.getSelectedBacklogProject();
+    if (!project) return undefined;
+    const task = this.getSelectedBacklogTask();
+    return this.projectBacklogDevelopmentBridgeService.createPreview({
+      project,
+      task,
+      activeProjectCompanyContext: this.state.activeProjectCompanyContext,
+      existingDraft: task ? this.getAssociatedDevelopmentRequestDraft(task) : undefined,
+      existingPreparation: task ? this.getAssociatedAdosRunPreparation(task) : undefined,
+      existingExecution: task ? this.getAssociatedAdosExecution(task) : undefined,
+      existingRunStatus: this.state.externalProjectAdosRunStatuses[project.id],
+    });
+  }
+
+  private getSelectedBacklogProject() {
+    const projectId = this.state.selectedBacklogProjectId;
+    return projectId ? this.state.projects.find((project) => project.id === projectId) : undefined;
+  }
+
+  private getAssociatedDevelopmentRequestDraft(task: ProjectBacklogTask) {
+    const draft = this.state.externalProjectDevelopmentRequestDrafts[task.projectId];
+    return draft && draft.id === task.developmentRequestId ? draft : undefined;
+  }
+
+  private getAssociatedAdosRunPreparation(task: ProjectBacklogTask) {
+    const preparation = this.state.externalProjectAdosRunPreparations[task.projectId];
+    return preparation && preparation.id === task.executionPreparationId ? preparation : undefined;
+  }
+
+  private getAssociatedAdosExecution(task: ProjectBacklogTask) {
+    const execution = this.state.externalProjectAdosExecutions[task.projectId];
+    return execution && execution.id === task.executionRunId ? execution : undefined;
+  }
+
+  private updateBacklogTaskAfterExecutionOutcome(
+    context: NonNullable<ReturnType<OfficeProjectPortalController["getBacklogMutationContext"]>>,
+    task: ProjectBacklogTask,
+    resultAt: string,
+    executionRunId: string | undefined,
+    accepted: boolean,
+  ) {
+    if (!accepted) return;
+    this.projectBacklogService.updateTask(this.state.projectBacklogCollections, context, task.id, {
+      status: "in_progress",
+      executionRunId: executionRunId ?? task.executionRunId,
+      executionAcceptedAt: resultAt,
+    });
+    this.syncBacklogSelectionToTaskId(task.id);
   }
 
   private moveWorkspaceSelection(delta: number) {
