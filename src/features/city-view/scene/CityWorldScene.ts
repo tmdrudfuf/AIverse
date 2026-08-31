@@ -13,7 +13,7 @@ import { FOUNDER_INITIAL_POSITION, FOUNDER_SPAWN_SEARCH_RADIUS_TILES } from "./c
 import { INITIAL_ZOOM } from "./config/navigationConfig";
 import { FounderEntity } from "./founder/FounderEntity";
 import { FounderMovementController } from "./founder/FounderMovementController";
-import { createCityBuildingLayer } from "./layers/CityBuildingLayer";
+import { createCityBuildingLayer, type CityBuildingLayerHandle } from "./layers/CityBuildingLayer";
 import { createCityDecorationLayer } from "./layers/CityDecorationLayer";
 import { CameraController } from "./navigation/CameraController";
 import { NavigationInputController } from "./navigation/NavigationInputController";
@@ -21,8 +21,12 @@ import { NavigationMovementResolver } from "./navigation/NavigationMovementResol
 import { createNavigationState } from "./navigation/NavigationState";
 import type { NavigationState } from "./navigation/navigationTypes";
 import type { CityReturnPayload } from "./office/officeTypes";
+import {
+  portfolioSummaryMatchesFilter,
+  type PortfolioFilter,
+} from "./PortfolioOperationsService";
 import type { Point } from "./shared/geometry";
-import type { PhaserRuntime } from "./shared/phaserTypes";
+import type { PhaserGraphics, PhaserRuntime } from "./shared/phaserTypes";
 import { CityCollisionMap } from "./tilemap/CityCollisionMap";
 import { createCityTilemapLayer, loadCityTilemapAssets } from "./tilemap/CityTilemapLayer";
 import { ProgressionEventFeedPanel } from "./world-state/ProgressionEventFeedPanel";
@@ -45,7 +49,18 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
     private progressionEventFeedPanel?: ProgressionEventFeedPanel;
     private progressionRewardPresentationPanel?: ProgressionRewardPresentationPanel;
     private cityProjectOperationStatuses?: CityProjectOperationStatusMap;
+    private cityBuildingGraphics?: PhaserGraphics;
+    private cityBuildingLayer?: CityBuildingLayerHandle;
+    private portfolioFilter: PortfolioFilter = "all";
+    private portfolioFilterPrompt?: Phaser.GameObjects.Text;
     private returnPayload?: CityReturnPayload;
+    private readonly handlePortfolioFilterKeyDown = (event: KeyboardEvent) => {
+      const nextFilter = getPortfolioFilterFromKeyboardCode(event.code);
+      if (!nextFilter) return;
+
+      event.preventDefault();
+      this.setPortfolioFilter(nextFilter);
+    };
 
     constructor() {
       super({ key: CITY_WORLD_SCENE_KEY });
@@ -80,9 +95,9 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       validateBuildingInteractionZones(CITY_BUILDINGS, cityCollisionMap);
       this.cityProjectOperationStatuses = createCityProjectOperationStatusesFromBrowserSession(CITY_BUILDINGS);
 
-      const graphics = this.add.graphics();
-      createCityBuildingLayer(this, graphics, this.cityProjectOperationStatuses);
-      createCityDecorationLayer(this, graphics);
+      this.cityBuildingGraphics = this.add.graphics();
+      this.renderCityBuildingLayer();
+      createCityDecorationLayer(this, this.add.graphics());
 
       const founderSpawn = resolveFounderSpawn(cityCollisionMap, this.returnPayload);
       this.founderEntity = new FounderEntity(this, founderSpawn);
@@ -96,10 +111,13 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingTransitionController = new BuildingTransitionController();
       this.progressionEventFeedPanel = new ProgressionEventFeedPanel(this);
       this.progressionRewardPresentationPanel = new ProgressionRewardPresentationPanel(this);
+      this.createPortfolioFilterPrompt();
+      window.addEventListener("keydown", this.handlePortfolioFilterKeyDown);
 
       this.cameraController.focusWorldPoint(this.founderEntity.position, { targetId: this.founderEntity.state.id });
       this.cameraController.update(0, this.navigationState.currentIntent);
       this.synchronizeWorldState();
+      this.updateCityCanvasPortfolioProbeAttributes();
     }
 
     update(_: number, delta: number) {
@@ -110,6 +128,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionController?.update(this.founderEntity.position);
       const activeBuilding = this.buildingInteractionController?.getActiveBuilding();
       this.buildingInteractionPrompt?.update(activeBuilding, activeBuilding ? this.cityProjectOperationStatuses?.[activeBuilding.id] : undefined);
+      this.updateCityCanvasPortfolioProbeAttributes(activeBuilding);
       const clickedBuilding = this.buildingInteractionController?.consumeClickedBuilding();
       if (clickedBuilding) {
         const entryRequest = this.buildingTransitionController?.createEntryRequest(
@@ -120,6 +139,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         );
 
         if (entryRequest) {
+          this.updateCityCanvasPortfolioProbeAttributes(clickedBuilding, entryRequest.projectId);
           this.scene.start(entryRequest.officeSceneKey, entryRequest);
           return;
         }
@@ -134,6 +154,7 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
         );
 
         if (entryRequest) {
+          this.updateCityCanvasPortfolioProbeAttributes(activeBuilding, entryRequest.projectId);
           this.scene.start(entryRequest.officeSceneKey, entryRequest);
           return;
         }
@@ -161,15 +182,80 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       });
       this.progressionEventFeedPanel?.update(result?.snapshot);
       this.progressionRewardPresentationPanel?.update(result?.snapshot);
+      this.updateCityCanvasPortfolioProbeAttributes(this.buildingInteractionController?.getActiveBuilding());
+    }
+
+    private renderCityBuildingLayer() {
+      if (!this.cityBuildingGraphics || !this.cityProjectOperationStatuses) return;
+
+      this.cityBuildingLayer?.destroy();
+      this.cityBuildingLayer = createCityBuildingLayer(this, this.cityBuildingGraphics, this.cityProjectOperationStatuses, {
+        portfolioFilter: this.portfolioFilter,
+      });
+    }
+
+    private createPortfolioFilterPrompt() {
+      this.portfolioFilterPrompt = this.add
+        .text(24, 670, "", {
+          fontFamily: "monospace",
+          fontSize: "11px",
+          color: "#ffffff",
+          backgroundColor: "rgba(37, 50, 71, 0.88)",
+          padding: { x: 8, y: 5 },
+        })
+        .setScrollFactor(0)
+        .setDepth(2000)
+        .setInteractive({ useHandCursor: true });
+      this.portfolioFilterPrompt.on("pointerup", () => this.setPortfolioFilter(getNextPortfolioFilter(this.portfolioFilter)));
+      this.updatePortfolioFilterPrompt();
+    }
+
+    private updatePortfolioFilterPrompt() {
+      this.portfolioFilterPrompt?.setText(`Filter ${getPortfolioFilterLabel(this.portfolioFilter)}  1 All 2 Active 3 Attention 4 Idle 5 Done 6 Offline`);
+    }
+
+    private setPortfolioFilter(filter: PortfolioFilter) {
+      if (this.portfolioFilter === filter) return;
+
+      this.portfolioFilter = filter;
+      this.renderCityBuildingLayer();
+      this.updatePortfolioFilterPrompt();
+      this.updateCityCanvasPortfolioProbeAttributes(this.buildingInteractionController?.getActiveBuilding());
+    }
+
+    private updateCityCanvasPortfolioProbeAttributes(activeBuilding?: CityBuildingDefinition, lastEntryProjectId?: string) {
+      if (typeof document === "undefined") return;
+      const host = this.game?.canvas?.parentElement;
+      if (!(host instanceof HTMLElement) || !this.cityProjectOperationStatuses) return;
+
+      const statuses = Object.values(this.cityProjectOperationStatuses);
+      host.setAttribute("data-aiverse-active-scene", "city");
+      host.setAttribute("data-aiverse-city-canvas-portfolio-filter", this.portfolioFilter);
+      host.setAttribute("data-aiverse-city-canvas-portfolio-labels", formatPortfolioLabels(statuses));
+      host.setAttribute(
+        "data-aiverse-city-canvas-filtered-portfolio-labels",
+        formatPortfolioLabels(statuses.filter((status) => portfolioSummaryMatchesFilter(status.portfolioSummary, this.portfolioFilter))),
+      );
+      if (activeBuilding) {
+        const status = this.cityProjectOperationStatuses[activeBuilding.id];
+        host.setAttribute("data-aiverse-city-canvas-active-building-id", activeBuilding.id);
+        host.setAttribute("data-aiverse-city-canvas-active-project-id", status?.projectId ?? activeBuilding.projectBinding?.projectId ?? "");
+        host.setAttribute("data-aiverse-city-canvas-active-portfolio-label", status?.label ?? "");
+      }
+      if (lastEntryProjectId) host.setAttribute("data-aiverse-city-canvas-last-entry-project-id", lastEntryProjectId);
     }
 
     private destroyNavigationControllers() {
+      window.removeEventListener("keydown", this.handlePortfolioFilterKeyDown);
       this.navigationInputController?.destroy();
       this.cameraController?.destroy();
       this.founderEntity?.destroy();
       this.buildingInteractionController?.destroy(this);
       this.buildingInteractionPrompt?.destroy();
       this.buildingTransitionController?.destroy();
+      this.cityBuildingLayer?.destroy();
+      this.cityBuildingGraphics?.destroy();
+      this.portfolioFilterPrompt?.destroy();
       this.progressionEventFeedPanel?.destroy();
       this.progressionRewardPresentationPanel?.destroy();
       this.worldStateSynchronizer = undefined;
@@ -181,6 +267,9 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.buildingInteractionController = undefined;
       this.buildingInteractionPrompt = undefined;
       this.buildingTransitionController = undefined;
+      this.cityBuildingLayer = undefined;
+      this.cityBuildingGraphics = undefined;
+      this.portfolioFilterPrompt = undefined;
       this.progressionEventFeedPanel = undefined;
       this.progressionRewardPresentationPanel = undefined;
       this.cityProjectOperationStatuses = undefined;
@@ -188,6 +277,38 @@ export function createCityWorldScene(PhaserRuntime: PhaserRuntime) {
       this.navigationState = undefined;
     }
   };
+}
+
+const PORTFOLIO_FILTER_SEQUENCE: PortfolioFilter[] = ["all", "active", "attention", "idle", "completed", "disconnected"];
+
+function getPortfolioFilterFromKeyboardCode(code: string): PortfolioFilter | undefined {
+  if (code === "Digit1" || code === "Numpad1") return "all";
+  if (code === "Digit2" || code === "Numpad2") return "active";
+  if (code === "Digit3" || code === "Numpad3") return "attention";
+  if (code === "Digit4" || code === "Numpad4") return "idle";
+  if (code === "Digit5" || code === "Numpad5") return "completed";
+  if (code === "Digit6" || code === "Numpad6") return "disconnected";
+  return undefined;
+}
+
+function getNextPortfolioFilter(current: PortfolioFilter): PortfolioFilter {
+  const currentIndex = PORTFOLIO_FILTER_SEQUENCE.indexOf(current);
+  return PORTFOLIO_FILTER_SEQUENCE[(currentIndex + 1) % PORTFOLIO_FILTER_SEQUENCE.length] ?? "all";
+}
+
+function getPortfolioFilterLabel(filter: PortfolioFilter) {
+  if (filter === "all") return "ALL";
+  if (filter === "active") return "ACTIVE";
+  if (filter === "attention") return "ATTENTION";
+  if (filter === "idle") return "IDLE";
+  if (filter === "completed") return "DONE";
+  return "OFFLINE";
+}
+
+function formatPortfolioLabels(statuses: ReadonlyArray<CityProjectOperationStatusMap[string]>) {
+  return statuses
+    .map((status) => `${status.projectId ?? "unknown"}:${status.label}`)
+    .join("|");
 }
 
 function resolveFounderSpawn(collisionMap: CityCollisionMap, returnPayload?: CityReturnPayload): Point {

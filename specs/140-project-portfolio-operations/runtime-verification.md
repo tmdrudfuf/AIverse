@@ -25,3 +25,6 @@ The fixture must use safe persisted/session state. It must not start autonomous 
 
 - `runtime-portfolio-city.png` was captured by `e2e/portfolio-operations-city.spec.ts`.
 - The seeded runtime showed `daily-proof:ACTIVE`, `ai-lab:NEEDS ATTENTION`, and `portfolio:RECENTLY COMPLETED` at the city canvas probe while rendering the city canvas.
+- The same runtime scenario applies the operator Attention filter and verifies the filtered city subset is `ai-lab:NEEDS ATTENTION` without mutating the persisted session.
+- The scenario enters Daily Proof, returns to the city, enters AI Lab, returns again, and re-enters Daily Proof while asserting the office project id and live-work stage remain scoped to the selected company.
+- Final persistence checks verify company bindings, development request drafts, and ADOS run statuses remain independently keyed after the city-to-office flow.

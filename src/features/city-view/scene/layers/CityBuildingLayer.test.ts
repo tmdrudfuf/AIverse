@@ -84,6 +84,42 @@ describe("createCityBuildingLayer", () => {
   it("keeps the current city company set available for status rendering", () => {
     expect(CITY_BUILDINGS).toHaveLength(3);
   });
+
+  it("dims buildings outside the active portfolio filter without removing them", () => {
+    const alphas: number[] = [];
+    const textCalls: string[] = [];
+    const scene = {
+      add: {
+        text: (_x: number, _y: number, text: string) => {
+          textCalls.push(text);
+          return {
+            setOrigin: () => ({
+              setAlpha: (alpha: number) => {
+                alphas.push(alpha);
+              },
+            }),
+          };
+        },
+      },
+    };
+    const graphics = {
+      fillStyle: () => graphics,
+      fillRect: () => graphics,
+      lineStyle: () => graphics,
+      strokeRect: () => graphics,
+    };
+    const statuses: CityProjectOperationStatusMap = {
+      "daily-proof-inc": status("daily-proof-inc", "daily-proof", "implementation", "ACTIVE", "active"),
+      "ai-lab": status("ai-lab", "ai-lab", "blocked", "BLOCKED", "warning"),
+      "portfolio-studio": status("portfolio-studio", "portfolio", "idle", "IDLE", "idle"),
+    };
+
+    createCityBuildingLayer(scene as never, graphics as never, statuses, { portfolioFilter: "attention" });
+
+    expect(textCalls).toEqual(expect.arrayContaining(["DAILY PROOF INC.", "AI LAB", "PORTFOLIO STUDIO"]));
+    expect(alphas).toContain(0.32);
+    expect(alphas).toContain(1);
+  });
 });
 
 function status(

@@ -139,6 +139,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.cameraController.update(0, this.navigationState.currentIntent);
       this.refreshOfficeProgressionVisualState();
       this.refreshLiveAgentWorkVisualization();
+      this.updateOfficeProbeAttributes();
     }
 
     update(_: number, delta: number) {
@@ -195,6 +196,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         this.refreshEmployeeInsightOverlay({ isBlockingOverlayOpen: true });
         this.employeeConversationBubbleOverlay?.hide();
         this.refreshOfficeProgressionVisualState();
+        this.updateOfficeProbeAttributes();
         return;
       }
       this.hideDevelopmentRequestTextArea();
@@ -250,6 +252,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.refreshEmployeeInsightOverlay();
       this.employeeConversationBubbleOverlay?.update(this.time.now);
       this.refreshOfficeProgressionVisualState();
+      this.updateOfficeProbeAttributes();
     }
 
     private refreshOfficeProgressionVisualState() {
@@ -305,6 +308,24 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private refreshLiveAgentWorkVisualization() {
       const workState = this.officeProjectPortalController?.getLiveAgentWorkState();
       this.officeVisualLayer?.updateLiveAgentWorkState(workState);
+    }
+
+    private updateOfficeProbeAttributes() {
+      if (typeof document === "undefined") return;
+      const host = this.game?.canvas?.parentElement;
+      if (!(host instanceof HTMLElement)) return;
+
+      const workState = this.officeProjectPortalController?.getLiveAgentWorkState();
+      host.setAttribute("data-aiverse-active-scene", "office");
+      host.setAttribute("data-aiverse-office-project-id", workState?.projectId ?? this.spawnRequest?.projectId ?? "");
+      host.setAttribute("data-aiverse-office-work-stage", workState?.stage ?? "unknown");
+      host.setAttribute("data-aiverse-office-work-lifecycle", workState?.lifecycle ?? "unknown");
+      host.setAttribute("data-aiverse-office-company-name", this.spawnRequest?.companyName ?? "");
+      host.setAttribute(
+        "data-aiverse-office-founder-position",
+        this.founderEntity ? `${Math.round(this.founderEntity.position.x)},${Math.round(this.founderEntity.position.y)}` : "",
+      );
+      host.setAttribute("data-aiverse-office-exit-active", String(this.officeExitController?.isExitActive() ?? false));
     }
 
     private refreshEmployeeInsightOverlay(options: { isBlockingOverlayOpen?: boolean } = {}) {
