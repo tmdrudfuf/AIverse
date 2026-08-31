@@ -85,6 +85,7 @@ import { createIssueSyncDisplayRows, type IssueSyncDisplayRows } from "./issue-s
 import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPortalTypes";
 import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPortalRegistry";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
+import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
 import { createRepositorySyncDisplayRows } from "./repository-sync/RepositorySyncView";
 import type { ProjectTask } from "./tasks/ProjectTaskTypes";
@@ -157,6 +158,11 @@ export class OfficeProjectPortalView {
 
     if (state.viewMode === "task-detail") {
       this.renderTaskDetail(state);
+      return;
+    }
+
+    if (state.viewMode === "project-backlog") {
+      this.renderProjectBacklog(state);
       return;
     }
 
@@ -616,6 +622,9 @@ export class OfficeProjectPortalView {
       })
       : undefined;
     const adosRunStatusRows = createExternalProjectAdosRunStatusDisplayRows(adosRunStatus);
+    const backlogSummary = dashboardProjectId
+      ? new ProjectBacklogService().createSummary(state.projectBacklogCollections[dashboardProjectId], dashboardProjectId)
+      : undefined;
 
     const maxLowerPanelHeight = this.panelHeight - PROJECT_DASHBOARD_LOWER_PANEL_Y - PORTAL_FOOTER_SAFE_GAP;
     const preparedLowerRows = prepareProjectDashboardLowerRows(
@@ -638,6 +647,7 @@ export class OfficeProjectPortalView {
         reviewFixRuntimeRows,
         validationRuntimeRows,
         postValidationReviewTargetRows,
+        backlogSummary && backlogSummary.totalTaskCount > 0 ? backlogSummary.indicatorText : undefined,
         developmentRequestRows,
         adosRunStatusRows,
         adosRunPreparationRows,
@@ -791,6 +801,68 @@ export class OfficeProjectPortalView {
 
     this.addText(this.panelX + 28, this.panelY + 354, compactTextLine("Repository and Tasks use local mock data. Other sections are placeholders.", 82), mutedStyle());
     this.addText(this.panelX + this.panelWidth - 28, this.panelY + this.panelHeight - 34, "Esc back  Up/Down select  Enter/Space open", instructionStyle()).setOrigin(1, 0.5);
+  }
+
+  private renderProjectBacklog(state: ProjectPortalState) {
+    const projectId = state.selectedBacklogProjectId ?? state.projects[state.selectedProjectIndex]?.id;
+    const project = state.projects.find((item) => item.id === projectId);
+    const collection = projectId
+      ? new ProjectBacklogService().getOrderedCollection(state.projectBacklogCollections, projectId)
+      : undefined;
+    const selectedTask = collection?.tasks[state.selectedBacklogTaskIndex];
+    const canMutate = Boolean(project && project.enabled);
+    const title = project ? `${project.name} Planning` : "Project Planning";
+
+    this.addText(this.panelX + 28, this.panelY + 24, compactTextLine(title, 46), titleStyle());
+    this.addText(
+      this.panelX + 28,
+      this.panelY + 62,
+      compactTextLine(`Backlog belongs to: ${project?.name ?? "Unavailable project"}`, 76),
+      headingStyle(),
+    );
+    this.addText(
+      this.panelX + 28,
+      this.panelY + 88,
+      canMutate
+        ? "Use the form below to create a task. Select a task to update planning fields."
+        : "Project unavailable. Backlog mutation is disabled.",
+      canMutate ? mutedStyle() : projectStatusStyle(),
+    );
+
+    this.addTerminalPanel(this.panelX + 24, this.panelY + 122, 304, 230);
+    this.addText(this.panelX + 36, this.panelY + 138, "Planned Work", headingStyle());
+    if (!collection || collection.tasks.length === 0) {
+      this.addText(this.panelX + 48, this.panelY + 178, "No planned tasks", mutedStyle());
+    } else {
+      collection.tasks.slice(0, 6).forEach((task, index) => {
+        const rowY = this.panelY + 172 + index * 30;
+        const marker = index === state.selectedBacklogTaskIndex ? ">" : " ";
+        this.addText(
+          this.panelX + 44,
+          rowY,
+          compactTextLine(`${marker} [${task.status.toUpperCase()}] ${task.priority.toUpperCase()} ${task.title}`, 38),
+          rowStyle(canMutate, index === state.selectedBacklogTaskIndex),
+        );
+      });
+    }
+
+    this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 230);
+    this.addText(this.panelX + 368, this.panelY + 138, "Create / Edit", headingStyle());
+    this.addText(this.panelX + 376, this.panelY + 172, "Title and description fields appear below.", mutedStyle());
+    this.addText(this.panelX + 376, this.panelY + 198, "Priority and status stay operator-controlled.", mutedStyle());
+    this.addText(this.panelX + 376, this.panelY + 224, "Ready only means eligible for future development.", mutedStyle());
+    this.addText(this.panelX + 376, this.panelY + 250, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
+    if (selectedTask) {
+      this.addText(this.panelX + 376, this.panelY + 288, compactTextLine(`Selected: ${selectedTask.title}`, 32), bodyStyle());
+      this.addText(this.panelX + 376, this.panelY + 314, wrapAndClampText(selectedTask.description, 32, 2), projectMutedStyle());
+    }
+
+    this.addText(
+      this.panelX + this.panelWidth - 28,
+      this.panelY + this.panelHeight - 34,
+      "Esc back  Up/Down select  Form buttons create/update",
+      instructionStyle(),
+    ).setOrigin(1, 0.5);
   }
 
   private renderRepositoryDetail(state: ProjectPortalState) {
@@ -1182,6 +1254,7 @@ function createProjectDashboardLowerRows(
   reviewFixRuntimeRows?: ReviewFixRuntimeDisplayRows,
   validationRuntimeRows?: ValidationRuntimeDisplayRows,
   postValidationReviewTargetRows?: PostValidationReviewTargetDisplayRows,
+  backlogSummaryText?: string,
   developmentRequestRows?: ExternalProjectDevelopmentRequestDisplayRows,
   adosRunStatusRows?: ExternalProjectAdosRunStatusDisplayRows,
   adosRunPreparationRows?: ExternalProjectAdosRunPreparationDisplayRows,
@@ -1382,6 +1455,15 @@ function createProjectDashboardLowerRows(
       text: `[RE-REVIEW] ${postValidationReviewTargetRows.statusText}`,
       maxLines: 1,
       dropPriority: 23,
+      usePriorityFit: true,
+    });
+  }
+
+  if (backlogSummaryText) {
+    lowerRows.push({
+      text: `[PLANNING BACKLOG] ${backlogSummaryText}`,
+      maxLines: 1,
+      dropPriority: 7,
       usePriorityFit: true,
     });
   }

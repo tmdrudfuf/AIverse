@@ -124,6 +124,35 @@ describe("OfficeProjectPortalView", () => {
     expect(text).toContain("Metadata only. No filesystem, GitHub, runtime, or repository mutation.");
   });
 
+  it("renders the project-scoped planning backlog surface", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "project-backlog" });
+    state.selectedBacklogProjectId = "daily-proof";
+    state.projectBacklogCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [{
+        id: "daily-proof:backlog:1",
+        projectId: "daily-proof",
+        title: "Add customer search",
+        description: "Add customer search to the admin page.",
+        status: "ready",
+        priority: "high",
+        createdAt: "2026-08-31T00:00:00.000Z",
+        updatedAt: "2026-08-31T00:00:00.000Z",
+      }],
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const text = renderedText.map((item) => item.text);
+    expect(text).toContain("Daily Proof Planning");
+    expect(text).toContain("Backlog belongs to: Daily Proof");
+    expect(text).toContain("> [READY] HIGH Add customer search");
+    expect(text).toContain("Ready only means eligible for future development.");
+    expect(text).toContain("Blocked here is planning state, not ADOS runtime.");
+  });
+
   it("renders the completed fifth employee recruiting action after recruitment", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
@@ -2466,6 +2495,11 @@ function createPortalState(options: {
     selectedCandidatePromotionIndex: 0,
     selectedInfluenceFocusIndex: 0,
     selectedProjectDashboardActiveWorkIndex: 0,
+    selectedBacklogProjectId: undefined,
+    selectedBacklogTaskIndex: 0,
+    selectedBacklogTaskId: undefined,
+    selectedBacklogPriorityIndex: 1,
+    selectedBacklogStatusIndex: 0,
     projects: [{
       id: "daily-proof",
       name: "Daily Proof",
@@ -2529,6 +2563,7 @@ function createPortalState(options: {
     externalProjectAdosExecutions: {},
     externalProjectAdosExecutionResults: {},
     externalProjectAdosRunStatuses: {},
+    projectBacklogCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},

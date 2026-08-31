@@ -72,8 +72,13 @@ export type ControllerInternals = {
     selectedTaskProjectId: string | undefined;
     selectedTaskId: string | undefined;
     selectedTaskIndex: number;
+    selectedBacklogProjectId?: string;
+    selectedBacklogTaskId?: string;
+    selectedBacklogTaskIndex: number;
     selectedEmployeeIndex: number;
     projects: ProjectPortalProjectLike[];
+    projectRegistryEntries: ProjectPortalState["projectRegistryEntries"];
+    projectCompanyBindings?: ProjectPortalState["projectCompanyBindings"];
     repositorySummaries: Record<string, { connectionStatus: string }>;
     repositorySyncSnapshots: ProjectPortalState["repositorySyncSnapshots"];
     issueSyncCollections: Record<string, IssueSnapshotCollection>;
@@ -116,9 +121,11 @@ export type ControllerInternals = {
     postValidationReviewTargetCollections?: ProjectPortalState["postValidationReviewTargetCollections"];
     postValidationReviewTargetResultCollections?: ProjectPortalState["postValidationReviewTargetResultCollections"];
     externalProjectAdosRunPreparations: ProjectPortalState["externalProjectAdosRunPreparations"];
+    externalProjectDevelopmentRequestDrafts: ProjectPortalState["externalProjectDevelopmentRequestDrafts"];
     externalProjectAdosExecutions: ProjectPortalState["externalProjectAdosExecutions"];
     externalProjectAdosExecutionResults: ProjectPortalState["externalProjectAdosExecutionResults"];
     externalProjectAdosRunStatuses: ProjectPortalState["externalProjectAdosRunStatuses"];
+    projectBacklogCollections: ProjectPortalState["projectBacklogCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     employeeSimulations: ProjectPortalState["employeeSimulations"];

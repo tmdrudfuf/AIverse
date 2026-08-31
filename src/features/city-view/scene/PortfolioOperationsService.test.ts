@@ -239,6 +239,43 @@ describe("derivePortfolioOperations", () => {
     expect(result["company-b"].activeOrResumableRunId).toBe("run-b");
   });
 
+  it("adds project-scoped read-only backlog indicators without mutating task data", () => {
+    const state = createState({
+      projectBacklogCollections: {
+        "project-a": {
+          projectId: "project-a",
+          tasks: [
+            backlogTask("project-a", "a-ready", "A ready", "ready"),
+            backlogTask("project-a", "a-blocked", "A blocked", "blocked"),
+          ],
+        },
+        "project-b": {
+          projectId: "project-b",
+          tasks: [
+            backlogTask("project-b", "b-backlog", "B backlog", "backlog"),
+          ],
+        },
+      },
+    });
+    const before = JSON.stringify(state.projectBacklogCollections);
+
+    const result = derivePortfolioOperations({ buildings: createBuildings().slice(0, 2), state });
+
+    expect(result["company-a"].backlogSummary).toMatchObject({
+      projectId: "project-a",
+      totalTaskCount: 2,
+      readyTaskCount: 1,
+      blockedTaskCount: 1,
+      indicatorText: "1 Blocked task",
+    });
+    expect(result["company-b"].backlogSummary).toMatchObject({
+      projectId: "project-b",
+      totalTaskCount: 1,
+      indicatorText: "1 Planned",
+    });
+    expect(JSON.stringify(state.projectBacklogCollections)).toBe(before);
+  });
+
   it("filters and attention ordering without mutating source state", () => {
     const state = createState({
       externalProjectAdosRunStatuses: {
@@ -481,6 +518,24 @@ function validationRuntimeResultCollection(input: {
     }],
     resultCount: 1,
     rulesVersion: "validation-runtime-v1",
+  };
+}
+
+function backlogTask(
+  projectId: string,
+  id: string,
+  title: string,
+  status: "backlog" | "ready" | "blocked",
+) {
+  return {
+    id,
+    projectId,
+    title,
+    description: `${title} description`,
+    status,
+    priority: "normal" as const,
+    createdAt: "2026-08-31T00:00:00.000Z",
+    updatedAt: "2026-08-31T00:00:00.000Z",
   };
 }
 

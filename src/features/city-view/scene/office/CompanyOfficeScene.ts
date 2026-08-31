@@ -60,6 +60,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private employeeKnowledgeService?: EmployeeKnowledgeService;
     private employeeKnowledgeOverlay?: EmployeeKnowledgeOverlay;
     private developmentRequestTextArea?: HTMLTextAreaElement;
+    private projectBacklogForm?: ProjectBacklogFormElements;
     private officeTilemapLayers?: OfficeTilemapLayers;
     private officeCollisionMap?: OfficeCollisionMap;
     private office?: OfficeDefinition;
@@ -170,6 +171,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         const developmentRequestText = this.officeProjectPortalController.shouldShowDevelopmentRequestInput()
           ? this.syncDevelopmentRequestTextArea()
           : this.hideDevelopmentRequestTextArea();
+        if (this.officeProjectPortalController.shouldShowProjectBacklogInput()) {
+          this.syncProjectBacklogForm();
+        } else {
+          this.hideProjectBacklogForm();
+        }
         this.officeProjectPortalController.updateInput({
           actionPressed,
           escapePressed,
@@ -200,6 +206,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         return;
       }
       this.hideDevelopmentRequestTextArea();
+      this.hideProjectBacklogForm();
       this.navigationInputController?.setPointerNavigationEnabled(true);
       this.officeInteractionController?.setPointerInteractionEnabled(true);
 
@@ -428,6 +435,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.officeExitController = undefined;
       this.officeVisualLayer = undefined;
       this.destroyDevelopmentRequestTextArea();
+      this.destroyProjectBacklogForm();
       this.officeTilemapLayers = undefined;
       this.officeCollisionMap = undefined;
       this.office = undefined;
@@ -490,10 +498,170 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.developmentRequestTextArea.remove();
       this.developmentRequestTextArea = undefined;
     }
+
+    private syncProjectBacklogForm() {
+      const form = this.getProjectBacklogForm();
+      const canvasBounds = this.game.canvas.getBoundingClientRect();
+      const selectedTask = this.officeProjectPortalController?.getSelectedProjectBacklogTaskInput();
+      if (form.lastSelectedTaskId !== selectedTask?.id) {
+        form.titleInput.value = selectedTask?.title ?? "";
+        form.descriptionInput.value = selectedTask?.description ?? "";
+        form.prioritySelect.value = selectedTask?.priority ?? "normal";
+        form.statusSelect.value = selectedTask?.status ?? "backlog";
+        form.blockedReasonInput.value = selectedTask?.blockedReason ?? "";
+        form.lastSelectedTaskId = selectedTask?.id;
+      }
+      const width = Math.min(560, Math.max(300, canvasBounds.width - 144));
+      const left = canvasBounds.left + (canvasBounds.width - width) / 2;
+      const top = canvasBounds.top + Math.max(126, canvasBounds.height - 216);
+      Object.assign(form.root.style, {
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        display: "grid",
+      });
+    }
+
+    private getProjectBacklogForm() {
+      if (this.projectBacklogForm) return this.projectBacklogForm;
+
+      const root = document.createElement("div");
+      const titleInput = document.createElement("input");
+      const descriptionInput = document.createElement("textarea");
+      const prioritySelect = document.createElement("select");
+      const statusSelect = document.createElement("select");
+      const blockedReasonInput = document.createElement("input");
+      const createButton = document.createElement("button");
+      const updateButton = document.createElement("button");
+
+      titleInput.setAttribute("aria-label", "Backlog task title");
+      titleInput.placeholder = "Task title";
+      descriptionInput.setAttribute("aria-label", "Backlog task description");
+      descriptionInput.placeholder = "Task description / request text";
+      blockedReasonInput.setAttribute("aria-label", "Backlog blocked reason");
+      blockedReasonInput.placeholder = "Blocked reason (optional)";
+      prioritySelect.setAttribute("aria-label", "Backlog task priority");
+      statusSelect.setAttribute("aria-label", "Backlog task planning status");
+      for (const priority of ["low", "normal", "high", "urgent"]) {
+        prioritySelect.appendChild(new Option(priority, priority, priority === "normal", priority === "normal"));
+      }
+      for (const status of ["backlog", "ready", "in_progress", "blocked", "completed", "cancelled"]) {
+        statusSelect.appendChild(new Option(status, status, status === "backlog", status === "backlog"));
+      }
+      createButton.textContent = "Create backlog task";
+      updateButton.textContent = "Update selected task";
+
+      Object.assign(root.style, {
+        position: "fixed",
+        zIndex: "3100",
+        display: "none",
+        gridTemplateColumns: "1fr 132px 132px",
+        gap: "6px",
+        background: "#020617",
+        border: "1px solid #cbd5e1",
+        borderRadius: "6px",
+        padding: "8px",
+        boxSizing: "border-box",
+      });
+      for (const element of [titleInput, descriptionInput, prioritySelect, statusSelect, blockedReasonInput, createButton, updateButton]) {
+        Object.assign(element.style, {
+          minWidth: "0",
+          border: "1px solid #334155",
+          borderRadius: "4px",
+          background: "#0f172a",
+          color: "#f8fafc",
+          font: "12px Courier New, monospace",
+          padding: "6px",
+          boxSizing: "border-box",
+        });
+        element.addEventListener("keydown", stopPortalShortcutPropagation);
+        element.addEventListener("keyup", stopPortalShortcutPropagation);
+      }
+      Object.assign(descriptionInput.style, {
+        gridColumn: "1 / 4",
+        height: "54px",
+        resize: "none",
+      });
+      Object.assign(blockedReasonInput.style, { gridColumn: "1 / 2" });
+
+      const createHandler = () => {
+        this.officeProjectPortalController?.createBacklogTaskFromInput({
+          title: titleInput.value,
+          description: descriptionInput.value,
+          priority: prioritySelect.value as never,
+        });
+      };
+      const updateHandler = () => {
+        this.officeProjectPortalController?.updateSelectedBacklogTaskFromInput({
+          title: titleInput.value,
+          description: descriptionInput.value,
+          priority: prioritySelect.value as never,
+          status: statusSelect.value as never,
+          blockedReason: blockedReasonInput.value,
+        });
+      };
+      createButton.addEventListener("click", createHandler);
+      updateButton.addEventListener("click", updateHandler);
+
+      root.append(titleInput, prioritySelect, statusSelect, descriptionInput, blockedReasonInput, createButton, updateButton);
+      document.body.appendChild(root);
+      this.projectBacklogForm = {
+        root,
+        titleInput,
+        descriptionInput,
+        prioritySelect,
+        statusSelect,
+        blockedReasonInput,
+        createButton,
+        updateButton,
+        createHandler,
+        updateHandler,
+      };
+      return this.projectBacklogForm;
+    }
+
+    private hideProjectBacklogForm() {
+      if (this.projectBacklogForm) this.projectBacklogForm.root.style.display = "none";
+    }
+
+    private destroyProjectBacklogForm() {
+      const form = this.projectBacklogForm;
+      if (!form) return;
+      for (const element of [
+        form.titleInput,
+        form.descriptionInput,
+        form.prioritySelect,
+        form.statusSelect,
+        form.blockedReasonInput,
+        form.createButton,
+        form.updateButton,
+      ]) {
+        element.removeEventListener("keydown", stopPortalShortcutPropagation);
+        element.removeEventListener("keyup", stopPortalShortcutPropagation);
+      }
+      form.createButton.removeEventListener("click", form.createHandler);
+      form.updateButton.removeEventListener("click", form.updateHandler);
+      form.root.remove();
+      this.projectBacklogForm = undefined;
+    }
   };
 }
 
-function stopPortalShortcutPropagation(event: KeyboardEvent) {
+type ProjectBacklogFormElements = {
+  root: HTMLDivElement;
+  titleInput: HTMLInputElement;
+  descriptionInput: HTMLTextAreaElement;
+  prioritySelect: HTMLSelectElement;
+  statusSelect: HTMLSelectElement;
+  blockedReasonInput: HTMLInputElement;
+  createButton: HTMLButtonElement;
+  updateButton: HTMLButtonElement;
+  createHandler: () => void;
+  updateHandler: () => void;
+  lastSelectedTaskId?: string;
+};
+
+function stopPortalShortcutPropagation(event: Event) {
   event.stopPropagation();
 }
 

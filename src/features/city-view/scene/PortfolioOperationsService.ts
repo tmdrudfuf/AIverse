@@ -2,6 +2,8 @@ import type { CityBuildingDefinition } from "./buildings/buildingTypes";
 import { createProjectPortalState } from "./office/OfficeProjectPortalRegistry";
 import type { ProjectPortalState } from "./office/OfficeProjectPortalTypes";
 import { deriveLiveAgentWorkState, type LiveAgentWorkState } from "./office/LiveAgentWorkVisualization";
+import { ProjectBacklogService } from "./office/project-backlog/ProjectBacklogService";
+import type { ProjectBacklogSummary } from "./office/project-backlog/ProjectBacklogTypes";
 import { ProjectCompanyBindingService } from "./office/project-company-binding/ProjectCompanyBindingService";
 import { toProjectPortalProject } from "./office/project-registry/ProjectRegistryAdapters";
 
@@ -35,6 +37,7 @@ export type PortfolioOperationsSummary = {
   };
   blockedReasonSummary?: string;
   recentCompletedSummary?: string;
+  backlogSummary?: ProjectBacklogSummary;
   updatedAt?: string;
   operatorActionAvailable: boolean;
 };
@@ -48,7 +51,10 @@ export type DerivePortfolioOperationsInput = {
 
 type LiveAgentWorkStateInput = Parameters<typeof deriveLiveAgentWorkState>[0];
 
-type ProjectScopedPortfolioState = Pick<ProjectPortalState, "projectRegistryEntries"> & Partial<LiveAgentWorkStateInput>;
+type ProjectScopedPortfolioState =
+  Pick<ProjectPortalState, "projectRegistryEntries"> &
+  Partial<Pick<ProjectPortalState, "projectBacklogCollections">> &
+  Partial<LiveAgentWorkStateInput>;
 
 export function createPortfolioOperationsFromBrowserSession(
   buildings: ReadonlyArray<CityBuildingDefinition>,
@@ -154,6 +160,10 @@ function createAvailableSummary(input: {
     recentCompletedSummary: attentionState === "recently-completed"
       ? createCompletedSummary(runStatus?.status, input.liveWorkState.updatedAt)
       : undefined,
+    backlogSummary: new ProjectBacklogService().createSummary(
+      input.state.projectBacklogCollections?.[input.projectId],
+      input.projectId,
+    ),
     updatedAt: input.liveWorkState.updatedAt,
     operatorActionAvailable: true,
   };

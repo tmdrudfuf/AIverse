@@ -161,6 +161,13 @@ const WORKSPACES: Record<string, ProjectWorkspace> = {
         placeholder: true,
       },
       {
+        id: "planning",
+        label: "Planning",
+        status: "Planning",
+        enabled: true,
+        placeholder: true,
+      },
+      {
         id: "tasks",
         label: "Tasks",
         status: "3 tasks",
@@ -222,6 +229,11 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     selectedEmployeeIndex: 0,
     selectedProjectDashboardProjectId: undefined,
     selectedProjectDashboardActiveWorkIndex: 0,
+    selectedBacklogProjectId: undefined,
+    selectedBacklogTaskIndex: 0,
+    selectedBacklogTaskId: undefined,
+    selectedBacklogPriorityIndex: 1,
+    selectedBacklogStatusIndex: 0,
     selectedCandidatePromotionIndex: 0,
     selectedCandidateTaskId: undefined,
     selectedInfluenceFocusIndex: 0,
@@ -277,6 +289,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     externalProjectAdosExecutions: {},
     externalProjectAdosExecutionResults: {},
     externalProjectAdosRunStatuses: {},
+    projectBacklogCollections: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
@@ -351,6 +364,11 @@ export function addExternalProjectDraftToState(state: ProjectPortalState): Proje
   state.selectedTaskIndex = 0;
   state.selectedEmployeeIndex = 0;
   state.selectedWorkSessionId = undefined;
+  state.selectedBacklogProjectId = undefined;
+  state.selectedBacklogTaskId = undefined;
+  state.selectedBacklogTaskIndex = 0;
+  state.selectedBacklogPriorityIndex = 1;
+  state.selectedBacklogStatusIndex = 0;
 
   return state;
 }
