@@ -4,6 +4,7 @@ import type { ProjectPortalState } from "./OfficeProjectPortalTypes";
 import type { EmployeeNpcMovementPositionHint } from "./npc/EmployeeNpcMovementTypes";
 
 export type LiveAgentWorkStage =
+  | "preparing"
   | "implementation"
   | "validation"
   | "review"
@@ -258,6 +259,7 @@ function resolveStage(
   if (runStatus?.stage === "Completed") return "complete";
   if (hasToken(raw, IMPLEMENTATION_RECOVERY_STAGE_TOKENS)) return "implementation";
   if (isRecoveryStatus(raw) || isRecoveryStatus(terminal)) return "blocked";
+  if (runStatus?.stage === "Prepared" || runStatus?.stage === "NotPrepared" || hasToken(raw, ["prepared", "preparing"])) return "preparing";
   if (hasToken(raw, ["validation", "validating", "qa", "testing"])) return "validation";
   if (hasToken(raw, ["reviewer", "reviewing", "review"])) return "review";
   if (hasToken(raw, ["exact_head", "push", "pr", "pr_refresh", "publication_gate", "publication", "publish", "merge", "cleanup", "pull_request"])) return "publication";
@@ -356,6 +358,7 @@ function matchesRole(employee: EmployeeLike, role: LiveAgentSemanticRole) {
 }
 
 function getRoleForStage(stage: LiveAgentWorkStage): LiveAgentSemanticRole {
+  if (stage === "preparing") return "operations";
   if (stage === "implementation") return "implementer";
   if (stage === "validation") return "validator";
   if (stage === "review") return "reviewer";
@@ -391,6 +394,7 @@ function getDepartmentForRole(role: LiveAgentSemanticRole, stage: LiveAgentWorkS
 function getStageLabel(stage: LiveAgentWorkStage, lifecycle: LiveAgentWorkLifecycle) {
   if (lifecycle === "blocked") return "Blocked";
   if (lifecycle === "complete") return "Complete";
+  if (stage === "preparing") return "Preparing";
   if (stage === "implementation") return "Implementing";
   if (stage === "validation") return "Validating";
   if (stage === "review") return "Reviewing";

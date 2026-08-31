@@ -68,6 +68,59 @@ describe("deriveCityProjectOperationStatuses", () => {
     });
   });
 
+  it("uses the shared live-work derivation for review-fix recovery and intervention-blocked states", () => {
+    const [companyA, companyB] = createBuildings();
+    const result = deriveCityProjectOperationStatuses({
+      buildings: [companyA, companyB],
+      state: createState({
+        reviewFixRuntimeCollections: {
+          "project-a": reviewFixRuntimeCollection("project-a", "2026-08-31T03:00:00.000Z"),
+        },
+        externalProjectAdosRunStatuses: {
+          "project-b": status({
+            projectId: "project-b",
+            stage: "Blocked",
+            status: "intervention required",
+            reasonCodes: ["EXTERNAL_ADOS_EXECUTION_PROVIDER_UNAVAILABLE"],
+          }),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      stage: "implementation",
+      label: "IMPLEMENTATION",
+      tone: "active",
+    });
+    expect(result["company-b"]).toMatchObject({
+      projectId: "project-b",
+      stage: "blocked",
+      label: "BLOCKED",
+      tone: "warning",
+      reasonText: "EXTERNAL ADOS EXECUTION PROVIDER UNAVAILABLE",
+    });
+  });
+
+  it("represents prepared runs with the same preparing stage used by office live work", () => {
+    const [companyA] = createBuildings();
+    const result = deriveCityProjectOperationStatuses({
+      buildings: [companyA],
+      state: createState({
+        externalProjectAdosRunPreparations: {
+          "project-a": preparation("project-a"),
+        },
+      }),
+    });
+
+    expect(result["company-a"]).toMatchObject({
+      projectId: "project-a",
+      stage: "preparing",
+      label: "PREPARING",
+      tone: "active",
+    });
+  });
+
   it("does not let the latest global run override a bound project's own missing run", () => {
     const result = deriveCityProjectOperationStatuses({
       buildings: createBuildings(),
@@ -178,30 +231,46 @@ describe("deriveCityProjectOperationStatuses", () => {
   });
 });
 
-function createState(overrides: Partial<Pick<
-  ProjectPortalState,
-  | "externalProjectAdosRunStatuses"
-  | "reviewerRuntimeCollections"
-  | "reviewerRuntimeResultCollections"
-  | "reviewPromotionCollections"
-  | "reviewPromotionResultCollections"
-  | "validationRuntimeCollections"
-  | "validationRuntimeResultCollections"
-  | "postValidationReviewTargetCollections"
-  | "postValidationReviewTargetResultCollections"
->> = {}) {
+function createState(overrides: Partial<ProjectPortalState> = {}) {
   return {
     projectRegistryEntries: createProjectEntries(),
+    externalProjectAdosRunPreparations: {},
+    externalProjectAdosExecutions: {},
+    externalProjectAdosExecutionResults: {},
     externalProjectAdosRunStatuses: {},
+    externalProjectDevelopmentRequestDrafts: {},
+    employees: [],
+    implementerRuntimeCollections: {},
+    implementerRuntimeResultCollections: {},
     reviewerRuntimeCollections: {},
     reviewerRuntimeResultCollections: {},
     reviewPromotionCollections: {},
     reviewPromotionResultCollections: {},
+    reviewFixRuntimeCollections: {},
+    reviewFixRuntimeResultCollections: {},
     validationRuntimeCollections: {},
     validationRuntimeResultCollections: {},
     postValidationReviewTargetCollections: {},
     postValidationReviewTargetResultCollections: {},
     ...overrides,
+  };
+}
+
+function preparation(projectId: string): ProjectPortalState["externalProjectAdosRunPreparations"][string] {
+  return {
+    id: `${projectId}:external-ados-run-preparation`,
+    projectId,
+    developmentRequestDraftId: `${projectId}:external-development-request-draft`,
+    status: "Prepared",
+    featureBranch: `codex/${projectId}-feature`,
+    authoritativeBaseSha: "1b9ef5f33b6f87f62dabbdfa61e2fa8ccf6f18ec",
+    specPath: `specs/${projectId}/spec.md`,
+    validationCommands: ["npm test"],
+    reviewerCommand: "claude -p",
+    executionPolicyVersion: 1,
+    createdAt: "2026-08-31T02:45:00.000Z",
+    updatedAt: "2026-08-31T02:45:00.000Z",
+    sideEffectBoundary: "Local fixture only.",
   };
 }
 
@@ -336,6 +405,21 @@ function reviewPromotionCollection(projectId: string, promotedAt: string): Proje
     } as unknown as ProjectPortalState["reviewPromotionCollections"][string]["promotions"][number]],
     promotionCount: 1,
     rulesVersion: "review-promotion-v1",
+  };
+}
+
+function reviewFixRuntimeCollection(projectId: string, startedAt: string): ProjectPortalState["reviewFixRuntimeCollections"][string] {
+  return {
+    projectId,
+    runtimes: [{
+      projectId,
+      status: "Completed",
+      startedAt,
+      implementer: "claude",
+      evidence: { agentId: "Claude" },
+    } as unknown as ProjectPortalState["reviewFixRuntimeCollections"][string]["runtimes"][number]],
+    runtimeCount: 1,
+    rulesVersion: "review-fix-runtime-v1",
   };
 }
 

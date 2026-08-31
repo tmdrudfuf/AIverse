@@ -74,10 +74,14 @@ export class BrowserOfficeSessionService {
     state.externalProjectAdosExecutions = clone(snapshot.externalProjectAdosExecutions ?? {});
     state.externalProjectAdosExecutionResults = clone(snapshot.externalProjectAdosExecutionResults ?? {});
     state.externalProjectAdosRunStatuses = cloneValidExternalProjectAdosRunStatuses(snapshot.externalProjectAdosRunStatuses);
+    state.implementerRuntimeCollections = clone(snapshot.implementerRuntimeCollections ?? {});
+    state.implementerRuntimeResultCollections = clone(snapshot.implementerRuntimeResultCollections ?? {});
     state.reviewerRuntimeCollections = clone(snapshot.reviewerRuntimeCollections ?? {});
     state.reviewerRuntimeResultCollections = clone(snapshot.reviewerRuntimeResultCollections ?? {});
     state.reviewPromotionCollections = clone(snapshot.reviewPromotionCollections ?? {});
     state.reviewPromotionResultCollections = clone(snapshot.reviewPromotionResultCollections ?? {});
+    state.reviewFixRuntimeCollections = clone(snapshot.reviewFixRuntimeCollections ?? {});
+    state.reviewFixRuntimeResultCollections = clone(snapshot.reviewFixRuntimeResultCollections ?? {});
     state.validationRuntimeCollections = clone(snapshot.validationRuntimeCollections ?? {});
     state.validationRuntimeResultCollections = clone(snapshot.validationRuntimeResultCollections ?? {});
     state.postValidationReviewTargetCollections = clone(snapshot.postValidationReviewTargetCollections ?? {});
@@ -119,10 +123,14 @@ export class BrowserOfficeSessionService {
       externalProjectAdosExecutions: clone(state.externalProjectAdosExecutions),
       externalProjectAdosExecutionResults: clone(state.externalProjectAdosExecutionResults),
       externalProjectAdosRunStatuses: clone(state.externalProjectAdosRunStatuses),
+      implementerRuntimeCollections: clone(state.implementerRuntimeCollections),
+      implementerRuntimeResultCollections: clone(state.implementerRuntimeResultCollections),
       reviewerRuntimeCollections: clone(state.reviewerRuntimeCollections),
       reviewerRuntimeResultCollections: clone(state.reviewerRuntimeResultCollections),
       reviewPromotionCollections: clone(state.reviewPromotionCollections),
       reviewPromotionResultCollections: clone(state.reviewPromotionResultCollections),
+      reviewFixRuntimeCollections: clone(state.reviewFixRuntimeCollections),
+      reviewFixRuntimeResultCollections: clone(state.reviewFixRuntimeResultCollections),
       validationRuntimeCollections: clone(state.validationRuntimeCollections),
       validationRuntimeResultCollections: clone(state.validationRuntimeResultCollections),
       postValidationReviewTargetCollections: clone(state.postValidationReviewTargetCollections),
@@ -181,10 +189,14 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     (value.externalProjectAdosExecutions === undefined || isRecordOfRecords(value.externalProjectAdosExecutions)) &&
     (value.externalProjectAdosExecutionResults === undefined || isRecordOfRecords(value.externalProjectAdosExecutionResults)) &&
     (value.externalProjectAdosRunStatuses === undefined || isRecord(value.externalProjectAdosRunStatuses)) &&
+    (value.implementerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.implementerRuntimeCollections)) &&
+    (value.implementerRuntimeResultCollections === undefined || isResultCollectionRecord(value.implementerRuntimeResultCollections)) &&
     (value.reviewerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.reviewerRuntimeCollections)) &&
     (value.reviewerRuntimeResultCollections === undefined || isResultCollectionRecord(value.reviewerRuntimeResultCollections)) &&
     (value.reviewPromotionCollections === undefined || isPromotionCollectionRecord(value.reviewPromotionCollections)) &&
     (value.reviewPromotionResultCollections === undefined || isResultCollectionRecord(value.reviewPromotionResultCollections)) &&
+    (value.reviewFixRuntimeCollections === undefined || isRuntimeCollectionRecord(value.reviewFixRuntimeCollections)) &&
+    (value.reviewFixRuntimeResultCollections === undefined || isResultCollectionRecord(value.reviewFixRuntimeResultCollections)) &&
     (value.validationRuntimeCollections === undefined || isRuntimeCollectionRecord(value.validationRuntimeCollections)) &&
     (value.validationRuntimeResultCollections === undefined || isResultCollectionRecord(value.validationRuntimeResultCollections)) &&
     (value.postValidationReviewTargetCollections === undefined || isTargetCollectionRecord(value.postValidationReviewTargetCollections)) &&

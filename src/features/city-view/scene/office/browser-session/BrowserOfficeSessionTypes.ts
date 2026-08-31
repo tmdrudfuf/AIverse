@@ -25,6 +25,10 @@ import type {
 import type { ExternalProjectAdosRunStatuses } from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
 import type {
+  ImplementerRuntimeCollection,
+  ImplementerRuntimeResultCollection,
+} from "../implementer-runtime/ImplementerRuntimeTypes";
+import type {
   ReviewerRuntimeCollection,
   ReviewerRuntimeResultCollection,
 } from "../reviewer-runtime/ReviewerRuntimeTypes";
@@ -32,6 +36,10 @@ import type {
   ReviewPromotionCollection,
   ReviewPromotionResultCollection,
 } from "../review-decision/ReviewDecisionTypes";
+import type {
+  ReviewFixRuntimeCollection,
+  ReviewFixRuntimeResultCollection,
+} from "../review-fix-runtime/ReviewFixRuntimeTypes";
 import type {
   ValidationRuntimeCollection,
   ValidationRuntimeResultCollection,
@@ -70,10 +78,14 @@ export type BrowserOfficeSessionSnapshot = {
   externalProjectAdosExecutions?: ExternalProjectAdosExecutions;
   externalProjectAdosExecutionResults?: ExternalProjectAdosExecutionResults;
   externalProjectAdosRunStatuses?: ExternalProjectAdosRunStatuses;
+  implementerRuntimeCollections?: Record<string, ImplementerRuntimeCollection>;
+  implementerRuntimeResultCollections?: Record<string, ImplementerRuntimeResultCollection>;
   reviewerRuntimeCollections?: Record<string, ReviewerRuntimeCollection>;
   reviewerRuntimeResultCollections?: Record<string, ReviewerRuntimeResultCollection>;
   reviewPromotionCollections?: Record<string, ReviewPromotionCollection>;
   reviewPromotionResultCollections?: Record<string, ReviewPromotionResultCollection>;
+  reviewFixRuntimeCollections?: Record<string, ReviewFixRuntimeCollection>;
+  reviewFixRuntimeResultCollections?: Record<string, ReviewFixRuntimeResultCollection>;
   validationRuntimeCollections?: Record<string, ValidationRuntimeCollection>;
   validationRuntimeResultCollections?: Record<string, ValidationRuntimeResultCollection>;
   postValidationReviewTargetCollections?: Record<string, PostValidationReviewTargetCollection>;
@@ -112,10 +124,14 @@ export type BrowserOfficeSessionState = Pick<
   | "externalProjectAdosExecutions"
   | "externalProjectAdosExecutionResults"
   | "externalProjectAdosRunStatuses"
+  | "implementerRuntimeCollections"
+  | "implementerRuntimeResultCollections"
   | "reviewerRuntimeCollections"
   | "reviewerRuntimeResultCollections"
   | "reviewPromotionCollections"
   | "reviewPromotionResultCollections"
+  | "reviewFixRuntimeCollections"
+  | "reviewFixRuntimeResultCollections"
   | "validationRuntimeCollections"
   | "validationRuntimeResultCollections"
   | "postValidationReviewTargetCollections"
