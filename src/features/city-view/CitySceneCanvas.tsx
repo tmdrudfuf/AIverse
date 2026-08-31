@@ -63,7 +63,7 @@ export async function bootCitySceneCanvas(
     scene,
   });
 
-  setCityCanvasReadyProbeState(host, scene.length);
+  setCityCanvasReadyProbeState(host, scene.length, game);
 
   return game;
 }
@@ -80,15 +80,19 @@ function setCityCanvasProbeState(host: HTMLDivElement | null, state: CityCanvasP
   }
 }
 
-function setCityCanvasReadyProbeState(host: HTMLDivElement, sceneCount: number) {
+function setCityCanvasReadyProbeState(host: HTMLDivElement, sceneCount: number, game: import("phaser").Game) {
   host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-state`, "ready");
   host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-width`, String(CITY_CANVAS_WIDTH));
   host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-height`, String(CITY_CANVAS_HEIGHT));
   host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-scene-count`, String(sceneCount));
   setCityCanvasRenderedCountProbeAttribute(host);
+  scheduleCityCanvasPortfolioProbeAttribute(host, game);
 
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-    window.requestAnimationFrame(() => setCityCanvasRenderedCountProbeAttribute(host));
+    window.requestAnimationFrame(() => {
+      setCityCanvasRenderedCountProbeAttribute(host);
+      scheduleCityCanvasPortfolioProbeAttribute(host, game);
+    });
   }
 }
 
@@ -97,4 +101,26 @@ function setCityCanvasRenderedCountProbeAttribute(host: HTMLDivElement) {
     `${CITY_CANVAS_PROBE_PREFIX}-rendered-count`,
     String(host.querySelectorAll("canvas").length),
   );
+}
+
+function scheduleCityCanvasPortfolioProbeAttribute(host: HTMLDivElement, game: import("phaser").Game, attemptsRemaining = 10) {
+  if (setCityCanvasPortfolioProbeAttribute(host, game) || attemptsRemaining <= 0) return;
+  if (typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
+
+  window.requestAnimationFrame(() => scheduleCityCanvasPortfolioProbeAttribute(host, game, attemptsRemaining - 1));
+}
+
+function setCityCanvasPortfolioProbeAttribute(host: HTMLDivElement, game: import("phaser").Game) {
+  const sceneManager = (game as { scene?: { getScene?: (key: string) => unknown } }).scene;
+  const cityScene = sceneManager?.getScene?.("city-world") as {
+    getWorldStateSnapshot?: () => { buildings?: Array<{ projectId?: string; operationLabel?: string }> };
+  } | null;
+  const labels = cityScene?.getWorldStateSnapshot?.()?.buildings
+    ?.map((building) => `${building.projectId ?? "unknown"}:${building.operationLabel ?? "UNKNOWN"}`)
+    .join("|");
+
+  if (!labels) return false;
+
+  host.setAttribute(`${CITY_CANVAS_PROBE_PREFIX}-portfolio-labels`, labels);
+  return true;
 }

@@ -27,6 +27,64 @@ describe("BuildingTransitionController", () => {
       returnFacing: "down",
     });
   });
+
+  it("uses the canonical project id from the selected portfolio status when entering", () => {
+    const controller = new BuildingTransitionController();
+    const first = controller.createEntryRequest(
+      building({
+        id: "alpha-tower",
+        name: "ALPHA TOWER",
+        projectId: "alpha",
+        bindingId: "alpha-tower-binding",
+      }),
+      { x: 12, y: 24 },
+      "down",
+      status("alpha-tower", "alpha", false),
+    );
+    const second = controller.createEntryRequest(
+      building({
+        id: "beta-tower",
+        name: "BETA TOWER",
+        projectId: "beta",
+        bindingId: "beta-tower-binding",
+      }),
+      { x: 36, y: 48 },
+      "up",
+      status("beta-tower", "beta", false),
+    );
+    const third = controller.createEntryRequest(
+      building({
+        id: "alpha-tower",
+        name: "ALPHA TOWER",
+        projectId: "alpha",
+        bindingId: "alpha-tower-binding",
+      }),
+      { x: 60, y: 72 },
+      "left",
+      status("alpha-tower", "alpha", false),
+    );
+
+    expect(first?.projectId).toBe("alpha");
+    expect(second?.projectId).toBe("beta");
+    expect(third?.projectId).toBe("alpha");
+    expect(controller.getLastEntryRequest()?.projectId).toBe("alpha");
+  });
+
+  it("does not create an office entry request for a disconnected portfolio status", () => {
+    const request = new BuildingTransitionController().createEntryRequest(
+      building({
+        id: "missing-tower",
+        name: "MISSING TOWER",
+        projectId: "missing-project",
+        bindingId: "missing-tower-binding",
+      }),
+      { x: 12, y: 24 },
+      "down",
+      status("missing-tower", "missing-project", true),
+    );
+
+    expect(request).toBeUndefined();
+  });
 });
 
 function building(input: {
@@ -51,4 +109,29 @@ function building(input: {
     active: true,
     visual: { wall: 0, roof: 0, accent: 0 },
   };
+}
+
+function status(buildingId: string, projectId: string, mutationDisabled: boolean) {
+  return {
+    buildingId,
+    projectId,
+    projectName: projectId,
+    companyName: projectId,
+    stage: mutationDisabled ? "disconnected" : "implementation",
+    label: mutationDisabled ? "DISCONNECTED" : "ACTIVE",
+    tone: mutationDisabled ? "disconnected" : "active",
+    mutationDisabled,
+    portfolioSummary: {
+      buildingId,
+      projectId,
+      projectName: projectId,
+      companyName: projectId,
+      bindingStatus: mutationDisabled ? "unavailable" : "bound",
+      workflowStage: mutationDisabled ? "disconnected" : "implementation",
+      attentionState: mutationDisabled ? "disconnected" : "active",
+      attentionLabel: mutationDisabled ? "DISCONNECTED" : "ACTIVE",
+      tone: mutationDisabled ? "disconnected" : "active",
+      operatorActionAvailable: !mutationDisabled,
+    },
+  } as const;
 }
