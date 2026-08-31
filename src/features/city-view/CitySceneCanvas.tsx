@@ -111,7 +111,8 @@ function scheduleCityCanvasPortfolioProbeAttribute(host: HTMLDivElement, game: i
 }
 
 function setCityCanvasPortfolioProbeAttribute(host: HTMLDivElement, game: import("phaser").Game) {
-  const cityScene = game.scene.getScene("city-world") as unknown as {
+  const sceneManager = (game as { scene?: { getScene?: (key: string) => unknown } }).scene;
+  const cityScene = sceneManager?.getScene?.("city-world") as {
     getWorldStateSnapshot?: () => { buildings?: Array<{ projectId?: string; operationLabel?: string }> };
   } | null;
   const labels = cityScene?.getWorldStateSnapshot?.()?.buildings
