@@ -1337,11 +1337,6 @@ export class OfficeProjectPortalController {
       }
     }
 
-    if (input.openCandidateDetailPressed && projectId && !selectedPromotion) {
-      this.openProjectBacklog(projectId);
-      return;
-    }
-
     if (input.actionPressed && selectedPromotion) {
       const targetStatus = getNextPromotionCycleStatus(selectedPromotion);
       if (targetStatus) {
@@ -1365,11 +1360,6 @@ export class OfficeProjectPortalController {
 
       if (this.openSelectedProjectDashboardActiveWorkTask()) {
         this.view.render(this.state);
-        return;
-      }
-
-      if (input.enterPressed && projectId) {
-        this.openProjectBacklog(projectId);
         return;
       }
 
