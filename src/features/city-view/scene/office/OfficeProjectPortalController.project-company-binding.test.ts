@@ -209,6 +209,79 @@ describe("OfficeProjectPortalController project-company binding", () => {
       binding.companyName === "AIverse Internal"
     )).toBe(true);
   });
+
+  it("switching Company A to Company B to Company A restores each project's request and run identity", () => {
+    const storage = createMemoryStorage();
+    const session = new BrowserOfficeSessionService({ storage, now: () => "2026-08-29T00:00:00.000Z" });
+    const savedState = createProjectPortalState({ browserOfficeSessionService: false });
+    savedState.externalProjectDevelopmentRequestDrafts = {
+      "daily-proof": requestDraft({
+        projectId: "daily-proof",
+        projectName: "Daily Proof",
+        companyName: "Daily Proof Inc.",
+        title: "Add invoice audit trail",
+        adosRunId: "daily-proof:run:111",
+      }),
+      portfolio: requestDraft({
+        projectId: "portfolio",
+        projectName: "Portfolio",
+        companyName: "AIverse Internal",
+        title: "Add reviewer dashboard",
+        adosRunId: "portfolio:run:222",
+      }),
+    };
+    savedState.externalProjectAdosRunStatuses = {
+      "daily-proof": {
+        ...status("daily-proof", "Started", "implementation"),
+        executionId: "daily-proof:run:111",
+      },
+      portfolio: {
+        ...status("portfolio", "Started", "reviewer"),
+        executionId: "portfolio:run:222",
+      },
+    };
+    expect(session.saveState(savedState)).toBe(true);
+
+    const companyA = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({ storage }),
+      activeProjectId: "daily-proof",
+      activeProjectBuildingId: "daily-proof-inc",
+      activeProjectBindingId: "daily-proof-inc",
+    });
+    const companyB = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({ storage }),
+      activeProjectId: "portfolio",
+      activeProjectBuildingId: "portfolio-studio",
+      activeProjectBindingId: "portfolio-studio",
+    });
+    const companyAReturn = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({ storage }),
+      activeProjectId: "daily-proof",
+      activeProjectBuildingId: "daily-proof-inc",
+      activeProjectBindingId: "daily-proof-inc",
+    });
+
+    const companyAStatus = companyA.getLiveAgentWorkState().projectStatus.rows.join("\n");
+    const companyBStatus = companyB.getLiveAgentWorkState().projectStatus.rows.join("\n");
+    const companyAReturnStatus = companyAReturn.getLiveAgentWorkState().projectStatus.rows.join("\n");
+
+    expect(companyA.getLiveAgentWorkState()).toMatchObject({ projectId: "daily-proof", stage: "implementation" });
+    expect(companyAStatus).toContain("Request Add invoice audit trail");
+    expect(companyAStatus).toContain("Run id daily-proof:run:111");
+    expect(companyAStatus).not.toContain("Add reviewer dashboard");
+    expect(companyAStatus).not.toContain("portfolio:run:222");
+
+    expect(companyB.getLiveAgentWorkState()).toMatchObject({ projectId: "portfolio", stage: "review" });
+    expect(companyBStatus).toContain("Request Add reviewer dashboard");
+    expect(companyBStatus).toContain("Run id portfolio:run:222");
+    expect(companyBStatus).not.toContain("Add invoice audit trail");
+    expect(companyBStatus).not.toContain("daily-proof:run:111");
+
+    expect(companyAReturn.getLiveAgentWorkState()).toMatchObject({ projectId: "daily-proof", stage: "implementation" });
+    expect(companyAReturnStatus).toContain("Request Add invoice audit trail");
+    expect(companyAReturnStatus).toContain("Run id daily-proof:run:111");
+    expect(companyAReturnStatus).not.toContain("Add reviewer dashboard");
+  });
 });
 
 function status(
@@ -238,6 +311,34 @@ function status(
 
 function projectPortalState(internals: ReturnType<typeof getControllerInternals>): ProjectPortalState {
   return internals.state as unknown as ProjectPortalState;
+}
+
+function requestDraft(input: {
+  projectId: string;
+  projectName: string;
+  companyName: string;
+  title: string;
+  adosRunId: string;
+}): ProjectPortalState["externalProjectDevelopmentRequestDrafts"][string] {
+  return {
+    id: `${input.projectId}:external-development-request-draft`,
+    projectId: input.projectId,
+    projectName: input.projectName,
+    companyName: input.companyName,
+    status: "Started",
+    title: input.title,
+    summary: input.title,
+    requestText: input.title,
+    targetProjectIdentity: `${input.projectId} (${input.projectName})`,
+    localProjectPath: `C:/worktrees/${input.projectId}`,
+    requirementsArtifactPath: `.aiverse/external-requests/${input.projectId}/requirements.md`,
+    requirementsArtifactContent: input.title,
+    adosRunId: input.adosRunId,
+    repositoryProvider: "local",
+    createdAt: "2026-08-29T00:00:00.000Z",
+    updatedAt: "2026-08-29T00:00:00.000Z",
+    sideEffectBoundary: "Local fixture only.",
+  };
 }
 
 function browserOfficeSessionService(

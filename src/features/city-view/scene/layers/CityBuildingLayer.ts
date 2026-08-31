@@ -1,23 +1,42 @@
 import { CITY_BUILDINGS } from "../config/cityBuildingConfig";
 import { CITY_COLORS } from "../config/cityWorldConfig";
+import {
+  createCityProjectOperationStatusesFromBrowserSession,
+  type CityProjectOperationStatus,
+  type CityProjectOperationStatusMap,
+} from "../CityProjectOperationsStatusService";
 import type { CityBuildingDefinition } from "../buildings/buildingTypes";
 import type { PhaserGraphics, PhaserScene } from "../shared/phaserTypes";
 
-export function createCityBuildingLayer(scene: PhaserScene, g: PhaserGraphics) {
-  CITY_BUILDINGS.forEach((building) => drawBuilding(scene, g, building));
+export function createCityBuildingLayer(
+  scene: PhaserScene,
+  g: PhaserGraphics,
+  cityProjectOperationStatuses: CityProjectOperationStatusMap = createCityProjectOperationStatusesFromBrowserSession(CITY_BUILDINGS),
+) {
+  CITY_BUILDINGS.forEach((building) => drawBuilding(scene, g, building, cityProjectOperationStatuses[building.id]));
 }
 
-function drawBuilding(scene: PhaserScene, g: PhaserGraphics, building: CityBuildingDefinition) {
+function drawBuilding(
+  scene: PhaserScene,
+  g: PhaserGraphics,
+  building: CityBuildingDefinition,
+  operationStatus?: CityProjectOperationStatus,
+) {
   const { worldPosition, size, visual, name, active } = building;
   const { x, y } = worldPosition;
   const { width, height } = size;
   const { wall, roof, accent } = visual;
+  const statusTone = operationStatus?.tone;
+  const activeWorkVisible = statusTone === "active";
+  const completedVisible = statusTone === "complete";
+  const warningVisible = statusTone === "warning";
 
   g.fillStyle(0x314233, 0.28).fillRect(x + 12, y + 15, width, height);
 
-  if (active) {
-    g.fillStyle(CITY_COLORS.yellow, 0.28).fillRect(x - 14, y - 14, width + 28, height + 28);
-    g.lineStyle(6, CITY_COLORS.yellow).strokeRect(x - 9, y - 9, width + 18, height + 18);
+  if (activeWorkVisible || warningVisible || completedVisible) {
+    const treatmentColor = warningVisible ? 0xc2410c : completedVisible ? 0x2f9e44 : CITY_COLORS.yellow;
+    g.fillStyle(treatmentColor, warningVisible ? 0.34 : 0.24).fillRect(x - 14, y - 14, width + 28, height + 28);
+    g.lineStyle(6, treatmentColor).strokeRect(x - 9, y - 9, width + 18, height + 18);
   }
 
   g.fillStyle(CITY_COLORS.ink).fillRect(x - 8, y - 16, width + 16, 30);
@@ -45,14 +64,46 @@ function drawBuilding(scene: PhaserScene, g: PhaserGraphics, building: CityBuild
     .setOrigin(0.5);
 
   scene.add
-    .text(x + width / 2, y + height + 12, active ? "ACTIVE COMPANY" : "COMING SOON", {
+    .text(x + width / 2, y + height + 12, operationStatus?.label ?? (active ? "ACTIVE COMPANY" : "COMING SOON"), {
       fontFamily: "monospace",
       fontSize: "13px",
-      color: active ? "#253247" : "#ffffff",
-      backgroundColor: active ? "#f4c85d" : "#596171",
+      color: getStatusTextColor(operationStatus, active),
+      backgroundColor: getStatusBackgroundColor(operationStatus, active),
       fontStyle: "bold",
       padding: { x: 10, y: 6 },
     })
     .setOrigin(0.5, 0)
-    .setAlpha(active ? 1 : 0.94);
+    .setAlpha(operationStatus?.tone === "idle" ? 0.94 : 1);
+
+  if (operationStatus?.reasonText) {
+    scene.add
+      .text(x + width / 2, y + height + 45, compactReason(operationStatus.reasonText), {
+        fontFamily: "monospace",
+        fontSize: "10px",
+        color: "#ffffff",
+        backgroundColor: "#253247",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setAlpha(0.92);
+  }
+}
+
+function getStatusTextColor(status: CityProjectOperationStatus | undefined, active: boolean) {
+  if (!status) return active ? "#253247" : "#ffffff";
+  if (status.tone === "idle" || status.tone === "disconnected" || status.tone === "warning") return "#ffffff";
+  return "#172033";
+}
+
+function getStatusBackgroundColor(status: CityProjectOperationStatus | undefined, active: boolean) {
+  if (!status) return active ? "#f4c85d" : "#596171";
+  if (status.tone === "warning") return "#c2410c";
+  if (status.tone === "complete") return "#7bd88f";
+  if (status.tone === "active") return "#f4c85d";
+  if (status.tone === "disconnected") return "#4b5563";
+  return "#596171";
+}
+
+function compactReason(value: string) {
+  return value.length <= 42 ? value : `${value.slice(0, 39)}...`;
 }

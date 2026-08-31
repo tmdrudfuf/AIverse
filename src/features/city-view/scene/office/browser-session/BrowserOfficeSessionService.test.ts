@@ -210,6 +210,46 @@ describe("BrowserOfficeSessionService", () => {
       deployStarted: false,
       rulesVersion: "external-ados-run-status-v1",
     };
+    source.reviewerRuntimeCollections["external-crm"] = {
+      projectId: "external-crm",
+      runtimes: [{
+        projectId: "external-crm",
+        status: "Completed",
+        startedAt: "2026-08-25T00:10:00.000Z",
+      } as unknown as typeof source.reviewerRuntimeCollections[string]["runtimes"][number]],
+      runtimeCount: 1,
+      rulesVersion: "codex-reviewer-v1",
+    };
+    source.implementerRuntimeCollections["external-crm"] = {
+      projectId: "external-crm",
+      runtimes: [{
+        projectId: "external-crm",
+        status: "Completed",
+        startedAt: "2026-08-25T00:05:00.000Z",
+      } as unknown as typeof source.implementerRuntimeCollections[string]["runtimes"][number]],
+      runtimeCount: 1,
+      rulesVersion: "claude-implementer-v1",
+    };
+    source.reviewFixRuntimeCollections["external-crm"] = {
+      projectId: "external-crm",
+      runtimes: [{
+        projectId: "external-crm",
+        status: "Completed",
+        startedAt: "2026-08-25T00:15:00.000Z",
+      } as unknown as typeof source.reviewFixRuntimeCollections[string]["runtimes"][number]],
+      runtimeCount: 1,
+      rulesVersion: "review-fix-runtime-v1",
+    };
+    source.validationRuntimeCollections["external-crm"] = {
+      projectId: "external-crm",
+      runtimes: [{
+        projectId: "external-crm",
+        status: "Completed",
+        startedAt: "2026-08-25T00:20:00.000Z",
+      } as unknown as typeof source.validationRuntimeCollections[string]["runtimes"][number]],
+      runtimeCount: 1,
+      rulesVersion: "validation-runtime-v1",
+    };
 
     expect(service.saveState(source)).toBe(true);
 
@@ -278,6 +318,26 @@ describe("BrowserOfficeSessionService", () => {
       publishStarted: false,
       mergeStarted: false,
       deployStarted: false,
+    });
+    expect(restored.reviewerRuntimeCollections["external-crm"]?.runtimes[0]).toMatchObject({
+      projectId: "external-crm",
+      status: "Completed",
+      startedAt: "2026-08-25T00:10:00.000Z",
+    });
+    expect(restored.implementerRuntimeCollections["external-crm"]?.runtimes[0]).toMatchObject({
+      projectId: "external-crm",
+      status: "Completed",
+      startedAt: "2026-08-25T00:05:00.000Z",
+    });
+    expect(restored.reviewFixRuntimeCollections["external-crm"]?.runtimes[0]).toMatchObject({
+      projectId: "external-crm",
+      status: "Completed",
+      startedAt: "2026-08-25T00:15:00.000Z",
+    });
+    expect(restored.validationRuntimeCollections["external-crm"]?.runtimes[0]).toMatchObject({
+      projectId: "external-crm",
+      status: "Completed",
+      startedAt: "2026-08-25T00:20:00.000Z",
     });
     expect(restored.workSessions["task-1"]?.[0]?.id).toBe("session-1");
   });

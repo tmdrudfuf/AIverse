@@ -24,6 +24,30 @@ import type {
 } from "../external-ados-execution/ExternalProjectAdosExecutionTypes";
 import type { ExternalProjectAdosRunStatuses } from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
+import type {
+  ImplementerRuntimeCollection,
+  ImplementerRuntimeResultCollection,
+} from "../implementer-runtime/ImplementerRuntimeTypes";
+import type {
+  ReviewerRuntimeCollection,
+  ReviewerRuntimeResultCollection,
+} from "../reviewer-runtime/ReviewerRuntimeTypes";
+import type {
+  ReviewPromotionCollection,
+  ReviewPromotionResultCollection,
+} from "../review-decision/ReviewDecisionTypes";
+import type {
+  ReviewFixRuntimeCollection,
+  ReviewFixRuntimeResultCollection,
+} from "../review-fix-runtime/ReviewFixRuntimeTypes";
+import type {
+  ValidationRuntimeCollection,
+  ValidationRuntimeResultCollection,
+} from "../validation-runtime/ValidationRuntimeTypes";
+import type {
+  PostValidationReviewTargetCollection,
+  PostValidationReviewTargetResultCollection,
+} from "../post-validation-review-target/PostValidationReviewTargetTypes";
 
 export const BROWSER_OFFICE_SESSION_STORAGE_KEY = "aiverse.office.session";
 export const BROWSER_OFFICE_SESSION_SCHEMA_VERSION = "browser-office-session-v1";
@@ -54,6 +78,18 @@ export type BrowserOfficeSessionSnapshot = {
   externalProjectAdosExecutions?: ExternalProjectAdosExecutions;
   externalProjectAdosExecutionResults?: ExternalProjectAdosExecutionResults;
   externalProjectAdosRunStatuses?: ExternalProjectAdosRunStatuses;
+  implementerRuntimeCollections?: Record<string, ImplementerRuntimeCollection>;
+  implementerRuntimeResultCollections?: Record<string, ImplementerRuntimeResultCollection>;
+  reviewerRuntimeCollections?: Record<string, ReviewerRuntimeCollection>;
+  reviewerRuntimeResultCollections?: Record<string, ReviewerRuntimeResultCollection>;
+  reviewPromotionCollections?: Record<string, ReviewPromotionCollection>;
+  reviewPromotionResultCollections?: Record<string, ReviewPromotionResultCollection>;
+  reviewFixRuntimeCollections?: Record<string, ReviewFixRuntimeCollection>;
+  reviewFixRuntimeResultCollections?: Record<string, ReviewFixRuntimeResultCollection>;
+  validationRuntimeCollections?: Record<string, ValidationRuntimeCollection>;
+  validationRuntimeResultCollections?: Record<string, ValidationRuntimeResultCollection>;
+  postValidationReviewTargetCollections?: Record<string, PostValidationReviewTargetCollection>;
+  postValidationReviewTargetResultCollections?: Record<string, PostValidationReviewTargetResultCollection>;
   workSessions: Record<string, WorkSession[]>;
 };
 
@@ -88,5 +124,17 @@ export type BrowserOfficeSessionState = Pick<
   | "externalProjectAdosExecutions"
   | "externalProjectAdosExecutionResults"
   | "externalProjectAdosRunStatuses"
+  | "implementerRuntimeCollections"
+  | "implementerRuntimeResultCollections"
+  | "reviewerRuntimeCollections"
+  | "reviewerRuntimeResultCollections"
+  | "reviewPromotionCollections"
+  | "reviewPromotionResultCollections"
+  | "reviewFixRuntimeCollections"
+  | "reviewFixRuntimeResultCollections"
+  | "validationRuntimeCollections"
+  | "validationRuntimeResultCollections"
+  | "postValidationReviewTargetCollections"
+  | "postValidationReviewTargetResultCollections"
   | "workSessions"
 >;

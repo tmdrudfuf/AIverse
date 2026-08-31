@@ -173,6 +173,42 @@ describe("deriveLiveAgentWorkState", () => {
     expect(JSON.stringify(state.assignments)).not.toContain("Validating");
   });
 
+  it("maps prepared run state to preparing across Project Status and NPC work", () => {
+    const state = deriveLiveAgentWorkState(portalState({
+      externalProjectAdosRunPreparations: {
+        alpha: {
+          id: "alpha:external-ados-run-preparation",
+          projectId: "alpha",
+          developmentRequestDraftId: "alpha:external-development-request-draft",
+          status: "Prepared",
+          featureBranch: "codex/alpha-feature",
+          authoritativeBaseSha: "1b9ef5f33b6f87f62dabbdfa61e2fa8ccf6f18ec",
+          specPath: "specs/alpha-feature/spec.md",
+          validationCommands: ["npm test"],
+          reviewerCommand: "claude -p",
+          executionPolicyVersion: 1,
+          createdAt: "2026-08-29T00:00:00.000Z",
+          updatedAt: "2026-08-29T00:00:00.000Z",
+          sideEffectBoundary: "Local fixture only.",
+        },
+      },
+    }));
+
+    expect(state).toMatchObject({
+      projectId: "alpha",
+      lifecycle: "active",
+      stage: "preparing",
+      stageLabel: "Preparing",
+    });
+    expect(state.assignments[0]).toMatchObject({
+      role: "operations",
+      department: "project-status-operations",
+      statusLabel: "Preparing",
+      visualTone: "active",
+    });
+    expect(state.projectStatus.summary).toContain("Preparing");
+  });
+
   it("returns an idle no-active-run state when the selected project has no run state", () => {
     const state = deriveLiveAgentWorkState(portalState());
 

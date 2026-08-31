@@ -1,4 +1,5 @@
 import type { CityBuildingDefinition } from "../buildings/buildingTypes";
+import type { CityProjectOperationStatusMap } from "../CityProjectOperationsStatusService";
 import type { FounderState } from "../founder/founderTypes";
 import type { WorldBounds } from "../shared/geometry";
 import {
@@ -25,6 +26,7 @@ export type WorldStateSynchronizationInput = {
   sceneKey: string;
   bounds: WorldBounds;
   buildings: ReadonlyArray<CityBuildingDefinition>;
+  cityProjectOperationStatuses?: CityProjectOperationStatusMap;
   founderState?: FounderState;
   effects?: ReadonlyArray<WorldEffectState>;
   rewards?: ReadonlyArray<WorldRewardState>;
@@ -81,7 +83,7 @@ export function createSucceededWorldStateSnapshot(input: WorldStateSynchronizati
     activeWorldSpaceId: input.activeWorldSpaceId,
     sceneKey: input.sceneKey,
     bounds: { ...input.bounds },
-    buildings: input.buildings.map(createWorldBuildingState),
+    buildings: input.buildings.map((building) => createWorldBuildingState(building, input.cityProjectOperationStatuses?.[building.id])),
     actors: createWorldActorStates(input.founderState),
     effects: (input.effects ?? []).map(copyWorldEffectState),
     rewards: (input.rewards ?? []).map(copyCompanyProgressionReward),
@@ -118,7 +120,7 @@ function createStatusSnapshot(
     sceneKey: input?.sceneKey ?? previous?.sceneKey ?? "",
     bounds: input?.bounds ? { ...input.bounds } : previous ? { ...previous.bounds } : { x: 0, y: 0, width: 0, height: 0 },
     buildings: input?.buildings
-      ? input.buildings.map(createWorldBuildingState)
+      ? input.buildings.map((building) => createWorldBuildingState(building, input.cityProjectOperationStatuses?.[building.id]))
       : previous
         ? previous.buildings.map((building) => ({ ...building, position: { ...building.position }, size: { ...building.size } }))
         : [],
@@ -148,7 +150,10 @@ function createStatusSnapshot(
   };
 }
 
-function createWorldBuildingState(building: CityBuildingDefinition): WorldBuildingState {
+function createWorldBuildingState(
+  building: CityBuildingDefinition,
+  operationStatus?: CityProjectOperationStatusMap[string],
+): WorldBuildingState {
   return {
     id: building.id,
     name: building.name,
@@ -157,6 +162,13 @@ function createWorldBuildingState(building: CityBuildingDefinition): WorldBuildi
     size: { ...building.size },
     active: building.active,
     destinationEnabled: building.destination.enabled,
+    companyId: building.projectBinding?.bindingId,
+    projectId: operationStatus?.projectId ?? building.projectBinding?.projectId,
+    operationStage: operationStatus?.stage,
+    operationLabel: operationStatus?.label,
+    operationTone: operationStatus?.tone,
+    operationReasonText: operationStatus?.reasonText,
+    mutationDisabled: operationStatus?.mutationDisabled,
   };
 }
 
