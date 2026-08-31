@@ -46,6 +46,9 @@ describe("BrowserOfficeSessionService", () => {
     source.selectedProjectId = "external-crm";
     source.selectedProjectDashboardProjectId = "daily-proof";
     source.selectedProjectDashboardActiveWorkIndex = 1;
+    source.selectedBacklogProjectId = "external-crm";
+    source.selectedBacklogTaskId = "external-crm:backlog:1";
+    source.selectedBacklogTaskIndex = 0;
     source.selectedWorkSessionId = "session-1";
     source.employees = [{
       id: "gpt-engineer",
@@ -210,6 +213,19 @@ describe("BrowserOfficeSessionService", () => {
       deployStarted: false,
       rulesVersion: "external-ados-run-status-v1",
     };
+    source.projectBacklogCollections["external-crm"] = {
+      projectId: "external-crm",
+      tasks: [{
+        id: "external-crm:backlog:1",
+        projectId: "external-crm",
+        title: "Plan CRM backlog",
+        description: "Preserve the operator-entered backlog request.",
+        status: "ready",
+        priority: "high",
+        createdAt: "2026-08-25T00:00:00.000Z",
+        updatedAt: "2026-08-25T00:05:00.000Z",
+      }],
+    };
     source.reviewerRuntimeCollections["external-crm"] = {
       projectId: "external-crm",
       runtimes: [{
@@ -259,6 +275,9 @@ describe("BrowserOfficeSessionService", () => {
     expect(restored.selectedProjectIndex).toBe(3);
     expect(restored.selectedProjectDashboardProjectId).toBe("daily-proof");
     expect(restored.selectedProjectDashboardActiveWorkIndex).toBe(1);
+    expect(restored.selectedBacklogProjectId).toBe("external-crm");
+    expect(restored.selectedBacklogTaskId).toBe("external-crm:backlog:1");
+    expect(restored.selectedBacklogTaskIndex).toBe(0);
     expect(restored.selectedWorkSessionId).toBe("session-1");
     expect(restored.projectRegistryEntries.some((entry) => entry.id === "external-crm")).toBe(true);
     expect(restored.projects.some((project) => project.id === "external-crm")).toBe(true);
@@ -318,6 +337,13 @@ describe("BrowserOfficeSessionService", () => {
       publishStarted: false,
       mergeStarted: false,
       deployStarted: false,
+    });
+    expect(restored.projectBacklogCollections["external-crm"].tasks[0]).toMatchObject({
+      projectId: "external-crm",
+      title: "Plan CRM backlog",
+      description: "Preserve the operator-entered backlog request.",
+      status: "ready",
+      priority: "high",
     });
     expect(restored.reviewerRuntimeCollections["external-crm"]?.runtimes[0]).toMatchObject({
       projectId: "external-crm",

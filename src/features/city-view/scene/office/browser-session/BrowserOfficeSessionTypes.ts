@@ -24,6 +24,7 @@ import type {
 } from "../external-ados-execution/ExternalProjectAdosExecutionTypes";
 import type { ExternalProjectAdosRunStatuses } from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
+import type { ProjectBacklogCollections } from "../project-backlog/ProjectBacklogTypes";
 import type {
   ImplementerRuntimeCollection,
   ImplementerRuntimeResultCollection,
@@ -58,6 +59,9 @@ export type BrowserOfficeSessionSnapshot = {
   selectedProjectId?: string;
   selectedProjectDashboardProjectId?: string;
   selectedProjectDashboardActiveWorkIndex?: number;
+  selectedBacklogProjectId?: string;
+  selectedBacklogTaskId?: string;
+  selectedBacklogTaskIndex?: number;
   selectedWorkSessionId?: string;
   projectRegistryEntries?: ProjectRegistryEntry[];
   projectCompanyBindings?: ProjectCompanyBinding[];
@@ -78,6 +82,7 @@ export type BrowserOfficeSessionSnapshot = {
   externalProjectAdosExecutions?: ExternalProjectAdosExecutions;
   externalProjectAdosExecutionResults?: ExternalProjectAdosExecutionResults;
   externalProjectAdosRunStatuses?: ExternalProjectAdosRunStatuses;
+  projectBacklogCollections?: ProjectBacklogCollections;
   implementerRuntimeCollections?: Record<string, ImplementerRuntimeCollection>;
   implementerRuntimeResultCollections?: Record<string, ImplementerRuntimeResultCollection>;
   reviewerRuntimeCollections?: Record<string, ReviewerRuntimeCollection>;
@@ -104,6 +109,9 @@ export type BrowserOfficeSessionState = Pick<
   | "selectedProjectId"
   | "selectedProjectDashboardProjectId"
   | "selectedProjectDashboardActiveWorkIndex"
+  | "selectedBacklogProjectId"
+  | "selectedBacklogTaskId"
+  | "selectedBacklogTaskIndex"
   | "selectedWorkSessionId"
   | "projectRegistryEntries"
   | "projectCompanyBindings"
@@ -124,6 +132,7 @@ export type BrowserOfficeSessionState = Pick<
   | "externalProjectAdosExecutions"
   | "externalProjectAdosExecutionResults"
   | "externalProjectAdosRunStatuses"
+  | "projectBacklogCollections"
   | "implementerRuntimeCollections"
   | "implementerRuntimeResultCollections"
   | "reviewerRuntimeCollections"

@@ -146,6 +146,8 @@ import {
   createProjectPortalState,
 } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
+import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
+import type { ProjectBacklogPlanningStatus, ProjectBacklogPriority } from "./project-backlog/ProjectBacklogTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
 import { EmployeeNpcMovementService } from "./npc/EmployeeNpcMovementService";
@@ -311,6 +313,11 @@ export type OfficeProjectPortalInput = {
   preparePostValidationReviewTargetPressed: boolean;
   startPostValidationReviewPressed: boolean;
   developmentRequestText?: string;
+  backlogTaskTitle?: string;
+  backlogTaskDescription?: string;
+  backlogTaskPriority?: ProjectBacklogPriority;
+  backlogTaskStatus?: ProjectBacklogPlanningStatus;
+  backlogTaskBlockedReason?: string;
 };
 
 export type OfficeProjectPortalControllerOptions = {
@@ -353,6 +360,7 @@ export class OfficeProjectPortalController {
   private reviewFixRuntimeService: ReviewFixRuntimeService;
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
+  private readonly projectBacklogService: ProjectBacklogService;
   private externalProjectAdosExecutionService: ExternalProjectAdosExecutionService;
   private activeExternalProjectAdosExecutionKeys?: Set<string> = new Set<string>();
   private readonly activeValidationRuntimeKeys = new Set<string>();
@@ -434,6 +442,7 @@ export class OfficeProjectPortalController {
       new ImplementerReviewFixRuntimeProvider(new ClaudeImplementerRuntimeProvider()),
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
+    this.projectBacklogService = new ProjectBacklogService();
     this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(new ClaudeImplementerRuntimeProvider());
     this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
@@ -520,6 +529,11 @@ export class OfficeProjectPortalController {
       return;
     }
 
+    if (this.state.viewMode === "project-backlog") {
+      this.updateProjectBacklogInput(input);
+      return;
+    }
+
     if (this.state.viewMode === "project-dashboard") {
       this.updateProjectDashboardInput(input);
       return;
@@ -546,6 +560,81 @@ export class OfficeProjectPortalController {
     return this.state.isOpen &&
       this.state.viewMode === "project-dashboard" &&
       Boolean(this.getDevelopmentRequestTargetProject());
+  }
+
+  shouldShowProjectBacklogInput() {
+    return this.state.isOpen && this.state.viewMode === "project-backlog";
+  }
+
+  getProjectBacklogProbeState() {
+    const projectId = this.state.selectedBacklogProjectId;
+    const collection = projectId
+      ? this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId)
+      : undefined;
+    const selectedTask = this.getSelectedBacklogTask();
+    return {
+      viewMode: this.state.isOpen ? this.state.viewMode : "",
+      projectId: projectId ?? "",
+      taskCount: collection?.tasks.length ?? 0,
+      taskTitles: collection?.tasks.map((task) => task.title) ?? [],
+      selectedTaskId: selectedTask?.id ?? "",
+      selectedTaskTitle: selectedTask?.title ?? "",
+      selectedTaskStatus: selectedTask?.status ?? "",
+      selectedTaskPriority: selectedTask?.priority ?? "",
+      selectedTaskBlockedReason: selectedTask?.blockedReason ?? "",
+    };
+  }
+
+  getSelectedProjectBacklogTaskInput() {
+    const task = this.getSelectedBacklogTask();
+    return task ? { ...task } : undefined;
+  }
+
+  createBacklogTaskFromInput(input: {
+    title: string;
+    description: string;
+    priority?: ProjectBacklogPriority;
+  }) {
+    const context = this.getBacklogMutationContext();
+    if (!context) return false;
+    const result = this.projectBacklogService.createTask(this.state.projectBacklogCollections, context, input);
+    if (!result.ok) return false;
+    this.state.selectedBacklogTaskIndex = 0;
+    this.state.selectedBacklogTaskId = result.task.id;
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+    return true;
+  }
+
+  updateSelectedBacklogTaskFromInput(input: {
+    title?: string;
+    description?: string;
+    priority?: ProjectBacklogPriority;
+    status?: ProjectBacklogPlanningStatus;
+    blockedReason?: string;
+  }) {
+    const context = this.getBacklogMutationContext();
+    const task = this.getSelectedBacklogTask();
+    if (!context || !task) return false;
+    const normalizedInput = {
+      ...input,
+      title: input.title?.trim() ? input.title : undefined,
+      description: input.description?.trim() ? input.description : undefined,
+    };
+    const result = this.projectBacklogService.updateTask(
+      this.state.projectBacklogCollections,
+      context,
+      task.id,
+      normalizedInput,
+    );
+    if (!result.ok) return false;
+    this.state.selectedBacklogTaskId = result.task.id;
+    this.syncBacklogSelectionToTaskId(result.task.id);
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+    return true;
   }
 
   async initializeEmployeeSimulationSnapshots() {
@@ -981,6 +1070,12 @@ export class OfficeProjectPortalController {
     if (input.upPressed) this.moveProjectSelection(-1);
     if (input.downPressed) this.moveProjectSelection(1);
 
+    if (input.openCandidateDetailPressed) {
+      const project = this.getSelectedProject();
+      if (project) this.openProjectBacklog(project.id);
+      return;
+    }
+
     if (input.actionPressed || input.enterPressed) {
       if (this.state.selectedProjectIndex === -2) {
         void this.recruitFifthEmployee().then((handled) => {
@@ -1023,6 +1118,7 @@ export class OfficeProjectPortalController {
     }
 
     const selectedPromotion = this.getSelectedCandidatePromotionReview();
+    const projectId = this.state.selectedProjectDashboardProjectId;
     if (input.upPressed || input.downPressed) {
       if (selectedPromotion) {
         this.moveCandidatePromotionSelection(input.upPressed ? -1 : 1);
@@ -1281,7 +1377,6 @@ export class OfficeProjectPortalController {
         return;
       }
 
-      const projectId = this.state.selectedProjectDashboardProjectId;
       if (projectId) {
         void this.syncRepositorySnapshot(projectId);
         void this.syncIssueSnapshots(projectId);
@@ -1365,8 +1460,38 @@ export class OfficeProjectPortalController {
         return;
       }
 
+      if (section.id === "planning") {
+        this.openProjectBacklog(project.id);
+        return;
+      }
+
       if (section.id === "tasks") {
         void this.openTaskList(project.id);
+      }
+    }
+  }
+
+  private updateProjectBacklogInput(input: OfficeProjectPortalInput) {
+    if (input.escapePressed) {
+      this.state.viewMode = "workspace";
+      this.state.selectedBacklogProjectId = undefined;
+      this.state.selectedBacklogTaskId = undefined;
+      this.state.selectedBacklogTaskIndex = 0;
+      this.view.render(this.state);
+      return;
+    }
+
+    if (input.upPressed) this.moveBacklogSelection(-1);
+    if (input.downPressed) this.moveBacklogSelection(1);
+    if (input.actionPressed || input.enterPressed) {
+      const title = input.backlogTaskTitle?.trim() ?? "";
+      const description = input.backlogTaskDescription?.trim() ?? "";
+      if (title && description) {
+        this.createBacklogTaskFromInput({
+          title,
+          description,
+          priority: input.backlogTaskPriority,
+        });
       }
     }
   }
@@ -3415,6 +3540,18 @@ export class OfficeProjectPortalController {
     this.view.render(this.state);
   }
 
+  private openProjectBacklog(projectId: string) {
+    this.state.selectedBacklogProjectId = projectId;
+    this.state.selectedBacklogTaskIndex = 0;
+    const collection = this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId);
+    this.state.projectBacklogCollections[projectId] = collection;
+    this.state.selectedBacklogTaskId = collection.tasks[0]?.id;
+    this.state.selectedBacklogPriorityIndex = 1;
+    this.state.selectedBacklogStatusIndex = 0;
+    this.state.viewMode = "project-backlog";
+    this.view.render(this.state);
+  }
+
   private async openEmployeeSelection() {
     const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
     const task = this.getSelectedTask();
@@ -4028,6 +4165,57 @@ export class OfficeProjectPortalController {
     const projectId = this.state.selectedTaskProjectId ?? this.getSelectedProject()?.id;
     if (projectId) void this.prepareProjectManagementSuggestion(projectId);
     this.view.render(this.state);
+  }
+
+  private moveBacklogSelection(delta: number) {
+    const projectId = this.state.selectedBacklogProjectId;
+    if (!projectId) return;
+    const collection = this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId);
+    if (collection.tasks.length === 0) {
+      this.state.selectedBacklogTaskIndex = 0;
+      this.state.selectedBacklogTaskId = undefined;
+      this.view.render(this.state);
+      return;
+    }
+
+    const nextIndex = clamp(this.state.selectedBacklogTaskIndex + delta, 0, collection.tasks.length - 1);
+    if (nextIndex === this.state.selectedBacklogTaskIndex) return;
+    this.state.selectedBacklogTaskIndex = nextIndex;
+    this.state.selectedBacklogTaskId = collection.tasks[nextIndex]?.id;
+    this.view.render(this.state);
+  }
+
+  private syncBacklogSelectionToTaskId(taskId: string) {
+    const projectId = this.state.selectedBacklogProjectId;
+    if (!projectId) return;
+    const collection = this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId);
+    this.state.projectBacklogCollections[projectId] = collection;
+    const taskIndex = collection.tasks.findIndex((task) => task.id === taskId);
+    this.state.selectedBacklogTaskIndex = taskIndex >= 0 ? taskIndex : 0;
+  }
+
+  private getSelectedBacklogTask() {
+    const projectId = this.state.selectedBacklogProjectId;
+    if (!projectId) return undefined;
+    const collection = this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId);
+    const selectedTaskId = this.state.selectedBacklogTaskId;
+    return selectedTaskId
+      ? collection.tasks.find((task) => task.id === selectedTaskId)
+      : collection.tasks[this.state.selectedBacklogTaskIndex];
+  }
+
+  private getBacklogMutationContext() {
+    const projectId = this.state.selectedBacklogProjectId;
+    if (!projectId) return undefined;
+    const project = this.state.projectRegistryEntries.find((entry) => entry.id === projectId);
+    const binding = this.state.projectCompanyBindings?.find((item) => item.projectId === projectId);
+    return {
+      projectId,
+      bindingId: binding?.bindingId ?? this.state.activeProjectCompanyContext?.binding.bindingId ?? projectId,
+      buildingId: binding?.buildingId ?? this.state.activeProjectCompanyContext?.binding.buildingId ?? projectId,
+      fallbackCompanyName: project?.owner.companyName ?? project?.displayName ?? projectId,
+      projects: this.state.projectRegistryEntries,
+    };
   }
 
   private moveEmployeeSelection(delta: number) {

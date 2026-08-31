@@ -1,4 +1,5 @@
 import type { ProjectPortalState } from "../OfficeProjectPortalTypes";
+import { createWorkspaces } from "../OfficeProjectPortalRegistry";
 import { toProjectPortalProject, toRepositoryMapping } from "../project-registry/ProjectRegistryAdapters";
 import type {
   NormalizedLocalProjectRepositoryBinding,
@@ -18,6 +19,8 @@ import type {
   ExternalProjectAdosRunStatus,
   ExternalProjectAdosRunStatuses,
 } from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
+import { ProjectBacklogService, isBacklogCollection } from "../project-backlog/ProjectBacklogService";
+import type { ProjectBacklogCollections } from "../project-backlog/ProjectBacklogTypes";
 
 export type BrowserOfficeSessionServiceOptions = {
   storage?: BrowserOfficeSessionStorage;
@@ -54,6 +57,9 @@ export class BrowserOfficeSessionService {
     state.selectedProjectId = snapshot.selectedProjectId ?? state.selectedProjectId;
     state.selectedProjectDashboardProjectId = snapshot.selectedProjectDashboardProjectId;
     state.selectedProjectDashboardActiveWorkIndex = clampIndex(snapshot.selectedProjectDashboardActiveWorkIndex);
+    state.selectedBacklogProjectId = snapshot.selectedBacklogProjectId;
+    state.selectedBacklogTaskId = snapshot.selectedBacklogTaskId;
+    state.selectedBacklogTaskIndex = clampIndex(snapshot.selectedBacklogTaskIndex);
     state.selectedWorkSessionId = snapshot.selectedWorkSessionId;
     restoreProjectRegistryEntries(state, snapshot.projectRegistryEntries);
     state.projectCompanyBindings = cloneValidProjectCompanyBindings(snapshot.projectCompanyBindings ?? state.projectCompanyBindings);
@@ -74,6 +80,7 @@ export class BrowserOfficeSessionService {
     state.externalProjectAdosExecutions = clone(snapshot.externalProjectAdosExecutions ?? {});
     state.externalProjectAdosExecutionResults = clone(snapshot.externalProjectAdosExecutionResults ?? {});
     state.externalProjectAdosRunStatuses = cloneValidExternalProjectAdosRunStatuses(snapshot.externalProjectAdosRunStatuses);
+    state.projectBacklogCollections = cloneValidProjectBacklogCollections(snapshot.projectBacklogCollections);
     state.implementerRuntimeCollections = clone(snapshot.implementerRuntimeCollections ?? {});
     state.implementerRuntimeResultCollections = clone(snapshot.implementerRuntimeResultCollections ?? {});
     state.reviewerRuntimeCollections = clone(snapshot.reviewerRuntimeCollections ?? {});
@@ -103,6 +110,9 @@ export class BrowserOfficeSessionService {
       selectedProjectId: state.selectedProjectId,
       selectedProjectDashboardProjectId: state.selectedProjectDashboardProjectId,
       selectedProjectDashboardActiveWorkIndex: clampIndex(state.selectedProjectDashboardActiveWorkIndex),
+      selectedBacklogProjectId: state.selectedBacklogProjectId,
+      selectedBacklogTaskId: state.selectedBacklogTaskId,
+      selectedBacklogTaskIndex: clampIndex(state.selectedBacklogTaskIndex),
       selectedWorkSessionId: state.selectedWorkSessionId,
       projectRegistryEntries: cloneProjectRegistryEntries(state.projectRegistryEntries),
       projectCompanyBindings: cloneValidProjectCompanyBindings(state.projectCompanyBindings),
@@ -123,6 +133,7 @@ export class BrowserOfficeSessionService {
       externalProjectAdosExecutions: clone(state.externalProjectAdosExecutions),
       externalProjectAdosExecutionResults: clone(state.externalProjectAdosExecutionResults),
       externalProjectAdosRunStatuses: clone(state.externalProjectAdosRunStatuses),
+      projectBacklogCollections: cloneValidProjectBacklogCollections(state.projectBacklogCollections),
       implementerRuntimeCollections: clone(state.implementerRuntimeCollections),
       implementerRuntimeResultCollections: clone(state.implementerRuntimeResultCollections),
       reviewerRuntimeCollections: clone(state.reviewerRuntimeCollections),
@@ -167,6 +178,9 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     typeof value.savedAt === "string" &&
     isOptionalString(value.selectedProjectId) &&
     isOptionalString(value.selectedProjectDashboardProjectId) &&
+    isOptionalString(value.selectedBacklogProjectId) &&
+    isOptionalString(value.selectedBacklogTaskId) &&
+    (value.selectedBacklogTaskIndex === undefined || typeof value.selectedBacklogTaskIndex === "number") &&
     isOptionalString(value.selectedWorkSessionId) &&
     (value.selectedProjectDashboardActiveWorkIndex === undefined || typeof value.selectedProjectDashboardActiveWorkIndex === "number") &&
     (value.projectRegistryEntries === undefined || Array.isArray(value.projectRegistryEntries)) &&
@@ -189,6 +203,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     (value.externalProjectAdosExecutions === undefined || isRecordOfRecords(value.externalProjectAdosExecutions)) &&
     (value.externalProjectAdosExecutionResults === undefined || isRecordOfRecords(value.externalProjectAdosExecutionResults)) &&
     (value.externalProjectAdosRunStatuses === undefined || isRecord(value.externalProjectAdosRunStatuses)) &&
+    (value.projectBacklogCollections === undefined || isProjectBacklogCollectionRecord(value.projectBacklogCollections)) &&
     (value.implementerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.implementerRuntimeCollections)) &&
     (value.implementerRuntimeResultCollections === undefined || isResultCollectionRecord(value.implementerRuntimeResultCollections)) &&
     (value.reviewerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.reviewerRuntimeCollections)) &&
@@ -223,6 +238,10 @@ function isTaskCollectionRecord(value: unknown) {
     typeof collection.projectId === "string" &&
     Array.isArray(collection.tasks)
   ));
+}
+
+function isProjectBacklogCollectionRecord(value: unknown) {
+  return isRecord(value) && Object.values(value).every(isBacklogCollection);
 }
 
 function isResultCollectionRecord(value: unknown) {
@@ -262,6 +281,12 @@ function cloneValidExternalProjectAdosRunStatuses(value: unknown): ExternalProje
         isExternalProjectAdosRunStatus(entry[1])
       )
       .map(([projectId, status]) => [projectId, clone(status)]),
+  );
+}
+
+function cloneValidProjectBacklogCollections(value: unknown) {
+  return new ProjectBacklogService().cloneCollections(
+    isProjectBacklogCollectionRecord(value) ? value as ProjectBacklogCollections : {},
   );
 }
 
@@ -325,6 +350,7 @@ function restoreProjectRegistryEntries(
   const registryEntries = Array.from(entriesById.values());
   state.projectRegistryEntries = registryEntries.map(cloneProjectRegistryEntry);
   state.projects = registryEntries.map((entry) => toProjectPortalProject(entry, clone(state.services)));
+  state.workspaces = createWorkspaces(registryEntries);
   state.repositoryMappings = registryEntries
     .map((entry) => toRepositoryMapping(entry))
     .filter((mapping): mapping is ProjectPortalState["repositoryMappings"][number] => Boolean(mapping));

@@ -87,6 +87,7 @@ import type {
 } from "./project-registry/ProjectRegistryTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import type { ReceptionDeskUpgradeBenefits } from "./ReceptionDeskUpgradeBenefitsService";
+import type { ProjectBacklogCollections } from "./project-backlog/ProjectBacklogTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 import type { ActiveProjectCompanyContext, ProjectCompanyBinding } from "./project-company-binding/ProjectCompanyBindingTypes";
@@ -103,6 +104,7 @@ export type ProjectPortalViewMode =
   | "repository-detail"
   | "task-list"
   | "task-detail"
+  | "project-backlog"
   | "employee-selection"
   | "project-dashboard"
   | "candidate-detail"
@@ -137,12 +139,12 @@ export type ProjectPortalProject = {
   repositoryIdentity?: ProjectRegistryRepositoryIdentity;
 };
 
-export type ProjectWorkspaceSectionId = "repository" | "firebase" | "analytics" | "tasks" | "ai-agents";
+export type ProjectWorkspaceSectionId = "repository" | "firebase" | "analytics" | "planning" | "tasks" | "ai-agents";
 
 export type ProjectWorkspaceSection = {
   id: ProjectWorkspaceSectionId;
   label: string;
-  status: "Not connected" | "Placeholder" | "Mock connected" | "3 tasks";
+  status: "Not connected" | "Placeholder" | "Mock connected" | "Planning" | "3 tasks";
   enabled: boolean;
   placeholder: true;
 };
@@ -187,6 +189,11 @@ export type ProjectPortalState = {
   selectedEmployeeIndex: number;
   selectedProjectDashboardProjectId?: string;
   selectedProjectDashboardActiveWorkIndex: number;
+  selectedBacklogProjectId?: string;
+  selectedBacklogTaskIndex: number;
+  selectedBacklogTaskId?: string;
+  selectedBacklogPriorityIndex: number;
+  selectedBacklogStatusIndex: number;
   selectedCandidatePromotionIndex: number;
   selectedCandidateTaskId?: string;
   selectedInfluenceFocusIndex: number;
@@ -244,6 +251,7 @@ export type ProjectPortalState = {
   externalProjectAdosExecutions: ExternalProjectAdosExecutions;
   externalProjectAdosExecutionResults: ExternalProjectAdosExecutionResults;
   externalProjectAdosRunStatuses: ExternalProjectAdosRunStatuses;
+  projectBacklogCollections: ProjectBacklogCollections;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
