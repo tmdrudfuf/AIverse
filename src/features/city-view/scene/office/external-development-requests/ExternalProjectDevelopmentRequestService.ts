@@ -53,7 +53,7 @@ export function createExternalProjectDevelopmentRequestDraft(
   const targetProjectIdentity = createTargetProjectIdentity(input.project);
   const requirementsArtifactPath = createExternalProjectRequirementsArtifactPath(input.project.id, timestamp);
   return {
-    id: `${input.project.id}:external-development-request-draft`,
+    id: createExternalProjectDevelopmentRequestDraftId(input.project.id, input.sourceBacklogTaskId),
     projectId: input.project.id,
     projectName: input.project.name,
     companyName,
@@ -79,6 +79,12 @@ export function createExternalProjectDevelopmentRequestDraft(
     updatedAt: timestamp,
     sideEffectBoundary: EXTERNAL_PROJECT_DEVELOPMENT_REQUEST_BOUNDARY,
   };
+}
+
+function createExternalProjectDevelopmentRequestDraftId(projectId: string, sourceBacklogTaskId: string | undefined) {
+  return sourceBacklogTaskId
+    ? `${projectId}:backlog-task:${sourceBacklogTaskId}:external-development-request-draft`
+    : `${projectId}:external-development-request-draft`;
 }
 
 export function resolveDevelopmentRequestTargetProject(input: {

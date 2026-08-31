@@ -147,7 +147,10 @@ import {
 } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
-import { ProjectBacklogDevelopmentBridgeService } from "./project-backlog/ProjectBacklogDevelopmentBridgeService";
+import {
+  ProjectBacklogDevelopmentBridgeService,
+  createProjectBacklogDevelopmentAssociationKey,
+} from "./project-backlog/ProjectBacklogDevelopmentBridgeService";
 import type { ProjectBacklogPlanningStatus, ProjectBacklogPriority, ProjectBacklogTask } from "./project-backlog/ProjectBacklogTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
@@ -653,6 +656,7 @@ export class OfficeProjectPortalController {
     const task = this.getSelectedBacklogTask();
     const context = this.getBacklogMutationContext();
     if (!project || !task || !context) return false;
+    const associationKey = this.getBacklogDevelopmentAssociationKey(task);
 
     const bridgeOutcome = this.projectBacklogDevelopmentBridgeService.createRequestAndPreparation({
       project,
@@ -661,24 +665,24 @@ export class OfficeProjectPortalController {
       existingDraft: this.getAssociatedDevelopmentRequestDraft(task),
       existingPreparation: this.getAssociatedAdosRunPreparation(task),
       existingExecution: this.getAssociatedAdosExecution(task),
-      existingRunStatus: this.state.externalProjectAdosRunStatuses[project.id],
+      existingRunStatus: this.getAssociatedAdosRunStatus(task) ?? this.getActiveProjectAdosRunStatus(project.id),
     });
     if (!bridgeOutcome.ok) return false;
 
     this.state.externalProjectDevelopmentRequestDrafts = {
       ...this.state.externalProjectDevelopmentRequestDrafts,
-      [project.id]: bridgeOutcome.draft,
+      [associationKey]: bridgeOutcome.draft,
     };
     this.state.externalProjectAdosRunPreparations = {
       ...this.state.externalProjectAdosRunPreparations,
-      [project.id]: bridgeOutcome.preparation,
+      [associationKey]: bridgeOutcome.preparation,
     };
     this.state.externalProjectAdosRunStatuses = {
       ...this.state.externalProjectAdosRunStatuses,
-      [project.id]: deriveExternalProjectAdosRunStatus({
+      [associationKey]: deriveExternalProjectAdosRunStatus({
         projectId: project.id,
         preparation: bridgeOutcome.preparation,
-        persistedStatus: this.state.externalProjectAdosRunStatuses[project.id],
+        persistedStatus: this.state.externalProjectAdosRunStatuses[associationKey],
       })!,
     };
     this.projectBacklogService.updateTask(this.state.projectBacklogCollections, context, task.id, bridgeOutcome.taskPatch);
@@ -705,29 +709,29 @@ export class OfficeProjectPortalController {
       if (outcome.execution) {
         this.state.externalProjectAdosExecutions = {
           ...this.state.externalProjectAdosExecutions,
-          [project.id]: outcome.execution,
+          [associationKey]: outcome.execution,
         };
       }
       this.state.externalProjectAdosExecutionResults = {
         ...this.state.externalProjectAdosExecutionResults,
-        [project.id]: outcome.result,
+        [associationKey]: outcome.result,
       };
       this.state.externalProjectAdosRunStatuses = {
         ...this.state.externalProjectAdosRunStatuses,
-        [project.id]: deriveExternalProjectAdosRunStatus({
+        [associationKey]: deriveExternalProjectAdosRunStatus({
           projectId: project.id,
           preparation: bridgeOutcome.preparation,
-          execution: outcome.execution ?? this.state.externalProjectAdosExecutions[project.id],
+          execution: outcome.execution ?? this.state.externalProjectAdosExecutions[associationKey],
           result: outcome.result,
-          persistedStatus: this.state.externalProjectAdosRunStatuses[project.id],
+          persistedStatus: this.state.externalProjectAdosRunStatuses[associationKey],
         })!,
       };
       this.updateBacklogTaskAfterExecutionOutcome(context, task, outcome.result.resultAt, outcome.execution?.id, outcome.result.started || outcome.result.duplicateExistingExecution);
-      const draft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
+      const draft = this.state.externalProjectDevelopmentRequestDrafts[associationKey];
       if (draft) {
         this.state.externalProjectDevelopmentRequestDrafts = {
           ...this.state.externalProjectDevelopmentRequestDrafts,
-          [project.id]: {
+          [associationKey]: {
             ...draft,
             status: outcome.result.duplicateExistingExecution
               ? "AlreadyActive"
@@ -4267,7 +4271,9 @@ export class OfficeProjectPortalController {
       existingDraft: task ? this.getAssociatedDevelopmentRequestDraft(task) : undefined,
       existingPreparation: task ? this.getAssociatedAdosRunPreparation(task) : undefined,
       existingExecution: task ? this.getAssociatedAdosExecution(task) : undefined,
-      existingRunStatus: this.state.externalProjectAdosRunStatuses[project.id],
+      existingRunStatus: task
+        ? this.getAssociatedAdosRunStatus(task) ?? this.getActiveProjectAdosRunStatus(project.id)
+        : this.getActiveProjectAdosRunStatus(project.id),
     });
   }
 
@@ -4277,18 +4283,59 @@ export class OfficeProjectPortalController {
   }
 
   private getAssociatedDevelopmentRequestDraft(task: ProjectBacklogTask) {
-    const draft = this.state.externalProjectDevelopmentRequestDrafts[task.projectId];
-    return draft && draft.id === task.developmentRequestId ? draft : undefined;
+    const draft = this.state.externalProjectDevelopmentRequestDrafts[this.getBacklogDevelopmentAssociationKey(task)];
+    return draft &&
+      draft.id === task.developmentRequestId &&
+      draft.projectId === task.projectId &&
+      draft.sourceBacklogTaskId === task.id
+      ? draft
+      : undefined;
   }
 
   private getAssociatedAdosRunPreparation(task: ProjectBacklogTask) {
-    const preparation = this.state.externalProjectAdosRunPreparations[task.projectId];
-    return preparation && preparation.id === task.executionPreparationId ? preparation : undefined;
+    const preparation = this.state.externalProjectAdosRunPreparations[this.getBacklogDevelopmentAssociationKey(task)];
+    return preparation &&
+      preparation.id === task.executionPreparationId &&
+      preparation.projectId === task.projectId &&
+      preparation.developmentRequestDraftId === task.developmentRequestId
+      ? preparation
+      : undefined;
   }
 
   private getAssociatedAdosExecution(task: ProjectBacklogTask) {
-    const execution = this.state.externalProjectAdosExecutions[task.projectId];
-    return execution && execution.id === task.executionRunId ? execution : undefined;
+    const execution = this.state.externalProjectAdosExecutions[this.getBacklogDevelopmentAssociationKey(task)];
+    return execution &&
+      execution.id === task.executionRunId &&
+      execution.projectId === task.projectId &&
+      execution.preparationId === task.executionPreparationId &&
+      execution.developmentRequestDraftId === task.developmentRequestId
+      ? execution
+      : undefined;
+  }
+
+  private getAssociatedAdosRunStatus(task: ProjectBacklogTask) {
+    const status = this.state.externalProjectAdosRunStatuses[this.getBacklogDevelopmentAssociationKey(task)];
+    return status &&
+      status.projectId === task.projectId &&
+      status.preparationId === task.executionPreparationId &&
+      (!task.executionRunId || status.executionId === task.executionRunId)
+      ? status
+      : undefined;
+  }
+
+  private getActiveProjectAdosRunStatus(projectId: string) {
+    return Object.values(this.state.externalProjectAdosRunStatuses).find((status) => (
+      status.projectId === projectId && (
+        status.stage === "Prepared" ||
+        status.stage === "Started" ||
+        status.stage === "Blocked" ||
+        status.stage === "TimedOut"
+      )
+    ));
+  }
+
+  private getBacklogDevelopmentAssociationKey(task: ProjectBacklogTask) {
+    return createProjectBacklogDevelopmentAssociationKey(task.projectId, task.id);
   }
 
   private updateBacklogTaskAfterExecutionOutcome(

@@ -43,11 +43,13 @@ describe("ProjectBacklogDevelopmentBridgeService", () => {
     expect(outcome.draft.requestText).toContain(maliciousText);
     expect(outcome.draft.requirementsArtifactContent).toContain("Source backlog task id: task-a");
     expect(outcome.draft.requirementsArtifactContent).toContain(maliciousText);
-    expect(outcome.preparation.requirementsFileContent).toContain("Prepared execution id: project-a:external-ados-run-preparation");
+    expect(outcome.draft.id).toBe("project-a:backlog-task:task-a:external-development-request-draft");
+    expect(outcome.preparation.id).toBe(`${outcome.draft.id}:external-ados-run-preparation`);
+    expect(outcome.preparation.requirementsFileContent).toContain(`Prepared execution id: ${outcome.preparation.id}`);
     expect(outcome.taskPatch).toEqual({
       sourceBacklogTaskId: "task-a",
-      developmentRequestId: "project-a:external-development-request-draft",
-      executionPreparationId: "project-a:external-ados-run-preparation",
+      developmentRequestId: outcome.draft.id,
+      executionPreparationId: outcome.preparation.id,
     });
   });
 

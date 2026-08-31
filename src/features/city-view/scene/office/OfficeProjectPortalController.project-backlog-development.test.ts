@@ -72,8 +72,11 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
 
     await controller.startSelectedBacklogTaskDevelopment();
 
-    const draft = internals.state.externalProjectDevelopmentRequestDrafts["project-a"];
-    const preparation = internals.state.externalProjectAdosRunPreparations["project-a"];
+    const draft = Object.values(internals.state.externalProjectDevelopmentRequestDrafts)[0];
+    const preparation = Object.values(internals.state.externalProjectAdosRunPreparations)[0];
+    expect(draft).toBeDefined();
+    expect(preparation).toBeDefined();
+    if (!draft || !preparation) throw new Error("Expected task-scoped draft and preparation");
     const updatedTask = internals.state.projectBacklogCollections["project-a"].tasks[0];
     expect(draft).toMatchObject({
       projectId: "project-a",
@@ -98,6 +101,59 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
       executionRunId: "project-a:run",
       status: "in_progress",
     });
+  });
+
+  it("keeps sequential Ready task executions in the same project associated to their own task records", async () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, internals, "project-a");
+    controller.createBacklogTaskFromInput({ title: "First task", description: "First durable request." });
+    controller.updateSelectedBacklogTaskFromInput({ status: "ready" });
+    controller.createBacklogTaskFromInput({ title: "Second task", description: "Second durable request." });
+    controller.updateSelectedBacklogTaskFromInput({ status: "ready" });
+    internals.externalProjectAdosExecutionService.start = vi.fn(async (input) => ({
+      execution: {
+        ...execution(input.projectId, input.preparation!),
+        id: `${input.projectId}:run:${input.preparation!.id}`,
+      },
+      result: startedResult(input.projectId, input.preparation!.id, `${input.projectId}:run:${input.preparation!.id}`),
+    }));
+
+    const firstCreatedTaskId = internals.state.projectBacklogCollections["project-a"].tasks.find((task) => task.title === "First task")?.id;
+    const secondCreatedTaskId = internals.state.projectBacklogCollections["project-a"].tasks.find((task) => task.title === "Second task")?.id;
+    expect(firstCreatedTaskId).toBeDefined();
+    expect(secondCreatedTaskId).toBeDefined();
+    if (!firstCreatedTaskId || !secondCreatedTaskId) throw new Error("Expected two created backlog tasks");
+
+    internals.state.selectedBacklogTaskId = firstCreatedTaskId;
+    await controller.startSelectedBacklogTaskDevelopment();
+    const firstTask = internals.state.projectBacklogCollections["project-a"].tasks.find((task) => task.id === firstCreatedTaskId)!;
+    const firstDraftId = firstTask.developmentRequestId;
+    const firstPreparationId = firstTask.executionPreparationId;
+    const firstRunId = firstTask.executionRunId;
+
+    internals.state.selectedBacklogTaskId = secondCreatedTaskId;
+    await controller.startSelectedBacklogTaskDevelopment();
+    const secondTask = internals.state.projectBacklogCollections["project-a"].tasks.find((task) => task.id === secondCreatedTaskId)!;
+
+    expect(internals.externalProjectAdosExecutionService.start).toHaveBeenCalledTimes(2);
+    expect(firstTask.developmentRequestId).toContain(firstTask.id);
+    expect(secondTask.developmentRequestId).toContain(secondTask.id);
+    expect(secondTask.developmentRequestId).not.toBe(firstDraftId);
+    expect(secondTask.executionPreparationId).not.toBe(firstPreparationId);
+    expect(secondTask.executionRunId).not.toBe(firstRunId);
+    expect(Object.values(internals.state.externalProjectDevelopmentRequestDrafts)).toHaveLength(2);
+    expect(Object.values(internals.state.externalProjectAdosRunPreparations)).toHaveLength(2);
+    expect(Object.values(internals.state.externalProjectAdosExecutions)).toHaveLength(2);
+
+    internals.state.selectedBacklogTaskId = firstTask.id;
+    const firstProbe = controller.getProjectBacklogProbeState();
+    internals.state.selectedBacklogTaskId = secondTask.id;
+    const secondProbe = controller.getProjectBacklogProbeState();
+
+    expect(firstProbe.associatedDevelopmentRequestId).toBe(firstDraftId);
+    expect(firstProbe.associatedExecutionRunId).toBe(firstRunId);
+    expect(secondProbe.associatedDevelopmentRequestId).toBe(secondTask.developmentRequestId);
+    expect(secondProbe.associatedExecutionRunId).toBe(secondTask.executionRunId);
   });
 
   it("does not create duplicate requests or runs for a repeated Start Development", async () => {
@@ -135,7 +191,8 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
     second.internals.externalProjectAdosExecutionService.start = vi.fn();
     const probe = second.controller.getProjectBacklogProbeState();
 
-    expect(probe.associatedDevelopmentRequestId).toBe("project-a:external-development-request-draft");
+    const task = second.internals.state.projectBacklogCollections["project-a"].tasks[0];
+    expect(probe.associatedDevelopmentRequestId).toBe(task.developmentRequestId);
     expect(probe.associatedExecutionRunId).toBe("project-a:run");
     expect(probe.developmentEligible).toBe(false);
     expect(second.internals.externalProjectAdosExecutionService.start).not.toHaveBeenCalled();
@@ -182,7 +239,7 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
     const task = internals.state.projectBacklogCollections["project-a"].tasks[0];
     expect(task.status).toBe("ready");
     expect(task.executionRunId).toBeUndefined();
-    expect(internals.state.externalProjectAdosRunStatuses["project-a"]).toMatchObject({
+    expect(Object.values(internals.state.externalProjectAdosRunStatuses)[0]).toMatchObject({
       stage: "Blocked",
       reasonCodes: ["EXTERNAL_ADOS_EXECUTION_PROVIDER_UNAVAILABLE"],
     });
@@ -192,7 +249,7 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
       status: "blocked",
       blockedReason: "Waiting on operator.",
     });
-    expect(internals.state.externalProjectAdosRunStatuses["project-a"].stage).toBe("Blocked");
+    expect(Object.values(internals.state.externalProjectAdosRunStatuses)[0]?.stage).toBe("Blocked");
   });
 
   it("disables execution for unavailable and non-Ready tasks", async () => {

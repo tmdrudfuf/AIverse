@@ -160,6 +160,10 @@ export class ProjectBacklogDevelopmentBridgeService {
   }
 }
 
+export function createProjectBacklogDevelopmentAssociationKey(projectId: string, backlogTaskId: string) {
+  return `${projectId}:backlog-task:${backlogTaskId}`;
+}
+
 export function createBacklogDevelopmentRequestText(task: ProjectBacklogTask) {
   return [
     `# ${task.title}`,
