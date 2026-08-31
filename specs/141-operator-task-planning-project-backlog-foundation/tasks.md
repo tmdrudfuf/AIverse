@@ -43,6 +43,7 @@
 
 - [X] T019 Document runtime evidence in `specs/141-operator-task-planning-project-backlog-foundation/runtime-verification.md`
 - [X] T020 Run targeted tests from quickstart and `git diff --check`
+- [X] T021 Add browser runtime backlog verification in `e2e/project-backlog-office.spec.ts` with captured evidence in `specs/141-operator-task-planning-project-backlog-foundation/runtime-project-backlog-office.png`
 
 ## Dependencies
 

@@ -323,11 +323,24 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       if (!(host instanceof HTMLElement)) return;
 
       const workState = this.officeProjectPortalController?.getLiveAgentWorkState();
+      const activeObject = this.officeInteractionController?.getActiveObject();
       host.setAttribute("data-aiverse-active-scene", "office");
       host.setAttribute("data-aiverse-office-project-id", workState?.projectId ?? this.spawnRequest?.projectId ?? "");
       host.setAttribute("data-aiverse-office-work-stage", workState?.stage ?? "unknown");
       host.setAttribute("data-aiverse-office-work-lifecycle", workState?.lifecycle ?? "unknown");
       host.setAttribute("data-aiverse-office-company-name", this.spawnRequest?.companyName ?? "");
+      host.setAttribute("data-aiverse-office-active-object-id", activeObject?.id ?? "");
+      host.setAttribute("data-aiverse-office-active-object-action", activeObject?.action ?? "");
+      const backlogProbe = this.officeProjectPortalController?.getProjectBacklogProbeState();
+      host.setAttribute("data-aiverse-office-portal-view-mode", backlogProbe?.viewMode ?? "");
+      host.setAttribute("data-aiverse-office-backlog-project-id", backlogProbe?.projectId ?? "");
+      host.setAttribute("data-aiverse-office-backlog-task-count", String(backlogProbe?.taskCount ?? 0));
+      host.setAttribute("data-aiverse-office-backlog-task-titles", JSON.stringify(backlogProbe?.taskTitles ?? []));
+      host.setAttribute("data-aiverse-office-backlog-selected-task-id", backlogProbe?.selectedTaskId ?? "");
+      host.setAttribute("data-aiverse-office-backlog-selected-task-title", backlogProbe?.selectedTaskTitle ?? "");
+      host.setAttribute("data-aiverse-office-backlog-selected-task-status", backlogProbe?.selectedTaskStatus ?? "");
+      host.setAttribute("data-aiverse-office-backlog-selected-task-priority", backlogProbe?.selectedTaskPriority ?? "");
+      host.setAttribute("data-aiverse-office-backlog-selected-blocked-reason", backlogProbe?.selectedTaskBlockedReason ?? "");
       host.setAttribute(
         "data-aiverse-office-founder-position",
         this.founderEntity ? `${Math.round(this.founderEntity.position.x)},${Math.round(this.founderEntity.position.y)}` : "",

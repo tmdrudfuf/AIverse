@@ -137,7 +137,7 @@ export class ProjectBacklogService {
         : {}),
       updatedAt: this.now(),
     };
-    if (input.status !== "blocked" && input.blockedReason !== undefined && !input.blockedReason.trim()) {
+    if (input.blockedReason !== undefined && !input.blockedReason.trim()) {
       delete updatedTask.blockedReason;
     }
 
@@ -279,4 +279,3 @@ function cloneCollection(collection: ProjectBacklogCollection): ProjectBacklogCo
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-

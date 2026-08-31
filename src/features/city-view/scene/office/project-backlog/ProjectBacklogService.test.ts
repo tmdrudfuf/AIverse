@@ -132,6 +132,27 @@ describe("ProjectBacklogService", () => {
       indicatorText: "1 Blocked task",
     });
   });
+
+  it("clears blocked reason when the operator empties it on a blocked task", () => {
+    const service = createService();
+    const collections: ProjectBacklogCollections = {
+      "project-a": {
+        projectId: "project-a",
+        tasks: [task("project-a", "blocked", "Planning blocked", {
+          status: "blocked",
+          blockedReason: "Waiting on design choice.",
+        })],
+      },
+    };
+
+    const updated = service.updateTask(collections, context("project-a"), "blocked", {
+      status: "blocked",
+      blockedReason: "",
+    });
+
+    expect(updated.ok && updated.task.blockedReason).toBeUndefined();
+    expect(collections["project-a"].tasks[0].blockedReason).toBeUndefined();
+  });
 });
 
 function createService() {
@@ -210,4 +231,3 @@ function task(
     ...overrides,
   };
 }
-

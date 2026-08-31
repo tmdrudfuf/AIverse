@@ -566,6 +566,25 @@ export class OfficeProjectPortalController {
     return this.state.isOpen && this.state.viewMode === "project-backlog";
   }
 
+  getProjectBacklogProbeState() {
+    const projectId = this.state.selectedBacklogProjectId;
+    const collection = projectId
+      ? this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId)
+      : undefined;
+    const selectedTask = this.getSelectedBacklogTask();
+    return {
+      viewMode: this.state.isOpen ? this.state.viewMode : "",
+      projectId: projectId ?? "",
+      taskCount: collection?.tasks.length ?? 0,
+      taskTitles: collection?.tasks.map((task) => task.title) ?? [],
+      selectedTaskId: selectedTask?.id ?? "",
+      selectedTaskTitle: selectedTask?.title ?? "",
+      selectedTaskStatus: selectedTask?.status ?? "",
+      selectedTaskPriority: selectedTask?.priority ?? "",
+      selectedTaskBlockedReason: selectedTask?.blockedReason ?? "",
+    };
+  }
+
   getSelectedProjectBacklogTaskInput() {
     const task = this.getSelectedBacklogTask();
     return task ? { ...task } : undefined;
@@ -1051,6 +1070,12 @@ export class OfficeProjectPortalController {
     if (input.upPressed) this.moveProjectSelection(-1);
     if (input.downPressed) this.moveProjectSelection(1);
 
+    if (input.openCandidateDetailPressed) {
+      const project = this.getSelectedProject();
+      if (project) this.openProjectBacklog(project.id);
+      return;
+    }
+
     if (input.actionPressed || input.enterPressed) {
       if (this.state.selectedProjectIndex === -2) {
         void this.recruitFifthEmployee().then((handled) => {
@@ -1093,6 +1118,7 @@ export class OfficeProjectPortalController {
     }
 
     const selectedPromotion = this.getSelectedCandidatePromotionReview();
+    const projectId = this.state.selectedProjectDashboardProjectId;
     if (input.upPressed || input.downPressed) {
       if (selectedPromotion) {
         this.moveCandidatePromotionSelection(input.upPressed ? -1 : 1);
@@ -1311,6 +1337,11 @@ export class OfficeProjectPortalController {
       }
     }
 
+    if (input.openCandidateDetailPressed && projectId && !selectedPromotion) {
+      this.openProjectBacklog(projectId);
+      return;
+    }
+
     if (input.actionPressed && selectedPromotion) {
       const targetStatus = getNextPromotionCycleStatus(selectedPromotion);
       if (targetStatus) {
@@ -1337,6 +1368,11 @@ export class OfficeProjectPortalController {
         return;
       }
 
+      if (input.enterPressed && projectId) {
+        this.openProjectBacklog(projectId);
+        return;
+      }
+
       if (input.actionPressed && this.startExternalProjectAdosExecution()) {
         return;
       }
@@ -1351,7 +1387,6 @@ export class OfficeProjectPortalController {
         return;
       }
 
-      const projectId = this.state.selectedProjectDashboardProjectId;
       if (projectId) {
         void this.syncRepositorySnapshot(projectId);
         void this.syncIssueSnapshots(projectId);

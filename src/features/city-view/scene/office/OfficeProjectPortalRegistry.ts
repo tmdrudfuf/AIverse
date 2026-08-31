@@ -242,7 +242,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     projectCompanyBindings: bindingService.createBindings(CITY_BUILDINGS, registryEntries),
     activeProjectCompanyContext: activeContext,
     services: createLinkedServices(),
-    workspaces: createWorkspaces(),
+    workspaces: createWorkspaces(registryEntries),
     repositoryMappings: createRepositoryMappings(registryEntries),
     repositorySummaries: {},
     repositorySyncSnapshots: {},
@@ -420,8 +420,8 @@ function createLinkedServices() {
   return PLACEHOLDER_SERVICES.map((service) => ({ ...service }));
 }
 
-function createWorkspaces() {
-  return Object.fromEntries(
+export function createWorkspaces(registryEntries: ReadonlyArray<ProjectRegistryEntry> = []) {
+  const workspaces = Object.fromEntries(
     Object.entries(WORKSPACES).map(([projectId, workspace]) => [
       projectId,
       {
@@ -430,6 +430,22 @@ function createWorkspaces() {
       },
     ]),
   );
+
+  for (const entry of registryEntries) {
+    if (workspaces[entry.id]) continue;
+    workspaces[entry.id] = createDefaultWorkspace(entry);
+  }
+
+  return workspaces;
+}
+
+export function createDefaultWorkspace(entry: ProjectRegistryEntry): ProjectWorkspace {
+  const baseSections = WORKSPACES["daily-proof"].sections;
+  return {
+    projectId: entry.id,
+    projectName: entry.displayName,
+    sections: baseSections.map((section) => ({ ...section })),
+  };
 }
 
 function cloneProjectRegistryEntry(entry: ProjectRegistryEntry): ProjectRegistryEntry {

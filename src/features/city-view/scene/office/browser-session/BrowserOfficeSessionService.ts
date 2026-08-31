@@ -1,4 +1,5 @@
 import type { ProjectPortalState } from "../OfficeProjectPortalTypes";
+import { createWorkspaces } from "../OfficeProjectPortalRegistry";
 import { toProjectPortalProject, toRepositoryMapping } from "../project-registry/ProjectRegistryAdapters";
 import type {
   NormalizedLocalProjectRepositoryBinding,
@@ -349,6 +350,7 @@ function restoreProjectRegistryEntries(
   const registryEntries = Array.from(entriesById.values());
   state.projectRegistryEntries = registryEntries.map(cloneProjectRegistryEntry);
   state.projects = registryEntries.map((entry) => toProjectPortalProject(entry, clone(state.services)));
+  state.workspaces = createWorkspaces(registryEntries);
   state.repositoryMappings = registryEntries
     .map((entry) => toRepositoryMapping(entry))
     .filter((mapping): mapping is ProjectPortalState["repositoryMappings"][number] => Boolean(mapping));
