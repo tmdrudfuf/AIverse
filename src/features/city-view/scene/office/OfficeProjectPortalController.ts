@@ -148,6 +148,7 @@ import {
 } from "./OfficeProjectPortalRegistry";
 import type { ProjectPortalState, TaskCompletionProgressionFeedback } from "./OfficeProjectPortalTypes";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
+import { ProjectAutonomousExecutionPolicyService } from "./project-backlog/ProjectAutonomousExecutionPolicyService";
 import {
   ProjectBacklogDevelopmentBridgeService,
   createProjectBacklogDevelopmentAssociationKey,
@@ -157,6 +158,7 @@ import {
   ProjectBacklogSuggestionService,
 } from "./project-backlog/ProjectBacklogSuggestionService";
 import type { ProjectBacklogSuggestionProvider } from "./project-backlog/ProjectBacklogSuggestionTypes";
+import type { ProjectAutonomyEvaluationResult } from "./project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import type { ProjectBacklogPlanningStatus, ProjectBacklogPriority, ProjectBacklogTask } from "./project-backlog/ProjectBacklogTypes";
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import { ReceptionDeskUpgradeBenefitsService } from "./ReceptionDeskUpgradeBenefitsService";
@@ -335,6 +337,9 @@ export type OfficeProjectPortalInput = {
   backlogTaskPriority?: ProjectBacklogPriority;
   backlogTaskStatus?: ProjectBacklogPlanningStatus;
   backlogTaskBlockedReason?: string;
+  toggleAutonomousExecutionPressed?: boolean;
+  reevaluateAutonomousExecutionPressed?: boolean;
+  autonomousAllowedPriorities?: ProjectBacklogPriority[];
 };
 
 export type OfficeProjectPortalControllerOptions = {
@@ -379,6 +384,7 @@ export class OfficeProjectPortalController {
   private readonly activeReviewFixRuntimeKeys = new Set<string>();
   private validationRuntimeService: ValidationRuntimeService;
   private readonly projectBacklogService: ProjectBacklogService;
+  private readonly projectAutonomousExecutionPolicyService: ProjectAutonomousExecutionPolicyService;
   private readonly projectBacklogDevelopmentBridgeService: ProjectBacklogDevelopmentBridgeService;
   private readonly projectBacklogSuggestionService: ProjectBacklogSuggestionService;
   private readonly projectBacklogSuggestionProvider: ProjectBacklogSuggestionProvider;
@@ -464,6 +470,7 @@ export class OfficeProjectPortalController {
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
     this.projectBacklogService = new ProjectBacklogService();
+    this.projectAutonomousExecutionPolicyService = new ProjectAutonomousExecutionPolicyService();
     this.projectBacklogDevelopmentBridgeService = new ProjectBacklogDevelopmentBridgeService();
     this.projectBacklogSuggestionService = new ProjectBacklogSuggestionService({
       backlogService: this.projectBacklogService,
@@ -600,6 +607,7 @@ export class OfficeProjectPortalController {
       : undefined;
     const selectedTask = this.getSelectedBacklogTask();
     const preview = this.getSelectedBacklogDevelopmentPreview();
+    const autonomy = this.getSelectedProjectAutonomyEvaluation();
     return {
       viewMode: this.state.isOpen ? this.state.viewMode : "",
       projectId: projectId ?? "",
@@ -635,6 +643,13 @@ export class OfficeProjectPortalController {
           .filter((candidate) => candidate.status === "rejected")
           .map((candidate) => candidate.title) ?? []
         : [],
+      autonomyEnabled: autonomy?.policy.enabled ?? false,
+      autonomyAllowedPriorities: autonomy?.policy.allowedPriorities ?? [],
+      autonomyState: autonomy?.state ?? "",
+      autonomyReason: autonomy?.reason ?? "",
+      autonomySelectedTaskId: autonomy?.selectedTask?.id ?? "",
+      autonomyEligibleTaskCount: autonomy?.eligibleTaskCount ?? 0,
+      autonomyActiveExecutionCount: autonomy?.activeExecutionCount ?? 0,
     };
   }
 
@@ -657,6 +672,7 @@ export class OfficeProjectPortalController {
     this.persistBrowserOfficeSession();
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
+    void this.reevaluateSelectedProjectAutonomy();
     return true;
   }
 
@@ -687,7 +703,52 @@ export class OfficeProjectPortalController {
     this.persistBrowserOfficeSession();
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
+    if (result.task.status === "ready") void this.reevaluateSelectedProjectAutonomy();
     return true;
+  }
+
+  updateSelectedProjectAutonomyPolicy(input: {
+    enabled?: boolean;
+    allowedPriorities?: ProjectBacklogPriority[];
+  }) {
+    const projectId = this.state.selectedBacklogProjectId;
+    const context = this.getBacklogMutationContext();
+    if (!projectId || !context) return false;
+    const result = this.projectAutonomousExecutionPolicyService.updatePolicy(
+      this.state.projectAutonomyPolicies,
+      context,
+      {
+        enabled: input.enabled,
+        allowedPriorities: input.allowedPriorities,
+      },
+    );
+    if (!result.ok) return false;
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+    if (result.policy.enabled) void this.reevaluateSelectedProjectAutonomy();
+    return true;
+  }
+
+  async reevaluateSelectedProjectAutonomy() {
+    const result = this.getSelectedProjectAutonomyEvaluation();
+    if (!result) return false;
+    this.recordProjectAutonomyEvaluation(result);
+    if (result.state !== "eligible" || !result.selectedTask) {
+      this.persistBrowserOfficeSession();
+      this.refreshCompanyDashboardSnapshot();
+      this.view.render(this.state);
+      return false;
+    }
+
+    this.state.selectedBacklogTaskId = result.selectedTask.id;
+    this.syncBacklogSelectionToTaskId(result.selectedTask.id);
+    const started = await this.startSelectedBacklogTaskDevelopment();
+    if (!started) this.recordProjectAutonomyEvaluation({ ...result, state: "blocked", reason: "ExecutionUnavailable" });
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+    return started;
   }
 
   async startSelectedBacklogTaskDevelopment() {
@@ -1732,6 +1793,23 @@ export class OfficeProjectPortalController {
 
     if (input.startBacklogDevelopmentPressed) {
       void this.startSelectedBacklogTaskDevelopment();
+      return;
+    }
+
+    if (input.toggleAutonomousExecutionPressed || input.autonomousAllowedPriorities) {
+      const projectId = this.state.selectedBacklogProjectId;
+      const existingPolicy = projectId
+        ? this.projectAutonomousExecutionPolicyService.getPolicy(this.state.projectAutonomyPolicies, projectId)
+        : undefined;
+      this.updateSelectedProjectAutonomyPolicy({
+        enabled: input.toggleAutonomousExecutionPressed ? !existingPolicy?.enabled : existingPolicy?.enabled,
+        allowedPriorities: input.autonomousAllowedPriorities,
+      });
+      return;
+    }
+
+    if (input.reevaluateAutonomousExecutionPressed) {
+      void this.reevaluateSelectedProjectAutonomy();
       return;
     }
 
@@ -3810,6 +3888,7 @@ export class OfficeProjectPortalController {
     this.state.selectedBacklogStatusIndex = 0;
     this.state.viewMode = "project-backlog";
     this.view.render(this.state);
+    void this.reevaluateSelectedProjectAutonomy();
   }
 
   private async openEmployeeSelection() {
@@ -4462,6 +4541,38 @@ export class OfficeProjectPortalController {
         ? this.getAssociatedAdosRunStatus(task) ?? this.getActiveProjectAdosRunStatus(project.id)
         : this.getActiveProjectAdosRunStatus(project.id),
     });
+  }
+
+  private getSelectedProjectAutonomyEvaluation() {
+    const project = this.getSelectedBacklogProject();
+    if (!project) return undefined;
+    const projectId = project.id;
+    const collection = this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId);
+    return this.projectAutonomousExecutionPolicyService.evaluate({
+      policies: this.state.projectAutonomyPolicies,
+      project,
+      context: this.getBacklogMutationContext(),
+      tasks: collection.tasks,
+      activeRunStatus: this.getActiveProjectAdosRunStatus(projectId),
+      activeExecutions: Object.values(this.state.externalProjectAdosExecutions)
+        .filter((execution) => execution.projectId === projectId),
+      executionAvailable: typeof this.externalProjectAdosExecutionService.start === "function",
+    });
+  }
+
+  private recordProjectAutonomyEvaluation(result: ProjectAutonomyEvaluationResult) {
+    const currentPolicy = this.projectAutonomousExecutionPolicyService.getPolicy(
+      this.state.projectAutonomyPolicies,
+      result.projectId,
+    );
+    if (!currentPolicy.updatedByOperator && !currentPolicy.enabled) return;
+    this.state.projectAutonomyPolicies = {
+      ...this.state.projectAutonomyPolicies,
+      [result.projectId]: {
+        ...currentPolicy,
+        lastEvaluationReason: result.reason,
+      },
+    };
   }
 
   private getSelectedBacklogProject() {

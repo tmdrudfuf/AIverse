@@ -308,6 +308,66 @@ describe("derivePortfolioOperations", () => {
     expect(result["company-b"].backlogSuggestionSummary).toBeUndefined();
   });
 
+  it("adds read-only project autonomy summaries without mutating policies", () => {
+    const state = createState({
+      projectBacklogCollections: {
+        "project-a": {
+          projectId: "project-a",
+          tasks: [backlogTask("project-a", "a-ready", "A ready", "ready")],
+        },
+        "project-b": {
+          projectId: "project-b",
+          tasks: [backlogTask("project-b", "b-ready", "B ready", "ready")],
+        },
+      },
+      projectAutonomyPolicies: {
+        "project-a": {
+          projectId: "project-a",
+          enabled: true,
+          allowedPriorities: ["normal"],
+          maxConcurrentExecutions: 1,
+          requireNoActiveRun: true,
+          allowedTaskStatuses: ["ready"],
+          updatedAt: "2026-09-01T00:00:00.000Z",
+          updatedByOperator: true,
+        },
+      },
+      externalProjectAdosRunStatuses: {
+        "project-a": {
+          id: "project-a:status",
+          projectId: "project-a",
+          stage: "Started",
+          status: "Started",
+          source: "execution",
+          reasonCodes: [],
+          updatedAt: "2026-09-01T00:05:00.000Z",
+          validationStarted: false,
+          reviewStarted: false,
+          repositoryMutationStarted: false,
+          githubMutationStarted: false,
+          publishStarted: false,
+          mergeStarted: false,
+          deployStarted: false,
+          rulesVersion: "test",
+        },
+      },
+    });
+    const before = JSON.stringify(state.projectAutonomyPolicies);
+
+    const result = derivePortfolioOperations({ buildings: createBuildings().slice(0, 2), state });
+
+    expect(result["company-a"].autonomySummary).toEqual({
+      state: "Waiting",
+      reason: "Active Run",
+      text: "Auto: Waiting - Active Run",
+    });
+    expect(result["company-b"].autonomySummary).toEqual({
+      state: "Off",
+      text: "Auto: Off",
+    });
+    expect(JSON.stringify(state.projectAutonomyPolicies)).toBe(before);
+  });
+
   it("filters and attention ordering without mutating source state", () => {
     const state = createState({
       externalProjectAdosRunStatuses: {

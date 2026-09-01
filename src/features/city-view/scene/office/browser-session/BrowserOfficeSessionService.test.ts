@@ -226,6 +226,17 @@ describe("BrowserOfficeSessionService", () => {
         updatedAt: "2026-08-25T00:05:00.000Z",
       }],
     };
+    source.projectAutonomyPolicies["external-crm"] = {
+      projectId: "external-crm",
+      enabled: true,
+      allowedPriorities: ["high"],
+      maxConcurrentExecutions: 1,
+      requireNoActiveRun: true,
+      allowedTaskStatuses: ["ready"],
+      updatedAt: "2026-08-25T00:06:00.000Z",
+      updatedByOperator: true,
+      lastEvaluationReason: "ActiveRunExists",
+    };
     source.reviewerRuntimeCollections["external-crm"] = {
       projectId: "external-crm",
       runtimes: [{
@@ -344,6 +355,16 @@ describe("BrowserOfficeSessionService", () => {
       description: "Preserve the operator-entered backlog request.",
       status: "ready",
       priority: "high",
+    });
+    expect(restored.projectAutonomyPolicies["external-crm"]).toMatchObject({
+      projectId: "external-crm",
+      enabled: true,
+      allowedPriorities: ["high"],
+      maxConcurrentExecutions: 1,
+      requireNoActiveRun: true,
+      allowedTaskStatuses: ["ready"],
+      updatedByOperator: true,
+      lastEvaluationReason: "ActiveRunExists",
     });
     expect(restored.reviewerRuntimeCollections["external-crm"]?.runtimes[0]).toMatchObject({
       projectId: "external-crm",
@@ -644,6 +665,59 @@ describe("BrowserOfficeSessionService", () => {
     expect(restored.projectBacklogSuggestionCollections["daily-proof"].candidates[0].status).toBe("accepted");
     expect(restored.projectBacklogSuggestionCollections["external-crm"].candidates[0].status).toBe("rejected");
     expect(restored.projectBacklogSuggestionCollections["contaminated"].candidates).toEqual([]);
+  });
+
+  it("persists valid project autonomy policies and drops malformed or cross-project policies", () => {
+    const storage = createMemoryStorage();
+    const service = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-09-01T00:00:00.000Z",
+    });
+    const source = createProjectPortalState({ browserOfficeSessionService: false });
+    source.projectAutonomyPolicies = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        enabled: true,
+        allowedPriorities: ["urgent", "high"],
+        maxConcurrentExecutions: 1,
+        requireNoActiveRun: true,
+        allowedTaskStatuses: ["ready"],
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+      "wrong-key": {
+        projectId: "other-project",
+        enabled: true,
+        allowedPriorities: ["urgent"],
+        maxConcurrentExecutions: 1,
+        requireNoActiveRun: true,
+        allowedTaskStatuses: ["ready"],
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+      "bad-concurrency": {
+        projectId: "bad-concurrency",
+        enabled: true,
+        allowedPriorities: ["urgent"],
+        maxConcurrentExecutions: 99,
+        requireNoActiveRun: true,
+        allowedTaskStatuses: ["ready"],
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+    };
+
+    expect(service.saveState(source)).toBe(true);
+
+    const restored = service.restoreState(createProjectPortalState({ browserOfficeSessionService: false }));
+
+    expect(restored.projectAutonomyPolicies["daily-proof"]).toMatchObject({
+      projectId: "daily-proof",
+      enabled: true,
+      allowedPriorities: ["urgent", "high"],
+    });
+    expect(restored.projectAutonomyPolicies["wrong-key"]).toBeUndefined();
+    expect(restored.projectAutonomyPolicies["bad-concurrency"]).toBeUndefined();
   });
 
   it("loads only current-version snapshots", () => {

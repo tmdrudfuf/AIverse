@@ -1,0 +1,102 @@
+{
+  "feature": "144-controlled-autonomous-backlog-execution-policy",
+  "capturedAt": "2026-09-01T00:00:00.000Z",
+  "captureMode": "deterministic controller runtime fixture using OfficeProjectPortalController, BrowserOfficeSessionService, ProjectAutonomousExecutionPolicyService, live CompanyOfficeScene backlog input controls, and the existing Spec 142 ProjectBacklogDevelopmentBridgeService",
+  "externalSafetyBoundary": {
+    "primaryRepositoryMutated": false,
+    "githubMutated": false,
+    "reviewStarted": false,
+    "published": false,
+    "deployed": false,
+    "fullAdosValidationPipelineRun": false,
+    "realChildRunSuppressedByHandoff": true
+  },
+  "projects": {
+    "projectA": {
+      "projectId": "project-a",
+      "policy": {
+        "enabled": true,
+        "allowedPriorities": ["urgent", "high"],
+        "maxConcurrentExecutions": 1,
+        "requireNoActiveRun": true,
+        "allowedTaskStatuses": ["ready"],
+        "updatedByOperator": true
+      },
+      "operatorControlSurface": {
+        "officeBacklogDomToggle": true,
+        "officeBacklogDomPrioritySelection": true,
+        "officeBacklogDomReevaluate": true,
+        "liveSceneUpdateInputPathCovered": true
+      },
+      "readyTasks": [
+        {
+          "id": "task-a",
+          "title": "Urgent A",
+          "priority": "urgent",
+          "statusBeforeEvaluation": "ready"
+        },
+        {
+          "id": "task-b",
+          "title": "Urgent B",
+          "priority": "urgent",
+          "statusBeforeEvaluation": "ready"
+        },
+        {
+          "id": "task-z",
+          "title": "High newest",
+          "priority": "high",
+          "statusBeforeEvaluation": "ready"
+        }
+      ],
+      "deterministicSelection": {
+        "ordering": ["priority rank", "oldest Ready timestamp via task updatedAt", "stable task id"],
+        "selectedTaskId": "task-a"
+      },
+      "existingBridgeReused": true,
+      "associations": {
+        "associationKey": "project-a:backlog-task:task-a",
+        "developmentRequestId": "project-a:backlog-task:task-a:external-development-request-draft",
+        "preparationId": "project-a:backlog-task:task-a:external-development-request-draft:external-ados-run-preparation",
+        "executionRunId": "project-a:run"
+      },
+      "taskState": {
+        "statusAfterAcceptedExecution": "in_progress",
+        "inProgressOnlyAfterExecutionAccepted": true
+      },
+      "idempotency": {
+        "repeatedEvaluations": 3,
+        "developmentRequestCount": 1,
+        "preparationCount": 1,
+        "executionCount": 1,
+        "duplicateAssociationCreated": false,
+        "reloadRelaunchedExecution": false
+      },
+      "disableWhileActive": {
+        "policyDisabled": true,
+        "existingRunContinued": true,
+        "futureTaskRemainedReady": true
+      }
+    },
+    "projectB": {
+      "projectId": "project-b",
+      "policy": {
+        "enabled": false
+      },
+      "readyTask": {
+        "title": "Project B urgent",
+        "priority": "urgent",
+        "statusAfterProjectAEvaluation": "ready"
+      },
+      "crossProjectPolicyLeakDetected": false
+    }
+  },
+  "spec143Boundary": {
+    "suggestionStatusAfterEvaluation": "proposed",
+    "suggestionAutoAccepted": false,
+    "backlogTaskAutoCreatedFromSuggestion": false
+  },
+  "validationEvidence": {
+    "targetedCommand": "npx vitest run src/features/city-view/scene/office/project-backlog/ProjectAutonomousExecutionPolicyService.test.ts src/features/city-view/scene/office/OfficeProjectPortalController.project-autonomy.test.ts src/features/city-view/scene/office/browser-session/BrowserOfficeSessionService.test.ts src/features/city-view/scene/PortfolioOperationsService.test.ts",
+    "result": "4 test files passed, 44 tests passed"
+  }
+}

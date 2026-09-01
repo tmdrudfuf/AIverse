@@ -5,6 +5,8 @@ import { deriveLiveAgentWorkState, type LiveAgentWorkState } from "./office/Live
 import { ProjectBacklogService } from "./office/project-backlog/ProjectBacklogService";
 import type { ProjectBacklogSummary } from "./office/project-backlog/ProjectBacklogTypes";
 import type { ProjectBacklogSuggestionCollections } from "./office/project-backlog/ProjectBacklogSuggestionTypes";
+import { ProjectAutonomousExecutionPolicyService } from "./office/project-backlog/ProjectAutonomousExecutionPolicyService";
+import type { ProjectAutonomyPolicies } from "./office/project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import { ProjectCompanyBindingService } from "./office/project-company-binding/ProjectCompanyBindingService";
 import { toProjectPortalProject } from "./office/project-registry/ProjectRegistryAdapters";
 
@@ -40,6 +42,11 @@ export type PortfolioOperationsSummary = {
   recentCompletedSummary?: string;
   backlogSummary?: ProjectBacklogSummary;
   backlogSuggestionSummary?: string;
+  autonomySummary?: {
+    state: "On" | "Waiting" | "Off";
+    reason?: string;
+    text: string;
+  };
   updatedAt?: string;
   operatorActionAvailable: boolean;
 };
@@ -55,7 +62,7 @@ type LiveAgentWorkStateInput = Parameters<typeof deriveLiveAgentWorkState>[0];
 
 type ProjectScopedPortfolioState =
   Pick<ProjectPortalState, "projectRegistryEntries"> &
-  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections">> &
+  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections" | "projectAutonomyPolicies">> &
   Partial<LiveAgentWorkStateInput>;
 
 export function createPortfolioOperationsFromBrowserSession(
@@ -137,6 +144,11 @@ function createAvailableSummary(input: {
       ? normalizeReason(input.liveWorkState.reasonText)
     : undefined;
 
+  const backlogSummary = new ProjectBacklogService().createSummary(
+    input.state.projectBacklogCollections?.[input.projectId],
+    input.projectId,
+  );
+
   return {
     buildingId: input.building.id,
     projectId: input.projectId,
@@ -162,17 +174,49 @@ function createAvailableSummary(input: {
     recentCompletedSummary: attentionState === "recently-completed"
       ? createCompletedSummary(runStatus?.status, input.liveWorkState.updatedAt)
       : undefined,
-    backlogSummary: new ProjectBacklogService().createSummary(
-      input.state.projectBacklogCollections?.[input.projectId],
-      input.projectId,
-    ),
+    backlogSummary,
     backlogSuggestionSummary: createBacklogSuggestionSummary(
       input.state.projectBacklogSuggestionCollections,
       input.projectId,
     ),
+    autonomySummary: createAutonomySummary(
+      input.state.projectAutonomyPolicies,
+      input.projectId,
+      backlogSummary,
+      input.liveWorkState,
+      runStatus?.stage,
+    ),
     updatedAt: input.liveWorkState.updatedAt,
     operatorActionAvailable: true,
   };
+}
+
+function createAutonomySummary(
+  policies: ProjectAutonomyPolicies | undefined,
+  projectId: string,
+  backlogSummary: ProjectBacklogSummary,
+  liveWorkState: LiveAgentWorkState,
+  runStage: string | undefined,
+) {
+  const policy = new ProjectAutonomousExecutionPolicyService().getPolicy(policies, projectId);
+  if (!policy.enabled) {
+    return { state: "Off" as const, text: "Auto: Off" };
+  }
+
+  const activeRun = liveWorkState.lifecycle !== "no-active-run" && liveWorkState.lifecycle !== "complete";
+  if (activeRun || runStage === "Prepared" || runStage === "Started" || runStage === "Blocked" || runStage === "TimedOut") {
+    return { state: "Waiting" as const, reason: "Active Run", text: "Auto: Waiting - Active Run" };
+  }
+
+  if (backlogSummary.readyTaskCount <= 0) {
+    return { state: "Waiting" as const, reason: "No Ready Task", text: "Auto: Waiting - No Ready Task" };
+  }
+
+  if (policy.lastEvaluationReason === "PriorityNotAllowed") {
+    return { state: "Waiting" as const, reason: "Priority Filter", text: "Auto: Waiting - Priority Filter" };
+  }
+
+  return { state: "On" as const, text: "Auto: On" };
 }
 
 function createBacklogSuggestionSummary(

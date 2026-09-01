@@ -86,6 +86,7 @@ import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPo
 import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPortalRegistry";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
+import { ProjectAutonomousExecutionPolicyService } from "./project-backlog/ProjectAutonomousExecutionPolicyService";
 import { canCreateExternalProjectDevelopmentRequestDraft } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
 import { createRepositorySyncDisplayRows } from "./repository-sync/RepositorySyncView";
@@ -816,6 +817,9 @@ export class OfficeProjectPortalView {
       : collection?.tasks[state.selectedBacklogTaskIndex];
     const canMutate = Boolean(project && project.enabled);
     const runStatus = projectId ? state.externalProjectAdosRunStatuses[projectId] : undefined;
+    const autonomyPolicy = projectId
+      ? new ProjectAutonomousExecutionPolicyService().getPolicy(state.projectAutonomyPolicies, projectId)
+      : undefined;
     const suggestionCollection = projectId ? state.projectBacklogSuggestionCollections?.[projectId] : undefined;
     const suggestions = suggestionCollection?.candidates.filter((candidate) => candidate.projectId === projectId) ?? [];
     const selectedSuggestion = state.selectedBacklogSuggestionId
@@ -864,6 +868,11 @@ export class OfficeProjectPortalView {
           rowStyle(canMutate, index === state.selectedBacklogTaskIndex),
         );
       });
+      if (collection.tasks.length <= 4) {
+        const planningNoteY = this.panelY + 190 + collection.tasks.length * 30;
+        this.addText(this.panelX + 48, planningNoteY, "Ready only means eligible for future development.", mutedStyle());
+        this.addText(this.panelX + 48, planningNoteY + 22, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
+      }
     }
 
     this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 178);
@@ -919,8 +928,20 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 376, this.panelY + 358, compactTextLine(summary, 32), mutedStyle());
       this.addText(this.panelX + 376, this.panelY + 382, "Generation is explicit and advisory.", mutedStyle());
     }
-    this.addText(this.panelX + 36, this.panelY + 364, "Ready only means eligible for future development.", mutedStyle());
-    this.addText(this.panelX + 36, this.panelY + 390, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
+    this.addTerminalPanel(this.panelX + 24, this.panelY + 364, 304, 82);
+    this.addText(this.panelX + 36, this.panelY + 380, "Autonomous Execution", headingStyle());
+    this.addText(
+      this.panelX + 44,
+      this.panelY + 406,
+      compactTextLine(`Auto: ${autonomyPolicy?.enabled ? "On" : "Off"}  Limit: 1  Blocks on active run`, 36),
+      autonomyPolicy?.enabled ? projectStatusStyle() : mutedStyle(),
+    );
+    this.addText(
+      this.panelX + 44,
+      this.panelY + 428,
+      compactTextLine(`Priorities: ${autonomyPolicy?.allowedPriorities.join(", ") || "none"}  ${formatAutonomyReason(autonomyPolicy?.lastEvaluationReason)}`, 36),
+      mutedStyle(),
+    );
 
     this.addText(
       this.panelX + this.panelWidth - 28,
@@ -1902,6 +1923,14 @@ function getBacklogDevelopmentDisabledText(
   if (task.status !== "ready") return "Start disabled: task is not Ready";
   if (!task.title.trim() || !task.description.trim()) return "Start disabled: task content missing";
   return "Start disabled";
+}
+
+function formatAutonomyReason(reason: string | undefined) {
+  if (!reason) return "Waiting";
+  return reason
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function titleStyle(): Phaser.Types.GameObjects.Text.TextStyle {

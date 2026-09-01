@@ -33,6 +33,9 @@ import { OfficeTileMovementResolver } from "./OfficeTileMovementResolver";
 import { createOfficeTilemapLayer, loadOfficeTilemapAssets, type OfficeTilemapLayers } from "./OfficeTilemapLayer";
 import { OfficeVisualLayer } from "./OfficeVisualLayer";
 import type { OfficeDefinition, OfficeInteractiveAction, OfficeSpawnRequest } from "./officeTypes";
+import type { ProjectBacklogPriority } from "./project-backlog/ProjectBacklogTypes";
+
+const BACKLOG_AUTONOMY_PRIORITIES: readonly ProjectBacklogPriority[] = ["urgent", "high", "normal", "low"];
 
 export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
   return class CompanyOfficeScene extends PhaserRuntime.Scene {
@@ -172,6 +175,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       if (this.officeProjectPortalController?.isOpen()) {
         this.navigationInputController?.setPointerNavigationEnabled(false);
         this.officeInteractionController?.setPointerInteractionEnabled(false);
+        const backlogFormInput = this.consumeProjectBacklogFormInput();
         const developmentRequestText = this.officeProjectPortalController.shouldShowDevelopmentRequestInput()
           ? this.syncDevelopmentRequestTextArea()
           : this.hideDevelopmentRequestTextArea();
@@ -203,6 +207,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           generateBacklogSuggestionsPressed,
           acceptBacklogSuggestionPressed,
           rejectBacklogSuggestionPressed,
+          toggleAutonomousExecutionPressed: backlogFormInput.toggleAutonomousExecutionPressed,
+          reevaluateAutonomousExecutionPressed: backlogFormInput.reevaluateAutonomousExecutionPressed,
+          autonomousAllowedPriorities: backlogFormInput.autonomousAllowedPriorities,
           developmentRequestText,
         });
         this.refreshEmployeeNpcRenderer();
@@ -349,6 +356,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       host.setAttribute("data-aiverse-office-backlog-selected-task-status", backlogProbe?.selectedTaskStatus ?? "");
       host.setAttribute("data-aiverse-office-backlog-selected-task-priority", backlogProbe?.selectedTaskPriority ?? "");
       host.setAttribute("data-aiverse-office-backlog-selected-blocked-reason", backlogProbe?.selectedTaskBlockedReason ?? "");
+      host.setAttribute("data-aiverse-office-autonomy-enabled", String(backlogProbe?.autonomyEnabled ?? false));
+      host.setAttribute("data-aiverse-office-autonomy-priorities", JSON.stringify(backlogProbe?.autonomyAllowedPriorities ?? []));
+      host.setAttribute("data-aiverse-office-autonomy-state", backlogProbe?.autonomyState ?? "");
+      host.setAttribute("data-aiverse-office-autonomy-reason", backlogProbe?.autonomyReason ?? "");
       host.setAttribute(
         "data-aiverse-office-founder-position",
         this.founderEntity ? `${Math.round(this.founderEntity.position.x)},${Math.round(this.founderEntity.position.y)}` : "",
@@ -539,6 +550,14 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         : probe?.developmentEligibilityReason || "Select a Ready task in an available project.";
       form.startDevelopmentButton.style.opacity = probe?.developmentEligible ? "1" : "0.52";
       form.startDevelopmentButton.style.cursor = probe?.developmentEligible ? "pointer" : "not-allowed";
+      form.autonomyToggleButton.textContent = probe?.autonomyEnabled ? "Pause Autonomous Execution" : "Enable Autonomous Execution";
+      form.autonomyToggleButton.title = "Enable or pause project-scoped autonomous Ready task execution.";
+      form.autonomyReason.textContent = `Auto: ${probe?.autonomyEnabled ? "On" : "Off"} | ${formatAutonomyPriorities(probe?.autonomyAllowedPriorities ?? [])} | ${formatAutonomyReason(probe?.autonomyReason)}`;
+      if (!form.isEditingAutonomyPriorities) {
+        for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
+          form.autonomyPriorityInputs[priority].checked = probe?.autonomyAllowedPriorities.includes(priority) ?? false;
+        }
+      }
       const width = Math.min(560, Math.max(300, canvasBounds.width - 144));
       const left = canvasBounds.left + (canvasBounds.width - width) / 2;
       const top = canvasBounds.top + Math.max(126, canvasBounds.height - 216);
@@ -562,6 +581,17 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const createButton = document.createElement("button");
       const updateButton = document.createElement("button");
       const startDevelopmentButton = document.createElement("button");
+      const autonomyToggleButton = document.createElement("button");
+      const autonomyReevaluateButton = document.createElement("button");
+      const autonomyReason = document.createElement("div");
+      const autonomyPriorityGroup = document.createElement("div");
+      const autonomyPriorityInputs = Object.fromEntries(BACKLOG_AUTONOMY_PRIORITIES.map((priority) => {
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = priority;
+        input.setAttribute("aria-label", `Allow ${priority} autonomous execution`);
+        return [priority, input];
+      })) as Record<ProjectBacklogPriority, HTMLInputElement>;
 
       titleInput.setAttribute("aria-label", "Backlog task title");
       titleInput.placeholder = "Task title";
@@ -580,6 +610,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       createButton.textContent = "Create backlog task";
       updateButton.textContent = "Update selected task";
       startDevelopmentButton.textContent = "Start Development";
+      autonomyReevaluateButton.textContent = "Reevaluate Automation";
+      autonomyPriorityGroup.setAttribute("aria-label", "Autonomous execution allowed priorities");
 
       Object.assign(root.style, {
         position: "fixed",
@@ -602,6 +634,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createButton,
         updateButton,
         startDevelopmentButton,
+        autonomyToggleButton,
+        autonomyReevaluateButton,
       ]) {
         Object.assign(element.style, {
           minWidth: "0",
@@ -616,6 +650,26 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         element.addEventListener("keydown", stopPortalShortcutPropagation);
         element.addEventListener("keyup", stopPortalShortcutPropagation);
       }
+      for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
+        const label = document.createElement("label");
+        Object.assign(label.style, {
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+          minWidth: "0",
+          color: "#f8fafc",
+          font: "12px Courier New, monospace",
+        });
+        Object.assign(autonomyPriorityInputs[priority].style, {
+          width: "14px",
+          height: "14px",
+          margin: "0",
+        });
+        autonomyPriorityInputs[priority].addEventListener("keydown", stopPortalShortcutPropagation);
+        autonomyPriorityInputs[priority].addEventListener("keyup", stopPortalShortcutPropagation);
+        label.append(autonomyPriorityInputs[priority], document.createTextNode(priority));
+        autonomyPriorityGroup.appendChild(label);
+      }
       Object.assign(descriptionInput.style, {
         gridColumn: "1 / 4",
         height: "54px",
@@ -623,6 +677,21 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       });
       Object.assign(blockedReasonInput.style, { gridColumn: "1 / 2" });
       Object.assign(startDevelopmentButton.style, { gridColumn: "1 / 4" });
+      Object.assign(autonomyReason.style, {
+        gridColumn: "1 / 4",
+        minWidth: "0",
+        color: "#cbd5e1",
+        font: "12px Courier New, monospace",
+      });
+      Object.assign(autonomyPriorityGroup.style, {
+        gridColumn: "1 / 4",
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: "6px",
+        padding: "2px 0",
+      });
+      Object.assign(autonomyToggleButton.style, { gridColumn: "1 / 3" });
+      Object.assign(autonomyReevaluateButton.style, { gridColumn: "3 / 4" });
 
       const createHandler = () => {
         this.officeProjectPortalController?.createBacklogTaskFromInput({
@@ -643,9 +712,24 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const startDevelopmentHandler = () => {
         void this.officeProjectPortalController?.startSelectedBacklogTaskDevelopment();
       };
+      const autonomyToggleHandler = () => {
+        this.projectBacklogFormPendingToggleAutonomy = true;
+      };
+      const autonomyReevaluateHandler = () => {
+        this.projectBacklogFormPendingReevaluateAutonomy = true;
+      };
+      const autonomyPriorityChangeHandler = () => {
+        this.projectBacklogFormPendingPriorityChange = true;
+        if (this.projectBacklogForm) this.projectBacklogForm.isEditingAutonomyPriorities = true;
+      };
       createButton.addEventListener("click", createHandler);
       updateButton.addEventListener("click", updateHandler);
       startDevelopmentButton.addEventListener("click", startDevelopmentHandler);
+      autonomyToggleButton.addEventListener("click", autonomyToggleHandler);
+      autonomyReevaluateButton.addEventListener("click", autonomyReevaluateHandler);
+      for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
+        autonomyPriorityInputs[priority].addEventListener("change", autonomyPriorityChangeHandler);
+      }
 
       root.append(
         titleInput,
@@ -656,6 +740,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createButton,
         updateButton,
         startDevelopmentButton,
+        autonomyReason,
+        autonomyPriorityGroup,
+        autonomyToggleButton,
+        autonomyReevaluateButton,
       );
       document.body.appendChild(root);
       this.projectBacklogForm = {
@@ -668,11 +756,40 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createButton,
         updateButton,
         startDevelopmentButton,
+        autonomyToggleButton,
+        autonomyReevaluateButton,
+        autonomyReason,
+        autonomyPriorityInputs,
         createHandler,
         updateHandler,
         startDevelopmentHandler,
+        autonomyToggleHandler,
+        autonomyReevaluateHandler,
+        autonomyPriorityChangeHandler,
       };
       return this.projectBacklogForm;
+    }
+
+    private projectBacklogFormPendingToggleAutonomy = false;
+    private projectBacklogFormPendingReevaluateAutonomy = false;
+    private projectBacklogFormPendingPriorityChange = false;
+
+    private consumeProjectBacklogFormInput() {
+      const form = this.projectBacklogForm;
+      const toggleAutonomousExecutionPressed = this.projectBacklogFormPendingToggleAutonomy;
+      const reevaluateAutonomousExecutionPressed = this.projectBacklogFormPendingReevaluateAutonomy;
+      const priorityChanged = this.projectBacklogFormPendingPriorityChange;
+      this.projectBacklogFormPendingToggleAutonomy = false;
+      this.projectBacklogFormPendingReevaluateAutonomy = false;
+      this.projectBacklogFormPendingPriorityChange = false;
+      if (form) form.isEditingAutonomyPriorities = false;
+      return {
+        toggleAutonomousExecutionPressed,
+        reevaluateAutonomousExecutionPressed,
+        autonomousAllowedPriorities: form && (toggleAutonomousExecutionPressed || priorityChanged)
+          ? getSelectedAutonomyPriorities(form.autonomyPriorityInputs)
+          : undefined,
+      };
     }
 
     private hideProjectBacklogForm() {
@@ -691,6 +808,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.createButton,
         form.updateButton,
         form.startDevelopmentButton,
+        form.autonomyToggleButton,
+        form.autonomyReevaluateButton,
       ]) {
         element.removeEventListener("keydown", stopPortalShortcutPropagation);
         element.removeEventListener("keyup", stopPortalShortcutPropagation);
@@ -698,8 +817,18 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.createButton.removeEventListener("click", form.createHandler);
       form.updateButton.removeEventListener("click", form.updateHandler);
       form.startDevelopmentButton.removeEventListener("click", form.startDevelopmentHandler);
+      form.autonomyToggleButton.removeEventListener("click", form.autonomyToggleHandler);
+      form.autonomyReevaluateButton.removeEventListener("click", form.autonomyReevaluateHandler);
+      for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
+        form.autonomyPriorityInputs[priority].removeEventListener("change", form.autonomyPriorityChangeHandler);
+        form.autonomyPriorityInputs[priority].removeEventListener("keydown", stopPortalShortcutPropagation);
+        form.autonomyPriorityInputs[priority].removeEventListener("keyup", stopPortalShortcutPropagation);
+      }
       form.root.remove();
       this.projectBacklogForm = undefined;
+      this.projectBacklogFormPendingToggleAutonomy = false;
+      this.projectBacklogFormPendingReevaluateAutonomy = false;
+      this.projectBacklogFormPendingPriorityChange = false;
     }
   };
 }
@@ -714,14 +843,34 @@ type ProjectBacklogFormElements = {
   createButton: HTMLButtonElement;
   updateButton: HTMLButtonElement;
   startDevelopmentButton: HTMLButtonElement;
+  autonomyToggleButton: HTMLButtonElement;
+  autonomyReevaluateButton: HTMLButtonElement;
+  autonomyReason: HTMLDivElement;
+  autonomyPriorityInputs: Record<ProjectBacklogPriority, HTMLInputElement>;
   createHandler: () => void;
   updateHandler: () => void;
   startDevelopmentHandler: () => void;
+  autonomyToggleHandler: () => void;
+  autonomyReevaluateHandler: () => void;
+  autonomyPriorityChangeHandler: () => void;
   lastSelectedTaskId?: string;
+  isEditingAutonomyPriorities?: boolean;
 };
 
 function stopPortalShortcutPropagation(event: Event) {
   event.stopPropagation();
+}
+
+function getSelectedAutonomyPriorities(inputs: Record<ProjectBacklogPriority, HTMLInputElement>) {
+  return BACKLOG_AUTONOMY_PRIORITIES.filter((priority) => inputs[priority].checked);
+}
+
+function formatAutonomyPriorities(priorities: readonly ProjectBacklogPriority[]) {
+  return priorities.length > 0 ? `Priorities: ${priorities.join(", ")}` : "Priorities: none selected";
+}
+
+function formatAutonomyReason(reason: string | undefined) {
+  return reason ? `Reason: ${reason}` : "Waiting";
 }
 
 function opensProjectWorkspace(action: OfficeInteractiveAction) {

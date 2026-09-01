@@ -129,6 +129,7 @@ export type ControllerInternals = {
     externalProjectAdosRunStatuses: ProjectPortalState["externalProjectAdosRunStatuses"];
     projectBacklogCollections: ProjectPortalState["projectBacklogCollections"];
     projectBacklogSuggestionCollections: ProjectPortalState["projectBacklogSuggestionCollections"];
+    projectAutonomyPolicies: ProjectPortalState["projectAutonomyPolicies"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     employeeSimulations: ProjectPortalState["employeeSimulations"];

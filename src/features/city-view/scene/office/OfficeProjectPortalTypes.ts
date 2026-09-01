@@ -89,6 +89,7 @@ import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTyp
 import type { ReceptionDeskUpgradeBenefits } from "./ReceptionDeskUpgradeBenefitsService";
 import type { ProjectBacklogCollections } from "./project-backlog/ProjectBacklogTypes";
 import type { ProjectBacklogSuggestionCollections } from "./project-backlog/ProjectBacklogSuggestionTypes";
+import type { ProjectAutonomyPolicies } from "./project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 import type { ActiveProjectCompanyContext, ProjectCompanyBinding } from "./project-company-binding/ProjectCompanyBindingTypes";
@@ -255,6 +256,7 @@ export type ProjectPortalState = {
   externalProjectAdosRunStatuses: ExternalProjectAdosRunStatuses;
   projectBacklogCollections: ProjectBacklogCollections;
   projectBacklogSuggestionCollections: ProjectBacklogSuggestionCollections;
+  projectAutonomyPolicies: ProjectAutonomyPolicies;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;
