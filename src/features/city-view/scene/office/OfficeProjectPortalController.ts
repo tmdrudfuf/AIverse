@@ -4266,7 +4266,6 @@ export class OfficeProjectPortalController {
     if (Array.from(activeExecutionKeys).some((key) => key.startsWith(`${projectId}:`))) return true;
     return Object.values(this.state.externalProjectAdosRunStatuses).some((status) => (
       status.projectId === projectId && (
-        status.stage === "Prepared" ||
         status.stage === "Started" ||
         status.stage === "Blocked" ||
         status.stage === "TimedOut"
