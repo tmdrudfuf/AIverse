@@ -1,5 +1,7 @@
 # Runtime Verification: AI-Assisted Project Backlog Suggestions
 
+The deterministic evidence payload is recorded in `runtime-evidence.json`.
+
 Runtime verification should demonstrate two registered projects with deterministic provider fixtures:
 
 - Project A has existing context and backlog item.

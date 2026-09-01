@@ -889,16 +889,31 @@ export class OfficeProjectPortalView {
     } else {
       this.addText(this.panelX + 376, this.panelY + 224, "No task selected", mutedStyle());
     }
-    this.addTerminalPanel(this.panelX + 356, this.panelY + 316, 284, 96);
+    this.addTerminalPanel(this.panelX + 356, this.panelY + 316, 284, 150);
     this.addText(this.panelX + 368, this.panelY + 332, "AI Suggestions", headingStyle());
     if (selectedSuggestion) {
       this.addText(
         this.panelX + 376,
-        this.panelY + 358,
+        this.panelY + 354,
+        compactTextLine(`Target: ${project?.name ?? selectedSuggestion.projectId}`, 32),
+        mutedStyle(),
+      );
+      this.addText(
+        this.panelX + 376,
+        this.panelY + 376,
         compactTextLine(`[${selectedSuggestion.status.toUpperCase()}] ${selectedSuggestion.title}`, 32),
         selectedSuggestion.status === "proposed" ? bodyStyle() : mutedStyle(),
       );
-      this.addText(this.panelX + 376, this.panelY + 382, wrapAndClampText(selectedSuggestion.description, 32, 2), projectMutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 400, wrapAndClampText(selectedSuggestion.description, 32, 2), projectMutedStyle());
+      this.addText(
+        this.panelX + 376,
+        this.panelY + 430,
+        compactTextLine(`Advisory priority: ${selectedSuggestion.suggestedPriority ?? "none"}`, 32),
+        mutedStyle(),
+      );
+      if (selectedSuggestion.rationale) {
+        this.addText(this.panelX + 376, this.panelY + 446, compactTextLine(`Why: ${selectedSuggestion.rationale}`, 32), mutedStyle());
+      }
     } else {
       const summary = suggestions.length > 0 ? `${suggestions.length} historical suggestions` : "No suggestions generated";
       this.addText(this.panelX + 376, this.panelY + 358, compactTextLine(summary, 32), mutedStyle());

@@ -153,6 +153,37 @@ describe("OfficeProjectPortalView", () => {
     expect(text).toContain("Blocked here is planning state, not ADOS runtime.");
   });
 
+  it("renders backlog suggestion review rationale and advisory priority when present", () => {
+    const renderedText: RenderedText[] = [];
+    const scene = createSceneStub(renderedText, []);
+    const state = createPortalState({ viewMode: "project-backlog" });
+    state.selectedBacklogProjectId = "daily-proof";
+    state.selectedBacklogSuggestionId = "daily-proof:suggestion:1";
+    state.projectBacklogSuggestionCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      candidates: [{
+        id: "daily-proof:suggestion:1",
+        projectId: "daily-proof",
+        title: "Add backlog search",
+        description: "Let operators search planning items.",
+        rationale: "Reduces planning review time.",
+        suggestedPriority: "high",
+        sourceContextSummary: "Daily Proof; 1 backlog; 0 active; 0 blocked",
+        generatedAt: "2026-08-31T00:00:00.000Z",
+        updatedAt: "2026-08-31T00:00:00.000Z",
+        status: "proposed",
+      }],
+    };
+
+    new OfficeProjectPortalView(scene, state);
+
+    const text = renderedText.map((item) => item.text);
+    expect(text).toContain("Target: Daily Proof");
+    expect(text).toContain("[PROPOSED] Add backlog search");
+    expect(text).toContain("Advisory priority: high");
+    expect(text.some((item) => item.startsWith("Why: Reduces planning review"))).toBe(true);
+  });
+
   it("renders the completed fifth employee recruiting action after recruitment", () => {
     const renderedText: RenderedText[] = [];
     const scene = createSceneStub(renderedText, []);
