@@ -70,10 +70,14 @@ export class ProjectAutonomousExecutionPolicyService {
     if (!resolution.ok) return resolution;
 
     const existing = this.getPolicy(policies, resolution.projectId);
+    const allowedPriorities = patch.allowedPriorities !== undefined
+      ? normalizePriorities(patch.allowedPriorities)
+      : existing.allowedPriorities;
+    const enabled = patch.enabled !== undefined ? Boolean(patch.enabled) : existing.enabled;
     const nextPolicy: ProjectAutonomyPolicy = {
       ...existing,
-      ...(patch.enabled !== undefined ? { enabled: Boolean(patch.enabled) } : {}),
-      ...(patch.allowedPriorities !== undefined ? { allowedPriorities: normalizePriorities(patch.allowedPriorities) } : {}),
+      enabled: enabled && allowedPriorities.length > 0,
+      allowedPriorities,
       ...(patch.maxConcurrentExecutions !== undefined
         ? { maxConcurrentExecutions: normalizeConcurrency(patch.maxConcurrentExecutions) }
         : {}),
@@ -156,7 +160,7 @@ export class ProjectAutonomousExecutionPolicyService {
     if (task.developmentRequestId || task.executionPreparationId || task.executionRunId || task.executionAcceptedAt) {
       return "TaskAlreadyAssociated";
     }
-    if (policy.allowedPriorities.length > 0 && !policy.allowedPriorities.includes(task.priority)) {
+    if (policy.allowedPriorities.length === 0 || !policy.allowedPriorities.includes(task.priority)) {
       return "PriorityNotAllowed";
     }
     return undefined;

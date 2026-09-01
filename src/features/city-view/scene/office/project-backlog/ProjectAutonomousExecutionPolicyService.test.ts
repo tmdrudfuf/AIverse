@@ -44,6 +44,29 @@ describe("ProjectAutonomousExecutionPolicyService", () => {
     expect(service.getPolicy(policies, "project-b").enabled).toBe(false);
   });
 
+  it("does not enable autonomy until the operator selects at least one allowed priority", () => {
+    const service = new ProjectAutonomousExecutionPolicyService({ now: () => NOW });
+    const policies: ProjectAutonomyPolicies = {};
+
+    const result = service.updatePolicy(policies, context("project-a"), {
+      enabled: true,
+      allowedPriorities: [],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(policies["project-a"]).toMatchObject({
+      enabled: false,
+      allowedPriorities: [],
+      updatedByOperator: true,
+    });
+    expect(service.evaluate({
+      policies,
+      project: project("project-a"),
+      context: context("project-a"),
+      tasks: [task("project-a", "urgent")],
+    })).toMatchObject({ state: "off", reason: "PolicyDisabled" });
+  });
+
   it("fails closed when policy is off, project unavailable, or project disconnected", () => {
     const service = new ProjectAutonomousExecutionPolicyService({ now: () => NOW });
     const policies: ProjectAutonomyPolicies = {

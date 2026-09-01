@@ -69,6 +69,60 @@ describe("OfficeProjectPortalController autonomous backlog execution", () => {
     });
   });
 
+  it("uses live backlog input fields to deliberately configure and enable project autonomy", async () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, "project-a");
+    internals.externalProjectAdosExecutionService.start = vi.fn(startedOutcome);
+
+    createReadyTask(controller, "Input-driven automatic start", "high");
+
+    controller.updateInput(createInput({
+      autonomousAllowedPriorities: ["high"],
+    }));
+    expect(controller.getProjectBacklogProbeState()).toMatchObject({
+      autonomyEnabled: false,
+      autonomyAllowedPriorities: ["high"],
+      autonomyReason: "PolicyDisabled",
+    });
+
+    controller.updateInput(createInput({
+      toggleAutonomousExecutionPressed: true,
+    }));
+    await flushPromises();
+
+    expect(internals.externalProjectAdosExecutionService.start).toHaveBeenCalledOnce();
+    expect(controller.getProjectBacklogProbeState()).toMatchObject({
+      autonomyEnabled: true,
+      autonomyAllowedPriorities: ["high"],
+    });
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0]).toMatchObject({
+      title: "Input-driven automatic start",
+      status: "in_progress",
+      executionRunId: "project-a:run",
+    });
+  });
+
+  it("does not enable project autonomy from live input when no priority is selected", async () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, "project-a");
+    internals.externalProjectAdosExecutionService.start = vi.fn(startedOutcome);
+
+    createReadyTask(controller, "No selected priority", "urgent");
+    controller.updateInput(createInput({
+      toggleAutonomousExecutionPressed: true,
+      autonomousAllowedPriorities: [],
+    }));
+    await flushPromises();
+
+    expect(internals.externalProjectAdosExecutionService.start).not.toHaveBeenCalled();
+    expect(controller.getProjectBacklogProbeState()).toMatchObject({
+      autonomyEnabled: false,
+      autonomyAllowedPriorities: [],
+      autonomyReason: "PolicyDisabled",
+    });
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).toBe("ready");
+  });
+
   it("selects deterministically and starts through the existing Spec 142 bridge once", async () => {
     const { controller, internals } = createController();
     openBacklog(controller, "project-a");

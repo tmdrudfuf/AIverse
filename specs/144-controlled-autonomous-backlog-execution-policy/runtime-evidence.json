@@ -1,7 +1,7 @@
 {
   "feature": "144-controlled-autonomous-backlog-execution-policy",
   "capturedAt": "2026-09-01T00:00:00.000Z",
-  "captureMode": "deterministic controller runtime fixture using OfficeProjectPortalController, BrowserOfficeSessionService, ProjectAutonomousExecutionPolicyService, and the existing Spec 142 ProjectBacklogDevelopmentBridgeService",
+  "captureMode": "deterministic controller runtime fixture using OfficeProjectPortalController, BrowserOfficeSessionService, ProjectAutonomousExecutionPolicyService, live CompanyOfficeScene backlog input controls, and the existing Spec 142 ProjectBacklogDevelopmentBridgeService",
   "externalSafetyBoundary": {
     "primaryRepositoryMutated": false,
     "githubMutated": false,
@@ -21,6 +21,12 @@
         "requireNoActiveRun": true,
         "allowedTaskStatuses": ["ready"],
         "updatedByOperator": true
+      },
+      "operatorControlSurface": {
+        "officeBacklogDomToggle": true,
+        "officeBacklogDomPrioritySelection": true,
+        "officeBacklogDomReevaluate": true,
+        "liveSceneUpdateInputPathCovered": true
       },
       "readyTasks": [
         {
@@ -91,6 +97,6 @@
   },
   "validationEvidence": {
     "targetedCommand": "npx vitest run src/features/city-view/scene/office/project-backlog/ProjectAutonomousExecutionPolicyService.test.ts src/features/city-view/scene/office/OfficeProjectPortalController.project-autonomy.test.ts src/features/city-view/scene/office/browser-session/BrowserOfficeSessionService.test.ts src/features/city-view/scene/PortfolioOperationsService.test.ts",
-    "result": "4 test files passed, 41 tests passed"
+    "result": "4 test files passed, 44 tests passed"
   }
 }
