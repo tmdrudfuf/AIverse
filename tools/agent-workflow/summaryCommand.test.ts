@@ -10,7 +10,20 @@ function createTempDir() {
 }
 
 function git(cwd: string, args: string[]) {
-  execFileSync("git", args, { cwd, stdio: "pipe" });
+  execFileSync("git", [
+    "-c", "commit.gpgsign=false",
+    "-c", "tag.gpgSign=false",
+    "-c", "core.hooksPath=/dev/null",
+    ...args,
+  ], {
+    cwd,
+    stdio: "pipe",
+    env: {
+      ...process.env,
+      GIT_CONFIG_NOSYSTEM: "1",
+      GIT_CONFIG_GLOBAL: os.platform() === "win32" ? "NUL" : "/dev/null",
+    },
+  });
 }
 
 function initRepo(cwd: string) {
