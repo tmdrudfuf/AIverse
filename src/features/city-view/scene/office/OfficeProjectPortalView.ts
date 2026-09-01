@@ -868,6 +868,11 @@ export class OfficeProjectPortalView {
           rowStyle(canMutate, index === state.selectedBacklogTaskIndex),
         );
       });
+      if (collection.tasks.length <= 4) {
+        const planningNoteY = this.panelY + 190 + collection.tasks.length * 30;
+        this.addText(this.panelX + 48, planningNoteY, "Ready only means eligible for future development.", mutedStyle());
+        this.addText(this.panelX + 48, planningNoteY + 22, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
+      }
     }
 
     this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 178);
