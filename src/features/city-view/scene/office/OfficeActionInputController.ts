@@ -50,6 +50,9 @@ const START_POST_VALIDATION_REVIEW_KEY_CODE = "KeyU";
 // one keyboard input that can explicitly start development for a Ready backlog
 // task. The HTML Start Development button calls the same controller path.
 const START_BACKLOG_DEVELOPMENT_KEY_CODE = "KeyB";
+const GENERATE_BACKLOG_SUGGESTIONS_KEY_CODE = "KeyN";
+const ACCEPT_BACKLOG_SUGGESTION_KEY_CODE = "KeyA";
+const REJECT_BACKLOG_SUGGESTION_KEY_CODE = "KeyJ";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -71,6 +74,9 @@ export class OfficeActionInputController {
   private pendingPreparePostValidationReviewTarget = false;
   private pendingStartPostValidationReview = false;
   private pendingStartBacklogDevelopment = false;
+  private pendingGenerateBacklogSuggestions = false;
+  private pendingAcceptBacklogSuggestion = false;
+  private pendingRejectBacklogSuggestion = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -113,6 +119,7 @@ export class OfficeActionInputController {
     if (event.code === APPROVE_CANDIDATE_DETAIL_KEY_CODE) {
       event.preventDefault();
       this.pendingApproveCandidateDetail = true;
+      this.pendingAcceptBacklogSuggestion = true;
       return;
     }
 
@@ -125,6 +132,7 @@ export class OfficeActionInputController {
     if (event.code === REJECT_CANDIDATE_DETAIL_KEY_CODE) {
       event.preventDefault();
       this.pendingRejectCandidateDetail = true;
+      this.pendingRejectBacklogSuggestion = true;
       return;
     }
 
@@ -185,6 +193,12 @@ export class OfficeActionInputController {
     if (event.code === START_BACKLOG_DEVELOPMENT_KEY_CODE) {
       event.preventDefault();
       this.pendingStartBacklogDevelopment = true;
+      return;
+    }
+
+    if (event.code === GENERATE_BACKLOG_SUGGESTIONS_KEY_CODE) {
+      event.preventDefault();
+      this.pendingGenerateBacklogSuggestions = true;
     }
   };
 
@@ -311,6 +325,24 @@ export class OfficeActionInputController {
     return pressed;
   }
 
+  consumeGenerateBacklogSuggestionsPressed() {
+    const pressed = this.pendingGenerateBacklogSuggestions;
+    this.pendingGenerateBacklogSuggestions = false;
+    return pressed;
+  }
+
+  consumeAcceptBacklogSuggestionPressed() {
+    const pressed = this.pendingAcceptBacklogSuggestion;
+    this.pendingAcceptBacklogSuggestion = false;
+    return pressed;
+  }
+
+  consumeRejectBacklogSuggestionPressed() {
+    const pressed = this.pendingRejectBacklogSuggestion;
+    this.pendingRejectBacklogSuggestion = false;
+    return pressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -337,5 +369,8 @@ export class OfficeActionInputController {
     this.pendingPreparePostValidationReviewTarget = false;
     this.pendingStartPostValidationReview = false;
     this.pendingStartBacklogDevelopment = false;
+    this.pendingGenerateBacklogSuggestions = false;
+    this.pendingAcceptBacklogSuggestion = false;
+    this.pendingRejectBacklogSuggestion = false;
   }
 }

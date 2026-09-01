@@ -165,6 +165,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const preparePostValidationReviewTargetPressed = this.officeActionInputController?.consumePreparePostValidationReviewTargetPressed() ?? false;
       const startPostValidationReviewPressed = this.officeActionInputController?.consumeStartPostValidationReviewPressed() ?? false;
       const startBacklogDevelopmentPressed = this.officeActionInputController?.consumeStartBacklogDevelopmentPressed() ?? false;
+      const generateBacklogSuggestionsPressed = this.officeActionInputController?.consumeGenerateBacklogSuggestionsPressed() ?? false;
+      const acceptBacklogSuggestionPressed = this.officeActionInputController?.consumeAcceptBacklogSuggestionPressed() ?? false;
+      const rejectBacklogSuggestionPressed = this.officeActionInputController?.consumeRejectBacklogSuggestionPressed() ?? false;
 
       if (this.officeProjectPortalController?.isOpen()) {
         this.navigationInputController?.setPointerNavigationEnabled(false);
@@ -197,6 +200,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           preparePostValidationReviewTargetPressed,
           startPostValidationReviewPressed,
           startBacklogDevelopmentPressed,
+          generateBacklogSuggestionsPressed,
+          acceptBacklogSuggestionPressed,
+          rejectBacklogSuggestionPressed,
           developmentRequestText,
         });
         this.refreshEmployeeNpcRenderer();

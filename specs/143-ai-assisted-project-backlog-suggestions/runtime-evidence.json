@@ -1,0 +1,266 @@
+{
+  "spec": "143-ai-assisted-project-backlog-suggestions",
+  "featureBranch": "codex/143-ai-assisted-project-backlog-suggestions",
+  "baseSha": "b04d72d233cbd90cfe062aa8027ac01f45e259f2",
+  "reviewedShaAddressed": "e3354819d6cf828903df75fb75fbaf59350631c3",
+  "capturedAt": "2026-08-31T00:00:00.000Z",
+  "captureMode": "deterministic provider runtime fixture through OfficeProjectPortalController and BrowserOfficeSessionService",
+  "provider": {
+    "name": "DeterministicProjectBacklogSuggestionProvider",
+    "maxSuggestions": 3,
+    "invocationPolicy": "explicit operator request only"
+  },
+  "projects": [
+    {
+      "label": "Project A",
+      "projectId": "daily-proof",
+      "displayName": "Daily Proof",
+      "ownerCompany": "Daily Proof Inc.",
+      "registered": true,
+      "canonicalResolution": {
+        "bindingId": "project:daily-proof",
+        "buildingId": "project:daily-proof",
+        "status": "bound"
+      },
+      "initialContext": {
+        "existingBacklog": [
+          {
+            "id": "daily-proof:backlog:existing",
+            "projectId": "daily-proof",
+            "title": "Add customer search",
+            "description": "Add customer search to the admin page.",
+            "status": "backlog",
+            "priority": "normal"
+          }
+        ],
+        "activeWork": [
+          "Active project run: Started"
+        ],
+        "blockedWork": [],
+        "repositorySummary": "Repo ai-verse/daily-proof on main is configured for read-only project metadata."
+      },
+      "operatorActions": [
+        {
+          "step": 1,
+          "action": "select project backlog",
+          "providerCallsAfterStep": 0
+        },
+        {
+          "step": 2,
+          "action": "generate suggestions",
+          "providerCallsAfterStep": 1
+        },
+        {
+          "step": 3,
+          "action": "accept suggestion with operator edits",
+          "suggestionId": "daily-proof:suggestion:1",
+          "operatorEditedTitle": "Operator accepted Daily Proof backlog search",
+          "operatorEditedDescription": "Preserve Daily Proof filter state and search terms in the planning backlog view.",
+          "operatorEditedPriority": "high"
+        }
+      ],
+      "generatedCandidates": [
+        {
+          "id": "daily-proof:suggestion:1",
+          "projectId": "daily-proof",
+          "title": "Add Daily Proof backlog search",
+          "description": "Add operator-facing search and filtering for Daily Proof planning items, informed by current Add customer search context.",
+          "rationale": "Improves planning review without changing task readiness or execution state.",
+          "suggestedPriority": "normal",
+          "sourceContextSummary": "Daily Proof; 1 backlog; 1 active; 0 blocked",
+          "statusBeforeReview": "proposed"
+        },
+        {
+          "id": "daily-proof:suggestion:2",
+          "projectId": "daily-proof",
+          "title": "Add Daily Proof sync recovery notes",
+          "description": "Show concise recovery notes when Daily Proof project or repository synchronization needs operator attention.",
+          "rationale": "Gives the operator concrete follow-up work while keeping blocked execution recovery separate.",
+          "suggestedPriority": "normal",
+          "sourceContextSummary": "Daily Proof; 1 backlog; 1 active; 0 blocked",
+          "statusBeforeReview": "proposed"
+        },
+        {
+          "id": "daily-proof:suggestion:3",
+          "projectId": "daily-proof",
+          "title": "Add Daily Proof accepted work audit trail",
+          "description": "Record how accepted planning work for Daily Proof moved from suggestion to backlog without starting development.",
+          "rationale": "Makes operator decisions auditable across reloads and project switches.",
+          "suggestedPriority": "low",
+          "sourceContextSummary": "Daily Proof; 1 backlog; 1 active; 0 blocked",
+          "statusBeforeReview": "proposed"
+        }
+      ],
+      "acceptedSuggestion": {
+        "suggestionId": "daily-proof:suggestion:1",
+        "resultingBacklogTaskId": "daily-proof:backlog:1",
+        "resultingBacklogTask": {
+          "id": "daily-proof:backlog:1",
+          "projectId": "daily-proof",
+          "title": "Operator accepted Daily Proof backlog search",
+          "description": "Preserve Daily Proof filter state and search terms in the planning backlog view.",
+          "status": "backlog",
+          "priority": "high",
+          "developmentRequestId": null,
+          "executionRunId": null
+        },
+        "adosInvoked": false,
+        "readyMarkedAutomatically": false
+      },
+      "isolationAssertions": {
+        "promptContainsOtherProjectBacklog": false,
+        "acceptedTaskAppearsInOtherProjectBacklog": false,
+        "suggestionsVisibleUnderOtherProject": false
+      }
+    },
+    {
+      "label": "Project B",
+      "projectId": "ai-lab",
+      "displayName": "AI Lab",
+      "ownerCompany": "AIverse Internal",
+      "registered": true,
+      "canonicalResolution": {
+        "bindingId": "project:ai-lab",
+        "buildingId": "project:ai-lab",
+        "status": "bound"
+      },
+      "initialContext": {
+        "existingBacklog": [
+          {
+            "id": "ai-lab:backlog:existing",
+            "projectId": "ai-lab",
+            "title": "Document agent experiment intake",
+            "description": "Capture the information needed before adding a new AI Lab experiment.",
+            "status": "backlog",
+            "priority": "normal"
+          }
+        ],
+        "activeWork": [],
+        "blockedWork": [
+          "Active project run: Blocked"
+        ],
+        "repositorySummary": "Local project identity is registered with no configured GitHub metadata."
+      },
+      "operatorActions": [
+        {
+          "step": 4,
+          "action": "switch to project backlog",
+          "providerCallsAfterStep": 1
+        },
+        {
+          "step": 5,
+          "action": "generate suggestions",
+          "providerCallsAfterStep": 2
+        },
+        {
+          "step": 6,
+          "action": "reject suggestion",
+          "suggestionId": "ai-lab:suggestion:4"
+        }
+      ],
+      "generatedCandidates": [
+        {
+          "id": "ai-lab:suggestion:4",
+          "projectId": "ai-lab",
+          "title": "Add AI Lab backlog search",
+          "description": "Add operator-facing search and filtering for AI Lab planning items, informed by current Document agent experiment intake context.",
+          "rationale": "Improves planning review without changing task readiness or execution state.",
+          "suggestedPriority": "normal",
+          "sourceContextSummary": "AI Lab; 1 backlog; 0 active; 1 blocked",
+          "statusBeforeReview": "proposed"
+        },
+        {
+          "id": "ai-lab:suggestion:5",
+          "projectId": "ai-lab",
+          "title": "Add AI Lab sync recovery notes",
+          "description": "Show concise recovery notes when AI Lab project or repository synchronization needs operator attention.",
+          "rationale": "Gives the operator concrete follow-up work while keeping blocked execution recovery separate.",
+          "suggestedPriority": "high",
+          "sourceContextSummary": "AI Lab; 1 backlog; 0 active; 1 blocked",
+          "statusBeforeReview": "proposed"
+        },
+        {
+          "id": "ai-lab:suggestion:6",
+          "projectId": "ai-lab",
+          "title": "Add AI Lab accepted work audit trail",
+          "description": "Record how accepted planning work for AI Lab moved from suggestion to backlog without starting development.",
+          "rationale": "Makes operator decisions auditable across reloads and project switches.",
+          "suggestedPriority": "low",
+          "sourceContextSummary": "AI Lab; 1 backlog; 0 active; 1 blocked",
+          "statusBeforeReview": "proposed"
+        }
+      ],
+      "rejectedSuggestion": {
+        "suggestionId": "ai-lab:suggestion:4",
+        "createdBacklogTaskCount": 0,
+        "backlogTaskIdsAfterReject": [
+          "ai-lab:backlog:existing"
+        ],
+        "adosInvoked": false
+      },
+      "isolationAssertions": {
+        "promptContainsOtherProjectBacklog": false,
+        "acceptedTaskAppearsInThisProjectBacklog": false,
+        "otherProjectSuggestionsVisibleHere": false
+      }
+    }
+  ],
+  "postReloadState": {
+    "providerCallsDuringReload": 0,
+    "suggestionCollections": {
+      "daily-proof": [
+        {
+          "id": "daily-proof:suggestion:1",
+          "projectId": "daily-proof",
+          "status": "accepted",
+          "acceptedBacklogTaskId": "daily-proof:backlog:1"
+        },
+        {
+          "id": "daily-proof:suggestion:2",
+          "projectId": "daily-proof",
+          "status": "proposed"
+        },
+        {
+          "id": "daily-proof:suggestion:3",
+          "projectId": "daily-proof",
+          "status": "proposed"
+        }
+      ],
+      "ai-lab": [
+        {
+          "id": "ai-lab:suggestion:4",
+          "projectId": "ai-lab",
+          "status": "rejected"
+        },
+        {
+          "id": "ai-lab:suggestion:5",
+          "projectId": "ai-lab",
+          "status": "proposed"
+        },
+        {
+          "id": "ai-lab:suggestion:6",
+          "projectId": "ai-lab",
+          "status": "proposed"
+        }
+      ]
+    },
+    "backlogCollections": {
+      "daily-proof": [
+        "daily-proof:backlog:existing",
+        "daily-proof:backlog:1"
+      ],
+      "ai-lab": [
+        "ai-lab:backlog:existing"
+      ]
+    },
+    "crossProjectSuggestionLeakDetected": false,
+    "crossProjectBacklogLeakDetected": false
+  },
+  "nonMutationBoundary": {
+    "gitMutatedBySuggestionGeneration": false,
+    "repositoryFilesModifiedBySuggestionGeneration": false,
+    "shellCommandsExecutedBySuggestionGeneration": false,
+    "startDevelopmentInvoked": false,
+    "adosInvoked": false
+  }
+}

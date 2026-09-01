@@ -25,6 +25,7 @@ import type {
 import type { ExternalProjectAdosRunStatuses } from "../external-ados-run-status/ExternalProjectAdosRunStatusTypes";
 import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
 import type { ProjectBacklogCollections } from "../project-backlog/ProjectBacklogTypes";
+import type { ProjectBacklogSuggestionCollections } from "../project-backlog/ProjectBacklogSuggestionTypes";
 import type {
   ImplementerRuntimeCollection,
   ImplementerRuntimeResultCollection,
@@ -62,6 +63,7 @@ export type BrowserOfficeSessionSnapshot = {
   selectedBacklogProjectId?: string;
   selectedBacklogTaskId?: string;
   selectedBacklogTaskIndex?: number;
+  selectedBacklogSuggestionId?: string;
   selectedWorkSessionId?: string;
   projectRegistryEntries?: ProjectRegistryEntry[];
   projectCompanyBindings?: ProjectCompanyBinding[];
@@ -83,6 +85,7 @@ export type BrowserOfficeSessionSnapshot = {
   externalProjectAdosExecutionResults?: ExternalProjectAdosExecutionResults;
   externalProjectAdosRunStatuses?: ExternalProjectAdosRunStatuses;
   projectBacklogCollections?: ProjectBacklogCollections;
+  projectBacklogSuggestionCollections?: ProjectBacklogSuggestionCollections;
   implementerRuntimeCollections?: Record<string, ImplementerRuntimeCollection>;
   implementerRuntimeResultCollections?: Record<string, ImplementerRuntimeResultCollection>;
   reviewerRuntimeCollections?: Record<string, ReviewerRuntimeCollection>;
@@ -112,6 +115,7 @@ export type BrowserOfficeSessionState = Pick<
   | "selectedBacklogProjectId"
   | "selectedBacklogTaskId"
   | "selectedBacklogTaskIndex"
+  | "selectedBacklogSuggestionId"
   | "selectedWorkSessionId"
   | "projectRegistryEntries"
   | "projectCompanyBindings"
@@ -133,6 +137,7 @@ export type BrowserOfficeSessionState = Pick<
   | "externalProjectAdosExecutionResults"
   | "externalProjectAdosRunStatuses"
   | "projectBacklogCollections"
+  | "projectBacklogSuggestionCollections"
   | "implementerRuntimeCollections"
   | "implementerRuntimeResultCollections"
   | "reviewerRuntimeCollections"

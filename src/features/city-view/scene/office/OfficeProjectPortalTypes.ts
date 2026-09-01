@@ -88,6 +88,7 @@ import type {
 import type { RepositorySyncSnapshot } from "./repository-sync/RepositorySyncTypes";
 import type { ReceptionDeskUpgradeBenefits } from "./ReceptionDeskUpgradeBenefitsService";
 import type { ProjectBacklogCollections } from "./project-backlog/ProjectBacklogTypes";
+import type { ProjectBacklogSuggestionCollections } from "./project-backlog/ProjectBacklogSuggestionTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
 import type { ActiveProjectCompanyContext, ProjectCompanyBinding } from "./project-company-binding/ProjectCompanyBindingTypes";
@@ -194,6 +195,7 @@ export type ProjectPortalState = {
   selectedBacklogTaskId?: string;
   selectedBacklogPriorityIndex: number;
   selectedBacklogStatusIndex: number;
+  selectedBacklogSuggestionId?: string;
   selectedCandidatePromotionIndex: number;
   selectedCandidateTaskId?: string;
   selectedInfluenceFocusIndex: number;
@@ -252,6 +254,7 @@ export type ProjectPortalState = {
   externalProjectAdosExecutionResults: ExternalProjectAdosExecutionResults;
   externalProjectAdosRunStatuses: ExternalProjectAdosRunStatuses;
   projectBacklogCollections: ProjectBacklogCollections;
+  projectBacklogSuggestionCollections: ProjectBacklogSuggestionCollections;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
   employeeRecommendations: Record<string, EmployeeRecommendationResult>;

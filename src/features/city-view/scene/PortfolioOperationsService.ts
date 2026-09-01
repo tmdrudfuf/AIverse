@@ -4,6 +4,7 @@ import type { ProjectPortalState } from "./office/OfficeProjectPortalTypes";
 import { deriveLiveAgentWorkState, type LiveAgentWorkState } from "./office/LiveAgentWorkVisualization";
 import { ProjectBacklogService } from "./office/project-backlog/ProjectBacklogService";
 import type { ProjectBacklogSummary } from "./office/project-backlog/ProjectBacklogTypes";
+import type { ProjectBacklogSuggestionCollections } from "./office/project-backlog/ProjectBacklogSuggestionTypes";
 import { ProjectCompanyBindingService } from "./office/project-company-binding/ProjectCompanyBindingService";
 import { toProjectPortalProject } from "./office/project-registry/ProjectRegistryAdapters";
 
@@ -38,6 +39,7 @@ export type PortfolioOperationsSummary = {
   blockedReasonSummary?: string;
   recentCompletedSummary?: string;
   backlogSummary?: ProjectBacklogSummary;
+  backlogSuggestionSummary?: string;
   updatedAt?: string;
   operatorActionAvailable: boolean;
 };
@@ -53,7 +55,7 @@ type LiveAgentWorkStateInput = Parameters<typeof deriveLiveAgentWorkState>[0];
 
 type ProjectScopedPortfolioState =
   Pick<ProjectPortalState, "projectRegistryEntries"> &
-  Partial<Pick<ProjectPortalState, "projectBacklogCollections">> &
+  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections">> &
   Partial<LiveAgentWorkStateInput>;
 
 export function createPortfolioOperationsFromBrowserSession(
@@ -164,9 +166,23 @@ function createAvailableSummary(input: {
       input.state.projectBacklogCollections?.[input.projectId],
       input.projectId,
     ),
+    backlogSuggestionSummary: createBacklogSuggestionSummary(
+      input.state.projectBacklogSuggestionCollections,
+      input.projectId,
+    ),
     updatedAt: input.liveWorkState.updatedAt,
     operatorActionAvailable: true,
   };
+}
+
+function createBacklogSuggestionSummary(
+  collections: ProjectBacklogSuggestionCollections | undefined,
+  projectId: string,
+) {
+  const proposedCount = collections?.[projectId]?.candidates
+    .filter((candidate) => candidate.projectId === projectId && candidate.status === "proposed").length ?? 0;
+  if (proposedCount <= 0) return undefined;
+  return `${proposedCount} AI ${proposedCount === 1 ? "suggestion" : "suggestions"} available`;
 }
 
 function createDisconnectedSummary(

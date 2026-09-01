@@ -75,6 +75,7 @@ export type ControllerInternals = {
     selectedBacklogProjectId?: string;
     selectedBacklogTaskId?: string;
     selectedBacklogTaskIndex: number;
+    selectedBacklogSuggestionId?: string;
     selectedEmployeeIndex: number;
     projects: ProjectPortalProjectLike[];
     projectRegistryEntries: ProjectPortalState["projectRegistryEntries"];
@@ -127,6 +128,7 @@ export type ControllerInternals = {
     externalProjectAdosExecutionResults: ProjectPortalState["externalProjectAdosExecutionResults"];
     externalProjectAdosRunStatuses: ProjectPortalState["externalProjectAdosRunStatuses"];
     projectBacklogCollections: ProjectPortalState["projectBacklogCollections"];
+    projectBacklogSuggestionCollections: ProjectPortalState["projectBacklogSuggestionCollections"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
     employeeSimulations: ProjectPortalState["employeeSimulations"];
@@ -185,6 +187,9 @@ export type ControllerInternals = {
   startValidationRuntimeForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   preparePostValidationReviewTargetForPromotion: (projectId: string, candidateTaskId: string) => boolean;
   startPostValidationReviewForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
+  generateProjectBacklogSuggestions: () => Promise<boolean>;
+  acceptSelectedBacklogSuggestion: (input?: { title?: string; description?: string; priority?: "low" | "normal" | "high" | "urgent" }) => boolean;
+  rejectSelectedBacklogSuggestion: () => boolean;
 };
 
 export function getControllerInternals(controller: OfficeProjectPortalController): ControllerInternals {
@@ -246,6 +251,9 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     preparePostValidationReviewTargetPressed: false,
     startPostValidationReviewPressed: false,
     startBacklogDevelopmentPressed: false,
+    generateBacklogSuggestionsPressed: false,
+    acceptBacklogSuggestionPressed: false,
+    rejectBacklogSuggestionPressed: false,
     ...overrides,
   };
 }
