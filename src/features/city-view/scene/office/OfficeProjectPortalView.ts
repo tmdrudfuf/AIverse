@@ -890,7 +890,7 @@ export class OfficeProjectPortalView {
     this.addText(
       this.panelX + this.panelWidth - 28,
       this.panelY + this.panelHeight - 34,
-      "Esc back  Up/Down select  Enter/Space Start Development",
+      "Esc back  Up/Down select  B Start Development",
       instructionStyle(),
     ).setOrigin(1, 0.5);
   }

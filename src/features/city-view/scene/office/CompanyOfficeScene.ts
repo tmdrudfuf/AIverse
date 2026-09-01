@@ -164,6 +164,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const startValidationRuntimePressed = this.officeActionInputController?.consumeStartValidationRuntimePressed() ?? false;
       const preparePostValidationReviewTargetPressed = this.officeActionInputController?.consumePreparePostValidationReviewTargetPressed() ?? false;
       const startPostValidationReviewPressed = this.officeActionInputController?.consumeStartPostValidationReviewPressed() ?? false;
+      const startBacklogDevelopmentPressed = this.officeActionInputController?.consumeStartBacklogDevelopmentPressed() ?? false;
 
       if (this.officeProjectPortalController?.isOpen()) {
         this.navigationInputController?.setPointerNavigationEnabled(false);
@@ -195,6 +196,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           startValidationRuntimePressed,
           preparePostValidationReviewTargetPressed,
           startPostValidationReviewPressed,
+          startBacklogDevelopmentPressed,
           developmentRequestText,
         });
         this.refreshEmployeeNpcRenderer();
@@ -516,6 +518,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const form = this.getProjectBacklogForm();
       const canvasBounds = this.game.canvas.getBoundingClientRect();
       const selectedTask = this.officeProjectPortalController?.getSelectedProjectBacklogTaskInput();
+      const probe = this.officeProjectPortalController?.getProjectBacklogProbeState();
       if (form.lastSelectedTaskId !== selectedTask?.id) {
         form.titleInput.value = selectedTask?.title ?? "";
         form.descriptionInput.value = selectedTask?.description ?? "";
@@ -524,6 +527,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.blockedReasonInput.value = selectedTask?.blockedReason ?? "";
         form.lastSelectedTaskId = selectedTask?.id;
       }
+      form.startDevelopmentButton.disabled = !probe?.developmentEligible;
+      form.startDevelopmentButton.title = probe?.developmentEligible
+        ? "Start Development"
+        : probe?.developmentEligibilityReason || "Select a Ready task in an available project.";
+      form.startDevelopmentButton.style.opacity = probe?.developmentEligible ? "1" : "0.52";
+      form.startDevelopmentButton.style.cursor = probe?.developmentEligible ? "pointer" : "not-allowed";
       const width = Math.min(560, Math.max(300, canvasBounds.width - 144));
       const left = canvasBounds.left + (canvasBounds.width - width) / 2;
       const top = canvasBounds.top + Math.max(126, canvasBounds.height - 216);
@@ -546,6 +555,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const blockedReasonInput = document.createElement("input");
       const createButton = document.createElement("button");
       const updateButton = document.createElement("button");
+      const startDevelopmentButton = document.createElement("button");
 
       titleInput.setAttribute("aria-label", "Backlog task title");
       titleInput.placeholder = "Task title";
@@ -563,6 +573,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       }
       createButton.textContent = "Create backlog task";
       updateButton.textContent = "Update selected task";
+      startDevelopmentButton.textContent = "Start Development";
 
       Object.assign(root.style, {
         position: "fixed",
@@ -576,7 +587,16 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         padding: "8px",
         boxSizing: "border-box",
       });
-      for (const element of [titleInput, descriptionInput, prioritySelect, statusSelect, blockedReasonInput, createButton, updateButton]) {
+      for (const element of [
+        titleInput,
+        descriptionInput,
+        prioritySelect,
+        statusSelect,
+        blockedReasonInput,
+        createButton,
+        updateButton,
+        startDevelopmentButton,
+      ]) {
         Object.assign(element.style, {
           minWidth: "0",
           border: "1px solid #334155",
@@ -596,6 +616,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         resize: "none",
       });
       Object.assign(blockedReasonInput.style, { gridColumn: "1 / 2" });
+      Object.assign(startDevelopmentButton.style, { gridColumn: "1 / 4" });
 
       const createHandler = () => {
         this.officeProjectPortalController?.createBacklogTaskFromInput({
@@ -613,10 +634,23 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           blockedReason: blockedReasonInput.value,
         });
       };
+      const startDevelopmentHandler = () => {
+        void this.officeProjectPortalController?.startSelectedBacklogTaskDevelopment();
+      };
       createButton.addEventListener("click", createHandler);
       updateButton.addEventListener("click", updateHandler);
+      startDevelopmentButton.addEventListener("click", startDevelopmentHandler);
 
-      root.append(titleInput, prioritySelect, statusSelect, descriptionInput, blockedReasonInput, createButton, updateButton);
+      root.append(
+        titleInput,
+        prioritySelect,
+        statusSelect,
+        descriptionInput,
+        blockedReasonInput,
+        createButton,
+        updateButton,
+        startDevelopmentButton,
+      );
       document.body.appendChild(root);
       this.projectBacklogForm = {
         root,
@@ -627,8 +661,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         blockedReasonInput,
         createButton,
         updateButton,
+        startDevelopmentButton,
         createHandler,
         updateHandler,
+        startDevelopmentHandler,
       };
       return this.projectBacklogForm;
     }
@@ -648,12 +684,14 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.blockedReasonInput,
         form.createButton,
         form.updateButton,
+        form.startDevelopmentButton,
       ]) {
         element.removeEventListener("keydown", stopPortalShortcutPropagation);
         element.removeEventListener("keyup", stopPortalShortcutPropagation);
       }
       form.createButton.removeEventListener("click", form.createHandler);
       form.updateButton.removeEventListener("click", form.updateHandler);
+      form.startDevelopmentButton.removeEventListener("click", form.startDevelopmentHandler);
       form.root.remove();
       this.projectBacklogForm = undefined;
     }
@@ -669,8 +707,10 @@ type ProjectBacklogFormElements = {
   blockedReasonInput: HTMLInputElement;
   createButton: HTMLButtonElement;
   updateButton: HTMLButtonElement;
+  startDevelopmentButton: HTMLButtonElement;
   createHandler: () => void;
   updateHandler: () => void;
+  startDevelopmentHandler: () => void;
   lastSelectedTaskId?: string;
 };
 

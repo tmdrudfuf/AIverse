@@ -44,6 +44,47 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
     expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).toBe("ready");
   });
 
+  it("generic Enter or Space on the backlog screen never starts Ready task development", () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, internals, "project-a");
+    controller.createBacklogTaskFromInput({
+      title: "Do not auto-start",
+      description: "Selecting or confirming the row is preview-only.",
+      priority: "high",
+    });
+    controller.updateSelectedBacklogTaskFromInput({ status: "ready" });
+    internals.externalProjectAdosExecutionService.start = vi.fn();
+
+    controller.updateInput(createInput({ enterPressed: true }));
+    controller.updateInput(createInput({ actionPressed: true }));
+
+    expect(internals.externalProjectAdosExecutionService.start).not.toHaveBeenCalled();
+    expect(Object.values(internals.state.externalProjectDevelopmentRequestDrafts)).toHaveLength(0);
+    expect(Object.values(internals.state.externalProjectAdosRunPreparations)).toHaveLength(0);
+    expect(Object.values(internals.state.externalProjectAdosExecutions)).toHaveLength(0);
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).toBe("ready");
+  });
+
+  it("dedicated Start Development input starts the selected Ready task", async () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, internals, "project-a");
+    controller.createBacklogTaskFromInput({
+      title: "Explicit start only",
+      description: "The dedicated control is the execution intent.",
+    });
+    controller.updateSelectedBacklogTaskFromInput({ status: "ready" });
+    internals.externalProjectAdosExecutionService.start = vi.fn(async (input) => ({
+      execution: execution(input.projectId, input.preparation!),
+      result: startedResult(input.projectId, input.preparation!.id, `${input.projectId}:run`),
+    }));
+
+    controller.updateInput(createInput({ startBacklogDevelopmentPressed: true }));
+    await Promise.resolve();
+
+    expect(internals.externalProjectAdosExecutionService.start).toHaveBeenCalledOnce();
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).toBe("in_progress");
+  });
+
   it("explicit Start Development maps the Ready task to the same canonical project and full durable requirements", async () => {
     const { controller, internals } = createController();
     openBacklog(controller, internals, "project-a");

@@ -99,4 +99,23 @@ describe("OfficeActionInputController", () => {
     expect(input.consumeOpenCandidateDetailPressed()).toBe(true);
     expect(input.consumeOpenCandidateDetailPressed()).toBe(false);
   });
+
+  it("keeps backlog development start separate from Enter and Space", () => {
+    const input = new OfficeActionInputController() as unknown as {
+      pendingAction: boolean;
+      pendingEnter: boolean;
+      pendingStartBacklogDevelopment: boolean;
+      consumeActionPressed: () => boolean;
+      consumeEnterPressed: () => boolean;
+      consumeStartBacklogDevelopmentPressed: () => boolean;
+    };
+    input.pendingAction = true;
+    input.pendingEnter = true;
+    input.pendingStartBacklogDevelopment = true;
+
+    expect(input.consumeActionPressed()).toBe(true);
+    expect(input.consumeEnterPressed()).toBe(true);
+    expect(input.consumeStartBacklogDevelopmentPressed()).toBe(true);
+    expect(input.consumeStartBacklogDevelopmentPressed()).toBe(false);
+  });
 });

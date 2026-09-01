@@ -316,6 +316,7 @@ export type OfficeProjectPortalInput = {
   startValidationRuntimePressed: boolean;
   preparePostValidationReviewTargetPressed: boolean;
   startPostValidationReviewPressed: boolean;
+  startBacklogDevelopmentPressed?: boolean;
   developmentRequestText?: string;
   backlogTaskTitle?: string;
   backlogTaskDescription?: string;
@@ -1613,6 +1614,9 @@ export class OfficeProjectPortalController {
         });
         return;
       }
+    }
+
+    if (input.startBacklogDevelopmentPressed) {
       void this.startSelectedBacklogTaskDevelopment();
     }
   }
