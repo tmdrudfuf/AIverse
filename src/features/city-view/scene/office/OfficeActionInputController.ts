@@ -46,6 +46,10 @@ const PREPARE_POST_VALIDATION_REVIEW_TARGET_KEY_CODE = "KeyY";
 // Distinct from target preparation: starts the independent re-review only
 // after a fresh post-validation target exists.
 const START_POST_VALIDATION_REVIEW_KEY_CODE = "KeyU";
+// Distinct from Enter/Space backlog navigation and form editing: this is the
+// one keyboard input that can explicitly start development for a Ready backlog
+// task. The HTML Start Development button calls the same controller path.
+const START_BACKLOG_DEVELOPMENT_KEY_CODE = "KeyB";
 
 export class OfficeActionInputController {
   private pendingAction = false;
@@ -66,6 +70,7 @@ export class OfficeActionInputController {
   private pendingStartValidationRuntime = false;
   private pendingPreparePostValidationReviewTarget = false;
   private pendingStartPostValidationReview = false;
+  private pendingStartBacklogDevelopment = false;
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.repeat) return;
 
@@ -174,6 +179,12 @@ export class OfficeActionInputController {
     if (event.code === START_POST_VALIDATION_REVIEW_KEY_CODE) {
       event.preventDefault();
       this.pendingStartPostValidationReview = true;
+      return;
+    }
+
+    if (event.code === START_BACKLOG_DEVELOPMENT_KEY_CODE) {
+      event.preventDefault();
+      this.pendingStartBacklogDevelopment = true;
     }
   };
 
@@ -294,6 +305,12 @@ export class OfficeActionInputController {
     return pressed;
   }
 
+  consumeStartBacklogDevelopmentPressed() {
+    const pressed = this.pendingStartBacklogDevelopment;
+    this.pendingStartBacklogDevelopment = false;
+    return pressed;
+  }
+
   destroy(scene: PhaserScene) {
     window.removeEventListener("keydown", this.handleKeyDown);
     scene.input.keyboard?.removeCapture("SPACE");
@@ -319,5 +336,6 @@ export class OfficeActionInputController {
     this.pendingStartValidationRuntime = false;
     this.pendingPreparePostValidationReviewTarget = false;
     this.pendingStartPostValidationReview = false;
+    this.pendingStartBacklogDevelopment = false;
   }
 }

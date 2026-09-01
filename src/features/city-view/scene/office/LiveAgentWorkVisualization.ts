@@ -92,12 +92,13 @@ export function deriveLiveAgentWorkState(state: Pick<
 
   if (!projectId) return createIdleState({ projectName, employees: state.employees });
 
+  const projectRunState = getProjectAdosRunState(state, projectId);
   const runStatus = deriveExternalProjectAdosRunStatus({
     projectId,
-    preparation: state.externalProjectAdosRunPreparations[projectId],
-    execution: state.externalProjectAdosExecutions[projectId],
-    result: state.externalProjectAdosExecutionResults[projectId],
-    persistedStatus: state.externalProjectAdosRunStatuses[projectId],
+    preparation: projectRunState.preparation,
+    execution: projectRunState.execution,
+    result: projectRunState.result,
+    persistedStatus: projectRunState.persistedStatus,
   });
   const latestFact = getLatestProjectFact(state, projectId);
   const rawStatus = createRawStatus(runStatus, latestFact?.label);
@@ -112,7 +113,7 @@ export function deriveLiveAgentWorkState(state: Pick<
     blockedStage,
     lifecycle,
     employees: state.employees,
-    providerLabel: latestFact?.providerLabel ?? getExternalProviderLabel(state, projectId),
+    providerLabel: latestFact?.providerLabel ?? getExternalProviderLabel(projectRunState),
     reasonText,
   });
   const assignments = assignment ? [assignment] : [];
@@ -124,8 +125,8 @@ export function deriveLiveAgentWorkState(state: Pick<
     stage,
     stageLabel,
     rawStatus,
-    specPath: getSpecPath(state, projectId),
-    featureBranch: runStatus?.featureBranch ?? state.externalProjectAdosRunPreparations[projectId]?.featureBranch,
+    specPath: getSpecPath(projectRunState),
+    featureBranch: runStatus?.featureBranch ?? projectRunState.preparation?.featureBranch,
     updatedAt: latestTimestamp(runStatus?.updatedAt, latestFact?.updatedAt),
     reasonText,
     assignments,
@@ -137,11 +138,11 @@ export function deriveLiveAgentWorkState(state: Pick<
       rawStatus,
       runStatus,
       reasonText,
-      specPath: getSpecPath(state, projectId),
-      featureBranch: runStatus?.featureBranch ?? state.externalProjectAdosRunPreparations[projectId]?.featureBranch,
+      specPath: getSpecPath(projectRunState),
+      featureBranch: runStatus?.featureBranch ?? projectRunState.preparation?.featureBranch,
       updatedAt: latestTimestamp(runStatus?.updatedAt, latestFact?.updatedAt),
-      requestTitle: state.externalProjectDevelopmentRequestDrafts[projectId]?.title,
-      runId: state.externalProjectDevelopmentRequestDrafts[projectId]?.adosRunId ?? runStatus?.executionId,
+      requestTitle: projectRunState.requestDraft?.title,
+      runId: projectRunState.requestDraft?.adosRunId ?? runStatus?.executionId,
     }),
   };
 }
@@ -166,6 +167,17 @@ type LatestFact = {
   updatedAt?: string;
   providerLabel?: string;
   reasonCodes?: string[];
+};
+
+type ProjectAdosRunStateInput = Parameters<typeof deriveLiveAgentWorkState>[0];
+
+type ProjectAdosRunState = {
+  key?: string;
+  preparation?: ProjectAdosRunStateInput["externalProjectAdosRunPreparations"][string];
+  execution?: ProjectAdosRunStateInput["externalProjectAdosExecutions"][string];
+  result?: ProjectAdosRunStateInput["externalProjectAdosExecutionResults"][string];
+  persistedStatus?: ProjectAdosRunStateInput["externalProjectAdosRunStatuses"][string];
+  requestDraft?: ProjectAdosRunStateInput["externalProjectDevelopmentRequestDrafts"][string];
 };
 
 const IMPLEMENTATION_RECOVERY_STAGE_TOKENS = [
@@ -235,6 +247,71 @@ function getLatestProjectFact(state: Parameters<typeof deriveLiveAgentWorkState>
   if (postValidationTargetResult) facts.push(resultFact("review", postValidationTargetResult.status, postValidationTargetResult.resultAt, postValidationTargetResult.reasonCodes));
 
   return latestFact(facts);
+}
+
+function getProjectAdosRunState(state: ProjectAdosRunStateInput, projectId: string): ProjectAdosRunState {
+  const candidateKeys = new Set<string>([projectId]);
+  collectProjectKeys(candidateKeys, state.externalProjectAdosRunPreparations, projectId);
+  collectProjectKeys(candidateKeys, state.externalProjectAdosExecutions, projectId);
+  collectProjectKeys(candidateKeys, state.externalProjectAdosExecutionResults, projectId);
+  collectProjectKeys(candidateKeys, state.externalProjectAdosRunStatuses, projectId);
+  collectProjectKeys(candidateKeys, state.externalProjectDevelopmentRequestDrafts, projectId);
+
+  const candidates = Array.from(candidateKeys).map((key) => createProjectAdosRunStateCandidate(state, key));
+  return candidates.find((candidate) => isActiveProjectAdosRunState(candidate))
+    ?? candidates.find((candidate) => candidate.key === projectId && hasProjectAdosRunState(candidate))
+    ?? candidates.sort((left, right) => compareTimestamp(getProjectAdosRunStateUpdatedAt(right), getProjectAdosRunStateUpdatedAt(left)))[0]
+    ?? {};
+}
+
+function collectProjectKeys(
+  keys: Set<string>,
+  records: Record<string, { projectId?: string } | undefined>,
+  projectId: string,
+) {
+  Object.entries(records).forEach(([key, value]) => {
+    if (value?.projectId === projectId) keys.add(key);
+  });
+}
+
+function createProjectAdosRunStateCandidate(state: ProjectAdosRunStateInput, key: string): ProjectAdosRunState {
+  return {
+    key,
+    preparation: state.externalProjectAdosRunPreparations[key],
+    execution: state.externalProjectAdosExecutions[key],
+    result: state.externalProjectAdosExecutionResults[key],
+    persistedStatus: state.externalProjectAdosRunStatuses[key],
+    requestDraft: state.externalProjectDevelopmentRequestDrafts[key],
+  };
+}
+
+function hasProjectAdosRunState(candidate: ProjectAdosRunState) {
+  return Boolean(
+    candidate.preparation ||
+    candidate.execution ||
+    candidate.result ||
+    candidate.persistedStatus ||
+    candidate.requestDraft
+  );
+}
+
+function isActiveProjectAdosRunState(candidate: ProjectAdosRunState) {
+  if (candidate.execution && isActiveAdosExecution(candidate.execution)) return true;
+  if (candidate.result && !isTerminalAdosExecutionStatus(candidate.result.status)) return true;
+  if (candidate.persistedStatus) return isActiveAdosRunStage(candidate.persistedStatus.stage);
+  return candidate.preparation?.status === "Prepared"
+    || Boolean(candidate.execution && isActiveAdosExecution(candidate.execution))
+    || Boolean(candidate.requestDraft && !isTerminalDevelopmentRequestStatus(candidate.requestDraft.status));
+}
+
+function getProjectAdosRunStateUpdatedAt(candidate: ProjectAdosRunState) {
+  return latestTimestamp(
+    candidate.persistedStatus?.updatedAt,
+    candidate.result?.resultAt,
+    candidate.execution?.startedAt,
+    candidate.preparation?.updatedAt,
+    candidate.requestDraft?.updatedAt,
+  );
 }
 
 function resultFact(kind: LatestFact["kind"], status: string, updatedAt: string | undefined, reasonCodes: ReadonlyArray<string> = []): LatestFact {
@@ -474,14 +551,14 @@ function createReasonText(runStatus: ExternalProjectAdosRunStatus | undefined, l
   return reasonCodes.map((reason) => reason.replace(/_/g, " ")).join(", ");
 }
 
-function getSpecPath(state: Parameters<typeof deriveLiveAgentWorkState>[0], projectId: string) {
-  return state.externalProjectAdosExecutions[projectId]?.specPath
-    ?? state.externalProjectAdosRunPreparations[projectId]?.specPath;
+function getSpecPath(projectRunState: ProjectAdosRunState) {
+  return projectRunState.execution?.specPath
+    ?? projectRunState.preparation?.specPath;
 }
 
-function getExternalProviderLabel(state: Parameters<typeof deriveLiveAgentWorkState>[0], projectId: string) {
-  return state.externalProjectAdosExecutions[projectId]?.evidence?.agentId
-    ?? state.externalProjectAdosExecutions[projectId]?.evidence?.providerId;
+function getExternalProviderLabel(projectRunState: ProjectAdosRunState) {
+  return projectRunState.execution?.evidence?.agentId
+    ?? projectRunState.execution?.evidence?.providerId;
 }
 
 function createIdleState(input: { projectName: string; employees: ReadonlyArray<EmployeeLike> }): LiveAgentWorkState {
@@ -532,6 +609,33 @@ function isRecoveryStatus(value: string) {
 
 function isCompletedStatus(value: string) {
   return hasToken(value, ["complete", "completed"]);
+}
+
+function isActiveAdosRunStage(value: string | undefined) {
+  return value === "Prepared" || value === "Started" || value === "Blocked" || value === "TimedOut";
+}
+
+function isTerminalAdosExecutionStatus(value: string | undefined) {
+  return isCompletedStatus(normalize(value))
+    || isHardBlockedStatus(normalize(value))
+    || hasToken(normalize(value), ["failed", "cancelled"]);
+}
+
+function isActiveAdosExecution(execution: NonNullable<ProjectAdosRunState["execution"]>) {
+  if (
+    execution.status === "Completed" &&
+    execution.implementerStarted &&
+    !execution.evidence.completed &&
+    !execution.evidence.timedOut &&
+    !execution.evidence.cancelled
+  ) {
+    return true;
+  }
+  return !isTerminalAdosExecutionStatus(execution.status);
+}
+
+function isTerminalDevelopmentRequestStatus(value: string | undefined) {
+  return value === "Completed" || value === "Failed";
 }
 
 function hasToken(value: string, tokens: ReadonlyArray<string>) {

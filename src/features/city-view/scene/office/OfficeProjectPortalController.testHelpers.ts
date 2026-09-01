@@ -79,6 +79,7 @@ export type ControllerInternals = {
     projects: ProjectPortalProjectLike[];
     projectRegistryEntries: ProjectPortalState["projectRegistryEntries"];
     projectCompanyBindings?: ProjectPortalState["projectCompanyBindings"];
+    activeProjectCompanyContext?: ProjectPortalState["activeProjectCompanyContext"];
     repositorySummaries: Record<string, { connectionStatus: string }>;
     repositorySyncSnapshots: ProjectPortalState["repositorySyncSnapshots"];
     issueSyncCollections: Record<string, IssueSnapshotCollection>;
@@ -244,6 +245,7 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     startValidationRuntimePressed: false,
     preparePostValidationReviewTargetPressed: false,
     startPostValidationReviewPressed: false,
+    startBacklogDevelopmentPressed: false,
     ...overrides,
   };
 }

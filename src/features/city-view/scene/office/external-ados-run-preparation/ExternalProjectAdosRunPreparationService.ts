@@ -47,7 +47,7 @@ export function createExternalProjectAdosRunPreparation(
   const featureId = createAdosFeatureId(input.developmentRequestDraft, timestamp);
 
   return {
-    id: `${input.projectId}:external-ados-run-preparation`,
+    id: createExternalProjectAdosRunPreparationId(input.projectId, input.developmentRequestDraft),
     projectId: input.projectId,
     developmentRequestDraftId: input.developmentRequestDraft.id,
     status: "Prepared",
@@ -65,6 +65,15 @@ export function createExternalProjectAdosRunPreparation(
     updatedAt: timestamp,
     sideEffectBoundary: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_BOUNDARY,
   };
+}
+
+function createExternalProjectAdosRunPreparationId(
+  projectId: string,
+  developmentRequestDraft: ExternalProjectDevelopmentRequestDraft,
+) {
+  return developmentRequestDraft.sourceBacklogTaskId
+    ? `${developmentRequestDraft.id}:external-ados-run-preparation`
+    : `${projectId}:external-ados-run-preparation`;
 }
 
 function createAdosFeatureId(draft: ExternalProjectDevelopmentRequestDraft, timestamp: string) {

@@ -106,7 +106,18 @@ export class ProjectBacklogService {
     collections: ProjectBacklogCollections,
     context: ProjectBacklogProjectContext,
     taskId: string,
-    input: Partial<Pick<ProjectBacklogTask, "title" | "description" | "priority" | "status" | "blockedReason">>,
+    input: Partial<Pick<ProjectBacklogTask,
+      | "title"
+      | "description"
+      | "priority"
+      | "status"
+      | "blockedReason"
+      | "sourceBacklogTaskId"
+      | "developmentRequestId"
+      | "executionPreparationId"
+      | "executionRunId"
+      | "executionAcceptedAt"
+    >>,
   ): ProjectBacklogMutationResult {
     const resolution = this.resolveMutationProjectId(context);
     if (!resolution.ok) return resolution;
@@ -132,6 +143,11 @@ export class ProjectBacklogService {
       ...(input.description !== undefined ? { description: input.description.trim() } : {}),
       ...(input.priority !== undefined ? { priority: input.priority } : {}),
       ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.sourceBacklogTaskId !== undefined ? { sourceBacklogTaskId: input.sourceBacklogTaskId } : {}),
+      ...(input.developmentRequestId !== undefined ? { developmentRequestId: input.developmentRequestId } : {}),
+      ...(input.executionPreparationId !== undefined ? { executionPreparationId: input.executionPreparationId } : {}),
+      ...(input.executionRunId !== undefined ? { executionRunId: input.executionRunId } : {}),
+      ...(input.executionAcceptedAt !== undefined ? { executionAcceptedAt: input.executionAcceptedAt } : {}),
       ...(input.blockedReason !== undefined && input.blockedReason.trim()
         ? { blockedReason: input.blockedReason.trim() }
         : {}),
@@ -177,16 +193,21 @@ export class ProjectBacklogService {
   createSummary(collection: ProjectBacklogCollection | undefined, projectId: string): ProjectBacklogSummary {
     const tasks = collection?.tasks.filter((task) => task.projectId === projectId) ?? [];
     const readyTaskCount = tasks.filter((task) => task.status === "ready").length;
+    const inDevelopmentTaskCount = tasks.filter((task) => task.status === "in_progress" && Boolean(task.executionRunId)).length;
+    const executionBlockedTaskCount = tasks.filter((task) => task.status !== "blocked" && Boolean(task.executionRunId)).length;
     const blockedTaskCount = tasks.filter((task) => task.status === "blocked").length;
     const completedTaskCount = tasks.filter((task) => task.status === "completed").length;
     return {
       projectId,
       totalTaskCount: tasks.length,
       readyTaskCount,
+      inDevelopmentTaskCount,
+      executionBlockedTaskCount,
       blockedTaskCount,
       completedTaskCount,
-      indicatorText: createIndicatorText(tasks.length, readyTaskCount, blockedTaskCount),
+      indicatorText: createIndicatorText(tasks.length, readyTaskCount, blockedTaskCount, inDevelopmentTaskCount),
       hasPlanningBlockedTasks: blockedTaskCount > 0,
+      hasExecutionBlockedTasks: executionBlockedTaskCount > 0,
     };
   }
 
@@ -232,8 +253,11 @@ export function isBacklogTask(value: unknown): value is ProjectBacklogTask {
     typeof value.createdAt === "string" &&
     typeof value.updatedAt === "string" &&
     (value.blockedReason === undefined || typeof value.blockedReason === "string") &&
+    (value.sourceBacklogTaskId === undefined || typeof value.sourceBacklogTaskId === "string") &&
     (value.developmentRequestId === undefined || typeof value.developmentRequestId === "string") &&
-    (value.executionRunId === undefined || typeof value.executionRunId === "string")
+    (value.executionPreparationId === undefined || typeof value.executionPreparationId === "string") &&
+    (value.executionRunId === undefined || typeof value.executionRunId === "string") &&
+    (value.executionAcceptedAt === undefined || typeof value.executionAcceptedAt === "string")
   );
 }
 
@@ -248,8 +272,9 @@ function taskExistsOutsideProject(collections: ProjectBacklogCollections, projec
   ));
 }
 
-function createIndicatorText(total: number, ready: number, blocked: number) {
+function createIndicatorText(total: number, ready: number, blocked: number, inDevelopment: number) {
   if (blocked > 0) return `${blocked} Blocked ${blocked === 1 ? "task" : "tasks"}`;
+  if (inDevelopment > 0) return `${inDevelopment} In development`;
   if (ready > 0) return `${ready} Ready`;
   if (total > 0) return `${total} Planned`;
   return "No planned tasks";

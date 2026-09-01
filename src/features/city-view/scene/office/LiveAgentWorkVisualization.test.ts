@@ -291,6 +291,117 @@ describe("deriveLiveAgentWorkState", () => {
     expect(state.projectStatus.rows.some((row) => row.startsWith("Run id alpha:run"))).toBe(true);
   });
 
+  it("shows backlog-started task executions in the selected project's live Project Status", () => {
+    const associationKey = "alpha:backlog-task:task-1";
+    const state = deriveLiveAgentWorkState(portalState({
+      externalProjectDevelopmentRequestDrafts: {
+        [associationKey]: {
+          id: "alpha:task-1:external-development-request-draft",
+          projectId: "alpha",
+          projectName: "Alpha Tools",
+          status: "Started",
+          title: "Implement backlog bridge",
+          summary: "Implement backlog bridge",
+          requestText: "Implement backlog bridge from task text",
+          sourceBacklogTaskId: "task-1",
+          targetProjectIdentity: "alpha (Alpha Tools; local:alpha)",
+          requirementsArtifactPath: ".aiverse/external-requests/alpha/task-1-requirements.md",
+          requirementsArtifactContent: "Implement backlog bridge from task text",
+          adosRunId: "alpha:task-1:run",
+          repositoryProvider: "local",
+          createdAt: "2026-08-31T00:00:00.000Z",
+          updatedAt: "2026-08-31T02:00:00.000Z",
+          sideEffectBoundary: "Local draft only.",
+        },
+      },
+      externalProjectAdosRunPreparations: {
+        [associationKey]: {
+          id: "alpha:task-1:external-ados-run-preparation",
+          projectId: "alpha",
+          developmentRequestDraftId: "alpha:task-1:external-development-request-draft",
+          status: "Prepared",
+          featureBranch: "codex/alpha-task-1",
+          authoritativeBaseSha: "1b9ef5f33b6f87f62dabbdfa61e2fa8ccf6f18ec",
+          specPath: "specs/alpha-task-1/spec.md",
+          validationCommands: ["npm test"],
+          reviewerCommand: "claude -p",
+          executionPolicyVersion: 1,
+          createdAt: "2026-08-31T00:00:00.000Z",
+          updatedAt: "2026-08-31T00:00:00.000Z",
+          sideEffectBoundary: "Local fixture only.",
+        },
+      },
+      externalProjectAdosExecutions: {
+        [associationKey]: {
+          id: "alpha:task-1:run",
+          projectId: "alpha",
+          preparationId: "alpha:task-1:external-ados-run-preparation",
+          developmentRequestDraftId: "alpha:task-1:external-development-request-draft",
+          status: "Completed",
+          featureBranch: "codex/alpha-task-1",
+          authoritativeBaseSha: "1b9ef5f33b6f87f62dabbdfa61e2fa8ccf6f18ec",
+          specPath: "specs/alpha-task-1/spec.md",
+          repositoryPath: "C:/repos/alpha",
+          worktreePath: "C:/worktrees/alpha",
+          validationCommands: ["npm test"],
+          reviewerCommand: "claude -p",
+          executionPolicyVersion: 1,
+          trustedLocalExecutionApproved: true,
+          startedBy: "Local Human",
+          startedAt: "2026-08-31T02:00:00.000Z",
+          implementerStarted: true,
+          validationStarted: false,
+          reviewStarted: false,
+          repositoryMutationStarted: false,
+          githubMutationStarted: false,
+          publishStarted: false,
+          mergeStarted: false,
+          deployStarted: false,
+          evidence: {
+            providerId: "stub",
+            agentId: "Stub",
+            role: "Implementer",
+            commandDisplay: "claude -p",
+            workingDirectory: "C:/worktrees/alpha",
+            started: true,
+            completed: false,
+            timedOut: false,
+            cancelled: false,
+            durationMs: 1,
+            stdoutSummary: "",
+            stderrSummary: "",
+            outputTruncated: false,
+          },
+          rulesVersion: "external-ados-execution-v1",
+        },
+      },
+      externalProjectAdosRunStatuses: {
+        [associationKey]: status({
+          id: "alpha:task-1:external-ados-run-status",
+          projectId: "alpha",
+          preparationId: "alpha:task-1:external-ados-run-preparation",
+          executionId: "alpha:task-1:run",
+          stage: "Started",
+          status: "implementer",
+          featureBranch: "codex/alpha-task-1",
+          updatedAt: "2026-08-31T02:00:00.000Z",
+        }),
+      },
+    }));
+
+    expect(state).toMatchObject({
+      projectId: "alpha",
+      lifecycle: "active",
+      stage: "implementation",
+      stageLabel: "Implementing",
+      specPath: "specs/alpha-task-1/spec.md",
+      featureBranch: "codex/alpha-task-1",
+    });
+    expect(state.projectStatus.rows).toContain("Request Implement backlog bridge");
+    expect(state.projectStatus.rows).toContain("Spec alpha-task-1");
+    expect(state.projectStatus.rows.some((row) => row.startsWith("Run id alpha:task-1:run"))).toBe(true);
+  });
+
   it("does not select an employee assigned to another project when scoped or shared workers exist", () => {
     const state = deriveLiveAgentWorkState(portalState({
       activeProjectCompanyContext: {

@@ -91,6 +91,83 @@ describe("OfficeProjectPortalController live agent work visualization", () => {
       semanticRole: "validator",
     });
   });
+
+  it("reads a backlog-started execution through the selected project's live work state", () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    internals.state.projects.push({
+      id: "external-crm",
+      name: "External CRM",
+      status: "Active",
+      type: "Company",
+      enabled: true,
+      description: "",
+      linkedServices: [],
+      nextAction: { label: "", enabled: true, placeholder: true },
+    });
+    internals.state.activeProjectCompanyContext = {
+      binding: {
+        bindingId: "company-external-crm",
+        buildingId: "company-external-crm",
+        projectId: "external-crm",
+        companyName: "External CRM Co",
+        status: "bound",
+      },
+      projectId: "external-crm",
+      companyName: "External CRM Co",
+      displayName: "External CRM Co",
+      status: "bound",
+    };
+    internals.state.selectedProjectId = "external-crm";
+    internals.state.selectedProjectIndex = internals.state.projects.findIndex((project) => project.id === "external-crm");
+    internals.state.employees = [
+      employee({ id: "engineer", name: "Provider Engineer", role: "Engineer", capabilities: ["Coding"] }),
+    ];
+    internals.state.employeeSimulations = {};
+    internals.state.externalProjectAdosRunStatuses = {
+      "external-crm:backlog-task:task-1": {
+        ...status("external-crm", "Started", "implementer"),
+        id: "external-crm:backlog-task:task-1:external-ados-run-status",
+        executionId: "external-crm:task-1:run",
+      },
+    };
+    internals.state.externalProjectDevelopmentRequestDrafts = {
+      "external-crm:backlog-task:task-1": {
+        id: "external-crm:task-1:development-request",
+        projectId: "external-crm",
+        projectName: "External CRM",
+        status: "Started",
+        title: "Build contact import",
+        summary: "Build contact import",
+        requestText: "Build contact import from backlog.",
+        sourceBacklogTaskId: "task-1",
+        targetProjectIdentity: "external-crm (External CRM)",
+        requirementsArtifactPath: ".aiverse/external-requests/external-crm/task-1.md",
+        requirementsArtifactContent: "Build contact import from backlog.",
+        repositoryProvider: "local",
+        createdAt: "2026-08-31T00:00:00.000Z",
+        updatedAt: "2026-08-31T00:01:00.000Z",
+        sideEffectBoundary: "Local draft only.",
+        adosRunId: "external-crm:task-1:run",
+      },
+    };
+
+    const workState = controller.getLiveAgentWorkState();
+    const viewModels = controller.getEmployeeNpcViewModels();
+
+    expect(workState).toMatchObject({
+      projectId: "external-crm",
+      stage: "implementation",
+      lifecycle: "active",
+    });
+    expect(workState.projectStatus.rows).toContain("Request Build contact import");
+    expect(workState.projectStatus.rows).toContain("Run id external-crm:task-1:run");
+    expect(viewModels[0]).toMatchObject({
+      displayLabel: "Implementing",
+      semanticRole: "implementer",
+      visualTone: "active",
+    });
+  });
 });
 
 function status(projectId: string, stage: "Started" | "Completed" | "Blocked", runStatus: string): ExternalProjectAdosRunStatus {
