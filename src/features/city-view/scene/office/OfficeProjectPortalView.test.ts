@@ -2596,6 +2596,7 @@ function createPortalState(options: {
     externalProjectAdosRunStatuses: {},
     projectBacklogCollections: {},
     projectBacklogSuggestionCollections: {},
+    projectAutonomyPolicies: {},
     taskCollections: {},
     taskAnalyses: {},
     employeeRecommendations: {},
