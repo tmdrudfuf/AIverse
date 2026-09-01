@@ -106,11 +106,17 @@ describe("OfficeProjectPortalController live agent work visualization", () => {
       nextAction: { label: "", enabled: true, placeholder: true },
     });
     internals.state.activeProjectCompanyContext = {
+      binding: {
+        bindingId: "company-external-crm",
+        buildingId: "company-external-crm",
+        projectId: "external-crm",
+        companyName: "External CRM Co",
+        status: "bound",
+      },
       projectId: "external-crm",
-      companyId: "company-external-crm",
       companyName: "External CRM Co",
-      bindingSource: "project-registry",
-      enteredAt: "2026-08-31T00:00:00.000Z",
+      displayName: "External CRM Co",
+      status: "bound",
     };
     internals.state.selectedProjectId = "external-crm";
     internals.state.selectedProjectIndex = internals.state.projects.findIndex((project) => project.id === "external-crm");

@@ -79,6 +79,7 @@ export type ControllerInternals = {
     projects: ProjectPortalProjectLike[];
     projectRegistryEntries: ProjectPortalState["projectRegistryEntries"];
     projectCompanyBindings?: ProjectPortalState["projectCompanyBindings"];
+    activeProjectCompanyContext?: ProjectPortalState["activeProjectCompanyContext"];
     repositorySummaries: Record<string, { connectionStatus: string }>;
     repositorySyncSnapshots: ProjectPortalState["repositorySyncSnapshots"];
     issueSyncCollections: Record<string, IssueSnapshotCollection>;
