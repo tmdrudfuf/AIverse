@@ -816,6 +816,11 @@ export class OfficeProjectPortalView {
       : collection?.tasks[state.selectedBacklogTaskIndex];
     const canMutate = Boolean(project && project.enabled);
     const runStatus = projectId ? state.externalProjectAdosRunStatuses[projectId] : undefined;
+    const suggestionCollection = projectId ? state.projectBacklogSuggestionCollections?.[projectId] : undefined;
+    const suggestions = suggestionCollection?.candidates.filter((candidate) => candidate.projectId === projectId) ?? [];
+    const selectedSuggestion = state.selectedBacklogSuggestionId
+      ? suggestions.find((candidate) => candidate.id === state.selectedBacklogSuggestionId)
+      : suggestions.find((candidate) => candidate.status === "proposed");
     const canStartDevelopment = Boolean(
       project &&
       selectedTask &&
@@ -861,36 +866,51 @@ export class OfficeProjectPortalView {
       });
     }
 
-    this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 258);
+    this.addTerminalPanel(this.panelX + 356, this.panelY + 122, 284, 178);
     this.addText(this.panelX + 368, this.panelY + 138, "Task Development", headingStyle());
     this.addText(this.panelX + 376, this.panelY + 168, compactTextLine(`Target: ${project?.name ?? "Unavailable project"}`, 32), mutedStyle());
     this.addText(this.panelX + 376, this.panelY + 194, compactTextLine(`Project id: ${projectId ?? "Unavailable"}`, 32), mutedStyle());
     if (selectedTask) {
       this.addText(this.panelX + 376, this.panelY + 224, compactTextLine(`Selected: ${selectedTask.title}`, 32), bodyStyle());
       this.addText(this.panelX + 376, this.panelY + 250, wrapAndClampText(selectedTask.description, 32, 2), projectMutedStyle());
-      this.addText(this.panelX + 376, this.panelY + 302, compactTextLine(`Priority: ${selectedTask.priority}  Planning: ${selectedTask.status}`, 32), mutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 278, compactTextLine(`Priority: ${selectedTask.priority}  Planning: ${selectedTask.status}`, 32), mutedStyle());
       const executionText = selectedTask.executionRunId
         ? `Execution: ${runStatus?.stage ?? "Associated"}`
         : runStatus
           ? `Active project run: ${runStatus.stage}`
           : "Execution: Not started";
-      this.addText(this.panelX + 376, this.panelY + 328, compactTextLine(executionText, 32), mutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 292, compactTextLine(executionText, 32), mutedStyle());
       const requestText = selectedTask.developmentRequestId
         ? `Request: ${selectedTask.developmentRequestId}`
         : canStartDevelopment
           ? "Start Development"
           : getBacklogDevelopmentDisabledText(selectedTask, project);
-      this.addText(this.panelX + 376, this.panelY + 354, compactTextLine(requestText, 32), canStartDevelopment ? projectStatusStyle() : mutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 306, compactTextLine(requestText, 32), canStartDevelopment ? projectStatusStyle() : mutedStyle());
     } else {
       this.addText(this.panelX + 376, this.panelY + 224, "No task selected", mutedStyle());
     }
-    this.addText(this.panelX + 376, this.panelY + 384, "Ready only means eligible for future development.", mutedStyle());
-    this.addText(this.panelX + 376, this.panelY + 410, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
+    this.addTerminalPanel(this.panelX + 356, this.panelY + 316, 284, 96);
+    this.addText(this.panelX + 368, this.panelY + 332, "AI Suggestions", headingStyle());
+    if (selectedSuggestion) {
+      this.addText(
+        this.panelX + 376,
+        this.panelY + 358,
+        compactTextLine(`[${selectedSuggestion.status.toUpperCase()}] ${selectedSuggestion.title}`, 32),
+        selectedSuggestion.status === "proposed" ? bodyStyle() : mutedStyle(),
+      );
+      this.addText(this.panelX + 376, this.panelY + 382, wrapAndClampText(selectedSuggestion.description, 32, 2), projectMutedStyle());
+    } else {
+      const summary = suggestions.length > 0 ? `${suggestions.length} historical suggestions` : "No suggestions generated";
+      this.addText(this.panelX + 376, this.panelY + 358, compactTextLine(summary, 32), mutedStyle());
+      this.addText(this.panelX + 376, this.panelY + 382, "Generation is explicit and advisory.", mutedStyle());
+    }
+    this.addText(this.panelX + 36, this.panelY + 364, "Ready only means eligible for future development.", mutedStyle());
+    this.addText(this.panelX + 36, this.panelY + 390, "Blocked here is planning state, not ADOS runtime.", mutedStyle());
 
     this.addText(
       this.panelX + this.panelWidth - 28,
       this.panelY + this.panelHeight - 34,
-      "Esc back  Up/Down select  B Start Development",
+      "Esc back  Up/Down select  N Suggest  A Accept  J Reject  B Start",
       instructionStyle(),
     ).setOrigin(1, 0.5);
   }

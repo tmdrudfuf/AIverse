@@ -585,6 +585,67 @@ describe("BrowserOfficeSessionService", () => {
     }
   });
 
+  it("persists project-scoped backlog suggestion state without cross-project leakage", () => {
+    const storage = createMemoryStorage();
+    const service = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-08-31T00:00:00.000Z",
+    });
+    const source = createProjectPortalState({ browserOfficeSessionService: false });
+    source.projectBacklogSuggestionCollections = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        candidates: [{
+          id: "daily-proof:suggestion:1",
+          projectId: "daily-proof",
+          title: "Add Daily Proof backlog filters",
+          description: "Persist planning filters for Daily Proof.",
+          sourceContextSummary: "Daily Proof; 1 backlog",
+          generatedAt: "2026-08-31T00:00:00.000Z",
+          updatedAt: "2026-08-31T00:00:00.000Z",
+          status: "accepted",
+          acceptedBacklogTaskId: "daily-proof:backlog:1",
+        }],
+      },
+      "external-crm": {
+        projectId: "external-crm",
+        candidates: [{
+          id: "external-crm:suggestion:1",
+          projectId: "external-crm",
+          title: "Add CRM sync notes",
+          description: "Explain CRM sync failures.",
+          sourceContextSummary: "External CRM; 0 backlog",
+          generatedAt: "2026-08-31T00:00:00.000Z",
+          updatedAt: "2026-08-31T00:00:00.000Z",
+          status: "rejected",
+        }],
+      },
+      "contaminated": {
+        projectId: "contaminated",
+        candidates: [{
+          id: "leak",
+          projectId: "daily-proof",
+          title: "Wrong project",
+          description: "Wrong project candidate.",
+          sourceContextSummary: "bad",
+          generatedAt: "2026-08-31T00:00:00.000Z",
+          updatedAt: "2026-08-31T00:00:00.000Z",
+          status: "proposed",
+        }],
+      },
+    };
+    source.selectedBacklogSuggestionId = "daily-proof:suggestion:1";
+
+    expect(service.saveState(source)).toBe(true);
+
+    const restored = service.restoreState(createProjectPortalState({ browserOfficeSessionService: false }));
+
+    expect(restored.selectedBacklogSuggestionId).toBe("daily-proof:suggestion:1");
+    expect(restored.projectBacklogSuggestionCollections["daily-proof"].candidates[0].status).toBe("accepted");
+    expect(restored.projectBacklogSuggestionCollections["external-crm"].candidates[0].status).toBe("rejected");
+    expect(restored.projectBacklogSuggestionCollections["contaminated"].candidates).toEqual([]);
+  });
+
   it("loads only current-version snapshots", () => {
     const storage = createMemoryStorage();
     storage.setItem(BROWSER_OFFICE_SESSION_STORAGE_KEY, JSON.stringify({

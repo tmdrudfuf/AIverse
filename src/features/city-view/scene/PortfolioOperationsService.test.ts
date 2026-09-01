@@ -281,6 +281,33 @@ describe("derivePortfolioOperations", () => {
     expect(JSON.stringify(state.projectBacklogCollections)).toBe(before);
   });
 
+  it("adds subtle project-scoped AI suggestion counts for proposed candidates only", () => {
+    const result = derivePortfolioOperations({
+      buildings: createBuildings().slice(0, 2),
+      state: createState({
+        projectBacklogSuggestionCollections: {
+          "project-a": {
+            projectId: "project-a",
+            candidates: [
+              suggestion("project-a", "a1", "A one", "proposed"),
+              suggestion("project-a", "a2", "A two", "proposed"),
+              suggestion("project-a", "a3", "A accepted", "accepted"),
+            ],
+          },
+          "project-b": {
+            projectId: "project-b",
+            candidates: [
+              suggestion("project-b", "b1", "B rejected", "rejected"),
+            ],
+          },
+        },
+      }),
+    });
+
+    expect(result["company-a"].backlogSuggestionSummary).toBe("2 AI suggestions available");
+    expect(result["company-b"].backlogSuggestionSummary).toBeUndefined();
+  });
+
   it("filters and attention ordering without mutating source state", () => {
     const state = createState({
       externalProjectAdosRunStatuses: {
@@ -427,6 +454,24 @@ function project(id: string, displayName: string, companyName: string): ProjectR
     },
     createdAt: "2026-08-31T00:00:00.000Z",
     lastActivityAt: "2026-08-31T00:00:00.000Z",
+  };
+}
+
+function suggestion(
+  projectId: string,
+  id: string,
+  title: string,
+  statusValue: "proposed" | "accepted" | "rejected",
+) {
+  return {
+    id,
+    projectId,
+    title,
+    description: `${title} description`,
+    sourceContextSummary: projectId,
+    generatedAt: "2026-08-31T00:00:00.000Z",
+    updatedAt: "2026-08-31T00:00:00.000Z",
+    status: statusValue,
   };
 }
 
