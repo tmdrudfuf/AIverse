@@ -92,6 +92,28 @@ describe("ExternalProjectDevelopmentRequestService", () => {
     expect(draft.requirementsArtifactPath).not.toContain("&&");
   });
 
+  it("uses the backlog task title as the visible request title without markdown heading syntax", () => {
+    const state = createProjectPortalState({ activeProjectId: "daily-proof" });
+    const project = state.projects.find((item) => item.id === "daily-proof")!;
+
+    const draft = createExternalProjectDevelopmentRequestDraft({
+      project,
+      activeProjectCompanyContext: state.activeProjectCompanyContext,
+      requestText: [
+        "# Build export filters",
+        "",
+        "Source backlog task id: backlog-task-1",
+        "",
+        "## Task Description",
+        "Keep the full task body.",
+      ].join("\n"),
+      sourceBacklogTaskId: "backlog-task-1",
+      now: "2026-08-29T10:00:00.000Z",
+    });
+
+    expect(draft.title).toBe("Build export filters");
+  });
+
   it("returns no mutation target when the active project-company binding is unavailable", () => {
     const state = createProjectPortalState({ activeProjectId: "missing-project" });
 

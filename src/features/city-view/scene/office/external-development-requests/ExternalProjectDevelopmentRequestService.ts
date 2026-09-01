@@ -137,5 +137,6 @@ function createRequirementsArtifactContent(input: {
 function createRequestTitle(projectName: string, requestText: string) {
   const firstLine = requestText.split(/\r?\n/).find((line) => line.trim())?.trim();
   if (!firstLine) return `Development request for ${projectName}`;
-  return firstLine.length <= 64 ? firstLine : `${firstLine.slice(0, 61)}...`;
+  const title = firstLine.replace(/^#{1,6}\s+/, "");
+  return title.length <= 64 ? title : `${title.slice(0, 61)}...`;
 }

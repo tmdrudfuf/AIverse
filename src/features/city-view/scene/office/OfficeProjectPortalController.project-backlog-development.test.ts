@@ -130,11 +130,15 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
     expect(preparation.requirementsFileContent).toContain(fullDescription);
     expect(preparation.requirementsFileContent).toContain(`Prepared execution id: ${preparation.id}`);
     expect(start).toHaveBeenCalledOnce();
-    expect(start.mock.calls[0]?.[0]).toMatchObject({
+    const executionInput = start.mock.calls[0]?.[0];
+    expect(executionInput).toMatchObject({
       projectId: "project-a",
       project: { id: "project-a" },
       preparation: { projectId: "project-a" },
     });
+    expect(JSON.stringify(executionInput?.project)).not.toContain(fullDescription);
+    expect(executionInput?.preparation?.requirementsFilePath).not.toContain("cmd /c");
+    expect(executionInput?.preparation?.requirementsFileContent).toContain("cmd /c del C:\\important");
     expect(updatedTask).toMatchObject({
       projectId: "project-a",
       developmentRequestId: draft.id,
@@ -213,6 +217,66 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
     expect(internals.externalProjectAdosExecutionService.start).toHaveBeenCalledTimes(1);
     expect(Object.values(internals.state.externalProjectDevelopmentRequestDrafts)).toHaveLength(1);
     expect(Object.values(internals.state.externalProjectAdosExecutions)).toHaveLength(1);
+  });
+
+  it("does not mark a task completed when only request and preparation state exists", () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, internals, "project-a");
+    controller.createBacklogTaskFromInput({ title: "Prepared only", description: "Request created but no run accepted." });
+    controller.updateSelectedBacklogTaskFromInput({ status: "ready" });
+    const task = internals.state.projectBacklogCollections["project-a"].tasks[0];
+    const associationKey = `project-a:backlog-task:${task.id}`;
+    internals.state.externalProjectDevelopmentRequestDrafts[associationKey] = {
+      id: `${associationKey}:external-development-request-draft`,
+      projectId: "project-a",
+      projectName: "Project A",
+      status: "Prepared",
+      title: "Prepared only",
+      summary: "Prepared only",
+      requestText: "Prepared only",
+      sourceBacklogTaskId: task.id,
+      targetProjectIdentity: "project-a (Project A; local:project-a)",
+      requirementsArtifactPath: ".aiverse/external-requests/project-a/prepared-only-requirements.md",
+      requirementsArtifactContent: "Prepared only",
+      repositoryProvider: "local",
+      createdAt: "2026-08-31T00:00:00.000Z",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+      sideEffectBoundary: "Local draft only.",
+    };
+    internals.state.externalProjectAdosRunPreparations[associationKey] = {
+      ...preparation("project-a"),
+      id: `${associationKey}:external-ados-run-preparation`,
+      developmentRequestDraftId: `${associationKey}:external-development-request-draft`,
+    };
+    internals.state.projectBacklogCollections["project-a"].tasks[0] = {
+      ...task,
+      developmentRequestId: `${associationKey}:external-development-request-draft`,
+      executionPreparationId: `${associationKey}:external-ados-run-preparation`,
+    };
+    internals.state.externalProjectAdosRunStatuses[associationKey] = {
+      id: `${associationKey}:external-ados-run-status`,
+      projectId: "project-a",
+      stage: "Prepared",
+      status: "Prepared",
+      source: "preparation",
+      preparationId: `${associationKey}:external-ados-run-preparation`,
+      reasonCodes: [],
+      updatedAt: "2026-08-31T00:00:00.000Z",
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      rulesVersion: "external-ados-run-status-v1",
+    };
+
+    const probe = controller.getProjectBacklogProbeState();
+
+    expect(probe.executionStage).toBe("Prepared");
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).toBe("ready");
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).not.toBe("completed");
   });
 
   it("manual development request start sees a backlog-started active execution for the same project", () => {

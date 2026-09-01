@@ -259,7 +259,7 @@ function getProjectAdosRunState(state: ProjectAdosRunStateInput, projectId: stri
 
   const candidates = Array.from(candidateKeys).map((key) => createProjectAdosRunStateCandidate(state, key));
   return candidates.find((candidate) => isActiveProjectAdosRunState(candidate))
-    ?? candidates.find((candidate) => candidate.key === projectId)
+    ?? candidates.find((candidate) => candidate.key === projectId && hasProjectAdosRunState(candidate))
     ?? candidates.sort((left, right) => compareTimestamp(getProjectAdosRunStateUpdatedAt(right), getProjectAdosRunStateUpdatedAt(left)))[0]
     ?? {};
 }
@@ -283,6 +283,16 @@ function createProjectAdosRunStateCandidate(state: ProjectAdosRunStateInput, key
     persistedStatus: state.externalProjectAdosRunStatuses[key],
     requestDraft: state.externalProjectDevelopmentRequestDrafts[key],
   };
+}
+
+function hasProjectAdosRunState(candidate: ProjectAdosRunState) {
+  return Boolean(
+    candidate.preparation ||
+    candidate.execution ||
+    candidate.result ||
+    candidate.persistedStatus ||
+    candidate.requestDraft
+  );
 }
 
 function isActiveProjectAdosRunState(candidate: ProjectAdosRunState) {
