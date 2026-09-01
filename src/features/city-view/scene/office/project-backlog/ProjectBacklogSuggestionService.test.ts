@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import { ProjectBacklogSuggestionService } from "./ProjectBacklogSuggestionService";
 import { ProjectBacklogService } from "./ProjectBacklogService";
 import type { ProjectBacklogCollections, ProjectBacklogTask } from "./ProjectBacklogTypes";
-import type { ProjectBacklogSuggestionCollections, ProjectBacklogSuggestionProvider } from "./ProjectBacklogSuggestionTypes";
+import type {
+  ProjectBacklogSuggestionCollections,
+  ProjectBacklogSuggestionProvider,
+  ProjectBacklogSuggestionProviderCandidate,
+} from "./ProjectBacklogSuggestionTypes";
 import type { ProjectRegistryEntry } from "../project-registry/ProjectRegistryTypes";
 
 describe("ProjectBacklogSuggestionService", () => {
@@ -220,7 +224,7 @@ function createBacklogService() {
   });
 }
 
-function providerWith(candidates: unknown[]): ProjectBacklogSuggestionProvider {
+function providerWith(candidates: ProjectBacklogSuggestionProviderCandidate[]): ProjectBacklogSuggestionProvider {
   return {
     generateSuggestions: vi.fn(() => candidates),
   };

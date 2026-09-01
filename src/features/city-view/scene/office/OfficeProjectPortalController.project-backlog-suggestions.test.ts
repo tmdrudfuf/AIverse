@@ -4,7 +4,11 @@ import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
 import { createInput, createSceneStub, flushPromises, getControllerInternals } from "./OfficeProjectPortalController.testHelpers";
 import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
-import type { ProjectBacklogSuggestionProvider } from "./project-backlog/ProjectBacklogSuggestionTypes";
+import type { ExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusTypes";
+import type {
+  ProjectBacklogSuggestionProvider,
+  ProjectBacklogSuggestionProviderCandidate,
+} from "./project-backlog/ProjectBacklogSuggestionTypes";
 
 describe("OfficeProjectPortalController backlog suggestions", () => {
   it("requires explicit operator action and does not generate on open or reload", async () => {
@@ -157,7 +161,7 @@ function createController(storage: BrowserOfficeSessionStorage, provider: Projec
   });
 }
 
-function providerWith(candidates: unknown[]): ProjectBacklogSuggestionProvider {
+function providerWith(candidates: ProjectBacklogSuggestionProviderCandidate[]): ProjectBacklogSuggestionProvider {
   return {
     generateSuggestions: vi.fn(() => candidates),
   };
@@ -228,14 +232,14 @@ function project(id: string, displayName: string, companyName: string) {
   };
 }
 
-function adosStatus(projectId: string, stage: "Started" | "Blocked") {
+function adosStatus(projectId: string, stage: "Started" | "Blocked"): ExternalProjectAdosRunStatus {
   return {
     id: `${projectId}:status`,
     projectId,
     stage,
     status: stage,
     source: "execution" as const,
-    reasonCodes: stage === "Blocked" ? ["PROVIDER_UNAVAILABLE"] : [],
+    reasonCodes: stage === "Blocked" ? ["EXTERNAL_ADOS_EXECUTION_PROVIDER_UNAVAILABLE"] : [],
     updatedAt: "2026-08-31T00:00:00.000Z",
     validationStarted: false,
     reviewStarted: false,
