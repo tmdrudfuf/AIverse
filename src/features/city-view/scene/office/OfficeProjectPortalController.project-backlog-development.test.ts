@@ -215,6 +215,60 @@ describe("OfficeProjectPortalController backlog task development bridge", () => 
     expect(Object.values(internals.state.externalProjectAdosExecutions)).toHaveLength(1);
   });
 
+  it("manual development request start sees a backlog-started active execution for the same project", () => {
+    const { controller, internals } = createController();
+    openBacklog(controller, internals, "project-a");
+    controller.createBacklogTaskFromInput({ title: "Active bridge run", description: "Already running from backlog." });
+    controller.updateSelectedBacklogTaskFromInput({ status: "ready" });
+    const task = internals.state.projectBacklogCollections["project-a"].tasks[0];
+    const associationKey = `project-a:backlog-task:${task.id}`;
+    const manualPreparation = preparation("project-a");
+    internals.state.externalProjectDevelopmentRequestDrafts["project-a"] = {
+      id: "project-a:manual-draft",
+      projectId: "project-a",
+      projectName: "Project A",
+      status: "Prepared",
+      title: "Manual request",
+      summary: "Manual request",
+      requestText: "Manual request",
+      targetProjectIdentity: "project-a (Project A; local:project-a)",
+      requirementsArtifactPath: ".aiverse/external-requests/project-a/manual-requirements.md",
+      requirementsArtifactContent: "Manual request",
+      repositoryProvider: "local",
+      createdAt: "2026-08-31T00:00:00.000Z",
+      updatedAt: "2026-08-31T00:00:00.000Z",
+      sideEffectBoundary: "Local draft only.",
+    };
+    internals.state.externalProjectAdosRunPreparations["project-a"] = manualPreparation;
+    internals.state.externalProjectAdosRunStatuses[associationKey] = {
+      id: `${associationKey}:external-ados-run-status`,
+      projectId: "project-a",
+      stage: "Started",
+      status: "implementer",
+      source: "execution",
+      preparationId: `${associationKey}:external-ados-run-preparation`,
+      executionId: `${associationKey}:run`,
+      reasonCodes: [],
+      updatedAt: "2026-08-31T02:00:00.000Z",
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      rulesVersion: "external-ados-run-status-v1",
+    };
+    internals.externalProjectAdosExecutionService.start = vi.fn();
+
+    const started = (controller as unknown as { startExternalProjectAdosExecution: () => boolean })
+      .startExternalProjectAdosExecution();
+
+    expect(started).toBe(true);
+    expect(internals.externalProjectAdosExecutionService.start).not.toHaveBeenCalled();
+    expect(internals.state.externalProjectDevelopmentRequestDrafts["project-a"]?.status).toBe("AlreadyActive");
+  });
+
   it("reload reconnects the existing association and does not relaunch", async () => {
     const storage = createMemoryStorage();
     const first = createController(storage);

@@ -40,6 +40,7 @@ import {
   createExternalProjectAdosRunPreparation,
 } from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import { ExternalProjectAdosExecutionService } from "./external-ados-execution/ExternalProjectAdosExecutionService";
+import type { ExternalProjectAdosExecution } from "./external-ados-execution/ExternalProjectAdosExecutionTypes";
 import { deriveExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusService";
 import {
   canCreateExternalProjectDevelopmentRequestDraft,
@@ -4178,7 +4179,10 @@ export class OfficeProjectPortalController {
     const preparation = this.state.externalProjectAdosRunPreparations[project.id];
     if (!preparation) return false;
     const activeExecutionKeys = this.getActiveExternalProjectAdosExecutionKeys();
-    if (activeExecutionKeys.has(project.id)) return true;
+    if (activeExecutionKeys.has(project.id) || this.hasActiveExternalProjectAdosExecutionForProject(project.id)) {
+      this.markExternalProjectDevelopmentRequestAlreadyActive(project.id);
+      return true;
+    }
 
     activeExecutionKeys.add(project.id);
     const existingDraft = this.state.externalProjectDevelopmentRequestDrafts[project.id];
@@ -4254,6 +4258,52 @@ export class OfficeProjectPortalController {
   private getActiveExternalProjectAdosExecutionKeys() {
     this.activeExternalProjectAdosExecutionKeys ??= new Set<string>();
     return this.activeExternalProjectAdosExecutionKeys;
+  }
+
+  private hasActiveExternalProjectAdosExecutionForProject(projectId: string) {
+    const activeExecutionKeys = this.getActiveExternalProjectAdosExecutionKeys();
+    if (activeExecutionKeys.has(projectId)) return true;
+    if (Array.from(activeExecutionKeys).some((key) => key.startsWith(`${projectId}:`))) return true;
+    return Object.values(this.state.externalProjectAdosRunStatuses).some((status) => (
+      status.projectId === projectId && (
+        status.stage === "Prepared" ||
+        status.stage === "Started" ||
+        status.stage === "Blocked" ||
+        status.stage === "TimedOut"
+      )
+    )) || Object.values(this.state.externalProjectAdosExecutions).some((execution) => (
+      execution.projectId === projectId && this.isActiveExternalProjectAdosExecution(execution)
+    ));
+  }
+
+  private isActiveExternalProjectAdosExecution(execution: ExternalProjectAdosExecution) {
+    if (
+      execution.status === "Completed" &&
+      execution.implementerStarted &&
+      !execution.evidence.completed &&
+      !execution.evidence.timedOut &&
+      !execution.evidence.cancelled
+    ) {
+      return true;
+    }
+    return execution.status !== "Completed" &&
+      execution.status !== "Failed" &&
+      execution.status !== "Cancelled";
+  }
+
+  private markExternalProjectDevelopmentRequestAlreadyActive(projectId: string) {
+    const existingDraft = this.state.externalProjectDevelopmentRequestDrafts[projectId];
+    if (!existingDraft) return;
+    this.state.externalProjectDevelopmentRequestDrafts = {
+      ...this.state.externalProjectDevelopmentRequestDrafts,
+      [projectId]: {
+        ...existingDraft,
+        status: "AlreadyActive",
+        updatedAt: new Date().toISOString(),
+      },
+    };
+    this.persistBrowserOfficeSession();
+    this.view.render(this.state);
   }
 
   private getDevelopmentRequestTargetProject() {
