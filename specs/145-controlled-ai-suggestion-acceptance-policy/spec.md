@@ -43,15 +43,18 @@ As an operator, I can see concise project-scoped policy and evaluation status in
 - **FR-014**: Automatic acceptance MUST reuse the existing manual suggestion-to-backlog conversion semantics.
 - **FR-015**: Automatically accepted tasks MUST always be created in `backlog` state and MUST NOT be marked Ready.
 - **FR-016**: Automatic acceptance MUST NOT invoke Start Development, Spec 142, Spec 144, ADOS execution/preparation, Codex, Claude, Git, or GitHub mutations.
-- **FR-017**: Backlog tasks created from suggestions MUST preserve source suggestion id, acceptance mode, and accepted time.
-- **FR-018**: Manual suggestion Accept and Reject MUST remain functional and distinguishable from automatic acceptance where provenance is stored.
-- **FR-019**: Policies, allowed priorities, latest evaluation results, suggestions, and provenance MUST persist through the existing browser office session architecture.
-- **FR-020**: Repeated evaluation, double-clicks, reloads, suggestion generation events, and project re-entry MUST be idempotent.
-- **FR-021**: Active ADOS runs MUST remain untouched by suggestion acceptance.
-- **FR-022**: Disconnected, removed, stale, or unregistered projects MUST fail closed.
-- **FR-023**: Policy evaluation MUST operate only on already-generated suggestions and MUST NOT call an AI model.
-- **FR-024**: The office UI MUST show compact project-scoped controls for canonical project, Auto Accept on/off, allowed priorities, and latest result near the backlog suggestion surface.
-- **FR-025**: Portfolio status MAY show read-only project-scoped AI Accept status and pending count, and MUST NOT mutate policy.
+- **FR-017**: AI-generated suggestion text MUST be treated only as bounded, validated data and MUST NOT be executed, passed as shell or Git arguments, used to mutate repository files, or used to invoke ADOS.
+- **FR-018**: If automatic acceptance fails before backlog task creation, the suggestion MUST remain available for manual review, no partial task MAY exist, no execution MAY start, and a concise deterministic failure reason MUST be exposed.
+- **FR-019**: If backlog task creation succeeds but provenance persistence encounters a retry scenario, the existing state/transaction semantics MUST remain idempotent so repeated evaluation cannot create duplicate tasks.
+- **FR-020**: Backlog tasks created from suggestions MUST preserve source suggestion id, acceptance mode, and accepted time.
+- **FR-021**: Manual suggestion Accept and Reject MUST remain functional and distinguishable from automatic acceptance where provenance is stored.
+- **FR-022**: Policies, allowed priorities, latest evaluation results, suggestions, and provenance MUST persist through the existing browser office session architecture.
+- **FR-023**: Repeated evaluation, double-clicks, reloads, suggestion generation events, and project re-entry MUST be idempotent.
+- **FR-024**: Active ADOS runs MUST remain untouched by suggestion acceptance.
+- **FR-025**: Disconnected, removed, stale, or unregistered projects MUST fail closed.
+- **FR-026**: Policy evaluation MUST operate only on already-generated suggestions and MUST NOT call an AI model.
+- **FR-027**: The office UI MUST show compact project-scoped controls for canonical project, Auto Accept on/off, allowed priorities, and latest result near the backlog suggestion surface.
+- **FR-028**: Portfolio status MAY show read-only project-scoped AI Accept status and pending count, and MUST NOT mutate policy.
 
 ## Key Entities
 

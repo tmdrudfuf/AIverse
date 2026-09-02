@@ -31,4 +31,4 @@
 
 ## Notes
 
-- Requirements are sourced from the ADOS handoff message because the referenced temp file hash did not match the handoff hash.
+- Requirements are sourced from the authoritative Spec 145 requirements embedded in the ADOS implementer handoff, including explicit Security Boundary and Failure Semantics sections.

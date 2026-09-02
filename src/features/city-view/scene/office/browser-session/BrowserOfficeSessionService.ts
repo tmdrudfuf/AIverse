@@ -25,7 +25,6 @@ import { ProjectBacklogSuggestionService, isSuggestionCollection } from "../proj
 import type { ProjectBacklogSuggestionCollections } from "../project-backlog/ProjectBacklogSuggestionTypes";
 import {
   ProjectBacklogSuggestionAcceptancePolicyService,
-  isProjectBacklogSuggestionAcceptancePolicy,
 } from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
 import type { ProjectBacklogSuggestionAcceptancePolicies } from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
 import { ProjectAutonomousExecutionPolicyService, isProjectAutonomyPolicy } from "../project-backlog/ProjectAutonomousExecutionPolicyService";
@@ -267,12 +266,6 @@ function isProjectBacklogCollectionRecord(value: unknown) {
 
 function isProjectBacklogSuggestionCollectionRecord(value: unknown) {
   return isRecord(value) && Object.values(value).every(isSuggestionCollection);
-}
-
-function isProjectBacklogSuggestionAcceptancePolicyRecord(value: unknown) {
-  return isRecord(value) && Object.entries(value).every(([projectId, policy]) => (
-    isProjectBacklogSuggestionAcceptancePolicy(policy) && policy.projectId === projectId
-  ));
 }
 
 function isProjectAutonomyPolicyRecord(value: unknown) {

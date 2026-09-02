@@ -131,6 +131,30 @@ describe("ProjectBacklogSuggestionAcceptancePolicyService", () => {
     expect(harness.backlog["project-a"].tasks.filter((item) => item.title === "New Work")).toHaveLength(1);
   });
 
+  it("stops future auto-acceptance after the operator disables the project policy", () => {
+    const harness = createHarness();
+    harness.service.updatePolicy(harness.policies, context("project-a"), {
+      enabled: true,
+      allowedPriorities: ["high"],
+    });
+    harness.suggestions["project-a"] = {
+      projectId: "project-a",
+      candidates: [suggestion("project-a", "a1", "First accepted", "high")],
+    };
+
+    expect(harness.evaluate("project-a").accepted.map((item) => item.suggestion.id)).toEqual(["a1"]);
+
+    harness.service.updatePolicy(harness.policies, context("project-a"), { enabled: false });
+    harness.suggestions["project-a"].candidates.push(suggestion("project-a", "a2", "Second stays proposed", "high"));
+
+    const disabled = harness.evaluate("project-a");
+
+    expect(disabled.latestResultText).toBe("Skipped: policy disabled");
+    expect(disabled.accepted).toEqual([]);
+    expect(harness.suggestions["project-a"].candidates.find((candidate) => candidate.id === "a2")?.status).toBe("proposed");
+    expect(harness.backlog["project-a"].tasks.map((item) => item.title)).toEqual(["First accepted"]);
+  });
+
   it("fails closed for malformed, cross-project, disabled, and disconnected project inputs", () => {
     const harness = createHarness();
     harness.service.updatePolicy(harness.policies, context("project-a"), {
@@ -142,12 +166,14 @@ describe("ProjectBacklogSuggestionAcceptancePolicyService", () => {
       candidates: [
         suggestion("project-a", "bad", "", "high"),
         suggestion("project-a", "cross", "Mentions project-b", "high"),
+        suggestion("project-b", "wrong-project-id", "Wrong project identity", "high"),
       ],
     };
 
     expect(harness.evaluate("project-a").skipped.map((item) => item.reason)).toEqual([
       "InvalidSuggestion",
       "InvalidSuggestion",
+      "ProjectMismatch",
     ]);
     expect(harness.backlog["project-a"]?.tasks ?? []).toHaveLength(0);
 

@@ -120,7 +120,7 @@ export class ProjectBacklogSuggestionAcceptancePolicyService {
 
     const collection = input.suggestionCollections[projectId];
     const suggestions = collection?.projectId === projectId
-      ? collection.candidates.filter((candidate) => candidate.projectId === projectId)
+      ? collection.candidates
       : [];
     const tasks = input.backlogService.getOrderedCollection(input.backlogCollections, projectId).tasks;
     const duplicateTitles = new Set(tasks.map((task) => normalizeWorkText(task.title)));
@@ -218,6 +218,7 @@ export class ProjectBacklogSuggestionAcceptancePolicyService {
     associatedSuggestionIds: ReadonlySet<string>,
     otherProjectIds: ReadonlyArray<string>,
   ): ProjectBacklogSuggestionAcceptanceReason | undefined {
+    if (suggestion.projectId !== policy.projectId) return "ProjectMismatch";
     if (suggestion.status !== "proposed") return suggestion.status === "accepted" ? "AlreadyAccepted" : "SuggestionNotProposed";
     if (associatedSuggestionIds.has(suggestion.id) || suggestion.acceptedBacklogTaskId) return "AlreadyAccepted";
     if (!isValidSuggestion(suggestion, otherProjectIds)) return "InvalidSuggestion";

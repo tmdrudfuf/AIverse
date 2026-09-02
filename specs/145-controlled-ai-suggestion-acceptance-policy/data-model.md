@@ -28,3 +28,6 @@ Existing Spec 143 entity. Auto-accept considers only `status = proposed`, same `
 - Missing or invalid policy creates a disabled default.
 - Auto-accepted tasks are created as `backlog`.
 - Existing accepted suggestion associations are authoritative for idempotency.
+- Suggestion text remains bounded, validated data only; it is never executed, passed to Git, used for repository mutation, or used to invoke ADOS.
+- Failed evaluation before task creation leaves the suggestion available for manual review and creates no partial backlog task.
+- If a retry observes an already accepted suggestion association or created task provenance, that association remains authoritative and prevents duplicate task creation.
