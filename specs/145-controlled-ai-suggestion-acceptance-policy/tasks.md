@@ -31,6 +31,7 @@
 
 - [X] T013 Run targeted Vitest coverage for changed services/controllers/session/portfolio
 - [X] T014 Leave full ADOS validation pipeline to authoritative ADOS runtime per handoff
+- [X] T015 Add two-project runtime evidence artifacts for Requirement 32 in specs/145-controlled-ai-suggestion-acceptance-policy/runtime-evidence.json and runtime-verification.md
 
 ## Dependencies
 
