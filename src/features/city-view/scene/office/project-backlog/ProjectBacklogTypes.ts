@@ -23,6 +23,9 @@ export type ProjectBacklogTask = {
   executionPreparationId?: string;
   executionRunId?: string;
   executionAcceptedAt?: string;
+  sourceSuggestionId?: string;
+  suggestionAcceptanceMode?: "manual" | "automatic";
+  suggestionAcceptedAt?: string;
 };
 
 export type ProjectBacklogCollection = {

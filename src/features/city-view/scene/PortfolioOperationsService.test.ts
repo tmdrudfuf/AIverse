@@ -308,6 +308,50 @@ describe("derivePortfolioOperations", () => {
     expect(result["company-b"].backlogSuggestionSummary).toBeUndefined();
   });
 
+  it("adds read-only project-scoped AI Accept status without mutating policies", () => {
+    const state = createState({
+      projectBacklogSuggestionAcceptancePolicies: {
+        "project-a": {
+          projectId: "project-a",
+          enabled: true,
+          allowedPriorities: ["high"],
+          maxAutoAcceptPerEvaluation: 1,
+          requireNonDuplicate: true,
+          requireValidStructuredSuggestion: true,
+          createdTaskInitialStatus: "backlog",
+          updatedAt: "2026-09-01T00:00:00.000Z",
+          updatedByOperator: true,
+        },
+      },
+      projectBacklogSuggestionCollections: {
+        "project-a": {
+          projectId: "project-a",
+          candidates: [suggestion("project-a", "a1", "A one", "proposed")],
+        },
+        "project-b": {
+          projectId: "project-b",
+          candidates: [suggestion("project-b", "b1", "B one", "proposed")],
+        },
+      },
+    });
+    const beforePolicies = JSON.stringify(state.projectBacklogSuggestionAcceptancePolicies);
+    const buildings = createBuildings().slice(0, 2);
+
+    const result = derivePortfolioOperations({ buildings, state });
+
+    expect(result["company-a"].backlogSuggestionAcceptanceSummary).toEqual({
+      state: "On",
+      pendingCount: 1,
+      text: "AI Accept: On - 1 pending",
+    });
+    expect(result["company-b"].backlogSuggestionAcceptanceSummary).toEqual({
+      state: "Off",
+      pendingCount: 1,
+      text: "AI Accept: Off - 1 pending",
+    });
+    expect(JSON.stringify(state.projectBacklogSuggestionAcceptancePolicies)).toBe(beforePolicies);
+  });
+
   it("adds read-only project autonomy summaries without mutating policies", () => {
     const state = createState({
       projectBacklogCollections: {

@@ -23,6 +23,11 @@ import { ProjectBacklogService, isBacklogCollection } from "../project-backlog/P
 import type { ProjectBacklogCollections } from "../project-backlog/ProjectBacklogTypes";
 import { ProjectBacklogSuggestionService, isSuggestionCollection } from "../project-backlog/ProjectBacklogSuggestionService";
 import type { ProjectBacklogSuggestionCollections } from "../project-backlog/ProjectBacklogSuggestionTypes";
+import {
+  ProjectBacklogSuggestionAcceptancePolicyService,
+  isProjectBacklogSuggestionAcceptancePolicy,
+} from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
+import type { ProjectBacklogSuggestionAcceptancePolicies } from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
 import { ProjectAutonomousExecutionPolicyService, isProjectAutonomyPolicy } from "../project-backlog/ProjectAutonomousExecutionPolicyService";
 import type { ProjectAutonomyPolicies } from "../project-backlog/ProjectAutonomousExecutionPolicyTypes";
 
@@ -87,6 +92,7 @@ export class BrowserOfficeSessionService {
     state.externalProjectAdosRunStatuses = cloneValidExternalProjectAdosRunStatuses(snapshot.externalProjectAdosRunStatuses);
     state.projectBacklogCollections = cloneValidProjectBacklogCollections(snapshot.projectBacklogCollections);
     state.projectBacklogSuggestionCollections = cloneValidProjectBacklogSuggestionCollections(snapshot.projectBacklogSuggestionCollections);
+    state.projectBacklogSuggestionAcceptancePolicies = cloneValidProjectBacklogSuggestionAcceptancePolicies(snapshot.projectBacklogSuggestionAcceptancePolicies);
     state.projectAutonomyPolicies = cloneValidProjectAutonomyPolicies(snapshot.projectAutonomyPolicies);
     state.implementerRuntimeCollections = clone(snapshot.implementerRuntimeCollections ?? {});
     state.implementerRuntimeResultCollections = clone(snapshot.implementerRuntimeResultCollections ?? {});
@@ -143,6 +149,7 @@ export class BrowserOfficeSessionService {
       externalProjectAdosRunStatuses: clone(state.externalProjectAdosRunStatuses),
       projectBacklogCollections: cloneValidProjectBacklogCollections(state.projectBacklogCollections),
       projectBacklogSuggestionCollections: cloneValidProjectBacklogSuggestionCollections(state.projectBacklogSuggestionCollections),
+      projectBacklogSuggestionAcceptancePolicies: cloneValidProjectBacklogSuggestionAcceptancePolicies(state.projectBacklogSuggestionAcceptancePolicies),
       projectAutonomyPolicies: cloneValidProjectAutonomyPolicies(state.projectAutonomyPolicies),
       implementerRuntimeCollections: clone(state.implementerRuntimeCollections),
       implementerRuntimeResultCollections: clone(state.implementerRuntimeResultCollections),
@@ -216,6 +223,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     (value.externalProjectAdosRunStatuses === undefined || isRecord(value.externalProjectAdosRunStatuses)) &&
     (value.projectBacklogCollections === undefined || isProjectBacklogCollectionRecord(value.projectBacklogCollections)) &&
     (value.projectBacklogSuggestionCollections === undefined || isProjectBacklogSuggestionCollectionRecord(value.projectBacklogSuggestionCollections)) &&
+    (value.projectBacklogSuggestionAcceptancePolicies === undefined || isRecord(value.projectBacklogSuggestionAcceptancePolicies)) &&
     (value.projectAutonomyPolicies === undefined || isRecord(value.projectAutonomyPolicies)) &&
     (value.implementerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.implementerRuntimeCollections)) &&
     (value.implementerRuntimeResultCollections === undefined || isResultCollectionRecord(value.implementerRuntimeResultCollections)) &&
@@ -259,6 +267,12 @@ function isProjectBacklogCollectionRecord(value: unknown) {
 
 function isProjectBacklogSuggestionCollectionRecord(value: unknown) {
   return isRecord(value) && Object.values(value).every(isSuggestionCollection);
+}
+
+function isProjectBacklogSuggestionAcceptancePolicyRecord(value: unknown) {
+  return isRecord(value) && Object.entries(value).every(([projectId, policy]) => (
+    isProjectBacklogSuggestionAcceptancePolicy(policy) && policy.projectId === projectId
+  ));
 }
 
 function isProjectAutonomyPolicyRecord(value: unknown) {
@@ -316,6 +330,12 @@ function cloneValidProjectBacklogCollections(value: unknown) {
 function cloneValidProjectBacklogSuggestionCollections(value: unknown) {
   return new ProjectBacklogSuggestionService().cloneCollections(
     isProjectBacklogSuggestionCollectionRecord(value) ? value as ProjectBacklogSuggestionCollections : {},
+  );
+}
+
+function cloneValidProjectBacklogSuggestionAcceptancePolicies(value: unknown) {
+  return new ProjectBacklogSuggestionAcceptancePolicyService().clonePolicies(
+    isRecord(value) ? value as ProjectBacklogSuggestionAcceptancePolicies : {},
   );
 }
 

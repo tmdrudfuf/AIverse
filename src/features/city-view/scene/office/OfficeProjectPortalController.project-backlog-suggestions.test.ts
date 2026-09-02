@@ -152,6 +152,92 @@ describe("OfficeProjectPortalController backlog suggestions", () => {
     expect(reloadedInternals.state.projectBacklogCollections["project-a"].tasks.some((task) => task.title === "Accepted A")).toBe(true);
     expect(reloadedInternals.state.projectBacklogCollections["project-b"]?.tasks ?? []).toHaveLength(0);
   });
+
+  it("auto-accepts eligible Project A suggestions only while Project B remains manual across reload", async () => {
+    const storage = createMemoryStorage();
+    const provider = providerWith([
+      { title: "A high", description: "High priority Project A suggestion.", priority: "high" },
+      { title: "A low", description: "Low priority Project A suggestion.", priority: "low" },
+    ]);
+    const controller = createController(storage, provider);
+    const internals = getControllerInternals(controller);
+    seedTwoProjects(internals);
+    internals.state.externalProjectAdosRunStatuses["project-a"] = adosStatus("project-a", "Started");
+
+    controller.open();
+    controller.updateInput(createInput({}));
+    openBacklog(controller, internals, "project-a");
+    internals.updateSelectedProjectSuggestionAcceptancePolicy({ enabled: true, allowedPriorities: ["high"] });
+    controller.updateInput(createInput({ generateBacklogSuggestionsPressed: true }));
+    await flushPromises();
+
+    const projectATasks = internals.state.projectBacklogCollections["project-a"].tasks;
+    expect(internals.state.projectBacklogSuggestionAcceptancePolicies["project-a"]).toMatchObject({
+      enabled: true,
+      allowedPriorities: ["high"],
+    });
+    expect(projectATasks).toHaveLength(1);
+    expect(projectATasks[0]).toMatchObject({
+      projectId: "project-a",
+      title: "A high",
+      status: "backlog",
+      sourceSuggestionId: "project-a:suggestion:1",
+      suggestionAcceptanceMode: "automatic",
+    });
+    expect(projectATasks[0].status).not.toBe("ready");
+    expect(projectATasks[0].developmentRequestId).toBeUndefined();
+    expect(projectATasks[0].executionRunId).toBeUndefined();
+    expect(internals.state.projectBacklogSuggestionCollections["project-a"].candidates[0].status).toBe("accepted");
+    expect(internals.state.projectBacklogSuggestionCollections["project-a"].candidates[1].status).toBe("proposed");
+    expect(internals.state.projectBacklogSuggestionAcceptancePolicies["project-a"].lastEvaluation?.skipped)
+      .toContainEqual({ suggestionId: "project-a:suggestion:2", title: "A low", reason: "PriorityNotAllowed" });
+    expect(internals.state.externalProjectAdosRunStatuses["project-a"].stage).toBe("Started");
+
+    internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
+    expect(internals.state.projectBacklogCollections["project-a"].tasks).toHaveLength(1);
+
+    provider.generateSuggestions = vi.fn(() => [
+      { title: "B urgent", description: "Urgent priority Project B suggestion.", priority: "urgent" },
+    ]);
+    openBacklog(controller, internals, "project-b");
+    controller.updateInput(createInput({ generateBacklogSuggestionsPressed: true }));
+    await flushPromises();
+
+    expect(internals.state.projectBacklogSuggestionAcceptancePolicies["project-b"]?.enabled ?? false).toBe(false);
+    expect(internals.state.projectBacklogSuggestionCollections["project-b"].candidates[0].status).toBe("proposed");
+    expect(internals.state.projectBacklogCollections["project-b"]?.tasks ?? []).toHaveLength(0);
+
+    const reloaded = createController(storage, provider);
+    const reloadedInternals = getControllerInternals(reloaded);
+    seedTwoProjects(reloadedInternals);
+    reloaded.open();
+    reloaded.updateInput(createInput({}));
+
+    expect(reloadedInternals.state.projectBacklogSuggestionAcceptancePolicies["project-a"]).toMatchObject({
+      enabled: true,
+      allowedPriorities: ["high"],
+      lastEvaluation: { latestResultText: "Skipped: already accepted" },
+    });
+    expect(reloadedInternals.state.projectBacklogSuggestionAcceptancePolicies["project-b"]?.enabled ?? false).toBe(false);
+    expect(reloadedInternals.state.projectBacklogCollections["project-a"].tasks).toHaveLength(1);
+    expect(reloadedInternals.state.projectBacklogSuggestionCollections["project-b"].candidates[0].status).toBe("proposed");
+
+    openBacklog(reloaded, reloadedInternals, "project-b");
+    expect(reloadedInternals.acceptSelectedBacklogSuggestion()).toBe(true);
+    expect(reloadedInternals.state.projectBacklogCollections["project-b"].tasks[0]).toMatchObject({
+      title: "B urgent",
+      status: "backlog",
+      suggestionAcceptanceMode: "manual",
+    });
+
+    provider.generateSuggestions = vi.fn(() => [
+      { title: "B reject", description: "Reject stays manual.", priority: "urgent" },
+    ]);
+    await reloadedInternals.generateProjectBacklogSuggestions();
+    reloadedInternals.rejectSelectedBacklogSuggestion();
+    expect(reloadedInternals.state.projectBacklogSuggestionCollections["project-b"].candidates
+      .some((candidate) => candidate.title === "B reject" && candidate.status === "rejected")).toBe(true);
+  });
 });
 
 function createController(storage: BrowserOfficeSessionStorage, provider: ProjectBacklogSuggestionProvider) {
@@ -184,6 +270,11 @@ function seedTwoProjects(internals: ReturnType<typeof getControllerInternals>) {
       description: "Project A",
       linkedServices: [],
       nextAction: { label: "Open", enabled: true, placeholder: true },
+      localRepositoryBinding: {
+        projectId: "project-a",
+        repositoryPath: "C:/repos/project-a",
+        worktreePath: "C:/repos/project-a",
+      },
       repositoryIdentity: { provider: "local", connectionState: "Configured", localPath: "C:/repos/project-a" },
     },
     {
@@ -195,6 +286,11 @@ function seedTwoProjects(internals: ReturnType<typeof getControllerInternals>) {
       description: "Project B",
       linkedServices: [],
       nextAction: { label: "Open", enabled: true, placeholder: true },
+      localRepositoryBinding: {
+        projectId: "project-b",
+        repositoryPath: "C:/repos/project-b",
+        worktreePath: "C:/repos/project-b",
+      },
       repositoryIdentity: { provider: "local", connectionState: "Configured", localPath: "C:/repos/project-b" },
     },
   ];

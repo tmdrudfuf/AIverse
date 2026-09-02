@@ -720,6 +720,97 @@ describe("BrowserOfficeSessionService", () => {
     expect(restored.projectAutonomyPolicies["bad-concurrency"]).toBeUndefined();
   });
 
+  it("persists suggestion acceptance policies and provenance while dropping unsafe policy records", () => {
+    const storage = createMemoryStorage();
+    const service = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-09-01T00:00:00.000Z",
+    });
+    const source = createProjectPortalState({ browserOfficeSessionService: false });
+    source.projectBacklogSuggestionAcceptancePolicies = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        enabled: true,
+        allowedPriorities: ["high"],
+        maxAutoAcceptPerEvaluation: 1,
+        requireNonDuplicate: true,
+        requireValidStructuredSuggestion: true,
+        createdTaskInitialStatus: "backlog",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        updatedByOperator: true,
+        lastEvaluation: {
+          evaluatedAt: "2026-09-01T00:00:00.000Z",
+          acceptedCount: 1,
+          skippedCount: 1,
+          latestResultText: "Auto-accepted: high priority allowed",
+          acceptedSuggestionIds: ["daily-proof:suggestion:1"],
+          skipped: [{ suggestionId: "daily-proof:suggestion:2", title: "Low item", reason: "PriorityNotAllowed" }],
+        },
+      },
+      "wrong-key": {
+        projectId: "other-project",
+        enabled: true,
+        allowedPriorities: ["urgent"],
+        maxAutoAcceptPerEvaluation: 1,
+        requireNonDuplicate: true,
+        requireValidStructuredSuggestion: true,
+        createdTaskInitialStatus: "backlog",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+      "ready-policy": {
+        projectId: "ready-policy",
+        enabled: true,
+        allowedPriorities: ["urgent"],
+        maxAutoAcceptPerEvaluation: 1,
+        requireNonDuplicate: true,
+        requireValidStructuredSuggestion: true,
+        createdTaskInitialStatus: "ready" as never,
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+    };
+    source.projectBacklogCollections["daily-proof"] = {
+      projectId: "daily-proof",
+      tasks: [{
+        id: "daily-proof:task:1",
+        projectId: "daily-proof",
+        title: "Accepted task",
+        description: "Accepted task description",
+        status: "backlog",
+        priority: "high",
+        createdAt: "2026-09-01T00:00:00.000Z",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+        sourceSuggestionId: "daily-proof:suggestion:1",
+        suggestionAcceptanceMode: "automatic",
+        suggestionAcceptedAt: "2026-09-01T00:00:00.000Z",
+      }],
+    };
+
+    expect(service.saveState(source)).toBe(true);
+
+    const restored = service.restoreState(createProjectPortalState({ browserOfficeSessionService: false }));
+
+    expect(restored.projectBacklogSuggestionAcceptancePolicies["daily-proof"]).toMatchObject({
+      projectId: "daily-proof",
+      enabled: true,
+      allowedPriorities: ["high"],
+      createdTaskInitialStatus: "backlog",
+      lastEvaluation: {
+        latestResultText: "Auto-accepted: high priority allowed",
+        acceptedSuggestionIds: ["daily-proof:suggestion:1"],
+      },
+    });
+    expect(restored.projectBacklogSuggestionAcceptancePolicies["wrong-key"]).toBeUndefined();
+    expect(restored.projectBacklogSuggestionAcceptancePolicies["ready-policy"]).toBeUndefined();
+    expect(restored.projectBacklogCollections["daily-proof"].tasks[0]).toMatchObject({
+      status: "backlog",
+      sourceSuggestionId: "daily-proof:suggestion:1",
+      suggestionAcceptanceMode: "automatic",
+      suggestionAcceptedAt: "2026-09-01T00:00:00.000Z",
+    });
+  });
+
   it("loads only current-version snapshots", () => {
     const storage = createMemoryStorage();
     storage.setItem(BROWSER_OFFICE_SESSION_STORAGE_KEY, JSON.stringify({
