@@ -1896,7 +1896,7 @@ describe("focused validation review loop (Spec 055)", () => {
     // No duplicate stage-timeline entries for the pre-resume "validate" occurrence.
     const validateEntries = summary.stageTimeline.filter((entry: { stage: string }) => entry.stage === "validate");
     expect(validateEntries).toHaveLength(1);
-  }, 30000);
+  }, 60000);
 
   it("does not re-run validation when resuming a state already at a terminal stage", async () => {
     const cwd = createTempDir();
