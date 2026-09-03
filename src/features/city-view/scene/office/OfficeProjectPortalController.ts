@@ -158,8 +158,11 @@ import {
   ProjectBacklogSuggestionService,
 } from "./project-backlog/ProjectBacklogSuggestionService";
 import { ProjectBacklogSuggestionAcceptancePolicyService } from "./project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
+import { ProjectAutonomousSuggestionCoordinator } from "./project-backlog/ProjectAutonomousSuggestionCoordinator";
+import { ProjectAutonomousSuggestionPolicyService } from "./project-backlog/ProjectAutonomousSuggestionPolicyService";
 import { ProjectBacklogReadinessPromotionPolicyService } from "./project-backlog/ProjectBacklogReadinessPromotionPolicyService";
 import type { ProjectBacklogSuggestionProvider } from "./project-backlog/ProjectBacklogSuggestionTypes";
+import type { ProjectAutonomousSuggestionEvaluationResult } from "./project-backlog/ProjectAutonomousSuggestionPolicyTypes";
 import type { ProjectBacklogReadinessPromotionEvaluationResult } from "./project-backlog/ProjectBacklogReadinessPromotionPolicyTypes";
 import type { ProjectAutonomyEvaluationResult } from "./project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import type { ProjectBacklogPlanningStatus, ProjectBacklogPriority, ProjectBacklogTask } from "./project-backlog/ProjectBacklogTypes";
@@ -334,6 +337,10 @@ export type OfficeProjectPortalInput = {
   toggleSuggestionAutoAcceptPressed?: boolean;
   evaluateSuggestionAutoAcceptPressed?: boolean;
   suggestionAutoAcceptAllowedPriorities?: ProjectBacklogPriority[];
+  toggleAutonomousSuggestionGenerationPressed?: boolean;
+  evaluateAutonomousSuggestionGenerationPressed?: boolean;
+  autonomousSuggestionMaxSuggestions?: number;
+  autonomousSuggestionCooldownMs?: number;
   toggleBacklogReadinessPromotionPressed?: boolean;
   evaluateBacklogReadinessPromotionPressed?: boolean;
   backlogReadinessPromotionAllowedPriorities?: ProjectBacklogPriority[];
@@ -397,6 +404,8 @@ export class OfficeProjectPortalController {
   private readonly projectAutonomousExecutionPolicyService: ProjectAutonomousExecutionPolicyService;
   private readonly projectBacklogDevelopmentBridgeService: ProjectBacklogDevelopmentBridgeService;
   private readonly projectBacklogSuggestionService: ProjectBacklogSuggestionService;
+  private readonly projectAutonomousSuggestionPolicyService: ProjectAutonomousSuggestionPolicyService;
+  private readonly projectAutonomousSuggestionCoordinator: ProjectAutonomousSuggestionCoordinator;
   private readonly projectBacklogSuggestionAcceptancePolicyService: ProjectBacklogSuggestionAcceptancePolicyService;
   private readonly projectBacklogReadinessPromotionPolicyService: ProjectBacklogReadinessPromotionPolicyService;
   private readonly projectBacklogSuggestionProvider: ProjectBacklogSuggestionProvider;
@@ -486,6 +495,10 @@ export class OfficeProjectPortalController {
     this.projectBacklogDevelopmentBridgeService = new ProjectBacklogDevelopmentBridgeService();
     this.projectBacklogSuggestionService = new ProjectBacklogSuggestionService({
       backlogService: this.projectBacklogService,
+    });
+    this.projectAutonomousSuggestionPolicyService = new ProjectAutonomousSuggestionPolicyService();
+    this.projectAutonomousSuggestionCoordinator = new ProjectAutonomousSuggestionCoordinator({
+      policyService: this.projectAutonomousSuggestionPolicyService,
     });
     this.projectBacklogSuggestionAcceptancePolicyService = new ProjectBacklogSuggestionAcceptancePolicyService();
     this.projectBacklogReadinessPromotionPolicyService = new ProjectBacklogReadinessPromotionPolicyService();
@@ -628,6 +641,12 @@ export class OfficeProjectPortalController {
         projectId,
       )
       : undefined;
+    const autonomousSuggestionPolicy = projectId
+      ? this.projectAutonomousSuggestionPolicyService.getPolicy(
+        this.state.projectAutonomousSuggestionPolicies,
+        projectId,
+      )
+      : undefined;
     const suggestionAcceptancePolicy = projectId
       ? this.projectBacklogSuggestionAcceptancePolicyService.getPolicy(
         this.state.projectBacklogSuggestionAcceptancePolicies,
@@ -669,6 +688,12 @@ export class OfficeProjectPortalController {
           .filter((candidate) => candidate.status === "rejected")
           .map((candidate) => candidate.title) ?? []
         : [],
+      autonomousSuggestionEnabled: autonomousSuggestionPolicy?.enabled ?? false,
+      autonomousSuggestionMaxSuggestions: autonomousSuggestionPolicy?.maxSuggestionsPerEvaluation ?? 1,
+      autonomousSuggestionCooldownMs: autonomousSuggestionPolicy?.cooldownMs ?? 900000,
+      autonomousSuggestionLatestResult: autonomousSuggestionPolicy?.lastEvaluation?.latestResultText ?? "",
+      autonomousSuggestionGeneratedCount: autonomousSuggestionPolicy?.lastEvaluation?.generatedCount ?? 0,
+      autonomousSuggestionProviderInvoked: autonomousSuggestionPolicy?.lastEvaluation?.providerInvoked ?? false,
       suggestionAutoAcceptEnabled: suggestionAcceptancePolicy?.enabled ?? false,
       suggestionAutoAcceptAllowedPriorities: suggestionAcceptancePolicy?.allowedPriorities ?? [],
       suggestionAutoAcceptLatestResult: suggestionAcceptancePolicy?.lastEvaluation?.latestResultText ?? "",
@@ -969,6 +994,66 @@ export class OfficeProjectPortalController {
     this.refreshCompanyDashboardSnapshot();
     this.view.render(this.state);
     return true;
+  }
+
+  updateSelectedProjectAutonomousSuggestionPolicy(input: {
+    enabled?: boolean;
+    maxSuggestionsPerEvaluation?: number;
+    cooldownMs?: number;
+  }) {
+    const projectId = this.state.selectedBacklogProjectId;
+    const context = this.getBacklogMutationContext();
+    if (!projectId || !context) return false;
+    const result = this.projectAutonomousSuggestionPolicyService.updatePolicy(
+      this.state.projectAutonomousSuggestionPolicies,
+      context,
+      {
+        enabled: input.enabled,
+        maxSuggestionsPerEvaluation: input.maxSuggestionsPerEvaluation,
+        cooldownMs: input.cooldownMs,
+      },
+    );
+    if (!result.ok) return false;
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+    if (result.policy.enabled) {
+      void this.evaluateSelectedProjectAutonomousSuggestionGeneration(`policy-change:${result.policy.updatedAt}`);
+    }
+    return true;
+  }
+
+  async evaluateSelectedProjectAutonomousSuggestionGeneration(eventId?: string) {
+    const project = this.getSelectedBacklogProject();
+    const context = this.getBacklogMutationContext();
+    if (!project || !context) return false;
+    const projectId = project.id;
+    const result = await this.projectAutonomousSuggestionCoordinator.evaluateAndGenerate({
+      policies: this.state.projectAutonomousSuggestionPolicies,
+      project,
+      context,
+      event: {
+        projectId,
+        eventId: eventId ?? `explicit-evaluation:${projectId}:${Date.now()}`,
+        eventType: eventId?.startsWith("policy-change:") ? "policy-change" : "explicit-evaluation",
+        occurredAt: new Date().toISOString(),
+      },
+      planningState: this.createAutonomousSuggestionPlanningState(projectId),
+      suggestionCollections: this.state.projectBacklogSuggestionCollections,
+      backlogCollections: this.state.projectBacklogCollections,
+      suggestionService: this.projectBacklogSuggestionService,
+      provider: this.projectBacklogSuggestionProvider,
+      activeWork: this.getProjectActiveWorkSummaries(projectId),
+      blockedWork: this.getProjectBlockedWorkSummaries(projectId),
+      developmentRequests: this.getProjectDevelopmentRequestSummaries(projectId),
+      repositorySummary: this.getProjectRepositorySummary(projectId),
+    });
+    this.recordProjectAutonomousSuggestionEvaluation(result);
+    if (result.generated[0]) this.state.selectedBacklogSuggestionId = result.generated[0].id;
+    this.persistBrowserOfficeSession();
+    this.refreshCompanyDashboardSnapshot();
+    this.view.render(this.state);
+    return result.generated.length > 0;
   }
 
   acceptSelectedBacklogSuggestion(input: {
@@ -1979,6 +2064,31 @@ export class OfficeProjectPortalController {
 
     if (input.generateBacklogSuggestionsPressed) {
       void this.generateProjectBacklogSuggestions();
+      return;
+    }
+
+    if (
+      input.toggleAutonomousSuggestionGenerationPressed ||
+      input.autonomousSuggestionMaxSuggestions !== undefined ||
+      input.autonomousSuggestionCooldownMs !== undefined
+    ) {
+      const projectId = this.state.selectedBacklogProjectId;
+      const existingPolicy = projectId
+        ? this.projectAutonomousSuggestionPolicyService.getPolicy(
+          this.state.projectAutonomousSuggestionPolicies,
+          projectId,
+        )
+        : undefined;
+      this.updateSelectedProjectAutonomousSuggestionPolicy({
+        enabled: input.toggleAutonomousSuggestionGenerationPressed ? !existingPolicy?.enabled : existingPolicy?.enabled,
+        maxSuggestionsPerEvaluation: input.autonomousSuggestionMaxSuggestions,
+        cooldownMs: input.autonomousSuggestionCooldownMs,
+      });
+      return;
+    }
+
+    if (input.evaluateAutonomousSuggestionGenerationPressed) {
+      void this.evaluateSelectedProjectAutonomousSuggestionGeneration();
       return;
     }
 
@@ -4762,6 +4872,15 @@ export class OfficeProjectPortalController {
     };
   }
 
+  private recordProjectAutonomousSuggestionEvaluation(
+    result: ProjectAutonomousSuggestionEvaluationResult,
+  ) {
+    this.projectAutonomousSuggestionPolicyService.recordEvaluation(
+      this.state.projectAutonomousSuggestionPolicies,
+      result,
+    );
+  }
+
   private recordProjectBacklogReadinessPromotionEvaluation(
     result: ProjectBacklogReadinessPromotionEvaluationResult,
   ) {
@@ -4932,6 +5051,17 @@ export class OfficeProjectPortalController {
     if (!projectId) return undefined;
     return this.state.projectBacklogSuggestionCollections[projectId]?.candidates
       .find((candidate) => candidate.projectId === projectId && candidate.status === "proposed");
+  }
+
+  private createAutonomousSuggestionPlanningState(projectId: string) {
+    return {
+      backlogTasks: this.projectBacklogService.getOrderedCollection(this.state.projectBacklogCollections, projectId).tasks,
+      suggestions: this.state.projectBacklogSuggestionCollections[projectId]?.candidates ?? [],
+      developmentDrafts: this.state.externalProjectDevelopmentRequestDrafts,
+      activeRunStatus: this.getActiveProjectAdosRunStatus(projectId),
+      activeExecutions: Object.values(this.state.externalProjectAdosExecutions)
+        .filter((execution) => execution.projectId === projectId),
+    };
   }
 
   private getProjectActiveWorkSummaries(projectId: string) {

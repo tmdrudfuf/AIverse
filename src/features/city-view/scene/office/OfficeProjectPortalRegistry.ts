@@ -292,6 +292,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     externalProjectAdosRunStatuses: {},
     projectBacklogCollections: {},
     projectBacklogSuggestionCollections: {},
+    projectAutonomousSuggestionPolicies: {},
     projectBacklogSuggestionAcceptancePolicies: {},
     projectBacklogReadinessPromotionPolicies: {},
     projectAutonomyPolicies: {},

@@ -87,6 +87,7 @@ import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPor
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
 import { ProjectBacklogSuggestionAcceptancePolicyService } from "./project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
+import { ProjectAutonomousSuggestionPolicyService } from "./project-backlog/ProjectAutonomousSuggestionPolicyService";
 import { ProjectBacklogReadinessPromotionPolicyService } from "./project-backlog/ProjectBacklogReadinessPromotionPolicyService";
 import { ProjectAutonomousExecutionPolicyService } from "./project-backlog/ProjectAutonomousExecutionPolicyService";
 import { canCreateExternalProjectDevelopmentRequestDraft } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
@@ -825,6 +826,9 @@ export class OfficeProjectPortalView {
     const readinessPromotionPolicy = projectId
       ? new ProjectBacklogReadinessPromotionPolicyService().getPolicy(state.projectBacklogReadinessPromotionPolicies, projectId)
       : undefined;
+    const autonomousSuggestionPolicy = projectId
+      ? new ProjectAutonomousSuggestionPolicyService().getPolicy(state.projectAutonomousSuggestionPolicies, projectId)
+      : undefined;
     const suggestionAcceptancePolicy = projectId
       ? new ProjectBacklogSuggestionAcceptancePolicyService().getPolicy(
         state.projectBacklogSuggestionAcceptancePolicies,
@@ -939,17 +943,32 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 376, this.panelY + 358, compactTextLine(summary, 32), mutedStyle());
       this.addText(this.panelX + 376, this.panelY + 382, "Generation is explicit and advisory.", mutedStyle());
     }
-    this.addTerminalPanel(this.panelX + 24, this.panelY + 364, 304, 82);
-    this.addText(this.panelX + 36, this.panelY + 380, "AI Accept Policy", headingStyle());
+    this.addTerminalPanel(this.panelX + 24, this.panelY + 364, 304, 78);
+    this.addText(this.panelX + 36, this.panelY + 378, "Auto Suggestions", headingStyle());
     this.addText(
       this.panelX + 44,
-      this.panelY + 404,
+      this.panelY + 400,
+      compactTextLine(`Auto Suggestions: ${autonomousSuggestionPolicy?.enabled ? "On" : "Off"}  Max: ${autonomousSuggestionPolicy?.maxSuggestionsPerEvaluation ?? 1}  Cooldown: ${Math.round((autonomousSuggestionPolicy?.cooldownMs ?? 900000) / 60000)}m`, 36),
+      autonomousSuggestionPolicy?.enabled ? projectStatusStyle() : mutedStyle(),
+    );
+    this.addText(
+      this.panelX + 44,
+      this.panelY + 422,
+      compactTextLine(autonomousSuggestionPolicy?.lastEvaluation?.latestResultText ?? "Manual generation", 36),
+      mutedStyle(),
+    );
+
+    this.addTerminalPanel(this.panelX + 24, this.panelY + 448, 304, 82);
+    this.addText(this.panelX + 36, this.panelY + 464, "AI Accept Policy", headingStyle());
+    this.addText(
+      this.panelX + 44,
+      this.panelY + 488,
       compactTextLine(`AI Accept: ${suggestionAcceptancePolicy?.enabled ? "On" : "Off"}  Limit: ${suggestionAcceptancePolicy?.maxAutoAcceptPerEvaluation ?? 1}`, 36),
       suggestionAcceptancePolicy?.enabled ? projectStatusStyle() : mutedStyle(),
     );
     this.addText(
       this.panelX + 44,
-      this.panelY + 426,
+      this.panelY + 510,
       compactTextLine(`Priorities: ${suggestionAcceptancePolicy?.allowedPriorities.join(", ") || "none"}  ${suggestionAcceptancePolicy?.lastEvaluation?.latestResultText ?? "Manual review"}`, 36),
       mutedStyle(),
     );
@@ -969,17 +988,17 @@ export class OfficeProjectPortalView {
       mutedStyle(),
     );
 
-    this.addTerminalPanel(this.panelX + 24, this.panelY + 454, 304, 68);
-    this.addText(this.panelX + 36, this.panelY + 468, "Autonomous Execution", headingStyle());
+    this.addTerminalPanel(this.panelX + 24, this.panelY + 538, 304, 68);
+    this.addText(this.panelX + 36, this.panelY + 552, "Autonomous Execution", headingStyle());
     this.addText(
       this.panelX + 44,
-      this.panelY + 492,
+      this.panelY + 576,
       compactTextLine(`Auto: ${autonomyPolicy?.enabled ? "On" : "Off"}  Limit: 1  Blocks on active run`, 36),
       autonomyPolicy?.enabled ? projectStatusStyle() : mutedStyle(),
     );
     this.addText(
       this.panelX + 44,
-      this.panelY + 512,
+      this.panelY + 596,
       compactTextLine(`Priorities: ${autonomyPolicy?.allowedPriorities.join(", ") || "none"}  ${formatAutonomyReason(autonomyPolicy?.lastEvaluationReason)}`, 36),
       mutedStyle(),
     );

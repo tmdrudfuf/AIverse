@@ -352,6 +352,39 @@ describe("derivePortfolioOperations", () => {
     expect(JSON.stringify(state.projectBacklogSuggestionAcceptancePolicies)).toBe(beforePolicies);
   });
 
+  it("adds read-only project-scoped Auto Plan status without mutating policies", () => {
+    const state = createState({
+      projectAutonomousSuggestionPolicies: {
+        "project-a": {
+          projectId: "project-a",
+          enabled: true,
+          maxSuggestionsPerEvaluation: 1,
+          cooldownMs: 900000,
+          requireNoActiveExecution: true,
+          requireNoPendingReadyTask: true,
+          requireNoExistingEligibleSuggestion: true,
+          minimumPlanningCapacity: 1,
+          maxUnresolvedPlanningItems: 10,
+          updatedAt: "2026-09-02T00:00:00.000Z",
+          updatedByOperator: true,
+        },
+      },
+    });
+    const before = JSON.stringify(state.projectAutonomousSuggestionPolicies);
+
+    const result = derivePortfolioOperations({ buildings: createBuildings().slice(0, 2), state });
+
+    expect(result["company-a"].autonomousSuggestionSummary).toEqual({
+      state: "On",
+      text: "Auto Plan: On",
+    });
+    expect(result["company-b"].autonomousSuggestionSummary).toEqual({
+      state: "Off",
+      text: "Auto Plan: Off",
+    });
+    expect(JSON.stringify(state.projectAutonomousSuggestionPolicies)).toBe(before);
+  });
+
   it("adds read-only project autonomy summaries without mutating policies", () => {
     const state = createState({
       projectBacklogCollections: {

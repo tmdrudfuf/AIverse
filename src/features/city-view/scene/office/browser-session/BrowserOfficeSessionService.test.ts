@@ -720,6 +720,85 @@ describe("BrowserOfficeSessionService", () => {
     expect(restored.projectAutonomyPolicies["bad-concurrency"]).toBeUndefined();
   });
 
+  it("persists Auto Suggestions policies and drops malformed or cross-project records", () => {
+    const storage = createMemoryStorage();
+    const service = new BrowserOfficeSessionService({
+      storage,
+      now: () => "2026-09-02T00:00:00.000Z",
+    });
+    const source = createProjectPortalState({ browserOfficeSessionService: false });
+    source.projectAutonomousSuggestionPolicies = {
+      "daily-proof": {
+        projectId: "daily-proof",
+        enabled: true,
+        maxSuggestionsPerEvaluation: 1,
+        cooldownMs: 900000,
+        requireNoActiveExecution: true,
+        requireNoPendingReadyTask: true,
+        requireNoExistingEligibleSuggestion: true,
+        minimumPlanningCapacity: 1,
+        maxUnresolvedPlanningItems: 10,
+        updatedAt: "2026-09-02T00:00:00.000Z",
+        updatedByOperator: true,
+        lastEvaluation: {
+          evaluatedAt: "2026-09-02T00:01:00.000Z",
+          eventId: "event-1",
+          eventType: "explicit-evaluation",
+          latestResultText: "Generated 1 suggestion",
+          reason: "Generated",
+          generatedCount: 1,
+          skippedCount: 0,
+          providerInvoked: true,
+          lastAutomaticGenerationAt: "2026-09-02T00:01:00.000Z",
+          lastGeneratedSuggestionId: "daily-proof:suggestion:1",
+          evaluatedEventIds: ["event-1"],
+        },
+      },
+      "wrong-key": {
+        projectId: "other-project",
+        enabled: true,
+        maxSuggestionsPerEvaluation: 1,
+        cooldownMs: 900000,
+        requireNoActiveExecution: true,
+        requireNoPendingReadyTask: true,
+        requireNoExistingEligibleSuggestion: true,
+        minimumPlanningCapacity: 1,
+        maxUnresolvedPlanningItems: 10,
+        updatedAt: "2026-09-02T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+      "bad-unbounded": {
+        projectId: "bad-unbounded",
+        enabled: true,
+        maxSuggestionsPerEvaluation: 999,
+        cooldownMs: 1,
+        requireNoActiveExecution: true,
+        requireNoPendingReadyTask: true,
+        requireNoExistingEligibleSuggestion: true,
+        minimumPlanningCapacity: 1,
+        maxUnresolvedPlanningItems: 10,
+        updatedAt: "2026-09-02T00:00:00.000Z",
+        updatedByOperator: true,
+      },
+    };
+
+    expect(service.saveState(source)).toBe(true);
+
+    const restored = service.restoreState(createProjectPortalState({ browserOfficeSessionService: false }));
+
+    expect(restored.projectAutonomousSuggestionPolicies["daily-proof"]).toMatchObject({
+      projectId: "daily-proof",
+      enabled: true,
+      maxSuggestionsPerEvaluation: 1,
+      lastEvaluation: {
+        latestResultText: "Generated 1 suggestion",
+        lastGeneratedSuggestionId: "daily-proof:suggestion:1",
+      },
+    });
+    expect(restored.projectAutonomousSuggestionPolicies["wrong-key"]).toBeUndefined();
+    expect(restored.projectAutonomousSuggestionPolicies["bad-unbounded"]).toBeUndefined();
+  });
+
   it("persists suggestion acceptance policies and provenance while dropping unsafe policy records", () => {
     const storage = createMemoryStorage();
     const service = new BrowserOfficeSessionService({
