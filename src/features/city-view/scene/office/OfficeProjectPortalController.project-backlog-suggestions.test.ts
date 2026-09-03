@@ -238,6 +238,111 @@ describe("OfficeProjectPortalController backlog suggestions", () => {
     expect(reloadedInternals.state.projectBacklogSuggestionCollections["project-b"].candidates
       .some((candidate) => candidate.title === "B reject" && candidate.status === "rejected")).toBe(true);
   });
+
+  it("auto-generates one Project A suggestion only after explicit Spec 147 enablement and keeps Project B off", async () => {
+    const storage = createMemoryStorage();
+    const provider = providerWith([
+      { title: "A automatic", description: "Automatically proposed Project A planning item.", priority: "normal" },
+      { title: "A extra", description: "This must be bounded out.", priority: "normal" },
+    ]);
+    const controller = createController(storage, provider);
+    const internals = getControllerInternals(controller);
+    seedTwoProjects(internals);
+
+    controller.open();
+    openBacklog(controller, internals, "project-a");
+
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-a"]).toBeUndefined();
+    expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("disabled-event")).toBe(false);
+    expect(provider.generateSuggestions).not.toHaveBeenCalled();
+
+    expect(internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 })).toBe(true);
+    await flushPromises();
+
+    expect(provider.generateSuggestions).toHaveBeenCalledTimes(1);
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-a"]).toMatchObject({
+      enabled: true,
+      lastEvaluation: {
+        latestResultText: "Generated 1 suggestion",
+        providerInvoked: true,
+      },
+    });
+    expect(internals.state.projectBacklogSuggestionCollections["project-a"].candidates).toHaveLength(1);
+    expect(internals.state.projectBacklogSuggestionCollections["project-a"].candidates[0]).toMatchObject({
+      projectId: "project-a",
+      status: "proposed",
+    });
+    expect(internals.state.projectBacklogCollections["project-a"]).toBeUndefined();
+
+    expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("repeat-event")).toBe(false);
+    expect(provider.generateSuggestions).toHaveBeenCalledTimes(1);
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-a"].lastEvaluation?.latestResultText)
+      .toBe("Skipped: cooldown active");
+
+    openBacklog(controller, internals, "project-b");
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-b"]).toBeUndefined();
+    expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("project-b-event")).toBe(false);
+    expect(provider.generateSuggestions).toHaveBeenCalledTimes(1);
+    expect(internals.state.projectBacklogSuggestionCollections["project-b"]).toBeUndefined();
+
+    const reloaded = createController(storage, provider);
+    const reloadedInternals = getControllerInternals(reloaded);
+    seedTwoProjects(reloadedInternals);
+    reloaded.open();
+
+    expect(reloadedInternals.state.projectAutonomousSuggestionPolicies["project-a"]).toMatchObject({
+      enabled: true,
+      lastEvaluation: { latestResultText: "Skipped: cooldown active" },
+    });
+    expect(reloadedInternals.state.projectAutonomousSuggestionPolicies["project-b"]?.enabled ?? false).toBe(false);
+  });
+
+  it("blocks Spec 147 generation for pending suggestions, active execution, and Ready work without downstream side effects", async () => {
+    const storage = createMemoryStorage();
+    const provider = providerWith([{ title: "A automatic", description: "Automatically proposed Project A planning item." }]);
+    const controller = createController(storage, provider);
+    const internals = getControllerInternals(controller);
+    seedTwoProjects(internals);
+    controller.open();
+    openBacklog(controller, internals, "project-a");
+    internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true });
+    await flushPromises();
+    provider.generateSuggestions = vi.fn(() => [{ title: "second", description: "second" }]);
+
+    expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("pending")).toBe(false);
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-a"]?.lastEvaluation?.latestResultText)
+      .toBe("Skipped: cooldown active");
+
+    internals.state.projectAutonomousSuggestionPolicies["project-a"] = {
+      ...internals.state.projectAutonomousSuggestionPolicies["project-a"]!,
+      lastEvaluation: undefined,
+    };
+    internals.state.externalProjectAdosRunStatuses["project-a"] = adosStatus("project-a", "Started");
+    expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("active")).toBe(false);
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-a"]?.lastEvaluation?.latestResultText)
+      .toBe("Skipped: active execution exists");
+
+    delete internals.state.externalProjectAdosRunStatuses["project-a"];
+    internals.state.projectBacklogCollections["project-a"] = {
+      projectId: "project-a",
+      tasks: [{
+        id: "ready-a",
+        projectId: "project-a",
+        title: "Ready A",
+        description: "Ready work blocks auto planning.",
+        status: "ready",
+        priority: "normal",
+        createdAt: "2026-08-31T00:00:00.000Z",
+        updatedAt: "2026-08-31T00:00:00.000Z",
+      }],
+    };
+    internals.state.projectBacklogSuggestionCollections["project-a"] = { projectId: "project-a", candidates: [] };
+    expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("ready")).toBe(false);
+    expect(internals.state.projectAutonomousSuggestionPolicies["project-a"]?.lastEvaluation?.latestResultText)
+      .toBe("Skipped: ready work pending");
+    expect(provider.generateSuggestions).not.toHaveBeenCalled();
+    expect(internals.state.projectBacklogCollections["project-a"].tasks[0].status).toBe("ready");
+  });
 });
 
 function createController(storage: BrowserOfficeSessionStorage, provider: ProjectBacklogSuggestionProvider) {

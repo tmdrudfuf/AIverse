@@ -1,0 +1,57 @@
+{
+  "feature": "147-controlled-autonomous-suggestion-generation-policy",
+  "evidenceVersion": 1,
+  "evidencePathsAreRepositoryRelative": true,
+  "runtimeEvidencePath": "specs/147-controlled-autonomous-suggestion-generation-policy/runtime-evidence.json",
+  "projectContexts": [
+    {
+      "projectId": "project-a",
+      "initialAutoSuggestions": "Off",
+      "operatorEnabled": true,
+      "providerInvocations": 1,
+      "configuredMaxSuggestionsPerEvaluation": 1,
+      "generatedSuggestionCount": 1,
+      "generatedSuggestionProjectId": "project-a",
+      "generatedSuggestionStatus": "proposed",
+      "backlogTaskCreatedBySpec147": false,
+      "immediateRepeatBlocked": "cooldown/idempotency"
+    },
+    {
+      "projectId": "project-b",
+      "initialAutoSuggestions": "Off",
+      "operatorEnabled": false,
+      "providerInvocations": 0,
+      "generatedSuggestionCount": 0
+    }
+  ],
+  "manualSpec143FlowRemainsValid": true,
+  "reloadPreservesPolicyAndCooldown": true,
+  "gatesVerified": [
+    "policy disabled",
+    "malformed policy fails closed",
+    "disconnected project",
+    "cooldown active",
+    "duplicate event",
+    "pending suggestion",
+    "active execution",
+    "Ready work pending",
+    "planning capacity reached"
+  ],
+  "nonInvocationsVerified": {
+    "spec145DirectCall": false,
+    "spec146DirectCall": false,
+    "spec144DirectCall": false,
+    "spec142DirectCall": false,
+    "adosProcessLaunch": false,
+    "codexInvocation": false,
+    "claudeInvocation": false,
+    "shellCommandInvocationFromRuntime": false,
+    "gitMutation": false,
+    "githubMutation": false
+  },
+  "validation": {
+    "targetedVitestCommand": "npx vitest run src/features/city-view/scene/office/project-backlog/ProjectAutonomousSuggestionPolicyService.test.ts src/features/city-view/scene/office/browser-session/BrowserOfficeSessionService.test.ts src/features/city-view/scene/PortfolioOperationsService.test.ts src/features/city-view/scene/office/OfficeProjectPortalController.project-backlog-suggestions.test.ts",
+    "testFilesPassed": 4,
+    "testsPassed": 43
+  }
+}

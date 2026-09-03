@@ -74,5 +74,5 @@ This repository is worked on by CLI agents assigned to logical workflow roles.
 
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read specs/146-controlled-backlog-readiness-promotion-policy/plan.md
+shell commands, and other important information, read specs/147-controlled-autonomous-suggestion-generation-policy/plan.md
 <!-- SPECKIT END -->

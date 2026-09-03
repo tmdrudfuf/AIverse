@@ -5,6 +5,8 @@ import { deriveLiveAgentWorkState, type LiveAgentWorkState } from "./office/Live
 import { ProjectBacklogService } from "./office/project-backlog/ProjectBacklogService";
 import type { ProjectBacklogSummary } from "./office/project-backlog/ProjectBacklogTypes";
 import type { ProjectBacklogSuggestionCollections } from "./office/project-backlog/ProjectBacklogSuggestionTypes";
+import { ProjectAutonomousSuggestionPolicyService } from "./office/project-backlog/ProjectAutonomousSuggestionPolicyService";
+import type { ProjectAutonomousSuggestionPolicies } from "./office/project-backlog/ProjectAutonomousSuggestionPolicyTypes";
 import { ProjectBacklogSuggestionAcceptancePolicyService } from "./office/project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
 import type { ProjectBacklogSuggestionAcceptancePolicies } from "./office/project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
 import { ProjectBacklogReadinessPromotionPolicyService } from "./office/project-backlog/ProjectBacklogReadinessPromotionPolicyService";
@@ -46,6 +48,10 @@ export type PortfolioOperationsSummary = {
   recentCompletedSummary?: string;
   backlogSummary?: ProjectBacklogSummary;
   backlogSuggestionSummary?: string;
+  autonomousSuggestionSummary?: {
+    state: "On" | "Off";
+    text: string;
+  };
   backlogSuggestionAcceptanceSummary?: {
     state: "On" | "Off";
     pendingCount: number;
@@ -77,7 +83,7 @@ type LiveAgentWorkStateInput = Parameters<typeof deriveLiveAgentWorkState>[0];
 
 type ProjectScopedPortfolioState =
   Pick<ProjectPortalState, "projectRegistryEntries"> &
-  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections" | "projectBacklogSuggestionAcceptancePolicies" | "projectBacklogReadinessPromotionPolicies" | "projectAutonomyPolicies">> &
+  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections" | "projectAutonomousSuggestionPolicies" | "projectBacklogSuggestionAcceptancePolicies" | "projectBacklogReadinessPromotionPolicies" | "projectAutonomyPolicies">> &
   Partial<LiveAgentWorkStateInput>;
 
 export function createPortfolioOperationsFromBrowserSession(
@@ -194,6 +200,10 @@ function createAvailableSummary(input: {
       input.state.projectBacklogSuggestionCollections,
       input.projectId,
     ),
+    autonomousSuggestionSummary: createAutonomousSuggestionSummary(
+      input.state.projectAutonomousSuggestionPolicies,
+      input.projectId,
+    ),
     backlogSuggestionAcceptanceSummary: createBacklogSuggestionAcceptanceSummary(
       input.state.projectBacklogSuggestionAcceptancePolicies,
       input.state.projectBacklogSuggestionCollections,
@@ -275,6 +285,18 @@ function createBacklogSuggestionSummary(
     .filter((candidate) => candidate.projectId === projectId && candidate.status === "proposed").length ?? 0;
   if (proposedCount <= 0) return undefined;
   return `${proposedCount} AI ${proposedCount === 1 ? "suggestion" : "suggestions"} available`;
+}
+
+function createAutonomousSuggestionSummary(
+  policies: ProjectAutonomousSuggestionPolicies | undefined,
+  projectId: string,
+) {
+  const policy = new ProjectAutonomousSuggestionPolicyService().getPolicy(policies, projectId);
+  const state = policy.enabled ? "On" as const : "Off" as const;
+  return {
+    state,
+    text: `Auto Plan: ${state}`,
+  };
 }
 
 function createBacklogSuggestionAcceptanceSummary(

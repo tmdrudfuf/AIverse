@@ -207,6 +207,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           generateBacklogSuggestionsPressed,
           acceptBacklogSuggestionPressed,
           rejectBacklogSuggestionPressed,
+          toggleAutonomousSuggestionGenerationPressed: backlogFormInput.toggleAutonomousSuggestionGenerationPressed,
+          evaluateAutonomousSuggestionGenerationPressed: backlogFormInput.evaluateAutonomousSuggestionGenerationPressed,
+          autonomousSuggestionMaxSuggestions: backlogFormInput.autonomousSuggestionMaxSuggestions,
+          autonomousSuggestionCooldownMs: backlogFormInput.autonomousSuggestionCooldownMs,
           toggleAutonomousExecutionPressed: backlogFormInput.toggleAutonomousExecutionPressed,
           reevaluateAutonomousExecutionPressed: backlogFormInput.reevaluateAutonomousExecutionPressed,
           autonomousAllowedPriorities: backlogFormInput.autonomousAllowedPriorities,
@@ -374,6 +378,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       host.setAttribute("data-aiverse-office-auto-ready-priorities", JSON.stringify(backlogProbe?.backlogReadinessPromotionAllowedPriorities ?? []));
       host.setAttribute("data-aiverse-office-auto-ready-max", String(backlogProbe?.backlogReadinessPromotionMaxPromotions ?? 1));
       host.setAttribute("data-aiverse-office-auto-ready-result", backlogProbe?.backlogReadinessPromotionLatestResult ?? "");
+      host.setAttribute("data-aiverse-office-auto-suggestions-enabled", String(backlogProbe?.autonomousSuggestionEnabled ?? false));
+      host.setAttribute("data-aiverse-office-auto-suggestions-max", String(backlogProbe?.autonomousSuggestionMaxSuggestions ?? 1));
+      host.setAttribute("data-aiverse-office-auto-suggestions-cooldown-ms", String(backlogProbe?.autonomousSuggestionCooldownMs ?? 900000));
+      host.setAttribute("data-aiverse-office-auto-suggestions-result", backlogProbe?.autonomousSuggestionLatestResult ?? "");
       host.setAttribute(
         "data-aiverse-office-founder-position",
         this.founderEntity ? `${Math.round(this.founderEntity.position.x)},${Math.round(this.founderEntity.position.y)}` : "",
@@ -564,6 +572,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         : probe?.developmentEligibilityReason || "Select a Ready task in an available project.";
       form.startDevelopmentButton.style.opacity = probe?.developmentEligible ? "1" : "0.52";
       form.startDevelopmentButton.style.cursor = probe?.developmentEligible ? "pointer" : "not-allowed";
+      form.autonomousSuggestionToggleButton.textContent = probe?.autonomousSuggestionEnabled ? "Disable Auto Suggestions" : "Enable Auto Suggestions";
+      form.autonomousSuggestionToggleButton.title = "Enable or disable project-scoped automatic AI backlog suggestion generation.";
+      form.autonomousSuggestionEvaluateButton.textContent = "Evaluate Auto Planning";
+      form.autonomousSuggestionMaxInput.value = String(probe?.autonomousSuggestionMaxSuggestions ?? 1);
+      form.autonomousSuggestionCooldownInput.value = String(Math.round((probe?.autonomousSuggestionCooldownMs ?? 900000) / 60000));
+      form.autonomousSuggestionReason.textContent = `Auto Suggestions: ${probe?.autonomousSuggestionEnabled ? "On" : "Off"} | Max ${probe?.autonomousSuggestionMaxSuggestions ?? 1} | Cooldown ${Math.round((probe?.autonomousSuggestionCooldownMs ?? 900000) / 60000)}m | ${probe?.autonomousSuggestionLatestResult || "Manual generation"}`;
       form.autonomyToggleButton.textContent = probe?.autonomyEnabled ? "Pause Autonomous Execution" : "Enable Autonomous Execution";
       form.autonomyToggleButton.title = "Enable or pause project-scoped autonomous Ready task execution.";
       form.autonomyReason.textContent = `Auto: ${probe?.autonomyEnabled ? "On" : "Off"} | ${formatAutonomyPriorities(probe?.autonomyAllowedPriorities ?? [])} | ${formatAutonomyReason(probe?.autonomyReason)}`;
@@ -615,6 +629,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const createButton = document.createElement("button");
       const updateButton = document.createElement("button");
       const startDevelopmentButton = document.createElement("button");
+      const autonomousSuggestionToggleButton = document.createElement("button");
+      const autonomousSuggestionEvaluateButton = document.createElement("button");
+      const autonomousSuggestionReason = document.createElement("div");
+      const autonomousSuggestionMaxInput = document.createElement("input");
+      const autonomousSuggestionCooldownInput = document.createElement("input");
       const autonomyToggleButton = document.createElement("button");
       const autonomyReevaluateButton = document.createElement("button");
       const autonomyReason = document.createElement("div");
@@ -667,6 +686,17 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       createButton.textContent = "Create backlog task";
       updateButton.textContent = "Update selected task";
       startDevelopmentButton.textContent = "Start Development";
+      autonomousSuggestionMaxInput.setAttribute("aria-label", "Auto Suggestions maximum suggestions");
+      autonomousSuggestionMaxInput.type = "number";
+      autonomousSuggestionMaxInput.min = "1";
+      autonomousSuggestionMaxInput.max = "5";
+      autonomousSuggestionMaxInput.step = "1";
+      autonomousSuggestionMaxInput.value = "1";
+      autonomousSuggestionCooldownInput.setAttribute("aria-label", "Auto Suggestions cooldown minutes");
+      autonomousSuggestionCooldownInput.type = "number";
+      autonomousSuggestionCooldownInput.min = "15";
+      autonomousSuggestionCooldownInput.step = "1";
+      autonomousSuggestionCooldownInput.value = "15";
       autonomyReevaluateButton.textContent = "Reevaluate Automation";
       autonomyPriorityGroup.setAttribute("aria-label", "Autonomous execution allowed priorities");
       suggestionAutoAcceptPriorityGroup.setAttribute("aria-label", "AI suggestion auto-accept allowed priorities");
@@ -700,6 +730,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createButton,
         updateButton,
         startDevelopmentButton,
+        autonomousSuggestionToggleButton,
+        autonomousSuggestionEvaluateButton,
+        autonomousSuggestionMaxInput,
+        autonomousSuggestionCooldownInput,
         suggestionAutoAcceptToggleButton,
         suggestionAutoAcceptEvaluateButton,
         readinessPromotionToggleButton,
@@ -788,6 +822,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       });
       Object.assign(blockedReasonInput.style, { gridColumn: "1 / 2" });
       Object.assign(startDevelopmentButton.style, { gridColumn: "1 / 4" });
+      Object.assign(autonomousSuggestionReason.style, {
+        gridColumn: "1 / 4",
+        minWidth: "0",
+        color: "#cbd5e1",
+        font: "12px Courier New, monospace",
+      });
       Object.assign(autonomyReason.style, {
         gridColumn: "1 / 4",
         minWidth: "0",
@@ -829,6 +869,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       });
       Object.assign(suggestionAutoAcceptToggleButton.style, { gridColumn: "1 / 3" });
       Object.assign(suggestionAutoAcceptEvaluateButton.style, { gridColumn: "3 / 4" });
+      Object.assign(autonomousSuggestionMaxInput.style, { gridColumn: "1 / 2" });
+      Object.assign(autonomousSuggestionCooldownInput.style, { gridColumn: "2 / 3" });
+      Object.assign(autonomousSuggestionToggleButton.style, { gridColumn: "1 / 3" });
+      Object.assign(autonomousSuggestionEvaluateButton.style, { gridColumn: "3 / 4" });
       Object.assign(readinessPromotionMaxInput.style, { gridColumn: "1 / 2" });
       Object.assign(readinessPromotionToggleButton.style, { gridColumn: "2 / 3" });
       Object.assign(readinessPromotionEvaluateButton.style, { gridColumn: "3 / 4" });
@@ -853,6 +897,18 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       };
       const startDevelopmentHandler = () => {
         void this.officeProjectPortalController?.startSelectedBacklogTaskDevelopment();
+      };
+      const autonomousSuggestionToggleHandler = () => {
+        this.projectBacklogFormPendingToggleAutonomousSuggestions = true;
+      };
+      const autonomousSuggestionEvaluateHandler = () => {
+        this.projectBacklogFormPendingEvaluateAutonomousSuggestions = true;
+      };
+      const autonomousSuggestionMaxChangeHandler = () => {
+        this.projectBacklogFormPendingAutonomousSuggestionMaxChange = true;
+      };
+      const autonomousSuggestionCooldownChangeHandler = () => {
+        this.projectBacklogFormPendingAutonomousSuggestionCooldownChange = true;
       };
       const autonomyToggleHandler = () => {
         this.projectBacklogFormPendingToggleAutonomy = true;
@@ -890,6 +946,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       createButton.addEventListener("click", createHandler);
       updateButton.addEventListener("click", updateHandler);
       startDevelopmentButton.addEventListener("click", startDevelopmentHandler);
+      autonomousSuggestionToggleButton.addEventListener("click", autonomousSuggestionToggleHandler);
+      autonomousSuggestionEvaluateButton.addEventListener("click", autonomousSuggestionEvaluateHandler);
+      autonomousSuggestionMaxInput.addEventListener("change", autonomousSuggestionMaxChangeHandler);
+      autonomousSuggestionCooldownInput.addEventListener("change", autonomousSuggestionCooldownChangeHandler);
       suggestionAutoAcceptToggleButton.addEventListener("click", suggestionAutoAcceptToggleHandler);
       suggestionAutoAcceptEvaluateButton.addEventListener("click", suggestionAutoAcceptEvaluateHandler);
       readinessPromotionToggleButton.addEventListener("click", readinessPromotionToggleHandler);
@@ -912,6 +972,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createButton,
         updateButton,
         startDevelopmentButton,
+        autonomousSuggestionReason,
+        autonomousSuggestionMaxInput,
+        autonomousSuggestionCooldownInput,
+        autonomousSuggestionToggleButton,
+        autonomousSuggestionEvaluateButton,
         suggestionAutoAcceptReason,
         suggestionAutoAcceptPriorityGroup,
         suggestionAutoAcceptToggleButton,
@@ -937,6 +1002,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createButton,
         updateButton,
         startDevelopmentButton,
+        autonomousSuggestionToggleButton,
+        autonomousSuggestionEvaluateButton,
+        autonomousSuggestionReason,
+        autonomousSuggestionMaxInput,
+        autonomousSuggestionCooldownInput,
         suggestionAutoAcceptToggleButton,
         suggestionAutoAcceptEvaluateButton,
         suggestionAutoAcceptReason,
@@ -953,6 +1023,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         createHandler,
         updateHandler,
         startDevelopmentHandler,
+        autonomousSuggestionToggleHandler,
+        autonomousSuggestionEvaluateHandler,
+        autonomousSuggestionMaxChangeHandler,
+        autonomousSuggestionCooldownChangeHandler,
         suggestionAutoAcceptToggleHandler,
         suggestionAutoAcceptEvaluateHandler,
         suggestionAutoAcceptPriorityChangeHandler,
@@ -970,6 +1044,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private projectBacklogFormPendingToggleAutonomy = false;
     private projectBacklogFormPendingReevaluateAutonomy = false;
     private projectBacklogFormPendingPriorityChange = false;
+    private projectBacklogFormPendingToggleAutonomousSuggestions = false;
+    private projectBacklogFormPendingEvaluateAutonomousSuggestions = false;
+    private projectBacklogFormPendingAutonomousSuggestionMaxChange = false;
+    private projectBacklogFormPendingAutonomousSuggestionCooldownChange = false;
     private projectBacklogFormPendingToggleSuggestionAutoAccept = false;
     private projectBacklogFormPendingEvaluateSuggestionAutoAccept = false;
     private projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = false;
@@ -983,6 +1061,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const toggleAutonomousExecutionPressed = this.projectBacklogFormPendingToggleAutonomy;
       const reevaluateAutonomousExecutionPressed = this.projectBacklogFormPendingReevaluateAutonomy;
       const priorityChanged = this.projectBacklogFormPendingPriorityChange;
+      const toggleAutonomousSuggestionGenerationPressed = this.projectBacklogFormPendingToggleAutonomousSuggestions;
+      const evaluateAutonomousSuggestionGenerationPressed = this.projectBacklogFormPendingEvaluateAutonomousSuggestions;
+      const autonomousSuggestionMaxChanged = this.projectBacklogFormPendingAutonomousSuggestionMaxChange;
+      const autonomousSuggestionCooldownChanged = this.projectBacklogFormPendingAutonomousSuggestionCooldownChange;
       const toggleSuggestionAutoAcceptPressed = this.projectBacklogFormPendingToggleSuggestionAutoAccept;
       const evaluateSuggestionAutoAcceptPressed = this.projectBacklogFormPendingEvaluateSuggestionAutoAccept;
       const suggestionPriorityChanged = this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange;
@@ -993,6 +1075,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.projectBacklogFormPendingToggleAutonomy = false;
       this.projectBacklogFormPendingReevaluateAutonomy = false;
       this.projectBacklogFormPendingPriorityChange = false;
+      this.projectBacklogFormPendingToggleAutonomousSuggestions = false;
+      this.projectBacklogFormPendingEvaluateAutonomousSuggestions = false;
+      this.projectBacklogFormPendingAutonomousSuggestionMaxChange = false;
+      this.projectBacklogFormPendingAutonomousSuggestionCooldownChange = false;
       this.projectBacklogFormPendingToggleSuggestionAutoAccept = false;
       this.projectBacklogFormPendingEvaluateSuggestionAutoAccept = false;
       this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = false;
@@ -1004,6 +1090,14 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       if (form) form.isEditingSuggestionAutoAcceptPriorities = false;
       if (form) form.isEditingReadinessPromotionPriorities = false;
       return {
+        toggleAutonomousSuggestionGenerationPressed,
+        evaluateAutonomousSuggestionGenerationPressed,
+        autonomousSuggestionMaxSuggestions: form && (toggleAutonomousSuggestionGenerationPressed || autonomousSuggestionMaxChanged)
+          ? Number(form.autonomousSuggestionMaxInput.value)
+          : undefined,
+        autonomousSuggestionCooldownMs: form && (toggleAutonomousSuggestionGenerationPressed || autonomousSuggestionCooldownChanged)
+          ? Number(form.autonomousSuggestionCooldownInput.value) * 60000
+          : undefined,
         toggleSuggestionAutoAcceptPressed,
         evaluateSuggestionAutoAcceptPressed,
         suggestionAutoAcceptAllowedPriorities: form && (toggleSuggestionAutoAcceptPressed || suggestionPriorityChanged)
@@ -1041,6 +1135,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.createButton,
         form.updateButton,
         form.startDevelopmentButton,
+        form.autonomousSuggestionToggleButton,
+        form.autonomousSuggestionEvaluateButton,
+        form.autonomousSuggestionMaxInput,
+        form.autonomousSuggestionCooldownInput,
         form.suggestionAutoAcceptToggleButton,
         form.suggestionAutoAcceptEvaluateButton,
         form.readinessPromotionToggleButton,
@@ -1055,6 +1153,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.createButton.removeEventListener("click", form.createHandler);
       form.updateButton.removeEventListener("click", form.updateHandler);
       form.startDevelopmentButton.removeEventListener("click", form.startDevelopmentHandler);
+      form.autonomousSuggestionToggleButton.removeEventListener("click", form.autonomousSuggestionToggleHandler);
+      form.autonomousSuggestionEvaluateButton.removeEventListener("click", form.autonomousSuggestionEvaluateHandler);
+      form.autonomousSuggestionMaxInput.removeEventListener("change", form.autonomousSuggestionMaxChangeHandler);
+      form.autonomousSuggestionCooldownInput.removeEventListener("change", form.autonomousSuggestionCooldownChangeHandler);
       form.suggestionAutoAcceptToggleButton.removeEventListener("click", form.suggestionAutoAcceptToggleHandler);
       form.suggestionAutoAcceptEvaluateButton.removeEventListener("click", form.suggestionAutoAcceptEvaluateHandler);
       form.readinessPromotionToggleButton.removeEventListener("click", form.readinessPromotionToggleHandler);
@@ -1078,6 +1180,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.projectBacklogFormPendingToggleAutonomy = false;
       this.projectBacklogFormPendingReevaluateAutonomy = false;
       this.projectBacklogFormPendingPriorityChange = false;
+      this.projectBacklogFormPendingToggleAutonomousSuggestions = false;
+      this.projectBacklogFormPendingEvaluateAutonomousSuggestions = false;
+      this.projectBacklogFormPendingAutonomousSuggestionMaxChange = false;
+      this.projectBacklogFormPendingAutonomousSuggestionCooldownChange = false;
       this.projectBacklogFormPendingToggleSuggestionAutoAccept = false;
       this.projectBacklogFormPendingEvaluateSuggestionAutoAccept = false;
       this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = false;
@@ -1099,6 +1205,11 @@ type ProjectBacklogFormElements = {
   createButton: HTMLButtonElement;
   updateButton: HTMLButtonElement;
   startDevelopmentButton: HTMLButtonElement;
+  autonomousSuggestionToggleButton: HTMLButtonElement;
+  autonomousSuggestionEvaluateButton: HTMLButtonElement;
+  autonomousSuggestionReason: HTMLDivElement;
+  autonomousSuggestionMaxInput: HTMLInputElement;
+  autonomousSuggestionCooldownInput: HTMLInputElement;
   suggestionAutoAcceptToggleButton: HTMLButtonElement;
   suggestionAutoAcceptEvaluateButton: HTMLButtonElement;
   suggestionAutoAcceptReason: HTMLDivElement;
@@ -1115,6 +1226,10 @@ type ProjectBacklogFormElements = {
   createHandler: () => void;
   updateHandler: () => void;
   startDevelopmentHandler: () => void;
+  autonomousSuggestionToggleHandler: () => void;
+  autonomousSuggestionEvaluateHandler: () => void;
+  autonomousSuggestionMaxChangeHandler: () => void;
+  autonomousSuggestionCooldownChangeHandler: () => void;
   suggestionAutoAcceptToggleHandler: () => void;
   suggestionAutoAcceptEvaluateHandler: () => void;
   suggestionAutoAcceptPriorityChangeHandler: () => void;

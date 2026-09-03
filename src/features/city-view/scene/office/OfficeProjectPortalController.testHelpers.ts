@@ -130,6 +130,7 @@ export type ControllerInternals = {
     externalProjectAdosRunStatuses: ProjectPortalState["externalProjectAdosRunStatuses"];
     projectBacklogCollections: ProjectPortalState["projectBacklogCollections"];
     projectBacklogSuggestionCollections: ProjectPortalState["projectBacklogSuggestionCollections"];
+    projectAutonomousSuggestionPolicies: ProjectPortalState["projectAutonomousSuggestionPolicies"];
     projectBacklogSuggestionAcceptancePolicies: ProjectPortalState["projectBacklogSuggestionAcceptancePolicies"];
     projectBacklogReadinessPromotionPolicies: ProjectPortalState["projectBacklogReadinessPromotionPolicies"];
     projectAutonomyPolicies: ProjectPortalState["projectAutonomyPolicies"];
@@ -192,6 +193,8 @@ export type ControllerInternals = {
   preparePostValidationReviewTargetForPromotion: (projectId: string, candidateTaskId: string) => boolean;
   startPostValidationReviewForPromotion: (projectId: string, candidateTaskId: string) => Promise<boolean>;
   generateProjectBacklogSuggestions: () => Promise<boolean>;
+  updateSelectedProjectAutonomousSuggestionPolicy: (input: { enabled?: boolean; maxSuggestionsPerEvaluation?: number; cooldownMs?: number }) => boolean;
+  evaluateSelectedProjectAutonomousSuggestionGeneration: (eventId?: string) => Promise<boolean>;
   acceptSelectedBacklogSuggestion: (input?: { title?: string; description?: string; priority?: "low" | "normal" | "high" | "urgent" }) => boolean;
   rejectSelectedBacklogSuggestion: () => boolean;
   updateSelectedProjectSuggestionAcceptancePolicy: (input: { enabled?: boolean; allowedPriorities?: Array<"low" | "normal" | "high" | "urgent"> }) => boolean;
@@ -260,6 +263,8 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     startPostValidationReviewPressed: false,
     startBacklogDevelopmentPressed: false,
     generateBacklogSuggestionsPressed: false,
+    toggleAutonomousSuggestionGenerationPressed: false,
+    evaluateAutonomousSuggestionGenerationPressed: false,
     acceptBacklogSuggestionPressed: false,
     rejectBacklogSuggestionPressed: false,
     toggleSuggestionAutoAcceptPressed: false,
