@@ -80,6 +80,7 @@
 
 - [X] T017 Run targeted Vitest coverage for Spec 146 service, office project backlog, browser session, and portfolio tests
 - [X] T018 Run `git diff --check`
+- [X] T019 Add two-project runtime verification evidence in `specs/146-controlled-backlog-readiness-promotion-policy/runtime-verification.md` and `specs/146-controlled-backlog-readiness-promotion-policy/runtime-evidence.json`
 
 ---
 
