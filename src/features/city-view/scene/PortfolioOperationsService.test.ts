@@ -412,6 +412,57 @@ describe("derivePortfolioOperations", () => {
     expect(JSON.stringify(state.projectAutonomyPolicies)).toBe(before);
   });
 
+  it("adds read-only project-scoped Auto Ready summaries without mutating policies or backlog", () => {
+    const state = createState({
+      projectBacklogCollections: {
+        "project-a": {
+          projectId: "project-a",
+          tasks: [
+            backlogTask("project-a", "a-backlog", "A backlog", "backlog"),
+            backlogTask("project-a", "a-ready", "A ready", "ready"),
+          ],
+        },
+        "project-b": {
+          projectId: "project-b",
+          tasks: [backlogTask("project-b", "b-backlog", "B backlog", "backlog")],
+        },
+      },
+      projectBacklogReadinessPromotionPolicies: {
+        "project-a": {
+          projectId: "project-a",
+          enabled: true,
+          allowedPriorities: ["high"],
+          allowedOrigins: ["operator-created"],
+          maxPromotionsPerEvaluation: 1,
+          requireNoActiveExecution: true,
+          requireValidTask: true,
+          requireNonDuplicate: true,
+          updatedAt: "2026-09-02T00:00:00.000Z",
+          updatedByOperator: true,
+        },
+      },
+    });
+    const beforePolicies = JSON.stringify(state.projectBacklogReadinessPromotionPolicies);
+    const beforeBacklog = JSON.stringify(state.projectBacklogCollections);
+
+    const result = derivePortfolioOperations({ buildings: createBuildings().slice(0, 2), state });
+
+    expect(result["company-a"].backlogReadinessPromotionSummary).toEqual({
+      state: "On",
+      backlogCount: 1,
+      readyCount: 1,
+      text: "Auto Ready: On - 1 Backlog / 1 Ready",
+    });
+    expect(result["company-b"].backlogReadinessPromotionSummary).toEqual({
+      state: "Off",
+      backlogCount: 1,
+      readyCount: 0,
+      text: "Auto Ready: Off - 1 Backlog / 0 Ready",
+    });
+    expect(JSON.stringify(state.projectBacklogReadinessPromotionPolicies)).toBe(beforePolicies);
+    expect(JSON.stringify(state.projectBacklogCollections)).toBe(beforeBacklog);
+  });
+
   it("filters and attention ordering without mutating source state", () => {
     const state = createState({
       externalProjectAdosRunStatuses: {

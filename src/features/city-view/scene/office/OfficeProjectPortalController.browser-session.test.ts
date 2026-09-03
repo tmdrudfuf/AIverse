@@ -51,6 +51,61 @@ describe("OfficeProjectPortalController browser office session save restore", ()
       assignedTaskId: "task-12",
     });
     expect(internals.state.workSessions["task-12"]?.[0]?.id).toBe(createSessionId());
+    expect(internals.state.projectBacklogReadinessPromotionPolicies["daily-proof"]).toMatchObject({
+      projectId: "daily-proof",
+      enabled: true,
+      allowedPriorities: ["high"],
+      maxPromotionsPerEvaluation: 1,
+    });
+  });
+
+  it("restores valid Auto Ready policies and drops malformed consent state", () => {
+    const storage = createMemoryStorage();
+    storage.setItem(BROWSER_OFFICE_SESSION_STORAGE_KEY, JSON.stringify({
+      ...createRestorableState(),
+      version: "browser-office-session-v1",
+      savedAt: "2026-09-02T00:00:00.000Z",
+      projectBacklogReadinessPromotionPolicies: {
+        "daily-proof": {
+          projectId: "daily-proof",
+          enabled: true,
+          allowedPriorities: ["high"],
+          allowedOrigins: ["operator-created"],
+          maxPromotionsPerEvaluation: 1,
+          requireNoActiveExecution: true,
+          requireValidTask: true,
+          requireNonDuplicate: true,
+          updatedAt: "2026-09-02T00:00:00.000Z",
+          updatedByOperator: true,
+          lastEvaluation: {
+            evaluatedAt: "2026-09-02T00:00:00.000Z",
+            promotedCount: 1,
+            skippedCount: 0,
+            latestResultText: "Promoted: high priority allowed",
+            promotedTaskIds: ["task-12"],
+            skipped: [],
+          },
+        },
+        "project-b": {
+          projectId: "project-b",
+          enabled: true,
+        },
+      },
+    }));
+
+    const controller = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({ storage }),
+    });
+    const internals = getControllerInternals(controller);
+
+    expect(internals.state.projectBacklogReadinessPromotionPolicies["daily-proof"]).toMatchObject({
+      enabled: true,
+      allowedOrigins: ["operator-created"],
+      lastEvaluation: {
+        latestResultText: "Promoted: high priority allowed",
+      },
+    });
+    expect(internals.state.projectBacklogReadinessPromotionPolicies["project-b"]).toBeUndefined();
   });
 
   it("does not save during empty input polling frames", () => {
@@ -239,6 +294,18 @@ function applyRestorableSession(state: ProjectPortalState) {
   state.selectedProjectDashboardProjectId = "daily-proof";
   state.selectedProjectDashboardActiveWorkIndex = 0;
   state.selectedWorkSessionId = activeSession.id;
+  state.projectBacklogReadinessPromotionPolicies["daily-proof"] = {
+    projectId: "daily-proof",
+    enabled: true,
+    allowedPriorities: ["high"],
+    allowedOrigins: ["operator-created", "ai-suggestion-manual", "ai-suggestion-automatic"],
+    maxPromotionsPerEvaluation: 1,
+    requireNoActiveExecution: true,
+    requireValidTask: true,
+    requireNonDuplicate: true,
+    updatedAt: "2026-09-02T00:00:00.000Z",
+    updatedByOperator: true,
+  };
   state.taskCollections["daily-proof"] = {
     projectId: "daily-proof",
     tasks: [task],

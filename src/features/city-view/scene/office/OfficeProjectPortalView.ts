@@ -87,6 +87,7 @@ import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPor
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
 import { ProjectBacklogSuggestionAcceptancePolicyService } from "./project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
+import { ProjectBacklogReadinessPromotionPolicyService } from "./project-backlog/ProjectBacklogReadinessPromotionPolicyService";
 import { ProjectAutonomousExecutionPolicyService } from "./project-backlog/ProjectAutonomousExecutionPolicyService";
 import { canCreateExternalProjectDevelopmentRequestDraft } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
@@ -821,6 +822,9 @@ export class OfficeProjectPortalView {
     const autonomyPolicy = projectId
       ? new ProjectAutonomousExecutionPolicyService().getPolicy(state.projectAutonomyPolicies, projectId)
       : undefined;
+    const readinessPromotionPolicy = projectId
+      ? new ProjectBacklogReadinessPromotionPolicyService().getPolicy(state.projectBacklogReadinessPromotionPolicies, projectId)
+      : undefined;
     const suggestionAcceptancePolicy = projectId
       ? new ProjectBacklogSuggestionAcceptancePolicyService().getPolicy(
         state.projectBacklogSuggestionAcceptancePolicies,
@@ -947,6 +951,21 @@ export class OfficeProjectPortalView {
       this.panelX + 44,
       this.panelY + 426,
       compactTextLine(`Priorities: ${suggestionAcceptancePolicy?.allowedPriorities.join(", ") || "none"}  ${suggestionAcceptancePolicy?.lastEvaluation?.latestResultText ?? "Manual review"}`, 36),
+      mutedStyle(),
+    );
+
+    this.addTerminalPanel(this.panelX + 356, this.panelY + 474, 284, 68);
+    this.addText(this.panelX + 368, this.panelY + 488, "Backlog Auto Ready", headingStyle());
+    this.addText(
+      this.panelX + 376,
+      this.panelY + 512,
+      compactTextLine(`Auto Ready: ${readinessPromotionPolicy?.enabled ? "On" : "Off"}  Max: ${readinessPromotionPolicy?.maxPromotionsPerEvaluation ?? 1}`, 32),
+      readinessPromotionPolicy?.enabled ? projectStatusStyle() : mutedStyle(),
+    );
+    this.addText(
+      this.panelX + 376,
+      this.panelY + 532,
+      compactTextLine(`Priorities: ${readinessPromotionPolicy?.allowedPriorities.join(", ") || "none"}  ${readinessPromotionPolicy?.lastEvaluation?.latestResultText ?? "Manual promotion"}`, 32),
       mutedStyle(),
     );
 

@@ -90,6 +90,7 @@ import type { ReceptionDeskUpgradeBenefits } from "./ReceptionDeskUpgradeBenefit
 import type { ProjectBacklogCollections } from "./project-backlog/ProjectBacklogTypes";
 import type { ProjectBacklogSuggestionCollections } from "./project-backlog/ProjectBacklogSuggestionTypes";
 import type { ProjectBacklogSuggestionAcceptancePolicies } from "./project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
+import type { ProjectBacklogReadinessPromotionPolicies } from "./project-backlog/ProjectBacklogReadinessPromotionPolicyTypes";
 import type { ProjectAutonomyPolicies } from "./project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import type { TaskCollection } from "./tasks/ProjectTaskTypes";
 import type { WorkSession } from "./work-sessions/WorkSessionTypes";
@@ -258,6 +259,7 @@ export type ProjectPortalState = {
   projectBacklogCollections: ProjectBacklogCollections;
   projectBacklogSuggestionCollections: ProjectBacklogSuggestionCollections;
   projectBacklogSuggestionAcceptancePolicies: ProjectBacklogSuggestionAcceptancePolicies;
+  projectBacklogReadinessPromotionPolicies: ProjectBacklogReadinessPromotionPolicies;
   projectAutonomyPolicies: ProjectAutonomyPolicies;
   taskCollections: Record<string, TaskCollection>;
   taskAnalyses: Record<string, TaskAnalysis>;
