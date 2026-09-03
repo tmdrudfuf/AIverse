@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { BrowserOfficeSessionService } from "./browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "./browser-session/BrowserOfficeSessionTypes";
@@ -121,6 +121,119 @@ describe("OfficeProjectPortalController project backlog", () => {
     expect(internals.state.projectBacklogCollections["missing-project"]?.tasks ?? []).toEqual([]);
     expect(internals.state.projectBacklogCollections["project-unavailable"]?.tasks ?? []).toEqual([]);
   });
+
+  it("auto-promotes eligible backlog tasks per project without starting ADOS or affecting other projects", () => {
+    const controller = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({ storage: createMemoryStorage() }),
+    });
+    const internals = getControllerInternals(controller);
+    seedProjects(internals);
+    internals.externalProjectAdosExecutionService = { start: vi.fn() };
+    controller.open();
+    controller.updateInput(createInput({}));
+
+    openBacklog(controller, internals, "project-a");
+    expect(internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+      enabled: true,
+      allowedPriorities: ["high"],
+      maxPromotionsPerEvaluation: 1,
+    })).toBe(true);
+    expect(controller.createBacklogTaskFromInput({
+      title: "A1 high",
+      description: "Promotable project A task.",
+      priority: "high",
+    })).toBe(true);
+    expect(controller.createBacklogTaskFromInput({
+      title: "A2 low",
+      description: "Filtered project A task.",
+      priority: "low",
+    })).toBe(true);
+
+    openBacklog(controller, internals, "project-b");
+    expect(controller.createBacklogTaskFromInput({
+      title: "B1 urgent",
+      description: "Project B stays manual.",
+      priority: "urgent",
+    })).toBe(true);
+
+    const projectATasks = internals.state.projectBacklogCollections["project-a"].tasks;
+    expect(projectATasks.find((task) => task.title === "A1 high")).toMatchObject({
+      projectId: "project-a",
+      status: "ready",
+    });
+    expect(projectATasks.find((task) => task.title === "A2 low")).toMatchObject({
+      projectId: "project-a",
+      status: "backlog",
+    });
+    expect(internals.state.projectBacklogCollections["project-b"].tasks[0]).toMatchObject({
+      projectId: "project-b",
+      status: "backlog",
+    });
+    expect(internals.state.projectBacklogReadinessPromotionPolicies["project-a"]).toMatchObject({
+      enabled: true,
+      allowedPriorities: ["high"],
+    });
+    expect(internals.state.projectBacklogReadinessPromotionPolicies["project-b"]?.enabled ?? false).toBe(false);
+    expect(internals.externalProjectAdosExecutionService.start).not.toHaveBeenCalled();
+
+    openBacklog(controller, internals, "project-a");
+    expect(internals.evaluateSelectedProjectBacklogReadinessPromotion()).toBe(false);
+    expect(internals.state.projectBacklogCollections["project-a"].tasks.filter((task) => task.title === "A1 high")).toHaveLength(1);
+    expect(internals.state.projectBacklogCollections["project-a"].tasks.find((task) => task.title === "A1 high")?.status).toBe("ready");
+    expect(internals.externalProjectAdosExecutionService.start).not.toHaveBeenCalled();
+  });
+
+  it("active execution safety blocks auto Ready while manual Ready remains functional", () => {
+    const controller = new OfficeProjectPortalController(createSceneStub(), {
+      browserOfficeSessionService: new BrowserOfficeSessionService({ storage: createMemoryStorage() }),
+    });
+    const internals = getControllerInternals(controller);
+    seedProjects(internals);
+    controller.open();
+    controller.updateInput(createInput({}));
+    openBacklog(controller, internals, "project-a");
+    expect(internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+      enabled: true,
+      allowedPriorities: ["high"],
+      maxPromotionsPerEvaluation: 1,
+    })).toBe(true);
+    internals.state.externalProjectAdosRunStatuses["active-project-a"] = {
+      id: "active-project-a",
+      projectId: "project-a",
+      stage: "Started",
+      status: "Started",
+      source: "execution",
+      reasonCodes: [],
+      updatedAt: "2026-09-02T00:00:00.000Z",
+      validationStarted: false,
+      reviewStarted: false,
+      repositoryMutationStarted: false,
+      githubMutationStarted: false,
+      publishStarted: false,
+      mergeStarted: false,
+      deployStarted: false,
+      rulesVersion: "external-project-ados-run-status-v1",
+    };
+    expect(controller.createBacklogTaskFromInput({
+      title: "Blocked by active run",
+      description: "Should stay backlog until active work clears.",
+      priority: "high",
+    })).toBe(true);
+
+    expect(internals.evaluateSelectedProjectBacklogReadinessPromotion()).toBe(false);
+    const task = internals.state.projectBacklogCollections["project-a"].tasks.find((item) => item.title === "Blocked by active run")!;
+    expect(task.status).toBe("backlog");
+    expect(internals.state.projectBacklogReadinessPromotionPolicies["project-a"].lastEvaluation?.latestResultText)
+      .toBe("Skipped: active execution exists");
+
+    expect(controller.updateSelectedBacklogTaskFromInput({
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      status: "ready",
+    })).toBe(true);
+    expect(internals.state.projectBacklogCollections["project-a"].tasks.find((item) => item.id === task.id)?.status).toBe("ready");
+  });
 });
 
 function openBacklog(
@@ -158,6 +271,7 @@ function seedProjects(internals: ReturnType<typeof getControllerInternals>) {
     nextAction: { label: "Review workspace", enabled: true, placeholder: true },
     ownerCompany: entry.owner.companyName,
     localRepositoryLabel: entry.localRepository.label,
+    localRepositoryBinding: entry.localRepositoryBinding,
     repositoryIdentity: entry.repositoryIdentity,
   }));
   internals.state.projectCompanyBindings = internals.state.projectRegistryEntries.map((entry) => ({

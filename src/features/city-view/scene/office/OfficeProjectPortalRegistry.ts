@@ -293,6 +293,7 @@ export function createProjectPortalState(options: CreateProjectPortalStateOption
     projectBacklogCollections: {},
     projectBacklogSuggestionCollections: {},
     projectBacklogSuggestionAcceptancePolicies: {},
+    projectBacklogReadinessPromotionPolicies: {},
     projectAutonomyPolicies: {},
     taskCollections: {},
     taskAnalyses: {},

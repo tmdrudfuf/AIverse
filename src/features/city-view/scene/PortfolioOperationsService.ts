@@ -7,6 +7,8 @@ import type { ProjectBacklogSummary } from "./office/project-backlog/ProjectBack
 import type { ProjectBacklogSuggestionCollections } from "./office/project-backlog/ProjectBacklogSuggestionTypes";
 import { ProjectBacklogSuggestionAcceptancePolicyService } from "./office/project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
 import type { ProjectBacklogSuggestionAcceptancePolicies } from "./office/project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
+import { ProjectBacklogReadinessPromotionPolicyService } from "./office/project-backlog/ProjectBacklogReadinessPromotionPolicyService";
+import type { ProjectBacklogReadinessPromotionPolicies } from "./office/project-backlog/ProjectBacklogReadinessPromotionPolicyTypes";
 import { ProjectAutonomousExecutionPolicyService } from "./office/project-backlog/ProjectAutonomousExecutionPolicyService";
 import type { ProjectAutonomyPolicies } from "./office/project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import { ProjectCompanyBindingService } from "./office/project-company-binding/ProjectCompanyBindingService";
@@ -49,6 +51,12 @@ export type PortfolioOperationsSummary = {
     pendingCount: number;
     text: string;
   };
+  backlogReadinessPromotionSummary?: {
+    state: "On" | "Off";
+    backlogCount: number;
+    readyCount: number;
+    text: string;
+  };
   autonomySummary?: {
     state: "On" | "Waiting" | "Off";
     reason?: string;
@@ -69,7 +77,7 @@ type LiveAgentWorkStateInput = Parameters<typeof deriveLiveAgentWorkState>[0];
 
 type ProjectScopedPortfolioState =
   Pick<ProjectPortalState, "projectRegistryEntries"> &
-  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections" | "projectBacklogSuggestionAcceptancePolicies" | "projectAutonomyPolicies">> &
+  Partial<Pick<ProjectPortalState, "projectBacklogCollections" | "projectBacklogSuggestionCollections" | "projectBacklogSuggestionAcceptancePolicies" | "projectBacklogReadinessPromotionPolicies" | "projectAutonomyPolicies">> &
   Partial<LiveAgentWorkStateInput>;
 
 export function createPortfolioOperationsFromBrowserSession(
@@ -191,6 +199,11 @@ function createAvailableSummary(input: {
       input.state.projectBacklogSuggestionCollections,
       input.projectId,
     ),
+    backlogReadinessPromotionSummary: createBacklogReadinessPromotionSummary(
+      input.state.projectBacklogReadinessPromotionPolicies,
+      backlogSummary,
+      input.projectId,
+    ),
     autonomySummary: createAutonomySummary(
       input.state.projectAutonomyPolicies,
       input.projectId,
@@ -229,6 +242,29 @@ function createAutonomySummary(
   }
 
   return { state: "On" as const, text: "Auto: On" };
+}
+
+function createBacklogReadinessPromotionSummary(
+  policies: ProjectBacklogReadinessPromotionPolicies | undefined,
+  backlogSummary: ProjectBacklogSummary,
+  projectId: string,
+) {
+  const policy = new ProjectBacklogReadinessPromotionPolicyService().getPolicy(policies, projectId);
+  const backlogCount = Math.max(
+    backlogSummary.totalTaskCount -
+      backlogSummary.readyTaskCount -
+      backlogSummary.inDevelopmentTaskCount -
+      backlogSummary.blockedTaskCount -
+      backlogSummary.completedTaskCount,
+    0,
+  );
+  const state = policy.enabled ? "On" as const : "Off" as const;
+  return {
+    state,
+    backlogCount,
+    readyCount: backlogSummary.readyTaskCount,
+    text: `Auto Ready: ${state} - ${backlogCount} Backlog / ${backlogSummary.readyTaskCount} Ready`,
+  };
 }
 
 function createBacklogSuggestionSummary(

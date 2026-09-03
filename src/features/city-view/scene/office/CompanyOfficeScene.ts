@@ -210,6 +210,13 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           toggleAutonomousExecutionPressed: backlogFormInput.toggleAutonomousExecutionPressed,
           reevaluateAutonomousExecutionPressed: backlogFormInput.reevaluateAutonomousExecutionPressed,
           autonomousAllowedPriorities: backlogFormInput.autonomousAllowedPriorities,
+          toggleBacklogReadinessPromotionPressed: backlogFormInput.toggleBacklogReadinessPromotionPressed,
+          evaluateBacklogReadinessPromotionPressed: backlogFormInput.evaluateBacklogReadinessPromotionPressed,
+          backlogReadinessPromotionAllowedPriorities: backlogFormInput.backlogReadinessPromotionAllowedPriorities,
+          backlogReadinessPromotionMaxPromotions: backlogFormInput.backlogReadinessPromotionMaxPromotions,
+          toggleSuggestionAutoAcceptPressed: backlogFormInput.toggleSuggestionAutoAcceptPressed,
+          evaluateSuggestionAutoAcceptPressed: backlogFormInput.evaluateSuggestionAutoAcceptPressed,
+          suggestionAutoAcceptAllowedPriorities: backlogFormInput.suggestionAutoAcceptAllowedPriorities,
           developmentRequestText,
         });
         this.refreshEmployeeNpcRenderer();
@@ -363,6 +370,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       host.setAttribute("data-aiverse-office-suggestion-auto-accept-enabled", String(backlogProbe?.suggestionAutoAcceptEnabled ?? false));
       host.setAttribute("data-aiverse-office-suggestion-auto-accept-priorities", JSON.stringify(backlogProbe?.suggestionAutoAcceptAllowedPriorities ?? []));
       host.setAttribute("data-aiverse-office-suggestion-auto-accept-result", backlogProbe?.suggestionAutoAcceptLatestResult ?? "");
+      host.setAttribute("data-aiverse-office-auto-ready-enabled", String(backlogProbe?.backlogReadinessPromotionEnabled ?? false));
+      host.setAttribute("data-aiverse-office-auto-ready-priorities", JSON.stringify(backlogProbe?.backlogReadinessPromotionAllowedPriorities ?? []));
+      host.setAttribute("data-aiverse-office-auto-ready-max", String(backlogProbe?.backlogReadinessPromotionMaxPromotions ?? 1));
+      host.setAttribute("data-aiverse-office-auto-ready-result", backlogProbe?.backlogReadinessPromotionLatestResult ?? "");
       host.setAttribute(
         "data-aiverse-office-founder-position",
         this.founderEntity ? `${Math.round(this.founderEntity.position.x)},${Math.round(this.founderEntity.position.y)}` : "",
@@ -560,9 +571,19 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.suggestionAutoAcceptToggleButton.title = "Enable or disable project-scoped automatic AI suggestion acceptance.";
       form.suggestionAutoAcceptEvaluateButton.textContent = "Evaluate AI Suggestions";
       form.suggestionAutoAcceptReason.textContent = `AI Accept: ${probe?.suggestionAutoAcceptEnabled ? "On" : "Off"} | ${formatAutonomyPriorities(probe?.suggestionAutoAcceptAllowedPriorities ?? [])} | ${probe?.suggestionAutoAcceptLatestResult || "Manual review"}`;
+      form.readinessPromotionToggleButton.textContent = probe?.backlogReadinessPromotionEnabled ? "Disable Auto Ready" : "Enable Auto Ready";
+      form.readinessPromotionToggleButton.title = "Enable or disable project-scoped automatic backlog to Ready promotion.";
+      form.readinessPromotionEvaluateButton.textContent = "Evaluate Readiness";
+      form.readinessPromotionMaxInput.value = String(probe?.backlogReadinessPromotionMaxPromotions ?? 1);
+      form.readinessPromotionReason.textContent = `Auto Ready: ${probe?.backlogReadinessPromotionEnabled ? "On" : "Off"} | ${formatAutonomyPriorities(probe?.backlogReadinessPromotionAllowedPriorities ?? [])} | Max ${probe?.backlogReadinessPromotionMaxPromotions ?? 1} | ${probe?.backlogReadinessPromotionLatestResult || "Manual promotion"}`;
       if (!form.isEditingSuggestionAutoAcceptPriorities) {
         for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
           form.suggestionAutoAcceptPriorityInputs[priority].checked = probe?.suggestionAutoAcceptAllowedPriorities.includes(priority) ?? false;
+        }
+      }
+      if (!form.isEditingReadinessPromotionPriorities) {
+        for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
+          form.readinessPromotionPriorityInputs[priority].checked = probe?.backlogReadinessPromotionAllowedPriorities.includes(priority) ?? false;
         }
       }
       if (!form.isEditingAutonomyPriorities) {
@@ -572,11 +593,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       }
       const width = Math.min(560, Math.max(300, canvasBounds.width - 144));
       const left = canvasBounds.left + (canvasBounds.width - width) / 2;
-      const top = canvasBounds.top + Math.max(64, canvasBounds.height - 356);
+      const top = canvasBounds.top + 64;
       Object.assign(form.root.style, {
         left: `${left}px`,
         top: `${top}px`,
         width: `${width}px`,
+        maxHeight: `${Math.max(240, canvasBounds.height - 96)}px`,
         display: "grid",
       });
     }
@@ -601,6 +623,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const suggestionAutoAcceptEvaluateButton = document.createElement("button");
       const suggestionAutoAcceptReason = document.createElement("div");
       const suggestionAutoAcceptPriorityGroup = document.createElement("div");
+      const readinessPromotionToggleButton = document.createElement("button");
+      const readinessPromotionEvaluateButton = document.createElement("button");
+      const readinessPromotionReason = document.createElement("div");
+      const readinessPromotionPriorityGroup = document.createElement("div");
+      const readinessPromotionMaxInput = document.createElement("input");
       const autonomyPriorityInputs = Object.fromEntries(BACKLOG_AUTONOMY_PRIORITIES.map((priority) => {
         const input = document.createElement("input");
         input.type = "checkbox";
@@ -613,6 +640,13 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         input.type = "checkbox";
         input.value = priority;
         input.setAttribute("aria-label", `Allow ${priority} AI suggestion auto-accept`);
+        return [priority, input];
+      })) as Record<ProjectBacklogPriority, HTMLInputElement>;
+      const readinessPromotionPriorityInputs = Object.fromEntries(BACKLOG_AUTONOMY_PRIORITIES.map((priority) => {
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = priority;
+        input.setAttribute("aria-label", `Allow ${priority} Auto Ready`);
         return [priority, input];
       })) as Record<ProjectBacklogPriority, HTMLInputElement>;
 
@@ -636,6 +670,13 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       autonomyReevaluateButton.textContent = "Reevaluate Automation";
       autonomyPriorityGroup.setAttribute("aria-label", "Autonomous execution allowed priorities");
       suggestionAutoAcceptPriorityGroup.setAttribute("aria-label", "AI suggestion auto-accept allowed priorities");
+      readinessPromotionPriorityGroup.setAttribute("aria-label", "Auto Ready allowed priorities");
+      readinessPromotionMaxInput.setAttribute("aria-label", "Auto Ready maximum promotions");
+      readinessPromotionMaxInput.type = "number";
+      readinessPromotionMaxInput.min = "1";
+      readinessPromotionMaxInput.max = "5";
+      readinessPromotionMaxInput.step = "1";
+      readinessPromotionMaxInput.value = "1";
 
       Object.assign(root.style, {
         position: "fixed",
@@ -648,6 +689,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         borderRadius: "6px",
         padding: "8px",
         boxSizing: "border-box",
+        overflowY: "auto",
       });
       for (const element of [
         titleInput,
@@ -660,6 +702,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         startDevelopmentButton,
         suggestionAutoAcceptToggleButton,
         suggestionAutoAcceptEvaluateButton,
+        readinessPromotionToggleButton,
+        readinessPromotionEvaluateButton,
+        readinessPromotionMaxInput,
         autonomyToggleButton,
         autonomyReevaluateButton,
       ]) {
@@ -716,6 +761,26 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         label.append(suggestionAutoAcceptPriorityInputs[priority], document.createTextNode(priority));
         suggestionAutoAcceptPriorityGroup.appendChild(label);
       }
+      for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
+        const label = document.createElement("label");
+        Object.assign(label.style, {
+          display: "flex",
+          alignItems: "center",
+          gap: "4px",
+          minWidth: "0",
+          color: "#f8fafc",
+          font: "12px Courier New, monospace",
+        });
+        Object.assign(readinessPromotionPriorityInputs[priority].style, {
+          width: "14px",
+          height: "14px",
+          margin: "0",
+        });
+        readinessPromotionPriorityInputs[priority].addEventListener("keydown", stopPortalShortcutPropagation);
+        readinessPromotionPriorityInputs[priority].addEventListener("keyup", stopPortalShortcutPropagation);
+        label.append(readinessPromotionPriorityInputs[priority], document.createTextNode(priority));
+        readinessPromotionPriorityGroup.appendChild(label);
+      }
       Object.assign(descriptionInput.style, {
         gridColumn: "1 / 4",
         height: "54px",
@@ -735,6 +800,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         color: "#cbd5e1",
         font: "12px Courier New, monospace",
       });
+      Object.assign(readinessPromotionReason.style, {
+        gridColumn: "1 / 4",
+        minWidth: "0",
+        color: "#cbd5e1",
+        font: "12px Courier New, monospace",
+      });
       Object.assign(autonomyPriorityGroup.style, {
         gridColumn: "1 / 4",
         display: "grid",
@@ -749,8 +820,18 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         gap: "6px",
         padding: "2px 0",
       });
+      Object.assign(readinessPromotionPriorityGroup.style, {
+        gridColumn: "1 / 4",
+        display: "grid",
+        gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        gap: "6px",
+        padding: "2px 0",
+      });
       Object.assign(suggestionAutoAcceptToggleButton.style, { gridColumn: "1 / 3" });
       Object.assign(suggestionAutoAcceptEvaluateButton.style, { gridColumn: "3 / 4" });
+      Object.assign(readinessPromotionMaxInput.style, { gridColumn: "1 / 2" });
+      Object.assign(readinessPromotionToggleButton.style, { gridColumn: "2 / 3" });
+      Object.assign(readinessPromotionEvaluateButton.style, { gridColumn: "3 / 4" });
       Object.assign(autonomyToggleButton.style, { gridColumn: "1 / 3" });
       Object.assign(autonomyReevaluateButton.style, { gridColumn: "3 / 4" });
 
@@ -793,16 +874,33 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = true;
         if (this.projectBacklogForm) this.projectBacklogForm.isEditingSuggestionAutoAcceptPriorities = true;
       };
+      const readinessPromotionToggleHandler = () => {
+        this.projectBacklogFormPendingToggleReadinessPromotion = true;
+      };
+      const readinessPromotionEvaluateHandler = () => {
+        this.projectBacklogFormPendingEvaluateReadinessPromotion = true;
+      };
+      const readinessPromotionPriorityChangeHandler = () => {
+        this.projectBacklogFormPendingReadinessPromotionPriorityChange = true;
+        if (this.projectBacklogForm) this.projectBacklogForm.isEditingReadinessPromotionPriorities = true;
+      };
+      const readinessPromotionMaxChangeHandler = () => {
+        this.projectBacklogFormPendingReadinessPromotionMaxChange = true;
+      };
       createButton.addEventListener("click", createHandler);
       updateButton.addEventListener("click", updateHandler);
       startDevelopmentButton.addEventListener("click", startDevelopmentHandler);
       suggestionAutoAcceptToggleButton.addEventListener("click", suggestionAutoAcceptToggleHandler);
       suggestionAutoAcceptEvaluateButton.addEventListener("click", suggestionAutoAcceptEvaluateHandler);
+      readinessPromotionToggleButton.addEventListener("click", readinessPromotionToggleHandler);
+      readinessPromotionEvaluateButton.addEventListener("click", readinessPromotionEvaluateHandler);
+      readinessPromotionMaxInput.addEventListener("change", readinessPromotionMaxChangeHandler);
       autonomyToggleButton.addEventListener("click", autonomyToggleHandler);
       autonomyReevaluateButton.addEventListener("click", autonomyReevaluateHandler);
       for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
         autonomyPriorityInputs[priority].addEventListener("change", autonomyPriorityChangeHandler);
         suggestionAutoAcceptPriorityInputs[priority].addEventListener("change", suggestionAutoAcceptPriorityChangeHandler);
+        readinessPromotionPriorityInputs[priority].addEventListener("change", readinessPromotionPriorityChangeHandler);
       }
 
       root.append(
@@ -818,6 +916,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         suggestionAutoAcceptPriorityGroup,
         suggestionAutoAcceptToggleButton,
         suggestionAutoAcceptEvaluateButton,
+        readinessPromotionReason,
+        readinessPromotionPriorityGroup,
+        readinessPromotionMaxInput,
+        readinessPromotionToggleButton,
+        readinessPromotionEvaluateButton,
         autonomyReason,
         autonomyPriorityGroup,
         autonomyToggleButton,
@@ -838,6 +941,11 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         suggestionAutoAcceptEvaluateButton,
         suggestionAutoAcceptReason,
         suggestionAutoAcceptPriorityInputs,
+        readinessPromotionToggleButton,
+        readinessPromotionEvaluateButton,
+        readinessPromotionReason,
+        readinessPromotionPriorityInputs,
+        readinessPromotionMaxInput,
         autonomyToggleButton,
         autonomyReevaluateButton,
         autonomyReason,
@@ -848,6 +956,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         suggestionAutoAcceptToggleHandler,
         suggestionAutoAcceptEvaluateHandler,
         suggestionAutoAcceptPriorityChangeHandler,
+        readinessPromotionToggleHandler,
+        readinessPromotionEvaluateHandler,
+        readinessPromotionPriorityChangeHandler,
+        readinessPromotionMaxChangeHandler,
         autonomyToggleHandler,
         autonomyReevaluateHandler,
         autonomyPriorityChangeHandler,
@@ -861,6 +973,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
     private projectBacklogFormPendingToggleSuggestionAutoAccept = false;
     private projectBacklogFormPendingEvaluateSuggestionAutoAccept = false;
     private projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = false;
+    private projectBacklogFormPendingToggleReadinessPromotion = false;
+    private projectBacklogFormPendingEvaluateReadinessPromotion = false;
+    private projectBacklogFormPendingReadinessPromotionPriorityChange = false;
+    private projectBacklogFormPendingReadinessPromotionMaxChange = false;
 
     private consumeProjectBacklogFormInput() {
       const form = this.projectBacklogForm;
@@ -870,19 +986,36 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const toggleSuggestionAutoAcceptPressed = this.projectBacklogFormPendingToggleSuggestionAutoAccept;
       const evaluateSuggestionAutoAcceptPressed = this.projectBacklogFormPendingEvaluateSuggestionAutoAccept;
       const suggestionPriorityChanged = this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange;
+      const toggleBacklogReadinessPromotionPressed = this.projectBacklogFormPendingToggleReadinessPromotion;
+      const evaluateBacklogReadinessPromotionPressed = this.projectBacklogFormPendingEvaluateReadinessPromotion;
+      const readinessPromotionPriorityChanged = this.projectBacklogFormPendingReadinessPromotionPriorityChange;
+      const readinessPromotionMaxChanged = this.projectBacklogFormPendingReadinessPromotionMaxChange;
       this.projectBacklogFormPendingToggleAutonomy = false;
       this.projectBacklogFormPendingReevaluateAutonomy = false;
       this.projectBacklogFormPendingPriorityChange = false;
       this.projectBacklogFormPendingToggleSuggestionAutoAccept = false;
       this.projectBacklogFormPendingEvaluateSuggestionAutoAccept = false;
       this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = false;
+      this.projectBacklogFormPendingToggleReadinessPromotion = false;
+      this.projectBacklogFormPendingEvaluateReadinessPromotion = false;
+      this.projectBacklogFormPendingReadinessPromotionPriorityChange = false;
+      this.projectBacklogFormPendingReadinessPromotionMaxChange = false;
       if (form) form.isEditingAutonomyPriorities = false;
       if (form) form.isEditingSuggestionAutoAcceptPriorities = false;
+      if (form) form.isEditingReadinessPromotionPriorities = false;
       return {
         toggleSuggestionAutoAcceptPressed,
         evaluateSuggestionAutoAcceptPressed,
         suggestionAutoAcceptAllowedPriorities: form && (toggleSuggestionAutoAcceptPressed || suggestionPriorityChanged)
           ? getSelectedAutonomyPriorities(form.suggestionAutoAcceptPriorityInputs)
+          : undefined,
+        toggleBacklogReadinessPromotionPressed,
+        evaluateBacklogReadinessPromotionPressed,
+        backlogReadinessPromotionAllowedPriorities: form && (toggleBacklogReadinessPromotionPressed || readinessPromotionPriorityChanged)
+          ? getSelectedAutonomyPriorities(form.readinessPromotionPriorityInputs)
+          : undefined,
+        backlogReadinessPromotionMaxPromotions: form && (toggleBacklogReadinessPromotionPressed || readinessPromotionMaxChanged)
+          ? Number(form.readinessPromotionMaxInput.value)
           : undefined,
         toggleAutonomousExecutionPressed,
         reevaluateAutonomousExecutionPressed,
@@ -910,6 +1043,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.startDevelopmentButton,
         form.suggestionAutoAcceptToggleButton,
         form.suggestionAutoAcceptEvaluateButton,
+        form.readinessPromotionToggleButton,
+        form.readinessPromotionEvaluateButton,
+        form.readinessPromotionMaxInput,
         form.autonomyToggleButton,
         form.autonomyReevaluateButton,
       ]) {
@@ -921,6 +1057,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.startDevelopmentButton.removeEventListener("click", form.startDevelopmentHandler);
       form.suggestionAutoAcceptToggleButton.removeEventListener("click", form.suggestionAutoAcceptToggleHandler);
       form.suggestionAutoAcceptEvaluateButton.removeEventListener("click", form.suggestionAutoAcceptEvaluateHandler);
+      form.readinessPromotionToggleButton.removeEventListener("click", form.readinessPromotionToggleHandler);
+      form.readinessPromotionEvaluateButton.removeEventListener("click", form.readinessPromotionEvaluateHandler);
+      form.readinessPromotionMaxInput.removeEventListener("change", form.readinessPromotionMaxChangeHandler);
       form.autonomyToggleButton.removeEventListener("click", form.autonomyToggleHandler);
       form.autonomyReevaluateButton.removeEventListener("click", form.autonomyReevaluateHandler);
       for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
@@ -930,6 +1069,9 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.suggestionAutoAcceptPriorityInputs[priority].removeEventListener("change", form.suggestionAutoAcceptPriorityChangeHandler);
         form.suggestionAutoAcceptPriorityInputs[priority].removeEventListener("keydown", stopPortalShortcutPropagation);
         form.suggestionAutoAcceptPriorityInputs[priority].removeEventListener("keyup", stopPortalShortcutPropagation);
+        form.readinessPromotionPriorityInputs[priority].removeEventListener("change", form.readinessPromotionPriorityChangeHandler);
+        form.readinessPromotionPriorityInputs[priority].removeEventListener("keydown", stopPortalShortcutPropagation);
+        form.readinessPromotionPriorityInputs[priority].removeEventListener("keyup", stopPortalShortcutPropagation);
       }
       form.root.remove();
       this.projectBacklogForm = undefined;
@@ -939,6 +1081,10 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       this.projectBacklogFormPendingToggleSuggestionAutoAccept = false;
       this.projectBacklogFormPendingEvaluateSuggestionAutoAccept = false;
       this.projectBacklogFormPendingSuggestionAutoAcceptPriorityChange = false;
+      this.projectBacklogFormPendingToggleReadinessPromotion = false;
+      this.projectBacklogFormPendingEvaluateReadinessPromotion = false;
+      this.projectBacklogFormPendingReadinessPromotionPriorityChange = false;
+      this.projectBacklogFormPendingReadinessPromotionMaxChange = false;
     }
   };
 }
@@ -957,6 +1103,11 @@ type ProjectBacklogFormElements = {
   suggestionAutoAcceptEvaluateButton: HTMLButtonElement;
   suggestionAutoAcceptReason: HTMLDivElement;
   suggestionAutoAcceptPriorityInputs: Record<ProjectBacklogPriority, HTMLInputElement>;
+  readinessPromotionToggleButton: HTMLButtonElement;
+  readinessPromotionEvaluateButton: HTMLButtonElement;
+  readinessPromotionReason: HTMLDivElement;
+  readinessPromotionPriorityInputs: Record<ProjectBacklogPriority, HTMLInputElement>;
+  readinessPromotionMaxInput: HTMLInputElement;
   autonomyToggleButton: HTMLButtonElement;
   autonomyReevaluateButton: HTMLButtonElement;
   autonomyReason: HTMLDivElement;
@@ -967,12 +1118,17 @@ type ProjectBacklogFormElements = {
   suggestionAutoAcceptToggleHandler: () => void;
   suggestionAutoAcceptEvaluateHandler: () => void;
   suggestionAutoAcceptPriorityChangeHandler: () => void;
+  readinessPromotionToggleHandler: () => void;
+  readinessPromotionEvaluateHandler: () => void;
+  readinessPromotionPriorityChangeHandler: () => void;
+  readinessPromotionMaxChangeHandler: () => void;
   autonomyToggleHandler: () => void;
   autonomyReevaluateHandler: () => void;
   autonomyPriorityChangeHandler: () => void;
   lastSelectedTaskId?: string;
   isEditingAutonomyPriorities?: boolean;
   isEditingSuggestionAutoAcceptPriorities?: boolean;
+  isEditingReadinessPromotionPriorities?: boolean;
 };
 
 function stopPortalShortcutPropagation(event: Event) {

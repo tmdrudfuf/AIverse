@@ -131,6 +131,7 @@ export type ControllerInternals = {
     projectBacklogCollections: ProjectPortalState["projectBacklogCollections"];
     projectBacklogSuggestionCollections: ProjectPortalState["projectBacklogSuggestionCollections"];
     projectBacklogSuggestionAcceptancePolicies: ProjectPortalState["projectBacklogSuggestionAcceptancePolicies"];
+    projectBacklogReadinessPromotionPolicies: ProjectPortalState["projectBacklogReadinessPromotionPolicies"];
     projectAutonomyPolicies: ProjectPortalState["projectAutonomyPolicies"];
     taskCollections: Record<string, TaskCollection>;
     employees: Employee[];
@@ -195,6 +196,8 @@ export type ControllerInternals = {
   rejectSelectedBacklogSuggestion: () => boolean;
   updateSelectedProjectSuggestionAcceptancePolicy: (input: { enabled?: boolean; allowedPriorities?: Array<"low" | "normal" | "high" | "urgent"> }) => boolean;
   evaluateSelectedProjectBacklogSuggestionsForAutoAccept: () => boolean;
+  updateSelectedProjectBacklogReadinessPromotionPolicy: (input: { enabled?: boolean; allowedPriorities?: Array<"low" | "normal" | "high" | "urgent">; maxPromotionsPerEvaluation?: number }) => boolean;
+  evaluateSelectedProjectBacklogReadinessPromotion: () => boolean;
 };
 
 export function getControllerInternals(controller: OfficeProjectPortalController): ControllerInternals {
@@ -261,6 +264,8 @@ export function createInput(overrides: Partial<OfficeProjectPortalInput>): Offic
     rejectBacklogSuggestionPressed: false,
     toggleSuggestionAutoAcceptPressed: false,
     evaluateSuggestionAutoAcceptPressed: false,
+    toggleBacklogReadinessPromotionPressed: false,
+    evaluateBacklogReadinessPromotionPressed: false,
     ...overrides,
   };
 }

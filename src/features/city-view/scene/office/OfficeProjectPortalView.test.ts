@@ -2597,6 +2597,7 @@ function createPortalState(options: {
     projectBacklogCollections: {},
     projectBacklogSuggestionCollections: {},
     projectBacklogSuggestionAcceptancePolicies: {},
+    projectBacklogReadinessPromotionPolicies: {},
     projectAutonomyPolicies: {},
     taskCollections: {},
     taskAnalyses: {},

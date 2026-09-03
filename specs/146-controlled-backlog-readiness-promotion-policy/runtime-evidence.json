@@ -1,0 +1,239 @@
+{
+  "spec": "146-controlled-backlog-readiness-promotion-policy",
+  "featureBranch": "codex/146-controlled-backlog-readiness-promotion-policy",
+  "baseSha": "d6edf61134f76e4c5038f61ea760cd4ab76091cd",
+  "reviewedShaAddressed": "b3250d48a501cd456b09803ffea87b8344b71eb6",
+  "capturedAt": "2026-09-02T00:00:00.000Z",
+  "captureMode": "deterministic two-project runtime fixture through OfficeProjectPortalController, ProjectBacklogReadinessPromotionPolicyService, BrowserOfficeSessionService, and PortfolioOperationsService",
+  "operatorConsentModel": {
+    "defaultPolicyEnabled": false,
+    "consentRequiredPerProject": true,
+    "globalFallbackPolicyUsed": false,
+    "spec145AutoAcceptImpliesSpec146": false,
+    "spec144AutonomousExecutionImpliesSpec146": false,
+    "promotionBoundary": "backlog-to-ready-only"
+  },
+  "projects": {
+    "projectA": {
+      "label": "Project A",
+      "projectId": "project-a",
+      "displayName": "Project A",
+      "ownerCompany": "project-a",
+      "registered": true,
+      "canonicalResolution": {
+        "bindingId": "project-a",
+        "buildingId": "project-a",
+        "status": "bound"
+      },
+      "policy": {
+        "enabled": true,
+        "allowedPriorities": ["high"],
+        "allowedOrigins": ["operator-created", "ai-suggestion-manual", "ai-suggestion-automatic"],
+        "maxPromotionsPerEvaluation": 1,
+        "requireNoActiveExecution": true,
+        "requireValidTask": true,
+        "requireNonDuplicate": true,
+        "updatedByOperator": true
+      },
+      "tasksBeforeEvaluation": [
+        {
+          "id": "project-a:backlog:a1",
+          "projectId": "project-a",
+          "title": "A1 high",
+          "description": "Promotable project A task.",
+          "status": "backlog",
+          "priority": "high",
+          "origin": "operator-created"
+        },
+        {
+          "id": "project-a:backlog:a2",
+          "projectId": "project-a",
+          "title": "A2 low",
+          "description": "Filtered project A task.",
+          "status": "backlog",
+          "priority": "low",
+          "origin": "operator-created"
+        }
+      ],
+      "evaluation": {
+        "trigger": "backlog task creation after operator-enabled policy, plus explicit re-evaluation coverage",
+        "deterministicOrdering": ["configured allowed priority order", "oldest created timestamp", "stable task id"],
+        "promoted": [
+          {
+            "taskId": "project-a:backlog:a1",
+            "title": "A1 high",
+            "reason": "Promoted: high priority allowed",
+            "transition": "backlog-to-ready",
+            "transitionPrimitive": "ProjectBacklogService.updateTask(status: ready)",
+            "projectIdAfterPromotion": "project-a",
+            "statusAfterPromotion": "ready",
+            "developmentRequestId": null,
+            "executionRunId": null
+          }
+        ],
+        "skipped": [
+          {
+            "taskId": "project-a:backlog:a2",
+            "title": "A2 low",
+            "reason": "PriorityNotAllowed",
+            "statusAfterEvaluation": "backlog"
+          }
+        ],
+        "promotedCount": 1,
+        "maxPromotionsPerEvaluation": 1,
+        "readyTaskCreated": true,
+        "inProgressTaskCreated": false,
+        "spec142BridgeInvoked": false,
+        "spec144CoordinatorInvoked": false,
+        "adosExecutionInvoked": false,
+        "codexInvoked": false,
+        "claudeInvoked": false,
+        "gitMutated": false,
+        "githubMutated": false
+      },
+      "idempotency": {
+        "reEvaluations": 1,
+        "promotedCountAfterReEvaluation": 0,
+        "readyRepresentationCountForA1": 1,
+        "duplicateReadyCreated": false,
+        "latestReevaluationSkipReason": "AlreadyPromoted"
+      },
+      "activeExecutionSafety": {
+        "policyRequiresNoActiveExecution": true,
+        "activeRunStageBeforeEvaluation": "Started",
+        "activeRunStatusBeforeEvaluation": "Started",
+        "promotionAttemptWhileActive": "skipped",
+        "latestResultText": "Skipped: active execution exists",
+        "taskStatusAfterBlockedEvaluation": "backlog",
+        "activeRunMutatedByPromotion": false
+      }
+    },
+    "projectB": {
+      "label": "Project B",
+      "projectId": "project-b",
+      "displayName": "Project B",
+      "ownerCompany": "project-b",
+      "registered": true,
+      "canonicalResolution": {
+        "bindingId": "project-b",
+        "buildingId": "project-b",
+        "status": "bound"
+      },
+      "policy": {
+        "enabled": false,
+        "consentInheritedFromProjectA": false
+      },
+      "tasksBeforeEvaluation": [
+        {
+          "id": "project-b:backlog:b1",
+          "projectId": "project-b",
+          "title": "B1 urgent",
+          "description": "Project B stays manual.",
+          "status": "backlog",
+          "priority": "urgent",
+          "origin": "operator-created"
+        }
+      ],
+      "evaluation": {
+        "trigger": "backlog task creation while Auto Ready disabled",
+        "promoted": [],
+        "skipped": [
+          {
+            "taskId": "project-b:backlog:b1",
+            "title": "B1 urgent",
+            "reason": "PolicyDisabled",
+            "statusAfterEvaluation": "backlog"
+          }
+        ],
+        "promotedCount": 0,
+        "taskStatusAfterEvaluation": "backlog",
+        "crossProjectPolicyLeakDetected": false,
+        "spec142BridgeInvoked": false,
+        "spec144CoordinatorInvoked": false,
+        "adosExecutionInvoked": false
+      }
+    }
+  },
+  "postReloadState": {
+    "policyCollections": {
+      "project-a": {
+        "enabled": true,
+        "allowedPriorities": ["high"],
+        "allowedOrigins": ["operator-created", "ai-suggestion-manual", "ai-suggestion-automatic"],
+        "maxPromotionsPerEvaluation": 1,
+        "lastEvaluationResult": "Promoted: high priority allowed"
+      },
+      "project-b": {
+        "enabled": false
+      }
+    },
+    "backlogCollections": {
+      "project-a": {
+        "backlogTaskCount": 1,
+        "readyTaskCount": 1,
+        "readyTaskProjectId": "project-a"
+      },
+      "project-b": {
+        "backlogTaskCount": 1,
+        "readyTaskCount": 0
+      }
+    },
+    "newConsentCreatedByReload": false,
+    "duplicatePromotionCreatedByReload": false,
+    "crossProjectBacklogLeakDetected": false,
+    "malformedConsentDroppedOnRestore": true
+  },
+  "manualFlowVerification": {
+    "manualBacklogCreationStillWorks": true,
+    "manualBacklogEditStillWorks": true,
+    "manualBacklogToReadyStillWorks": true,
+    "manualReadyUsesExistingTransitionSemantics": true,
+    "manualReadyCreatesDevelopmentRequest": false,
+    "manualReadyStartsExecution": false
+  },
+  "failureAndSecurityBoundaries": {
+    "malformedTaskFailsClosed": true,
+    "crossProjectTaskFailsClosed": true,
+    "disconnectedProjectFailsClosed": true,
+    "readyTaskNotRepromoted": true,
+    "inProgressTaskNotPromoted": true,
+    "completedTaskNotPromoted": true,
+    "duplicateReadyOrActiveWorkPreventsPromotion": true,
+    "taskTextExecuted": false,
+    "taskTextPassedToShell": false,
+    "taskTextPassedToGit": false,
+    "repositoryFilesMutatedByPromotion": false,
+    "gitMutatedByPromotion": false,
+    "githubMutatedByPromotion": false
+  },
+  "portfolioSummary": {
+    "readOnly": true,
+    "projectScoped": true,
+    "projectAText": "Auto Ready: On - 1 Backlog / 1 Ready",
+    "projectBText": "Auto Ready: Off - 1 Backlog / 0 Ready",
+    "mutatesReadinessPolicy": false,
+    "mutatesBacklog": false
+  },
+  "requirement32VerificationPoints": [
+    { "id": 1, "statement": "A policy enabled only for A.", "status": "verified" },
+    { "id": 2, "statement": "B policy remains disabled.", "status": "verified" },
+    { "id": 3, "statement": "A1 is eligible.", "status": "verified" },
+    { "id": 4, "statement": "A2 is skipped because priority is not allowed.", "status": "verified" },
+    { "id": 5, "statement": "Exactly one task is promoted.", "status": "verified" },
+    { "id": 6, "statement": "A1 changes from backlog to Ready exactly once.", "status": "verified" },
+    { "id": 7, "statement": "A1 remains under Project A.", "status": "verified" },
+    { "id": 8, "statement": "No direct Spec 142 invocation occurs.", "status": "verified" },
+    { "id": 9, "statement": "No direct Spec 144 invocation occurs from Spec 146.", "status": "verified" },
+    { "id": 10, "statement": "No ADOS process is launched by Spec 146.", "status": "verified" },
+    { "id": 11, "statement": "Re-evaluation does not repeat the transition.", "status": "verified" },
+    { "id": 12, "statement": "Project B task remains backlog.", "status": "verified" },
+    { "id": 13, "statement": "Reload preserves policy state.", "status": "verified" },
+    { "id": 14, "statement": "Manual Ready promotion still works.", "status": "verified" },
+    { "id": 15, "statement": "Active execution safety prevents unsafe additional promotion.", "status": "verified" }
+  ],
+  "validationEvidence": {
+    "targetedEvidenceSource": "OfficeProjectPortalController.project-backlog.test.ts; ProjectBacklogReadinessPromotionPolicyService.test.ts; OfficeProjectPortalController.browser-session.test.ts; PortfolioOperationsService.test.ts",
+    "fullAdosValidationPipelineRunInThisRuntime": false,
+    "fullAdosValidationDeferredToAuthoritativeRuntime": true
+  }
+}

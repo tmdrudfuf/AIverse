@@ -27,6 +27,8 @@ import {
   ProjectBacklogSuggestionAcceptancePolicyService,
 } from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
 import type { ProjectBacklogSuggestionAcceptancePolicies } from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
+import { ProjectBacklogReadinessPromotionPolicyService } from "../project-backlog/ProjectBacklogReadinessPromotionPolicyService";
+import type { ProjectBacklogReadinessPromotionPolicies } from "../project-backlog/ProjectBacklogReadinessPromotionPolicyTypes";
 import { ProjectAutonomousExecutionPolicyService, isProjectAutonomyPolicy } from "../project-backlog/ProjectAutonomousExecutionPolicyService";
 import type { ProjectAutonomyPolicies } from "../project-backlog/ProjectAutonomousExecutionPolicyTypes";
 
@@ -92,6 +94,7 @@ export class BrowserOfficeSessionService {
     state.projectBacklogCollections = cloneValidProjectBacklogCollections(snapshot.projectBacklogCollections);
     state.projectBacklogSuggestionCollections = cloneValidProjectBacklogSuggestionCollections(snapshot.projectBacklogSuggestionCollections);
     state.projectBacklogSuggestionAcceptancePolicies = cloneValidProjectBacklogSuggestionAcceptancePolicies(snapshot.projectBacklogSuggestionAcceptancePolicies);
+    state.projectBacklogReadinessPromotionPolicies = cloneValidProjectBacklogReadinessPromotionPolicies(snapshot.projectBacklogReadinessPromotionPolicies);
     state.projectAutonomyPolicies = cloneValidProjectAutonomyPolicies(snapshot.projectAutonomyPolicies);
     state.implementerRuntimeCollections = clone(snapshot.implementerRuntimeCollections ?? {});
     state.implementerRuntimeResultCollections = clone(snapshot.implementerRuntimeResultCollections ?? {});
@@ -149,6 +152,7 @@ export class BrowserOfficeSessionService {
       projectBacklogCollections: cloneValidProjectBacklogCollections(state.projectBacklogCollections),
       projectBacklogSuggestionCollections: cloneValidProjectBacklogSuggestionCollections(state.projectBacklogSuggestionCollections),
       projectBacklogSuggestionAcceptancePolicies: cloneValidProjectBacklogSuggestionAcceptancePolicies(state.projectBacklogSuggestionAcceptancePolicies),
+      projectBacklogReadinessPromotionPolicies: cloneValidProjectBacklogReadinessPromotionPolicies(state.projectBacklogReadinessPromotionPolicies),
       projectAutonomyPolicies: cloneValidProjectAutonomyPolicies(state.projectAutonomyPolicies),
       implementerRuntimeCollections: clone(state.implementerRuntimeCollections),
       implementerRuntimeResultCollections: clone(state.implementerRuntimeResultCollections),
@@ -223,6 +227,7 @@ function isBrowserOfficeSessionSnapshot(value: unknown): value is BrowserOfficeS
     (value.projectBacklogCollections === undefined || isProjectBacklogCollectionRecord(value.projectBacklogCollections)) &&
     (value.projectBacklogSuggestionCollections === undefined || isProjectBacklogSuggestionCollectionRecord(value.projectBacklogSuggestionCollections)) &&
     (value.projectBacklogSuggestionAcceptancePolicies === undefined || isRecord(value.projectBacklogSuggestionAcceptancePolicies)) &&
+    (value.projectBacklogReadinessPromotionPolicies === undefined || isRecord(value.projectBacklogReadinessPromotionPolicies)) &&
     (value.projectAutonomyPolicies === undefined || isRecord(value.projectAutonomyPolicies)) &&
     (value.implementerRuntimeCollections === undefined || isRuntimeCollectionRecord(value.implementerRuntimeCollections)) &&
     (value.implementerRuntimeResultCollections === undefined || isResultCollectionRecord(value.implementerRuntimeResultCollections)) &&
@@ -329,6 +334,12 @@ function cloneValidProjectBacklogSuggestionCollections(value: unknown) {
 function cloneValidProjectBacklogSuggestionAcceptancePolicies(value: unknown) {
   return new ProjectBacklogSuggestionAcceptancePolicyService().clonePolicies(
     isRecord(value) ? value as ProjectBacklogSuggestionAcceptancePolicies : {},
+  );
+}
+
+function cloneValidProjectBacklogReadinessPromotionPolicies(value: unknown) {
+  return new ProjectBacklogReadinessPromotionPolicyService().clonePolicies(
+    isRecord(value) ? value as ProjectBacklogReadinessPromotionPolicies : {},
   );
 }
 
