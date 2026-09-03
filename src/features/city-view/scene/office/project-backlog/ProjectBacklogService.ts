@@ -117,6 +117,9 @@ export class ProjectBacklogService {
       | "executionPreparationId"
       | "executionRunId"
       | "executionAcceptedAt"
+      | "sourceSuggestionId"
+      | "suggestionAcceptanceMode"
+      | "suggestionAcceptedAt"
     >>,
   ): ProjectBacklogMutationResult {
     const resolution = this.resolveMutationProjectId(context);
@@ -134,6 +137,7 @@ export class ProjectBacklogService {
     if (existing.projectId !== resolution.projectId) return { ok: false, reason: "ProjectMismatch" };
     if (input.priority !== undefined && !isPriority(input.priority)) return { ok: false, reason: "InvalidInput" };
     if (input.status !== undefined && !isPlanningStatus(input.status)) return { ok: false, reason: "InvalidInput" };
+    if (input.suggestionAcceptanceMode !== undefined && input.suggestionAcceptanceMode !== "manual" && input.suggestionAcceptanceMode !== "automatic") return { ok: false, reason: "InvalidInput" };
     if (input.title !== undefined && input.title.trim().length === 0) return { ok: false, reason: "InvalidInput" };
     if (input.description !== undefined && input.description.trim().length === 0) return { ok: false, reason: "InvalidInput" };
 
@@ -148,6 +152,9 @@ export class ProjectBacklogService {
       ...(input.executionPreparationId !== undefined ? { executionPreparationId: input.executionPreparationId } : {}),
       ...(input.executionRunId !== undefined ? { executionRunId: input.executionRunId } : {}),
       ...(input.executionAcceptedAt !== undefined ? { executionAcceptedAt: input.executionAcceptedAt } : {}),
+      ...(input.sourceSuggestionId !== undefined ? { sourceSuggestionId: input.sourceSuggestionId } : {}),
+      ...(input.suggestionAcceptanceMode !== undefined ? { suggestionAcceptanceMode: input.suggestionAcceptanceMode } : {}),
+      ...(input.suggestionAcceptedAt !== undefined ? { suggestionAcceptedAt: input.suggestionAcceptedAt } : {}),
       ...(input.blockedReason !== undefined && input.blockedReason.trim()
         ? { blockedReason: input.blockedReason.trim() }
         : {}),
@@ -257,7 +264,10 @@ export function isBacklogTask(value: unknown): value is ProjectBacklogTask {
     (value.developmentRequestId === undefined || typeof value.developmentRequestId === "string") &&
     (value.executionPreparationId === undefined || typeof value.executionPreparationId === "string") &&
     (value.executionRunId === undefined || typeof value.executionRunId === "string") &&
-    (value.executionAcceptedAt === undefined || typeof value.executionAcceptedAt === "string")
+    (value.executionAcceptedAt === undefined || typeof value.executionAcceptedAt === "string") &&
+    (value.sourceSuggestionId === undefined || typeof value.sourceSuggestionId === "string") &&
+    (value.suggestionAcceptanceMode === undefined || value.suggestionAcceptanceMode === "manual" || value.suggestionAcceptanceMode === "automatic") &&
+    (value.suggestionAcceptedAt === undefined || typeof value.suggestionAcceptedAt === "string")
   );
 }
 

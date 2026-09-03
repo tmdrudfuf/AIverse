@@ -34,6 +34,7 @@ const TASK_DESCRIPTION = [
 ].join("\n");
 const NOW = "2026-08-31T12:00:00.000Z";
 const EVIDENCE_PATH = path.join(process.cwd(), "specs/142-ready-task-to-development-request-execution/runtime-evidence.json");
+const DISPOSABLE_PROJECT_EVIDENCE_PATH = `.agent-workflow/disposable-projects/${PROJECT_ID}`;
 
 type CapturingProvider = ImplementerRuntimeProvider & {
   commands: ImplementerRuntimeProviderCommand[];
@@ -106,6 +107,7 @@ describe("Spec 142 runtime bridge verification", () => {
     expect(writtenRequirements).toBe(preparation.requirementsFileContent);
     expect(command.command).toBe("claude");
     expect(command.arguments).toEqual(["--dangerously-skip-permissions", "-p", "{{prompt}}"]);
+    expect(command.workingDirectory).toBe(disposableProjectPath());
     expect(command.prompt).not.toContain(TASK_DESCRIPTION);
     expect(JSON.stringify(command.arguments)).not.toContain("Invoke-Expression");
     expect(command.files?.[0]).toMatchObject({
@@ -151,8 +153,8 @@ describe("Spec 142 runtime bridge verification", () => {
         projectId: PROJECT_ID,
         projectName: PROJECT_NAME,
         companyName: COMPANY_NAME,
-        repositoryPath: disposableProjectPath(),
-        worktreePath: disposableProjectPath(),
+        repositoryPath: toPersistedEvidencePath(disposableProjectPath()),
+        worktreePath: toPersistedEvidencePath(disposableProjectPath()),
       },
       readyTask: {
         taskId: selectedTask.id,
@@ -221,6 +223,18 @@ describe("Spec 142 runtime bridge verification", () => {
       },
     };
     writeEvidence(evidence);
+  });
+
+  it("persists disposable project paths relative to any parent feature worktree", () => {
+    const firstRoot = "C:/Users/tmdru/Desktop/Ky-Project/AIverse-controlled-autonomous-backlog-execution-policy";
+    const secondRoot = "C:/Users/tmdru/Desktop/Ky-Project/AIverse-controlled-ai-suggestion-acceptance-policy";
+
+    const firstProjectPath = disposableProjectPath(firstRoot);
+    const secondProjectPath = disposableProjectPath(secondRoot);
+
+    expect(firstProjectPath).not.toBe(secondProjectPath);
+    expect(toPersistedEvidencePath(firstProjectPath, firstRoot)).toBe(DISPOSABLE_PROJECT_EVIDENCE_PATH);
+    expect(toPersistedEvidencePath(secondProjectPath, secondRoot)).toBe(DISPOSABLE_PROJECT_EVIDENCE_PATH);
   });
 });
 
@@ -370,8 +384,17 @@ function createCapturingProvider(): CapturingProvider {
   return provider;
 }
 
-function disposableProjectPath() {
-  return path.join(process.cwd(), ".agent-workflow", "disposable-projects", PROJECT_ID).replace(/\\/g, "/");
+function disposableProjectPath(repositoryRoot = process.cwd()) {
+  return path.join(repositoryRoot, ".agent-workflow", "disposable-projects", PROJECT_ID).replace(/\\/g, "/");
+}
+
+function toPersistedEvidencePath(absolutePath: string, repositoryRoot = process.cwd()) {
+  const normalizedPath = absolutePath.replace(/\\/g, "/");
+  const normalizedRoot = repositoryRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (normalizedPath === normalizedRoot) return ".";
+  const rootPrefix = `${normalizedRoot}/`;
+  if (normalizedPath.startsWith(rootPrefix)) return normalizedPath.slice(rootPrefix.length);
+  return normalizedPath;
 }
 
 function writeEvidence(evidence: unknown) {

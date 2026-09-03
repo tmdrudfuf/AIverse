@@ -19,5 +19,10 @@ export default defineConfig({
   },
   test: {
     exclude: [...configDefaults.exclude, "**/.claude/**", "e2e/**"],
+    testTimeout: 60000,
+    // Agent workflow suites create temporary Git repositories and spawn mock
+    // CLI subprocesses. Running those files concurrently can starve the
+    // subprocess tests enough to trip their per-test timeouts under `npm test`.
+    fileParallelism: false,
   },
 });

@@ -26,6 +26,7 @@ import type { ExternalProjectAdosRunStatuses } from "../external-ados-run-status
 import type { ExternalProjectDevelopmentRequestDrafts } from "../external-development-requests/ExternalProjectDevelopmentRequestTypes";
 import type { ProjectBacklogCollections } from "../project-backlog/ProjectBacklogTypes";
 import type { ProjectBacklogSuggestionCollections } from "../project-backlog/ProjectBacklogSuggestionTypes";
+import type { ProjectBacklogSuggestionAcceptancePolicies } from "../project-backlog/ProjectBacklogSuggestionAcceptancePolicyTypes";
 import type { ProjectAutonomyPolicies } from "../project-backlog/ProjectAutonomousExecutionPolicyTypes";
 import type {
   ImplementerRuntimeCollection,
@@ -87,6 +88,7 @@ export type BrowserOfficeSessionSnapshot = {
   externalProjectAdosRunStatuses?: ExternalProjectAdosRunStatuses;
   projectBacklogCollections?: ProjectBacklogCollections;
   projectBacklogSuggestionCollections?: ProjectBacklogSuggestionCollections;
+  projectBacklogSuggestionAcceptancePolicies?: ProjectBacklogSuggestionAcceptancePolicies;
   projectAutonomyPolicies?: ProjectAutonomyPolicies;
   implementerRuntimeCollections?: Record<string, ImplementerRuntimeCollection>;
   implementerRuntimeResultCollections?: Record<string, ImplementerRuntimeResultCollection>;
@@ -140,6 +142,7 @@ export type BrowserOfficeSessionState = Pick<
   | "externalProjectAdosRunStatuses"
   | "projectBacklogCollections"
   | "projectBacklogSuggestionCollections"
+  | "projectBacklogSuggestionAcceptancePolicies"
   | "projectAutonomyPolicies"
   | "implementerRuntimeCollections"
   | "implementerRuntimeResultCollections"

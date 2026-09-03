@@ -1,0 +1,242 @@
+{
+  "spec": "145-controlled-ai-suggestion-acceptance-policy",
+  "featureBranch": "codex/145-controlled-ai-suggestion-acceptance-policy",
+  "baseSha": "10cc03ed331abc8d6a7fac4294f0ee981701e053",
+  "reviewedShaAddressed": "5aabd4860eea0499a27684744e0c0a8268b0f6f9",
+  "capturedAt": "2026-09-02T00:00:00.000Z",
+  "captureMode": "deterministic two-project runtime fixture through OfficeProjectPortalController, ProjectBacklogSuggestionAcceptancePolicyService, BrowserOfficeSessionService, and PortfolioOperationsService",
+  "operatorConsentModel": {
+    "defaultPolicyEnabled": false,
+    "consentRequiredPerProject": true,
+    "globalFallbackPolicyUsed": false,
+    "createdTaskInitialStatus": "backlog"
+  },
+  "projects": {
+    "projectA": {
+      "label": "Project A",
+      "projectId": "project-a",
+      "displayName": "Project A",
+      "ownerCompany": "Company A",
+      "registered": true,
+      "canonicalResolution": {
+        "bindingId": "project-a",
+        "buildingId": "building-a",
+        "status": "bound"
+      },
+      "policy": {
+        "enabled": true,
+        "allowedPriorities": ["high"],
+        "maxAutoAcceptPerEvaluation": 1,
+        "requireNonDuplicate": true,
+        "requireValidStructuredSuggestion": true,
+        "createdTaskInitialStatus": "backlog",
+        "updatedByOperator": true
+      },
+      "suggestionsBeforeEvaluation": [
+        {
+          "id": "project-a:suggestion:1",
+          "projectId": "project-a",
+          "title": "A high",
+          "description": "High priority Project A suggestion.",
+          "suggestedPriority": "high",
+          "status": "proposed"
+        },
+        {
+          "id": "project-a:suggestion:2",
+          "projectId": "project-a",
+          "title": "A low",
+          "description": "Low priority Project A suggestion.",
+          "suggestedPriority": "low",
+          "status": "proposed"
+        }
+      ],
+      "evaluation": {
+        "trigger": "explicit suggestion generation after operator-enabled policy",
+        "deterministicOrdering": ["allowed priority rank", "oldest generated timestamp", "stable suggestion id"],
+        "accepted": [
+          {
+            "suggestionId": "project-a:suggestion:1",
+            "reason": "Auto-accepted: high priority allowed",
+            "createdBacklogTask": {
+              "projectId": "project-a",
+              "title": "A high",
+              "description": "High priority Project A suggestion.",
+              "status": "backlog",
+              "priority": "high",
+              "sourceSuggestionId": "project-a:suggestion:1",
+              "suggestionAcceptanceMode": "automatic",
+              "developmentRequestId": null,
+              "executionRunId": null
+            }
+          }
+        ],
+        "skipped": [
+          {
+            "suggestionId": "project-a:suggestion:2",
+            "title": "A low",
+            "reason": "PriorityNotAllowed"
+          }
+        ],
+        "createdBacklogTaskCount": 1,
+        "readyTaskCreated": false,
+        "spec142BridgeInvoked": false,
+        "spec144CoordinatorInvoked": false,
+        "adosExecutionInvoked": false
+      },
+      "idempotency": {
+        "reEvaluations": 1,
+        "createdBacklogTaskCountAfterReEvaluation": 1,
+        "duplicateTaskCreated": false,
+        "authoritativeAssociation": {
+          "suggestionId": "project-a:suggestion:1",
+          "acceptedBacklogTaskIdPresent": true,
+          "acceptanceMode": "automatic"
+        }
+      },
+      "activeExecutionIndependence": {
+        "activeRunStageBeforeEvaluation": "Started",
+        "activeRunStageAfterEvaluation": "Started",
+        "activeRunMutatedByAcceptance": false
+      }
+    },
+    "projectB": {
+      "label": "Project B",
+      "projectId": "project-b",
+      "displayName": "Project B",
+      "ownerCompany": "Company B",
+      "registered": true,
+      "canonicalResolution": {
+        "bindingId": "project-b",
+        "buildingId": "building-b",
+        "status": "bound"
+      },
+      "policy": {
+        "enabled": false,
+        "consentInheritedFromProjectA": false
+      },
+      "suggestionsBeforeEvaluation": [
+        {
+          "id": "project-b:suggestion:3",
+          "projectId": "project-b",
+          "title": "B urgent",
+          "description": "Urgent priority Project B suggestion.",
+          "suggestedPriority": "urgent",
+          "status": "proposed"
+        }
+      ],
+      "evaluation": {
+        "trigger": "explicit suggestion generation while policy disabled",
+        "accepted": [],
+        "skipped": [
+          {
+            "suggestionId": "project-b:suggestion:3",
+            "title": "B urgent",
+            "reason": "PolicyDisabled"
+          }
+        ],
+        "createdBacklogTaskCount": 0,
+        "suggestionStatusAfterEvaluation": "proposed",
+        "crossProjectPolicyLeakDetected": false,
+        "spec142BridgeInvoked": false,
+        "spec144CoordinatorInvoked": false,
+        "adosExecutionInvoked": false
+      }
+    }
+  },
+  "postReloadState": {
+    "policyCollections": {
+      "project-a": {
+        "enabled": true,
+        "allowedPriorities": ["high"],
+        "lastEvaluationResult": "Skipped: already accepted"
+      },
+      "project-b": {
+        "enabled": false
+      }
+    },
+    "suggestionCollections": {
+      "project-a": [
+        {
+          "id": "project-a:suggestion:1",
+          "projectId": "project-a",
+          "status": "accepted",
+          "acceptedBacklogTaskIdPresent": true,
+          "acceptanceMode": "automatic"
+        },
+        {
+          "id": "project-a:suggestion:2",
+          "projectId": "project-a",
+          "status": "proposed"
+        }
+      ],
+      "project-b": [
+        {
+          "id": "project-b:suggestion:3",
+          "projectId": "project-b",
+          "status": "proposed"
+        }
+      ]
+    },
+    "backlogCollections": {
+      "project-a": {
+        "taskCount": 1,
+        "readyTaskCount": 0,
+        "automaticSuggestionTaskCount": 1
+      },
+      "project-b": {
+        "taskCountBeforeManualAccept": 0,
+        "taskCountAfterManualAccept": 1,
+        "manualSuggestionTaskCount": 1
+      }
+    },
+    "newConsentCreatedByReload": false,
+    "duplicateConversionCreatedByReload": false,
+    "crossProjectSuggestionLeakDetected": false,
+    "crossProjectBacklogLeakDetected": false
+  },
+  "manualFlowVerification": {
+    "manualAcceptStillWorks": true,
+    "manualRejectStillWorks": true,
+    "manualAcceptanceModeDistinct": true,
+    "rejectedSuggestionAutoAcceptedLater": false
+  },
+  "failureAndSecurityBoundaries": {
+    "malformedSuggestionFailsClosed": true,
+    "crossProjectSuggestionFailsClosed": true,
+    "disconnectedProjectFailsClosed": true,
+    "duplicateBacklogDetectionPreventsConversion": true,
+    "suggestionTextExecuted": false,
+    "suggestionTextPassedToShell": false,
+    "suggestionTextPassedToGit": false,
+    "repositoryFilesMutatedByAcceptance": false,
+    "gitMutatedByAcceptance": false,
+    "githubMutatedByAcceptance": false
+  },
+  "portfolioSummary": {
+    "readOnly": true,
+    "projectScoped": true,
+    "mutatesAcceptancePolicy": false
+  },
+  "requirement32VerificationPoints": [
+    { "id": 1, "statement": "Project A policy is enabled only for A.", "status": "verified" },
+    { "id": 2, "statement": "A1 is eligible.", "status": "verified" },
+    { "id": 3, "statement": "A2 is skipped due to priority policy.", "status": "verified" },
+    { "id": 4, "statement": "A1 becomes exactly one Project A backlog task.", "status": "verified" },
+    { "id": 5, "statement": "Created task status is backlog.", "status": "verified" },
+    { "id": 6, "statement": "Created task is not Ready.", "status": "verified" },
+    { "id": 7, "statement": "No Spec 142/144 execution occurs.", "status": "verified" },
+    { "id": 8, "statement": "Suggestion-to-task provenance is stored.", "status": "verified" },
+    { "id": 9, "statement": "Re-evaluation does not duplicate the task.", "status": "verified" },
+    { "id": 10, "statement": "Switch to Project B.", "status": "verified" },
+    { "id": 11, "statement": "B policy remains Off.", "status": "verified" },
+    { "id": 12, "statement": "B1 remains proposed.", "status": "verified" },
+    { "id": 13, "statement": "Reload.", "status": "verified" },
+    { "id": 14, "statement": "Policy state and provenance remain project-scoped.", "status": "verified" },
+    { "id": 15, "statement": "Manual accept/reject still works.", "status": "verified" }
+  ],
+  "validationEvidence": {
+    "targetedEvidenceSource": "OfficeProjectPortalController.project-backlog-suggestions.test.ts; ProjectBacklogSuggestionAcceptancePolicyService.test.ts; BrowserOfficeSessionService.test.ts; PortfolioOperationsService.test.ts",
+    "fullAdosValidationPipelineRunInThisRuntime": false,
+    "fullAdosValidationDeferredToAuthoritativeRuntime": true
+  }
+}

@@ -494,7 +494,7 @@ describe("orchestrate workflow", () => {
 
     expect(run.decision).toBe("Blocked");
     expect(run.reason).toBe("Answer stage modified repository files");
-  }, 30000);
+  }, 60000);
 
   it("blocks when answer stage commits repository changes", async () => {
     const cwd = createTempDir();
@@ -759,7 +759,7 @@ describe("orchestrate workflow", () => {
     expect(run.decision).toBe("Ready for human merge decision");
     expect(secondFixPrompt).toContain("Finding P2-001:");
     expect(secondFixPrompt).not.toContain("Finding P1-001:");
-  }, 30000);
+  }, 60000);
 
   it("blocks invalid lifecycle data before another fix cycle", async () => {
     const cwd = createTempDir();
@@ -1672,7 +1672,7 @@ describe("focused validation review loop (Spec 055)", () => {
     expect(summary.validation.status).toBe("passed");
     expect(summary.review.fixCycles).toBe(2);
     expect(summary.humanGate.ready).toBe(true);
-  }, 30000);
+  }, 60000);
 
   it("Smoke B: full validation failure after Approved does not become ready; it routes back to fix (not a hard block) and must pass focused validation + a fresh review before full validation runs again", async () => {
     const cwd = createTempDir();
@@ -1896,7 +1896,7 @@ describe("focused validation review loop (Spec 055)", () => {
     // No duplicate stage-timeline entries for the pre-resume "validate" occurrence.
     const validateEntries = summary.stageTimeline.filter((entry: { stage: string }) => entry.stage === "validate");
     expect(validateEntries).toHaveLength(1);
-  }, 30000);
+  }, 60000);
 
   it("does not re-run validation when resuming a state already at a terminal stage", async () => {
     const cwd = createTempDir();

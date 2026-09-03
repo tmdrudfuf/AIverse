@@ -114,6 +114,7 @@ export class ProjectBacklogSuggestionService {
       title?: string;
       description?: string;
       priority?: ProjectBacklogPriority;
+      acceptanceMode?: "manual" | "automatic";
     } = {},
   ): ProjectBacklogSuggestionReviewResult {
     const resolution = this.resolveProjectId(context);
@@ -134,6 +135,8 @@ export class ProjectBacklogSuggestionService {
     const title = input.title?.trim() ?? suggestion.title;
     const description = input.description?.trim() ?? suggestion.description;
     const priority = input.priority ?? suggestion.suggestedPriority ?? "normal";
+    const acceptanceMode = input.acceptanceMode ?? "manual";
+    const acceptedAt = this.now();
     if (!title || !description || !isPriority(priority)) return { ok: false, reason: "InvalidInput" };
 
     const duplicateKey = createDuplicateKey(title, description);
@@ -148,7 +151,9 @@ export class ProjectBacklogSuggestionService {
         suggestedPriority: priority,
         status: "accepted",
         acceptedBacklogTaskId: existingTask.id,
-        updatedAt: this.now(),
+        acceptanceMode,
+        acceptedAt,
+        updatedAt: acceptedAt,
       });
       suggestionCollections[resolution.projectId] = cloneCollection(updatedCollection);
       return {
@@ -178,14 +183,22 @@ export class ProjectBacklogSuggestionService {
       suggestedPriority: priority,
       status: "accepted",
       acceptedBacklogTaskId: taskResult.task.id,
-      updatedAt: this.now(),
+      acceptanceMode,
+      acceptedAt,
+      updatedAt: acceptedAt,
     });
+    const provenanceResult = this.backlogService.updateTask(backlogCollections, context, taskResult.task.id, {
+      sourceSuggestionId: suggestion.id,
+      suggestionAcceptanceMode: acceptanceMode,
+      suggestionAcceptedAt: acceptedAt,
+    });
+    const task = provenanceResult.ok ? provenanceResult.task : taskResult.task;
     suggestionCollections[resolution.projectId] = cloneCollection(updatedCollection);
     return {
       ok: true,
       collection: cloneCollection(updatedCollection),
       suggestion: { ...updatedCollection.candidates[index] },
-      task: { ...taskResult.task },
+      task: { ...task },
     };
   }
 
@@ -374,7 +387,9 @@ export function isSuggestionCandidate(value: unknown): value is ProjectBacklogSu
     (value.status === "proposed" || value.status === "accepted" || value.status === "rejected" || value.status === "stale") &&
     (value.rationale === undefined || typeof value.rationale === "string") &&
     (value.suggestedPriority === undefined || isPriority(value.suggestedPriority)) &&
-    (value.acceptedBacklogTaskId === undefined || typeof value.acceptedBacklogTaskId === "string")
+    (value.acceptedBacklogTaskId === undefined || typeof value.acceptedBacklogTaskId === "string") &&
+    (value.acceptanceMode === undefined || value.acceptanceMode === "manual" || value.acceptanceMode === "automatic") &&
+    (value.acceptedAt === undefined || typeof value.acceptedAt === "string")
   );
 }
 

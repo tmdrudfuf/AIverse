@@ -86,6 +86,7 @@ import type { ProjectPortalProject, ProjectPortalState } from "./OfficeProjectPo
 import { EXTERNAL_PROJECT_REPOSITORY_IDENTITY_CHOICES } from "./OfficeProjectPortalRegistry";
 import { createProjectDashboardPanelRows } from "./project-dashboard/ProjectDashboardView";
 import { ProjectBacklogService } from "./project-backlog/ProjectBacklogService";
+import { ProjectBacklogSuggestionAcceptancePolicyService } from "./project-backlog/ProjectBacklogSuggestionAcceptancePolicyService";
 import { ProjectAutonomousExecutionPolicyService } from "./project-backlog/ProjectAutonomousExecutionPolicyService";
 import { canCreateExternalProjectDevelopmentRequestDraft } from "./external-development-requests/ExternalProjectDevelopmentRequestService";
 import type { ProjectRegistryRepositoryIdentity } from "./project-registry/ProjectRegistryTypes";
@@ -820,6 +821,12 @@ export class OfficeProjectPortalView {
     const autonomyPolicy = projectId
       ? new ProjectAutonomousExecutionPolicyService().getPolicy(state.projectAutonomyPolicies, projectId)
       : undefined;
+    const suggestionAcceptancePolicy = projectId
+      ? new ProjectBacklogSuggestionAcceptancePolicyService().getPolicy(
+        state.projectBacklogSuggestionAcceptancePolicies,
+        projectId,
+      )
+      : undefined;
     const suggestionCollection = projectId ? state.projectBacklogSuggestionCollections?.[projectId] : undefined;
     const suggestions = suggestionCollection?.candidates.filter((candidate) => candidate.projectId === projectId) ?? [];
     const selectedSuggestion = state.selectedBacklogSuggestionId
@@ -929,16 +936,31 @@ export class OfficeProjectPortalView {
       this.addText(this.panelX + 376, this.panelY + 382, "Generation is explicit and advisory.", mutedStyle());
     }
     this.addTerminalPanel(this.panelX + 24, this.panelY + 364, 304, 82);
-    this.addText(this.panelX + 36, this.panelY + 380, "Autonomous Execution", headingStyle());
+    this.addText(this.panelX + 36, this.panelY + 380, "AI Accept Policy", headingStyle());
     this.addText(
       this.panelX + 44,
-      this.panelY + 406,
+      this.panelY + 404,
+      compactTextLine(`AI Accept: ${suggestionAcceptancePolicy?.enabled ? "On" : "Off"}  Limit: ${suggestionAcceptancePolicy?.maxAutoAcceptPerEvaluation ?? 1}`, 36),
+      suggestionAcceptancePolicy?.enabled ? projectStatusStyle() : mutedStyle(),
+    );
+    this.addText(
+      this.panelX + 44,
+      this.panelY + 426,
+      compactTextLine(`Priorities: ${suggestionAcceptancePolicy?.allowedPriorities.join(", ") || "none"}  ${suggestionAcceptancePolicy?.lastEvaluation?.latestResultText ?? "Manual review"}`, 36),
+      mutedStyle(),
+    );
+
+    this.addTerminalPanel(this.panelX + 24, this.panelY + 454, 304, 68);
+    this.addText(this.panelX + 36, this.panelY + 468, "Autonomous Execution", headingStyle());
+    this.addText(
+      this.panelX + 44,
+      this.panelY + 492,
       compactTextLine(`Auto: ${autonomyPolicy?.enabled ? "On" : "Off"}  Limit: 1  Blocks on active run`, 36),
       autonomyPolicy?.enabled ? projectStatusStyle() : mutedStyle(),
     );
     this.addText(
       this.panelX + 44,
-      this.panelY + 428,
+      this.panelY + 512,
       compactTextLine(`Priorities: ${autonomyPolicy?.allowedPriorities.join(", ") || "none"}  ${formatAutonomyReason(autonomyPolicy?.lastEvaluationReason)}`, 36),
       mutedStyle(),
     );

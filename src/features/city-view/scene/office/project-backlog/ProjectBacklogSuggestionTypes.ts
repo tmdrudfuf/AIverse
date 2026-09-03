@@ -14,6 +14,8 @@ export type ProjectBacklogSuggestionCandidate = {
   rationale?: string;
   suggestedPriority?: ProjectBacklogPriority;
   acceptedBacklogTaskId?: string;
+  acceptanceMode?: "manual" | "automatic";
+  acceptedAt?: string;
 };
 
 export type ProjectBacklogSuggestionCollection = {
