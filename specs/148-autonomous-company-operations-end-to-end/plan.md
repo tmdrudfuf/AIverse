@@ -102,8 +102,12 @@ authoritative services and the existing agent-workflow role logic. Reuse:
   `updateSelectedProjectAutonomyPolicy` / `reevaluateSelectedProjectAutonomy`).
 - The existing deterministic `projectBacklogSuggestionProvider` injection point
   for the Spec 143 abstraction.
-- The existing injectable `externalProjectAdosExecutionService.start` adapter
-  for the ADOS process boundary in automated tests.
+- The real `ExternalProjectAdosExecutionService`, with only its injectable
+  `ImplementerRuntimeProvider` (the OS process spawn) replaced by a
+  deterministic fake for the ADOS process boundary in automated tests. Real
+  preparation validation, trusted-policy / safe-command checks, structured
+  requirements assembly, and durable execution/result/run-status record
+  creation still run.
 - `tools/agent-workflow/roleResolver.js` (`resolveEffectiveRoles`,
   `validateAgentForRole`) for distinct-reviewer / no-self-review enforcement.
 - `tools/agent-workflow/reviewConvergence.js` (`computeConvergenceStatus`) for

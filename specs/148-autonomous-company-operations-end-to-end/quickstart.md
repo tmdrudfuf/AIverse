@@ -24,13 +24,18 @@ for authoritative requirement 13 (Spec 140 portfolio truthfulness).
 ## Read the evidence
 
 `specs/148-autonomous-company-operations-end-to-end/runtime-evidence.json`
-records one complete cycle: Project A canonical identity, Project B isolation
-identity, the four automation policy states, the suggestion id, accepted task
-id, backlog state, Ready transition, development request / preparation /
-execution ids, the ADOS durable run id, the ADOS role assignment (implementer
-Claude, reviewer Codex, mode adaptive), candidate owner, reviewer identity, SHA
-alignment fields, duplicate-event idempotency evidence, active-run gating
-evidence, and reload persistence evidence. All paths are repository-relative.
+records one controlled cycle up to the ADOS execution boundary: Project A
+canonical identity, Project B isolation identity, the four automation policy
+states (all independently On), the suggestion id, accepted task id, backlog
+state, Ready transition, development request / preparation / execution ids, the
+durable execution record the office observes, the ADOS durable run id, the ADOS
+role assignment (implementer Claude, reviewer Codex, mode adaptive), candidate
+owner, reviewer identity, the `externalSafetyBoundary` block, SHA-alignment /
+convergence-gate fields, duplicate-event idempotency evidence, active-run gating
+evidence, and reload persistence evidence. Independent Codex review,
+implementation validation, exact-HEAD convergence, and publication are the
+authoritative ADOS pipeline that runs after this handoff. All paths are
+repository-relative.
 
 ## Manual controls still work
 

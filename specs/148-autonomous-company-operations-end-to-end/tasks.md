@@ -17,10 +17,11 @@
 ## Phase 2: E2E Chain Coverage
 
 **Purpose**: One deterministic ordered cycle across Specs 141-147 plus the
-Spec 142/138 bridge and the injectable ADOS adapter.
+Spec 142/138 bridge and the real ADOS execution service (only the process
+spawn faked).
 
-- [X] T002 Add `src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts` driving `OfficeProjectPortalController` with a deterministic Spec 143 suggestion provider and a stubbed `externalProjectAdosExecutionService.start`
-- [X] T003 [US1] Cover ordered single cycle and each transition once: Test H (sequencing), Test B (suggestion project-scoped), Test C (acceptance to backlog not Ready), Test D (Ready exactly once), Test E (Spec 144 sole execution authority), Test F (bridge exact project/task context)
+- [X] T002 Add `src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts` driving `OfficeProjectPortalController` with a deterministic Spec 143 suggestion provider and the real `ExternalProjectAdosExecutionService` (only its `ImplementerRuntimeProvider` process spawn faked)
+- [X] T003 [US1] Cover ordered single cycle and each transition once: Test H (sequencing), Test B (suggestion project-scoped), Test C (Spec 145 acceptance owns the backlog task; Ready transition attributed to Spec 146's counter with all four controls enabled), Test D (Ready exactly once), Test E (Spec 144 sole execution authority), Test F (bridge + process boundary exact project/task context, structured requirements as file payload)
 - [X] T004 [US2] Cover four independent automation controls: Test A
 - [X] T005 [US2] Cover no direct ADOS invocation from Specs 145-147: Test G (structural import assertion on the three service modules)
 - [X] T006 [US3] Cover idempotency: Test I (duplicate planning event), Test J (duplicate acceptance), Test K (duplicate readiness evaluation), Test L (duplicate execution event)

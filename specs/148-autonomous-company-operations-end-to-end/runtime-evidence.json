@@ -7,7 +7,7 @@
     "chainTest": "src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts",
     "roleAndGateTest": "tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts",
     "suggestionProvider": "deterministic fixture (authoritative requirement 23)",
-    "adosProcessBoundary": "existing injectable externalProjectAdosExecutionService.start adapter"
+    "adosProcessBoundary": "real ExternalProjectAdosExecutionService; only its ImplementerRuntimeProvider (the OS process spawn) is a deterministic fake, per authoritative requirement 23. Real preparation validation, trusted-policy check, safe-command check, structured requirements assembly, and durable execution/result/run-status record creation all run."
   },
   "projectA": {
     "projectId": "project-a",
@@ -26,25 +26,48 @@
     "boundedSuggestionCount": 1,
     "spec147CreatedBacklogTask": false,
     "acceptedTaskId": "project-a:backlog:1",
-    "acceptedTaskStatusAfterSpec145": "backlog",
+    "spec145AcceptedCount": 1,
     "spec145MarkedReady": false,
+    "cascade": {
+      "note": "With all four controls enabled, evaluateSelectedProjectBacklogSuggestionsForAutoAccept() synchronously runs the sanctioned Spec 146 FR-016 trigger. Each transition is attributed to its owning policy's per-evaluation audit counter, not by disabling a stage.",
+      "spec145AcceptedCount": 1,
+      "spec146PromotedCount": 1,
+      "readyTransitionAttributedTo": "spec146",
+      "suggestionAcceptanceModeOnTask": "automatic"
+    },
     "readyTransition": {
       "taskId": "project-a:backlog:1",
       "promotedCount": 1,
       "promotedExactlyOnce": true,
       "spec146StartedDevelopment": false,
-      "spec146InvokedSpec144": false
+      "spec146InvokedSpec144": false,
+      "processSpawnInvocationsAfterCascade": 0
     },
     "developmentRequestId": "project-a:backlog-task:project-a:backlog:1:external-development-request-draft",
     "executionPreparationId": "project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation",
-    "executionRunId": "project-a:run",
-    "executionResultId": "project-a:result",
+    "executionRunId": "project-a:external-ados-execution:project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation:external-ados-execution-v1",
+    "executionResultId": "project-a:external-ados-execution-result:project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation:external-ados-execution-v1",
+    "executionDurableRecord": {
+      "source": "real ExternalProjectAdosExecutionService outcome persisted into controller state (externalProjectAdosExecutions / externalProjectAdosExecutionResults / externalProjectAdosRunStatuses)",
+      "status": "Completed",
+      "implementerStarted": true,
+      "validationStarted": false,
+      "reviewStarted": false,
+      "repositoryMutationStarted": false,
+      "githubMutationStarted": false,
+      "publishStarted": false,
+      "mergeStarted": false,
+      "deployStarted": false,
+      "processSpawnInvocations": 1,
+      "spawnInvocationsAfterDuplicateExecutionEvent": 1
+    },
     "bridgeBinding": {
       "boundProjectId": "project-a",
       "sourceBacklogTaskId": "project-a:backlog:1",
       "crossProjectFallback": false,
       "globalLatestProjectSingleton": false,
-      "taskTextShellInterpolation": false
+      "taskTextShellInterpolation": false,
+      "structuredRequirementsDeliveredAsFilePayload": true
     }
   },
   "projectB": {
@@ -64,7 +87,7 @@
     }
   },
   "adosRun": {
-    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json so evidence is stable across worktree locations. Absolute worktree/repository/source paths are intentionally omitted.",
+    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json so evidence is stable across worktree locations. Absolute worktree/repository/source paths are intentionally omitted. This run evidences the durable ADOS role assignment and run identity only; at status READY_FOR_IMPLEMENTATION it has executed nothing. The real ADOS execution-path semantics (preparation validation, structured request, durable run status) are exercised by the real ExternalProjectAdosExecutionService in the deterministic harness; the authoritative full pipeline (validation, independent Codex review, exact-HEAD convergence, publication) runs after this implementation handoff.",
     "runId": "cc6ed14815c049ed1b97ce1c",
     "status": "READY_FOR_IMPLEMENTATION",
     "specNumber": "148",
@@ -86,17 +109,31 @@
   "candidateOwner": "claude",
   "reviewer": "codex",
   "candidateOwnerIsReviewer": false,
+  "externalSafetyBoundary": {
+    "note": "This implementation runtime does not start review/validation/publication/merge/deploy and does not mutate GitHub (execution policy). Same boundary Specs 142-147 declare. Because of this boundary, validated/reviewed/exact-HEAD SHAs and the publication result are not available in this runtime; requirement 21 asks for those 'where available' and requirement 18 forbids fabricating completion.",
+    "reviewStarted": false,
+    "validationStarted": false,
+    "fullAdosValidationPipelineRun": false,
+    "published": false,
+    "merged": false,
+    "deployed": false,
+    "primaryRepositoryMutated": false,
+    "githubMutated": false,
+    "realChildRunSuppressedByHandoff": true
+  },
   "shaAlignment": {
     "candidateBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
-    "validatedSha": "ADOS-owned; produced after implementation validation",
-    "reviewedSha": "ADOS-owned; produced by the independent Codex review",
-    "exactHeadResult": "ADOS-owned; convergence requires validatedSha == reviewedSha == exact HEAD",
+    "validatedSha": "not available in this runtime; produced by the authoritative ADOS implementation-validation pipeline after this handoff",
+    "reviewedSha": "not available in this runtime; produced by the independent Codex review of this candidate after this handoff",
+    "exactHeadResult": "not available in this runtime; convergence gate requires validatedSha == reviewedSha == exact HEAD before publication",
     "staleApprovalReuseAllowed": false,
-    "enforcementProvenById": "tools/agent-workflow/reviewConvergence.js computeConvergenceStatus (exactTargetMatch gate)"
+    "enforcementProvenById": "tools/agent-workflow/reviewConvergence.js computeConvergenceStatus (exactTargetMatch gate); exercised by tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts including stale-approval rejection"
   },
-  "publicationResult": "Pending: human-only gate. Publication requires an independent Codex Approved review of the exact validated Spec 148 candidate.",
+  "publicationResult": "Pending: human-only gate. Publication requires an independent Codex Approved review of the exact validated Spec 148 candidate, with validatedSha == reviewedSha == exact HEAD.",
   "completionState": {
-    "source": "actual ADOS execution/result status",
+    "source": "real ExternalProjectAdosExecutionService execution/result status persisted into controller state",
+    "harnessExecutionStatus": "Completed",
+    "runLifecycleComplete": false,
     "fabricatedPercentageProgressIntroduced": false
   },
   "idempotency": {
@@ -165,7 +202,7 @@
   },
   "validation": {
     "targetedVitestCommand": "npx vitest run src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts src/features/city-view/scene/PortfolioOperationsService.test.ts",
-    "chainTests": 4,
+    "chainTests": 5,
     "roleAndGateTests": 10,
     "portfolioTruthfulnessTests": "src/features/city-view/scene/PortfolioOperationsService.test.ts (existing, unchanged)"
   }

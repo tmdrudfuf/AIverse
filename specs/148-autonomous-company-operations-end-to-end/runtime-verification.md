@@ -10,8 +10,9 @@ so the evidence is stable across worktree locations.
 
 Runtime verification drives the real `OfficeProjectPortalController` and the real
 Spec 141-147 services through one controlled autonomous cycle, using a
-deterministic Spec 143 suggestion provider fixture and the existing injectable
-`externalProjectAdosExecutionService.start` adapter:
+deterministic Spec 143 suggestion provider fixture and the real
+`ExternalProjectAdosExecutionService` with only its `ImplementerRuntimeProvider`
+(the OS process spawn) replaced by a deterministic fake:
 
 1. **Planning** - Project A has Auto Suggestions, Auto Accept, Auto Ready, and
    Auto Execute independently enabled. Enabling Auto Suggestions is the single
@@ -30,26 +31,38 @@ deterministic Spec 143 suggestion provider fixture and the existing injectable
 4. **Engineering** - Spec 144 alone authorizes one bounded execution. It reuses
    the Spec 142 / Spec 138 bridge, which binds the exact
    `projectId = project-a` and `sourceBacklogTaskId = project-a:backlog:1`, with
-   no cross-project id and no global latest-project singleton. The ADOS adapter
-   is invoked once; the task becomes `in_progress` with `executionRunId =
-   project-a:run`. A replayed execution event starts no second run.
+   no cross-project id and no global latest-project singleton. The real
+   `ExternalProjectAdosExecutionService` runs once: it validates the
+   preparation, checks the trusted policy and the safe command, assembles the
+   structured requirements file, invokes the process boundary once (fake
+   `ImplementerRuntimeProvider`), and persists a durable execution + result +
+   run-status record the office observes (`implementerStarted: true`,
+   `reviewStarted: false`, `githubMutationStarted: false`, `publishStarted:
+   false`). The task becomes `in_progress` with the real execution id
+   `project-a:external-ados-execution:...:external-ados-execution-v1`. A
+   replayed execution event starts no second run and no second process spawn.
 5. **Review / Validation / Complete** - The independent reviewer is Codex per the
-   durable ADOS role assignment; completion state derives from the actual ADOS
-   execution result, not a hardcoded value. No fabricated percentage progress is
-   introduced.
+   durable ADOS role assignment. Completion state derives from the real
+   execution result, not a hardcoded value; no fabricated percentage progress
+   is introduced. Independent Codex review, implementation validation,
+   exact-HEAD convergence, and publication are the authoritative ADOS pipeline
+   that runs *after* this implementation handoff (the same external boundary
+   Specs 142-147 declare) and are gated by
+   `tools/agent-workflow/reviewConvergence.js` (see below).
 
-### Note on the Spec 145 -> Spec 146 trigger
+### Attribution of the Spec 145 -> Spec 146 cascade
 
 `OfficeProjectPortalController.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()`
-calls `evaluateSelectedProjectBacklogReadinessPromotion()` at its tail. This is
-a sanctioned safe trigger (Spec 146 FR-016 lists "Spec 145 acceptance
-evaluation completion"). Spec 146 still runs its own independent policy
-evaluation and Spec 145 never sets `ready` itself. The chain test enables
-Spec 146 only after asserting the Spec 145 result so the `backlog`-not-`ready`
-state (authoritative requirement 5) is observable; the "independently
-disableable" test asserts `suggestionAutoAcceptAcceptedCount` and
-`backlogReadinessPromotionPromotedCount` separately so each transition is
-attributed to its owning policy even when both are enabled.
+calls `evaluateSelectedProjectBacklogReadinessPromotion()` at its tail - a
+sanctioned trigger (Spec 146 FR-016 lists "Spec 145 acceptance evaluation
+completion"). With all four controls enabled, acceptance and promotion happen
+in one synchronous cascade. Each transition is attributed to its owning policy
+by that policy's per-evaluation audit counter, not by disabling a stage:
+`suggestionAutoAcceptAcceptedCount === 1` (Spec 145 accepted once) and
+`backlogReadinessPromotionPromotedCount === 1` (Spec 146's own evaluation
+promoted once). Spec 145 never sets `ready` itself, and
+`expect(invoke).not.toHaveBeenCalled()` immediately after the cascade proves
+Spec 146 did not invoke Spec 144 despite Auto Execute being enabled throughout.
 
 ## Independent automation controls
 
@@ -87,6 +100,22 @@ disabled; no consent is granted on remount.
 With all automation disabled, manual backlog task creation, manual
 backlog -> Ready promotion, and manual suggestion generation all continue to
 work. Each automation stage can be disabled independently.
+
+## External safety boundary
+
+This implementation runtime does not start review, validation, publication,
+merge, or deploy, and does not mutate GitHub (execution policy; the same
+boundary Specs 142-147 declare). `runtime-evidence.json.externalSafetyBoundary`
+records `reviewStarted: false`, `published: false`,
+`fullAdosValidationPipelineRun: false`, and `realChildRunSuppressedByHandoff:
+true`. Consequently validated SHA, reviewed SHA, exact-HEAD result, and
+publication result are **not available in this runtime** - they are produced by
+the authoritative ADOS pipeline that runs after this handoff and by the
+independent Codex review of this candidate. Requirement 21 asks for those SHAs
+"where available"; requirement 18 forbids fabricating completion. The evidence
+records the candidate base SHA that is available now and the real enforcement
+gate (`reviewConvergence.js`) that will require
+`validated == reviewed == exact HEAD` before publication.
 
 ## Adaptive role and publication-gate evidence
 

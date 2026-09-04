@@ -292,12 +292,18 @@ stays blocked rather than self-reviewing.
 
 - The controlled deterministic E2E harness drives the existing
   `OfficeProjectPortalController` and real Spec 141-147 services with a
-  deterministic Spec 143 suggestion provider fixture and the existing injectable
-  ADOS execution adapter, per authoritative requirement 23.
-- The real configured ADOS integration path for this feature is exercised by the
-  ADOS run that produced this implementation handoff; its durable role
-  assignment and run id are the authoritative ADOS evidence and are transcribed
-  into repository-relative runtime evidence.
+  deterministic Spec 143 suggestion provider fixture and the real
+  `ExternalProjectAdosExecutionService`, replacing only its injectable
+  `ImplementerRuntimeProvider` (the OS process spawn) with a deterministic fake,
+  per authoritative requirement 23.
+- The real ADOS execution-path semantics (preparation validation, trusted-policy
+  and safe-command checks, structured requirements request, durable
+  execution/result/run-status records observable by the office) are exercised by
+  that real service in the harness. The durable role assignment and run id from
+  the ADOS run that produced this implementation handoff are transcribed into
+  repository-relative runtime evidence. The authoritative full pipeline
+  (implementation validation, independent Codex review, exact-HEAD convergence,
+  publication) runs after this implementation handoff.
 - `.agent-workflow/` run state is gitignored; role-assignment values are
   transcribed into tracked runtime evidence rather than read from an untracked
   path at test time.

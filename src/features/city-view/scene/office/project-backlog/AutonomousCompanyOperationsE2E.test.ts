@@ -12,10 +12,16 @@ import {
   flushPromises,
   getControllerInternals,
 } from "../OfficeProjectPortalController.testHelpers";
+import { ExternalProjectAdosExecutionService } from "../external-ados-execution/ExternalProjectAdosExecutionService";
 import type {
   StartExternalProjectAdosExecutionInput,
   StartExternalProjectAdosExecutionOutcome,
 } from "../external-ados-execution/ExternalProjectAdosExecutionService";
+import type {
+  ImplementerRuntimeProvider,
+  ImplementerRuntimeProviderCommand,
+  ImplementerRuntimeProviderResult,
+} from "../implementer-runtime/ImplementerRuntimeProvider";
 import type { ExternalProjectAdosExecution } from "../external-ados-execution/ExternalProjectAdosExecutionTypes";
 import type { ExternalProjectAdosRunPreparation } from "../external-ados-run-preparation/ExternalProjectAdosRunPreparationTypes";
 import type { ProjectRegistryEntry } from "../project-registry/ProjectRegistryTypes";
@@ -49,36 +55,54 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       { title: "A11y audit doc", description: "Add a short accessibility checklist to docs/.", priority: HIGH },
       { title: "Bounded-out extra", description: "This second candidate must be bounded out.", priority: HIGH },
     ]);
-    const start = vi.fn(startedOutcome);
+    const { provider: implementerProvider, invoke } = completedImplementerProvider();
     const controller = createController(storage, provider);
     const internals = getControllerInternals(controller);
-    internals.externalProjectAdosExecutionService.start = start;
+    // Drive the *real* ExternalProjectAdosExecutionService; only the OS process
+    // spawn (ImplementerRuntimeProvider.invoke) is a deterministic fake, which
+    // the authoritative requirement 23 permits for the ADOS process boundary.
+    // The real service still runs preparation validation, the trusted-policy
+    // check, the safe-command check, structured requirements assembly, and
+    // durable execution / result / run-status record creation observable by the
+    // office.
+    internals.externalProjectAdosExecutionService =
+      new ExternalProjectAdosExecutionService(implementerProvider);
     seedTwoProjects(internals);
     controller.open();
     controller.updateInput(createInput({}));
     openBacklog(controller, internals, "project-a");
 
-    // --- Test A: four automation controls toggle independently -------------
+    // --- Test A: the four automation controls toggle independently, and all
+    //     four are then independently enabled for project A before the cycle --
     expect(internals.updateSelectedProjectSuggestionAcceptancePolicy({ enabled: true, allowedPriorities: [HIGH] }))
       .toBe(true);
     expectPolicyFlags(controller, { accept: true, ready: false, execute: false, suggest: false });
 
+    expect(internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+      enabled: true,
+      allowedPriorities: [HIGH],
+      maxPromotionsPerEvaluation: 1,
+    })).toBe(true);
+    expectPolicyFlags(controller, { accept: true, ready: true, execute: false, suggest: false });
+
     expect(controller.updateSelectedProjectAutonomyPolicy({ enabled: true, allowedPriorities: [HIGH] })).toBe(true);
     await flushPromises();
-    expectPolicyFlags(controller, { accept: true, ready: false, execute: true, suggest: false });
+    expectPolicyFlags(controller, { accept: true, ready: true, execute: true, suggest: false });
 
+    // All four controls are now independently ON. Enabling Auto Suggestions
+    // last is the single bounded lifecycle event that seeds the cycle.
     expect(internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 }))
       .toBe(true);
     await flushPromises();
-    // Enabling Auto Suggestions is the single bounded lifecycle event.
-    expectPolicyFlags(controller, { accept: true, ready: false, execute: true, suggest: true });
+    expectPolicyFlags(controller, { accept: true, ready: true, execute: true, suggest: true });
 
     // --- Test B: Spec 147 generated a bounded, project-scoped suggestion ---
     const suggestionsA = internals.state.projectBacklogSuggestionCollections["project-a"]?.candidates ?? [];
     expect(suggestionsA).toHaveLength(1); // bounded to maxSuggestionsPerEvaluation
     expect(suggestionsA[0]).toMatchObject({ projectId: "project-a", status: "proposed" });
     const suggestionId = suggestionsA[0].id;
-    // Spec 147 must not create a backlog task directly.
+    // Spec 147 must not create a backlog task directly, and generation does not
+    // auto-accept even though Auto Accept is enabled: it only proposes.
     expect(internals.state.projectBacklogCollections["project-a"]?.tasks ?? []).toEqual([]);
     // Project B received nothing.
     expect(internals.state.projectBacklogSuggestionCollections["project-b"]).toBeUndefined();
@@ -87,40 +111,38 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("replay-planning-event")).toBe(false);
     expect(internals.state.projectBacklogSuggestionCollections["project-a"].candidates).toHaveLength(1);
 
-    // --- Test C: Spec 145 acceptance produces a backlog task, not Ready ----
+    // --- Test C: Spec 145 acceptance produces the backlog task; the Ready
+    //     transition is owned by Spec 146's own evaluation, never Spec 145 ----
     expect(internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()).toBe(true);
+    const probeAfterAccept = controller.getProjectBacklogProbeState();
+    // Spec 145 performed exactly one acceptance...
+    expect(probeAfterAccept.suggestionAutoAcceptAcceptedCount).toBe(1);
+    // ...and Spec 146 (its own independent policy evaluation, the sanctioned
+    // Spec 146 FR-016 trigger) performed exactly one promotion. The Ready
+    // transition is attributed to Spec 146's audit counter, never to Spec 145.
+    expect(probeAfterAccept.backlogReadinessPromotionPromotedCount).toBe(1);
     const acceptedTasks = internals.state.projectBacklogCollections["project-a"].tasks;
     expect(acceptedTasks).toHaveLength(1);
     const acceptedTask = acceptedTasks[0];
     expect(acceptedTask).toMatchObject({
       projectId: "project-a",
-      status: "backlog",
       suggestionAcceptanceMode: "automatic",
       sourceSuggestionId: suggestionId,
     });
-    expect(acceptedTask.status).not.toBe("ready");
-    // Spec 146 is still disabled -> no promotion happened as a side effect.
-    expect(controller.getProjectBacklogProbeState().backlogReadinessPromotionEnabled).toBe(false);
     const acceptedTaskId = acceptedTask.id;
+    // Spec 146 must not start development directly, even with Auto Execute on.
+    expect(invoke).not.toHaveBeenCalled();
+    expect(acceptedTask.executionRunId).toBeUndefined();
 
     // --- Test J: duplicate acceptance evaluation does not duplicate the task
     internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
     expect(internals.state.projectBacklogCollections["project-a"].tasks).toHaveLength(1);
 
-    // --- Test D: Spec 146 promotes backlog -> Ready exactly once ----------
-    expect(internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
-      enabled: true,
-      allowedPriorities: [HIGH],
-      maxPromotionsPerEvaluation: 1,
-    })).toBe(true);
-    expectPolicyFlags(controller, { accept: true, ready: true, execute: true, suggest: true });
-    const promotedTask = internals.state.projectBacklogCollections["project-a"].tasks
-      .find((task) => task.id === acceptedTaskId)!;
-    expect(promotedTask.status).toBe("ready");
-    expect(controller.getProjectBacklogProbeState().backlogReadinessPromotionPromotedCount).toBe(1);
-    // Spec 146 must not start development directly.
-    expect(start).not.toHaveBeenCalled();
-    expect(promotedTask.executionRunId).toBeUndefined();
+    // --- Test D: Spec 146 produced Ready exactly once --------------------
+    const readyAfterCascade = internals.state.projectBacklogCollections["project-a"].tasks
+      .filter((task) => task.status === "ready");
+    expect(readyAfterCascade).toHaveLength(1);
+    expect(readyAfterCascade[0].id).toBe(acceptedTaskId);
 
     // --- Test K: duplicate readiness evaluation does not duplicate --------
     expect(internals.evaluateSelectedProjectBacklogReadinessPromotion()).toBe(false);
@@ -130,13 +152,14 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
     // --- Test E: Spec 144 alone authorizes autonomous execution ----------
     expect(await controller.reevaluateSelectedProjectAutonomy()).toBe(true);
-    expect(start).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
     const executedTask = internals.state.projectBacklogCollections["project-a"].tasks
       .find((task) => task.id === acceptedTaskId)!;
     expect(executedTask.status).toBe("in_progress");
-    expect(executedTask.executionRunId).toBe("project-a:run");
+    expect(executedTask.executionRunId).toBeTruthy();
 
-    // --- Test F: Spec 142/138 bridge received exact project/task context --
+    // --- Test F: Spec 142/138 bridge + ADOS process boundary received the
+    //     exact canonical project/task context, with no shell interpolation --
     const draftKeys = Object.keys(internals.state.externalProjectDevelopmentRequestDrafts);
     expect(draftKeys).toEqual([`project-a:backlog-task:${acceptedTaskId}`]);
     const draft = internals.state.externalProjectDevelopmentRequestDrafts[draftKeys[0]];
@@ -144,18 +167,32 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(draft.sourceBacklogTaskId).toBe(acceptedTaskId);
     const prep = internals.state.externalProjectAdosRunPreparations[draftKeys[0]];
     expect(prep.projectId).toBe("project-a");
-    const startArg = start.mock.calls[0][0] as StartExternalProjectAdosExecutionInput;
-    expect(startArg.projectId).toBe("project-a");
-    expect(JSON.stringify(startArg)).not.toContain("project-b");
+    const command = invoke.mock.calls[0][0];
+    expect(command.workingDirectory).toBe("C:/worktrees/project-a");
+    expect(command.prompt).toContain("Project A");
+    // Structured requirements travel as a file payload, not as argv text.
+    expect(command.arguments.join(" ")).not.toContain(acceptedTask.title);
+    expect(command.files?.some((file) => file.content.length > 0)).toBe(true);
+    expect(JSON.stringify(command)).not.toContain("project-b");
 
-    // --- Test X: completion state reflects the actual ADOS adapter outcome
+    // --- Test X: completion state reflects the real ADOS service outcome and
+    //     the durable execution record the office observes ------------------
     const executionResult = Object.values(internals.state.externalProjectAdosExecutionResults)[0];
-    expect(executionResult?.status).toBe("Completed"); // from startedOutcome, not hardcoded
-    expect(executionResult?.executionId).toBe("project-a:run");
+    expect(executionResult?.status).toBe("Completed"); // from the real service, not hardcoded
+    expect(executionResult?.projectId).toBe("project-a");
+    expect(executionResult?.reviewStarted).toBe(false);
+    expect(executionResult?.publishStarted).toBe(false);
+    const executionRecord = Object.values(internals.state.externalProjectAdosExecutions)[0];
+    expect(executionRecord?.projectId).toBe("project-a");
+    expect(executionRecord?.implementerStarted).toBe(true);
+    expect(executionRecord?.reviewStarted).toBe(false);
+    expect(executionRecord?.githubMutationStarted).toBe(false);
+    const runStatus = Object.values(internals.state.externalProjectAdosRunStatuses)[0] as { projectId: string };
+    expect(runStatus.projectId).toBe("project-a");
 
     // --- Test L: duplicate execution event does not create a duplicate run
     await controller.reevaluateSelectedProjectAutonomy();
-    expect(start).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
     expect(Object.values(internals.state.externalProjectAdosExecutions)).toHaveLength(1);
 
     // --- Test M: active run blocks prohibited extra planning/Ready/exec ---
@@ -180,7 +217,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       .toBe("Skipped: active execution exists");
 
     await controller.reevaluateSelectedProjectAutonomy();
-    expect(start).toHaveBeenCalledTimes(1); // Spec 144 concurrency limit holds
+    expect(invoke).toHaveBeenCalledTimes(1); // Spec 144 concurrency limit holds
     expect(controller.getProjectBacklogProbeState()).toMatchObject({
       autonomyState: "blocked",
       autonomyReason: "ActiveRunExists",
@@ -215,7 +252,8 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(suggestionId).toBe("project-a:suggestion:1");
     expect(acceptedTaskId).toBe("project-a:backlog:1");
     expect(draft.id).toBe("project-a:backlog-task:project-a:backlog:1:external-development-request-draft");
-    expect(executedTask.executionRunId).toBe("project-a:run");
+    expect(executedTask.executionRunId).toContain("project-a:external-ados-execution:");
+    expect(executionRecord?.id).toBe(executedTask.executionRunId);
   });
 
   it("keeps the four automation controls independently disableable (Tests A, Z)", async () => {
@@ -449,6 +487,36 @@ function projectEntry(id: string): ProjectRegistryEntry {
     createdAt: "2026-08-31T00:00:00.000Z",
     lastActivityAt: "2026-08-31T00:00:00.000Z",
   };
+}
+
+// A deterministic ADOS process-boundary fake: the implementer subprocess spawn
+// succeeds and the run is launched (status "Completed", started true), but the
+// ADOS run as a whole is still in flight (evidence.completed false) -- the same
+// "run launched, not finished" shape the Spec 144 suite and this file's other
+// tests use, and the shape the active-run gate in
+// ProjectAutonomousSuggestionPolicyService.countActiveExecutions keys on.
+function completedImplementerProvider() {
+  const invoke = vi.fn(
+    async (command: ImplementerRuntimeProviderCommand): Promise<ImplementerRuntimeProviderResult> => ({
+      status: "Completed",
+      evidence: {
+        providerId: "claude",
+        agentId: "Claude",
+        role: "Implementer",
+        commandDisplay: [command.command, ...command.arguments].join(" "),
+        workingDirectory: command.workingDirectory,
+        started: true,
+        completed: false,
+        timedOut: false,
+        cancelled: false,
+        durationMs: 5,
+        stdoutSummary: "",
+        stderrSummary: "",
+        outputTruncated: false,
+      },
+    }),
+  );
+  return { provider: { providerId: "claude", invoke } as ImplementerRuntimeProvider, invoke };
 }
 
 async function startedOutcome(
