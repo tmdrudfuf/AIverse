@@ -74,7 +74,7 @@ const durableCandidate = readJsonIfPresent(new URL("candidate.json", runDir)) as
   | { candidate_sha: string; status: string }
   | undefined;
 const durableValidation = readJsonIfPresent(new URL("validation-runtime.json", runDir)) as
-  | { commands: Array<{ command: string; exit_code: number }> }
+  | { head_before: string; head_after: string; commands: Array<{ command: string; exit_code: number }> }
   | undefined;
 const durableReview = readJsonIfPresent(new URL("review-runtime.json", runDir)) as
   | { reviewed_sha: string; status: string; decision: string }
@@ -115,6 +115,16 @@ describe("Spec 148 durable ADOS role assignment", () => {
     ]);
   });
 
+  it("carries no absolute machine path and no unexpected field, in any checkout (Tests P, Q, S)", () => {
+    // This must hold for the tracked artifact itself, independent of whether a
+    // live ADOS run dir exists in this worktree.
+    const allowed = new Set([...sanitized._derivedFields, "_note", "_durableSource", "_derivedFields"]);
+    for (const key of Object.keys(sanitized)) {
+      expect(allowed.has(key), `sanitized artifact must not carry unexpected field ${key}`).toBe(true);
+    }
+    expect(JSON.stringify(sanitized)).not.toMatch(/[A-Za-z]:[\\/]/);
+  });
+
   it("matches the durable ADOS run record field-for-field when it is present in the worktree (Tests P, Q, S)", () => {
     if (!durableRun) {
       // Clean checkout without a live ADOS run dir: nothing to cross-check here;
@@ -129,14 +139,6 @@ describe("Spec 148 durable ADOS role assignment", () => {
         `sanitized.${field} must equal durable ados-run.json`,
       ).toEqual((durableRun as Record<string, unknown>)[field]);
     }
-    // ...and the sanitized copy carries nothing beyond that allowlist plus its
-    // own provenance markers - in particular no volatile lifecycle field and no
-    // absolute machine path.
-    const allowed = new Set([...sanitized._derivedFields, "_note", "_durableSource", "_derivedFields"]);
-    for (const key of Object.keys(sanitized)) {
-      expect(allowed.has(key), `sanitized artifact must not carry unexpected field ${key}`).toBe(true);
-    }
-    expect(JSON.stringify(sanitized)).not.toMatch(/[A-Za-z]:[\\/]/);
   });
 
   it("has runtime-evidence.json transcribe the sanitized assignment unchanged (Tests P, Q, R, S)", () => {
@@ -224,8 +226,8 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     expect(evidence.shaAlignment.staleApprovalReuseAllowed).toBe(false);
   });
 
-  it("cross-checks validated == reviewed SHA from durable ADOS sources when present (Tests S, U, X)", () => {
-    if (!durableCandidate || !durableReview || !durableValidation) {
+  it("reads candidate/review SHA identity from durable ADOS sources when present (Tests S, U, X)", () => {
+    if (!durableCandidate) {
       // No live ADOS run dir (clean checkout). The exact-HEAD + no-stale-approval
       // gate is still enforced by the computeConvergenceStatus tests above; the
       // evidence deliberately does not freeze a candidate SHA literal.
@@ -233,14 +235,46 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       return;
     }
     expect(durableCandidate.candidate_sha).toMatch(/^[0-9a-f]{40}$/);
-    // validated candidate == reviewed candidate.
-    expect(durableReview.reviewed_sha).toBe(durableCandidate.candidate_sha);
-    // Full configured validation succeeded for that candidate. The review
-    // *decision* is intentionally not asserted here: it changes every review
-    // cycle, and publication gating is covered by computeConvergenceStatus.
-    for (const command of durableValidation.commands) {
-      expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
+    // The ADOS pipeline order is candidate -> validate -> review
+    // (run_pipeline.py: candidate.json is written, *then* ValidationEngine.run
+    // executes every configured command including this repository's own
+    // `npm test`, and only after that full run returns does it write
+    // validation-runtime.json; review-runtime.json is written later still,
+    // only once validation has already passed). This suite itself runs as
+    // part of that `npm test` command. So at the moment this test executes for
+    // a freshly-committed candidate, validation-runtime.json and
+    // review-runtime.json on disk can only reflect a *prior*, already-finished
+    // cycle (or be absent on the first cycle) - never the in-flight candidate.
+    // Asserting reviewed_sha === candidate_sha, or that the *prior* cycle's
+    // command list all exited 0, unconditionally here would fail by
+    // construction on every cycle after the first. A mismatch is the
+    // correctly-modelled "not yet (re)validated / not yet reviewed" state that
+    // computeConvergenceStatus (exercised above) already treats as
+    // non-convergent, not a defect in this test.
+    //
+    // What *is* still checkable without that circularity: whenever a durable
+    // record happens to name the exact current candidate - which is true any
+    // time this test runs outside of a live ADOS validation pass for a new
+    // candidate, e.g. right after a full cycle has completed and before a new
+    // one starts - the strong invariant must hold. So the exit-code / no-tree-
+    // mutation check is restored, gated on that correlation, instead of being
+    // dropped to a bare shape check.
+    if (durableReview) {
+      expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
     }
+    if (durableValidation) {
+      expect(Array.isArray(durableValidation.commands)).toBe(true);
+      if (durableValidation.head_after === durableCandidate.candidate_sha) {
+        // This durable validation record targeted the exact current candidate
+        // (not a stale prior cycle): the strong invariant applies - the
+        // worktree was left unmutated and every command must have exited 0.
+        expect(durableValidation.head_before).toBe(durableValidation.head_after);
+        for (const command of durableValidation.commands) {
+          expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
+        }
+      }
+    }
+    expect(evidence.shaAlignment.candidateOwner).toBe("claude");
   });
 
   it("keeps publicationResult a standing gate, not a frozen per-candidate verdict (Tests U, X, Y)", () => {

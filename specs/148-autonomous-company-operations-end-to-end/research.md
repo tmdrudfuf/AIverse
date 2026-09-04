@@ -189,9 +189,16 @@ validated, or reviewed SHA literal, nor a review decision. It records the
 enforces it, `staleApprovalReuseAllowed: false`, and `durableSources`: the
 `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
 paths where the SHAs are durably available.
-`spec148RoleAssignmentEvidence.test.ts` reads those sources when present and
-asserts `reviewed_sha == candidate_sha` with every validation command exit code
-`0`; when they are absent it asserts the enforcement gate directly.
+`spec148RoleAssignmentEvidence.test.ts` reads those sources when present and,
+whenever a durable record's SHA actually names the exact current candidate,
+asserts every validation command for it exited `0`; because this suite itself
+runs as part of the repository's own `npm test` (one of the validation
+commands ADOS runs *before* it writes `validation-runtime.json` and *before* it
+runs review at all), a durable record is expected to name an older, already-
+finished candidate whenever this test executes as part of a live ADOS
+validation pass on a fresh candidate - the test checks shape only in that case,
+not a false cross-cycle equality. When durable sources are absent entirely it
+asserts the enforcement gate directly.
 `publicationResult` is a standing condition ("blocked until ADOS records an
 Approved independent Codex review with `validated == reviewed == exact HEAD`"),
 not a per-candidate snapshot.
@@ -212,8 +219,11 @@ only returns `CONVERGED` when `latestReviewOutcome === "Approved"`,
 `latestCompletenessStatus === "complete"`, `activeBlockingFindingsCount === 0`
 and `exactTargetMatch` (validated SHA == reviewed SHA == exact HEAD).
 `spec148RoleAssignmentEvidence.test.ts` exercises that gate, including the
-stale-approval (`exactTargetMatch: false`) rejection and the
-`reviewed_sha == candidate_sha` durable-source cross-check.
+stale-approval (`exactTargetMatch: false`) rejection and the durable-source
+validation-exit-code cross-check (gated on the durable record actually naming
+the current candidate, since `validation-runtime.json` is only ever written
+*after* the full validation command sequence - which includes this very test -
+returns).
 
 **Alternatives rejected**: Freezing SHA literals / a review decision into
 tracked evidence - stale on landing, the rejected approach. Declaring the SHAs
