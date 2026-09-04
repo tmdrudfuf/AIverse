@@ -44,11 +44,14 @@ deterministic Spec 143 suggestion provider fixture and the real
 5. **Review / Validation / Complete** - The independent reviewer is Codex per the
    durable ADOS role assignment. Completion state derives from the real
    execution result, not a hardcoded value; no fabricated percentage progress
-   is introduced. Independent Codex review, implementation validation,
-   exact-HEAD convergence, and publication are the authoritative ADOS pipeline
-   that runs *after* this implementation handoff (the same external boundary
-   Specs 142-147 declare) and are gated by
-   `tools/agent-workflow/reviewConvergence.js` (see below).
+   is introduced. Full configured validation (`npm test`, `npx tsc --noEmit`,
+   `npm run build`, `npm run test:e2e:home-canvas`, `git diff --check`,
+   `git diff --cached --check`) PASSED against candidate
+   `693a07b0ffbeca0919589ba40fadf69b183f1b12` and an independent Codex review
+   ran against the same SHA (see *External safety boundary* below). Exact-HEAD
+   convergence and publication remain gated by
+   `tools/agent-workflow/reviewConvergence.js`, which requires
+   `validated == reviewed == exact HEAD` plus an Approved independent review.
 
 ### Attribution of the Spec 145 -> Spec 146 cascade
 
@@ -103,19 +106,29 @@ work. Each automation stage can be disabled independently.
 
 ## External safety boundary
 
-This implementation runtime does not start review, validation, publication,
-merge, or deploy, and does not mutate GitHub (execution policy; the same
-boundary Specs 142-147 declare). `runtime-evidence.json.externalSafetyBoundary`
-records `reviewStarted: false`, `published: false`,
-`fullAdosValidationPipelineRun: false`, and `realChildRunSuppressedByHandoff:
-true`. Consequently validated SHA, reviewed SHA, exact-HEAD result, and
-publication result are **not available in this runtime** - they are produced by
-the authoritative ADOS pipeline that runs after this handoff and by the
-independent Codex review of this candidate. Requirement 21 asks for those SHAs
-"where available"; requirement 18 forbids fabricating completion. The evidence
-records the candidate base SHA that is available now and the real enforcement
-gate (`reviewConvergence.js`) that will require
-`validated == reviewed == exact HEAD` before publication.
+This implementation runtime does not publish, merge, or deploy, and does not
+mutate GitHub (execution policy; the same boundary Specs 142-147 declare).
+Full configured validation and an independent Codex review, however, *did* run
+against candidate `693a07b0ffbeca0919589ba40fadf69b183f1b12` after the
+implementation-handoff checkpoint. `runtime-evidence.json.externalSafetyBoundary`
+records `validationStarted: true`, `reviewStarted: true`,
+`fullAdosValidationPipelineRun: true`
+(`fullAdosValidationPipelineResult: PASS`),
+`independentReviewDecisionForTranscribedCandidate: "Changes Requested"`, and
+`published/merged/deployed/githubMutated: false`. `runtime-evidence.json.shaAlignment`
+transcribes, from the durable
+`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
+artifacts, `candidateSha == validatedSha == reviewedSha ==
+693a07b0ffbeca0919589ba40fadf69b183f1b12`, the six validation commands and
+their exit codes, `validationTreeMutated: false`, and
+`convergenceStatusForTranscribedCandidate: not converged` (latest decision is
+Changes Requested). Requirement 21 asks for those SHAs "where available" - they
+are now available and recorded; requirement 18 forbids fabricating completion,
+so the evidence records the non-converged status rather than an approval. Every
+value carries `evidenceCycle: 1` / `transcribedAsOfCandidateSha`: the fix commit
+that adds this block produces a **new** candidate that ADOS must re-validate and
+Codex must independently re-review, and `reviewConvergence.js` evaluates
+`validated == reviewed == exact HEAD` against that new SHA before publication.
 
 ## Adaptive role and publication-gate evidence
 

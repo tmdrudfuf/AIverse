@@ -299,11 +299,13 @@ stays blocked rather than self-reviewing.
 - The real ADOS execution-path semantics (preparation validation, trusted-policy
   and safe-command checks, structured requirements request, durable
   execution/result/run-status records observable by the office) are exercised by
-  that real service in the harness. The durable role assignment and run id from
-  the ADOS run that produced this implementation handoff are transcribed into
-  repository-relative runtime evidence. The authoritative full pipeline
-  (implementation validation, independent Codex review, exact-HEAD convergence,
-  publication) runs after this implementation handoff.
+  that real service in the harness. The durable role assignment, run id,
+  candidate SHA, full-validation result, and independent-review decision from the
+  ADOS run are transcribed into repository-relative runtime evidence
+  (`runtime-evidence.json.shaAlignment`), which records
+  `candidateSha == validatedSha == reviewedSha` for the exercised candidate.
+  Exact-HEAD convergence and publication remain the human-only gate and require
+  an Approved independent Codex review of the re-validated candidate.
 - `.agent-workflow/` run state is gitignored; role-assignment values are
   transcribed into tracked runtime evidence rather than read from an untracked
   path at test time.
