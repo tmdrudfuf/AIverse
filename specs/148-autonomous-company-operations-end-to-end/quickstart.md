@@ -24,20 +24,22 @@ for authoritative requirement 13 (Spec 140 portfolio truthfulness).
 ## Read the evidence
 
 `specs/148-autonomous-company-operations-end-to-end/runtime-evidence.json`
-records one controlled cycle: Project A canonical identity, Project B isolation
-identity, the four automation policy states (all independently On), the
-suggestion id, accepted task id, backlog state, Ready transition, development
-request / preparation / execution ids, the durable execution record the office
-observes, the ADOS durable run id, the ADOS role assignment (implementer Claude,
-reviewer Codex, mode adaptive), candidate owner, reviewer identity, the
-`externalSafetyBoundary` block, the `shaAlignment` block (candidate ==
-validated == reviewed SHA transcribed from the durable ADOS run artifacts, the
-full-validation command results, and the convergence status), duplicate-event
-idempotency evidence, active-run gating evidence, and reload persistence
-evidence. Full configured validation and an independent Codex review already ran
-against candidate `693a07b0ffbeca0919589ba40fadf69b183f1b12`; exact-HEAD
-convergence and publication remain gated on an Approved independent Codex review
-of the re-validated candidate (human-only). All paths are repository-relative.
+records one controlled cycle: Project A canonical identity (`daily-proof`),
+Project B isolation identity (`ai-lab`), the four automation policy states (all
+independently On), the suggestion id, accepted task id, backlog state, Ready
+transition, development request / preparation / execution ids, the durable
+execution record the office observes, the ADOS durable run id, the ADOS role
+assignment (implementer Claude, reviewer Codex, mode adaptive) mirrored from the
+sanitized `ados-run.sanitized.json`, candidate owner, reviewer identity, the
+`externalSafetyBoundary` block, and the `shaAlignment` block. `shaAlignment`
+names the durable ADOS sources where the candidate / validated / reviewed SHAs
+are available and the module that enforces `validated == reviewed == exact HEAD`,
+rather than freezing a SHA literal or a review decision that goes stale the
+moment this artifact is committed. It also carries duplicate-event idempotency
+evidence, active-run gating evidence, and reload persistence evidence.
+`publicationResult` is a standing gate: publication is blocked until ADOS records
+an Approved independent Codex review with `validated == reviewed == exact HEAD`
+(human-only). All paths are repository-relative.
 
 ## Manual controls still work
 

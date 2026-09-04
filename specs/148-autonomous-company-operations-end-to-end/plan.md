@@ -21,7 +21,7 @@ observes state transitions.
 
 **Storage**: Existing browser office session localStorage snapshot; existing
 `.agent-workflow/runs/<feature>/ados-run.json` durable ADOS state (gitignored,
-transcribed into tracked evidence)
+mirrored into tracked, sanitized `ados-run.sanitized.json`)
 
 **Testing**: Targeted Vitest coverage plus diff checks in this runtime; full
 configured ADOS validation remains ADOS-owned per handoff
@@ -76,7 +76,8 @@ specs/148-autonomous-company-operations-end-to-end/
 │   └── requirements.md
 ├── tasks.md
 ├── runtime-verification.md
-└── runtime-evidence.json
+├── runtime-evidence.json
+└── ados-run.sanitized.json   (path-stripped mirror of the durable ADOS run record)
 ```
 
 ### Source Code (repository root)
@@ -123,7 +124,8 @@ See [research.md](research.md). Key findings:
 - Every stage is already wired into `OfficeProjectPortalController`; Spec 148
   needs no new wiring, only ordered driving and assertions.
 - `.agent-workflow/` is gitignored (`git check-ignore` confirms); the durable
-  role assignment must be transcribed into tracked evidence.
+  role assignment is mirrored into a tracked, sanitized `ados-run.sanitized.json`
+  and cross-checked against the durable file when present.
 - Existing agent-workflow modules already enforce distinct reviewer, exact
   target match, and no self-review; Spec 148 asserts these for this run rather
   than re-implementing them.

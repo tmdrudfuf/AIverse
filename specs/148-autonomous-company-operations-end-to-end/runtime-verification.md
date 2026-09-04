@@ -1,12 +1,16 @@
 # Runtime Verification: Autonomous Company Operations End-to-End
 
 The deterministic evidence payload is recorded in `runtime-evidence.json`. All
-tracked paths are repository-relative; the durable ADOS role assignment is
-transcribed from the gitignored
-`.agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json`
-so the evidence is stable across worktree locations.
+tracked paths are repository-relative. The durable ADOS role assignment lives in
+the gitignored
+`.agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json`;
+its non-path fields are mirrored into the tracked, sanitized
+`ados-run.sanitized.json`, and `spec148RoleAssignmentEvidence.test.ts` asserts
+`runtime-evidence.json` transcribes them unchanged (and, when the durable file is
+present, that the sanitized copy still matches it). Role and candidate ownership
+therefore come from ADOS durable state, not a free-standing evidence label.
 
-## Demonstrated controlled cycle (Project A)
+## Demonstrated controlled cycle (Project A = canonical `daily-proof`)
 
 Runtime verification drives the real `OfficeProjectPortalController` and the real
 Spec 141-147 services through one controlled autonomous cycle, using a
@@ -18,10 +22,10 @@ deterministic Spec 143 suggestion provider fixture and the real
    Auto Execute independently enabled. Enabling Auto Suggestions is the single
    bounded lifecycle event; Spec 147 invokes the existing Spec 143 path and
    produces exactly one proposed, project-scoped suggestion
-   (`project-a:suggestion:1`). Spec 147 creates no backlog task. A replayed
+   (`daily-proof:suggestion:1`). Spec 147 creates no backlog task. A replayed
    planning event produces no second suggestion (cooldown).
 2. **Backlog** - Spec 145 converts the suggestion through the existing
-   Spec 143 -> Spec 141 path into a backlog-state task (`project-a:backlog:1`,
+   Spec 143 -> Spec 141 path into a backlog-state task (`daily-proof:backlog:1`,
    `suggestionAcceptanceMode: automatic`). Spec 145 does not mark the task
    Ready. A replayed acceptance evaluation creates no duplicate task.
 3. **Ready** - Spec 146 transitions the task backlog -> Ready exactly once
@@ -30,8 +34,11 @@ deterministic Spec 143 suggestion provider fixture and the real
    evaluation performs no second promotion.
 4. **Engineering** - Spec 144 alone authorizes one bounded execution. It reuses
    the Spec 142 / Spec 138 bridge, which binds the exact
-   `projectId = project-a` and `sourceBacklogTaskId = project-a:backlog:1`, with
-   no cross-project id and no global latest-project singleton. The real
+   `projectId = daily-proof` and `sourceBacklogTaskId = daily-proof:backlog:1`,
+   against Project A's real registered local repository/worktree binding (the
+   actual repository this verification runs in, applied through
+   `ProjectRegistryService` + `applyLocalProjectRepositoryBindings`), with no
+   cross-project id and no global latest-project singleton. The real
    `ExternalProjectAdosExecutionService` runs once: it validates the
    preparation, checks the trusted policy and the safe command, assembles the
    structured requirements file, invokes the process boundary once (fake
@@ -39,16 +46,20 @@ deterministic Spec 143 suggestion provider fixture and the real
    run-status record the office observes (`implementerStarted: true`,
    `reviewStarted: false`, `githubMutationStarted: false`, `publishStarted:
    false`). The task becomes `in_progress` with the real execution id
-   `project-a:external-ados-execution:...:external-ados-execution-v1`. A
+   `daily-proof:external-ados-execution:...:external-ados-execution-v1`. A
    replayed execution event starts no second run and no second process spawn.
 5. **Review / Validation / Complete** - The independent reviewer is Codex per the
    durable ADOS role assignment. Completion state derives from the real
    execution result, not a hardcoded value; no fabricated percentage progress
-   is introduced. Full configured validation (`npm test`, `npx tsc --noEmit`,
-   `npm run build`, `npm run test:e2e:home-canvas`, `git diff --check`,
-   `git diff --cached --check`) PASSED against candidate
-   `693a07b0ffbeca0919589ba40fadf69b183f1b12` and an independent Codex review
-   ran against the same SHA (see *External safety boundary* below). Exact-HEAD
+   is introduced. ADOS runs full configured validation (`npm test`,
+   `npx tsc --noEmit`, `npm run build`, `npm run test:e2e:home-canvas`,
+   `git diff --check`, `git diff --cached --check`) and an independent Codex
+   review against the exact candidate HEAD after every implementation handoff,
+   including the one that adds this evidence. The live per-candidate verdict is
+   in the durable
+   `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
+   sources; this tracked artifact does not freeze it, because committing the
+   artifact advances HEAD and staleifies any frozen verdict. Exact-HEAD
    convergence and publication remain gated by
    `tools/agent-workflow/reviewConvergence.js`, which requires
    `validated == reviewed == exact HEAD` plus an Approved independent review.
@@ -86,10 +97,10 @@ While Project A has an active execution:
 
 ## Second-project isolation
 
-Project B receives no suggestion, backlog task, Ready transition, execution,
-ADOS status, or candidate/reviewer state, and its four automation policies stay
-Off. No development request, preparation, execution, or run status references
-`project-b`.
+Project B (canonical `ai-lab`) receives no suggestion, backlog task, Ready
+transition, execution, ADOS status, or candidate/reviewer state, and its four
+automation policies stay Off. No development request, preparation, execution, or
+run status references `ai-lab`.
 
 ## Reload / re-entry
 
@@ -107,36 +118,38 @@ work. Each automation stage can be disabled independently.
 ## External safety boundary
 
 This implementation runtime does not publish, merge, or deploy, and does not
-mutate GitHub (execution policy; the same boundary Specs 142-147 declare).
-Full configured validation and an independent Codex review, however, *did* run
-against candidate `693a07b0ffbeca0919589ba40fadf69b183f1b12` after the
-implementation-handoff checkpoint. `runtime-evidence.json.externalSafetyBoundary`
-records `validationStarted: true`, `reviewStarted: true`,
-`fullAdosValidationPipelineRun: true`
-(`fullAdosValidationPipelineResult: PASS`),
-`independentReviewDecisionForTranscribedCandidate: "Changes Requested"`, and
-`published/merged/deployed/githubMutated: false`. `runtime-evidence.json.shaAlignment`
-transcribes, from the durable
-`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
-artifacts, `candidateSha == validatedSha == reviewedSha ==
-693a07b0ffbeca0919589ba40fadf69b183f1b12`, the six validation commands and
-their exit codes, `validationTreeMutated: false`, and
-`convergenceStatusForTranscribedCandidate: not converged` (latest decision is
-Changes Requested). Requirement 21 asks for those SHAs "where available" - they
-are now available and recorded; requirement 18 forbids fabricating completion,
-so the evidence records the non-converged status rather than an approval. Every
-value is scoped to `transcribedAsOfCandidateSha` (not current HEAD): the fix
-commit that adds this block is itself a **new** candidate that ADOS must
-re-validate and Codex must independently re-review, and `reviewConvergence.js`
-evaluates `validated == reviewed == exact HEAD` against that new SHA before
-publication.
+mutate GitHub (execution policy; the same boundary Specs 142-147 declare). ADOS
+runs full configured validation and an independent Codex review against the
+exact candidate HEAD after every implementation handoff.
+`runtime-evidence.json.externalSafetyBoundary` records
+`validationAndReviewRunByAdosPerCandidate: true` and
+`published/merged/deployed/githubMutated: false`. It deliberately does **not**
+record a per-candidate validation result or review decision: committing this
+tracked artifact advances HEAD, so any frozen verdict is immediately stale.
+
+`runtime-evidence.json.shaAlignment` names, rather than transcribes, the durable
+sources where the candidate/validated/reviewed SHAs are available
+(`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`).
+`spec148RoleAssignmentEvidence.test.ts` reads those sources when present and
+asserts `reviewed_sha == candidate_sha` with every validation command exit code
+`0`; when they are absent (clean checkout) it asserts the enforcement gate
+directly. Requirement 21's "where available" is satisfied by naming the durable
+location plus the test that resolves it; requirement 18's ban on fabricated
+completion is satisfied because no approval is asserted anywhere. Exact-HEAD
+convergence and publication remain gated by
+`tools/agent-workflow/reviewConvergence.js` `computeConvergenceStatus`, which
+requires `validated == reviewed == exact HEAD` (`exactTargetMatch`) plus an
+Approved, complete, unblocked independent review before returning `converged`.
 
 ## Adaptive role and publication-gate evidence
 
-`tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts` asserts the
-transcribed durable role assignment (implementer Claude, reviewer Codex, mode
-adaptive, candidate owner Claude, run id `cc6ed14815c049ed1b97ce1c`) and
-exercises the real agent-workflow enforcement modules:
+`tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts` asserts the durable
+role assignment (implementer Claude, reviewer Codex, mode adaptive, candidate
+owner Claude, run id `cc6ed14815c049ed1b97ce1c`) from the sanitized ADOS
+artifact `ados-run.sanitized.json`, cross-checks it against the durable
+`.agent-workflow/runs/148-.../ados-run.json` when present, checks
+`runtime-evidence.json` transcribes it unchanged, and exercises the real
+agent-workflow enforcement modules:
 
 - `roleResolver.js` resolves a Claude implementer to a distinct Codex reviewer,
   and refuses to resolve any reviewer when Claude is the only roster agent

@@ -1,0 +1,31 @@
+{
+  "_note": "Sanitized, repository-relative mirror of the durable ADOS run record at .agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json (gitignored). Derived by copying an allowlist of stable identity fields only: absolute featureWorktree / primaryRepository / requirements.sourcePath paths are dropped so this evidence is stable across worktree locations, and volatile lifecycle fields (status, nextStage, implementationFailure, implementationRecoveryAttempts, implementationRecoveryBlock) are dropped because committing this file advances HEAD and would immediately stale any frozen per-cycle verdict (authoritative requirement 21). spec148RoleAssignmentEvidence.test.ts asserts runtime-evidence.json transcribes these values unchanged, and - when the durable file is present - that this sanitized copy still matches it field-for-field. The durable ADOS state, not a UI or evidence label, is the source of truth for role and candidate ownership (authoritative requirement 10).",
+  "_durableSource": ".agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json",
+  "_derivedFields": [
+    "runId",
+    "specNumber",
+    "featureBranch",
+    "authoritativeBaseSha",
+    "executionPolicyVersion",
+    "agentAssignment"
+  ],
+  "runId": "cc6ed14815c049ed1b97ce1c",
+  "specNumber": "148",
+  "featureBranch": "codex/148-autonomous-company-operations-end-to-end",
+  "authoritativeBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
+  "executionPolicyVersion": "1",
+  "agentAssignment": {
+    "mode": "adaptive",
+    "implementerId": "claude",
+    "implementerCommand": "claude -p",
+    "reviewerId": "codex",
+    "reviewerCommand": "codex exec -",
+    "candidateOwnerId": "claude",
+    "reason": "operator preferred implementer=claude; reviewer=codex",
+    "sequence": 1,
+    "availability": {
+      "claude": "available",
+      "codex": "available"
+    }
+  }
+}

@@ -299,16 +299,20 @@ stays blocked rather than self-reviewing.
 - The real ADOS execution-path semantics (preparation validation, trusted-policy
   and safe-command checks, structured requirements request, durable
   execution/result/run-status records observable by the office) are exercised by
-  that real service in the harness. The durable role assignment, run id,
-  candidate SHA, full-validation result, and independent-review decision from the
-  ADOS run are transcribed into repository-relative runtime evidence
-  (`runtime-evidence.json.shaAlignment`), which records
-  `candidateSha == validatedSha == reviewedSha` for the exercised candidate.
-  Exact-HEAD convergence and publication remain the human-only gate and require
-  an Approved independent Codex review of the re-validated candidate.
-- `.agent-workflow/` run state is gitignored; role-assignment values are
-  transcribed into tracked runtime evidence rather than read from an untracked
-  path at test time.
+  that real service in the harness. The durable role assignment and run id are
+  mirrored into the tracked, sanitized `ados-run.sanitized.json` and transcribed
+  unchanged into `runtime-evidence.json`; `spec148RoleAssignmentEvidence.test.ts`
+  cross-checks both against the durable `.agent-workflow/runs/148-.../ados-run.json`
+  when it is present. `runtime-evidence.json.shaAlignment` names the durable ADOS
+  sources where the candidate / validated / reviewed SHAs are available and the
+  module enforcing `validated == reviewed == exact HEAD`, instead of freezing a
+  SHA literal or review decision that goes stale the moment the artifact is
+  committed. Exact-HEAD convergence and publication remain the human-only gate
+  and require an Approved independent Codex review of the exact re-validated
+  candidate.
+- `.agent-workflow/` run state is gitignored; role-assignment values are mirrored
+  into a tracked sanitized artifact (no absolute paths) rather than read only
+  from an untracked path at test time.
 - Office lifecycle states (Planning, Backlog, Ready, Engineering, Review,
   Validation/QA, Complete) and portfolio attention states (planning, ready,
   active, attention-needed/blocked, completed) are already representable by

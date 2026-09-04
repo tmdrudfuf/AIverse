@@ -43,11 +43,12 @@ preparation validation, the trusted-policy check, the safe-command check, the
 structured requirements-file assembly, and durable
 execution / result / run-status record creation that the office observes. The
 ADOS run that produced this handoff (`cc6ed14815c049ed1b97ce1c`) records
-`status: READY_FOR_IMPLEMENTATION` at the handoff checkpoint; after that
-checkpoint its durable artifacts show full configured validation PASSED and an
-independent Codex review ran against candidate
-`693a07b0ffbeca0919589ba40fadf69b183f1b12`
-(see `runtime-evidence.json.shaAlignment`).
+`status: READY_FOR_IMPLEMENTATION` at the handoff checkpoint. ADOS then runs
+full configured validation and an independent Codex review against the exact
+candidate HEAD after every handoff; the live per-candidate verdict lives in the
+durable `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
+sources (see `runtime-evidence.json.shaAlignment.durableSources`), not frozen in
+tracked evidence.
 
 **Rationale**: Requirement 23 permits "existing injectable runtime adapters ...
 where necessary" for the "external provider/ADOS process boundaries" - i.e. the
@@ -59,17 +60,18 @@ configured ADOS project execution path or produces durable run status
 observable by the office (requirements 9, 23). Injecting at the
 `ImplementerRuntimeProvider` boundary - the same seam
 `ExternalProjectAdosExecutionService.test.ts` already uses - keeps every layer
-of the real service in the test. The authoritative full ADOS pipeline then ran:
-implementation validation PASSED and an independent Codex review was performed
-against candidate `693a07b0ffbeca0919589ba40fadf69b183f1b12`
-(`runtime-evidence.json.shaAlignment`). Exact-HEAD convergence and publication
-remain the human-only gate, the same external boundary Specs 142-147 declare.
+of the real service in the test. ADOS then runs the authoritative full
+validation pipeline and an independent Codex review against the exact candidate
+HEAD after every handoff. Exact-HEAD convergence and publication remain the
+human-only gate, the same external boundary Specs 142-147 declare.
 
 **Alternatives rejected**: A mock-only ADOS shortcut - barred by requirement 9.
-Claiming validated / reviewed / exact-HEAD SHAs are "not available in this
-runtime" - they are available in the durable ADOS run artifacts and are now
-transcribed into `runtime-evidence.json.shaAlignment` (same mechanism as the
-role assignment).
+Freezing validated / reviewed / exact-HEAD SHA literals and a review decision
+into tracked evidence - they go stale the moment the commit lands (it changes
+HEAD), which is exactly why an earlier candidate's frozen `693a07b...` block was
+rejected. `runtime-evidence.json.shaAlignment` instead names the durable ADOS
+sources where those SHAs are available and `spec148RoleAssignmentEvidence.test.ts`
+resolves them at run time.
 
 **Fake outcome shape**: the fake `ImplementerRuntimeProvider` returns
 `status: "Completed"` (the spawn succeeded, the run is launched) with
@@ -85,23 +87,30 @@ file and the Spec 144 suite already encode the same shape. Returning
 (correctly) not register as an active run, defeating the active-run safety
 checks in requirements 15-16.
 
-## Decision 4 - `.agent-workflow/` is gitignored; transcribe role evidence
+## Decision 4 - `.agent-workflow/` is gitignored; commit a sanitized ADOS mirror
 
-**Decision**: Transcribe the durable role assignment values into the tracked
-`runtime-evidence.json`; tests assert against tracked values and against the
-real `roleResolver.js` / `reviewConvergence.js` enforcement logic.
+**Decision**: Commit `specs/148-.../ados-run.sanitized.json` - a
+repository-relative mirror of the durable ADOS run record carrying the
+`agentAssignment` block, `runId`, `specNumber`, `featureBranch`,
+`authoritativeBaseSha`, `executionPolicyVersion`, `status`, and no absolute
+paths. `spec148RoleAssignmentEvidence.test.ts` asserts `runtime-evidence.json`
+transcribes those values unchanged **and**, when the durable
+`.agent-workflow/runs/148-.../ados-run.json` is present in the worktree, that the
+sanitized copy still deep-equals it minus the stripped path fields.
 
 **Rationale**: `git check-ignore -v` resolves
 `.agent-workflow/runs/148-.../ados-run.json` to `.gitignore:11:.agent-workflow/`.
-The session-start `git status` was clean while those files existed, confirming
-they are untracked. A test reading that path would pass in this worktree and
-fail for the reviewer and in CI. The `runId` (`cc6ed14815c049ed1b97ce1c`) and
-role fields are provable, so transcription still satisfies "from ADOS durable
-state, not a fake UI label".
+A test reading only the tracked `runtime-evidence.json` and asserting its own
+transcribed strings would pass even if those strings were a fabricated label -
+the review's blocking finding. Binding the evidence to a committed sanitized
+ADOS artifact (and cross-checking the live durable file when available) makes the
+role and candidate-ownership values verifiable against ADOS durable state, per
+requirement 10, while staying portable across worktrees (requirement 21 bars
+persisting absolute worktree paths).
 
-**Alternatives rejected**: Reading the untracked path at test time - non-portable
-across worktrees, violates acceptance criterion 18. Committing
-`.agent-workflow/` - out of scope and against repo boundaries.
+**Alternatives rejected**: Reading only the untracked path at test time -
+non-portable across worktrees. Committing `.agent-workflow/` verbatim - carries
+absolute worktree/repository/source paths, barred by requirement 21.
 
 ## Decision 5 - Existing enforcement of role / exact-HEAD / no-self-review
 
@@ -172,39 +181,74 @@ still off at that point.
 independently enabled for the test project" to make an intermediate assertion
 observable.
 
-## Decision 8 - validated / reviewed / exact-HEAD SHAs are transcribed from durable ADOS state
+## Decision 8 - validated / reviewed / exact-HEAD SHAs are resolved at run time, never frozen
 
-**Decision**: `runtime-evidence.json.shaAlignment` transcribes the candidate
-SHA, validated SHA, reviewed SHA, the full-validation command results, and the
-review decision from the durable
+**Decision**: `runtime-evidence.json.shaAlignment` does not carry a candidate,
+validated, or reviewed SHA literal, nor a review decision. It records the
+`candidateBaseSha` (stable), the `exactHeadInvariant` and the module that
+enforces it, `staleApprovalReuseAllowed: false`, and `durableSources`: the
 `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
-artifacts - the same provenance mechanism already used for the role assignment -
-rather than declaring them unavailable. It also records
-`convergenceStatusForTranscribedCandidate` (not converged, latest decision is
-Changes Requested) and the enforced convergence gate.
+paths where the SHAs are durably available.
+`spec148RoleAssignmentEvidence.test.ts` reads those sources when present and
+asserts `reviewed_sha == candidate_sha` with every validation command exit code
+`0`; when they are absent it asserts the enforcement gate directly.
+`publicationResult` is a standing condition ("blocked until ADOS records an
+Approved independent Codex review with `validated == reviewed == exact HEAD`"),
+not a per-candidate snapshot.
 
-**Rationale**: The full configured validation pipeline and an independent Codex
-review both ran against candidate `693a07b0ffbeca0919589ba40fadf69b183f1b12`
-after the implementation-handoff checkpoint, and their results are durable in
-the ADOS run directory. Requirement 21 asks for "candidate/validated/reviewed
-SHA **where available**" - they are available, so they are recorded:
-`candidateSha == validatedSha == reviewedSha == 693a07b...`, validation
-`PASS` with the working tree unmodified (`headBefore == headAfter`,
-`violations: []`). Requirement 18 forbids fabricating completion, so the
-evidence records the non-converged status rather than an approval, and marks
-every value `evidenceCycle: 1` / `transcribedAsOfCandidateSha`: the fix commit
-that adds this block is a new candidate that ADOS must re-validate and Codex
-must independently re-review. Publication is still gated by
+**Rationale**: An earlier candidate froze `candidateSha == validatedSha ==
+reviewedSha == 693a07b...` plus `reviewDecision: "Changes Requested"` into this
+tracked file. The review's blocking finding: the moment that commit landed it
+described a two-commits-stale candidate, and a frozen "Changes Requested" /
+"publication pending" reads as a stale verdict, failing `validated == reviewed ==
+exact HEAD`, no-stale-approval, and completion-only-after-Approved. A tracked
+artifact structurally cannot contain its own post-commit SHA or its own
+not-yet-performed review outcome. Requirement 21's "candidate/validated/reviewed
+SHA **where available**" is satisfied by naming the durable location and the test
+that resolves it; requirement 18's ban on fabricated completion is satisfied
+because no approval is asserted anywhere. Publication stays gated by
 `tools/agent-workflow/reviewConvergence.js` `computeConvergenceStatus`, which
 only returns `CONVERGED` when `latestReviewOutcome === "Approved"`,
 `latestCompletenessStatus === "complete"`, `activeBlockingFindingsCount === 0`
 and `exactTargetMatch` (validated SHA == reviewed SHA == exact HEAD).
 `spec148RoleAssignmentEvidence.test.ts` exercises that gate, including the
 stale-approval (`exactTargetMatch: false`) rejection and the
-`candidateSha == validatedSha == reviewedSha` alignment.
+`reviewed_sha == candidate_sha` durable-source cross-check.
 
-**Alternatives rejected**: Writing placeholder SHAs that read as real - a
-fabricated completion, barred by requirement 18. Declaring the SHAs "not
-available in this runtime" - false: they are in the durable ADOS artifacts.
-Starting the publish/merge pipeline from this runtime - barred by the execution
-policy, and not required (publication stays the human-only gate).
+**Alternatives rejected**: Freezing SHA literals / a review decision into
+tracked evidence - stale on landing, the rejected approach. Declaring the SHAs
+"not available in this runtime" - an even earlier rejected approach; they are
+available in the durable ADOS artifacts, which the test now reads. Starting the
+publish/merge pipeline from this runtime - barred by the execution policy, and
+not required (publication stays the human-only gate).
+
+## Decision 9 - Canonical registered projects for the E2E context
+
+**Decision**: `seedTwoProjects` builds Project A / Project B from
+`createDefaultProjectRegistryEntries()` (the canonical registry seed) registered
+through `new ProjectRegistryService(seed, bindings)`. Project A is the canonical
+Active company workspace `daily-proof`; its local repository/worktree binding is
+applied through the real `applyLocalProjectRepositoryBindings` path and points at
+the actual repository the test runs in (`process.cwd()`). Project B is the
+canonical `ai-lab`, left in its seeded not-connected state for isolation
+assertions. Identity strings (`daily-proof:suggestion:1`, `daily-proof:backlog:1`,
+the draft / preparation / execution / result ids) and `runtime-evidence.json`
+move in lockstep.
+
+**Rationale**: The review's blocking finding: hand-rolled `project-a` /
+`project-b` records with invented `C:/repos/...` / `C:/worktrees/...` paths
+assigned straight into controller internals do not demonstrate a real canonical
+registered project context or an exact configured repository/worktree binding
+(requirements 3, 8). Using the canonical seed + real `ProjectRegistryService`
+registration + real local-binding application exercises the actual registration
+and binding logic, and the bridge then receives `projectId = daily-proof` bound
+to a real on-disk worktree path. `daily-proof` is deliberately the E2E project
+because it is the only seeded `Active` `Company` entry; `ai-lab` is a genuine
+second registered project, so second-project isolation is proven against real
+registry state rather than a fixture.
+
+**Alternatives rejected**: Keeping synthetic ids but routing them through
+`registerProject` - still a synthetic, non-canonical project, which the finding
+rejects. Hardcoding an AIverse-specific path into a reusable service - barred by
+requirement 3; the path is derived at test time and never persisted into tracked
+evidence.

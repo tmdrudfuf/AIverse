@@ -10,8 +10,10 @@
     "adosProcessBoundary": "real ExternalProjectAdosExecutionService; only its ImplementerRuntimeProvider (the OS process spawn) is a deterministic fake, per authoritative requirement 23. Real preparation validation, trusted-policy check, safe-command check, structured requirements assembly, and durable execution/result/run-status record creation all run."
   },
   "projectA": {
-    "projectId": "project-a",
+    "projectId": "daily-proof",
     "canonical": true,
+    "registration": "canonical ProjectRegistrySeedData entry (Active, Company), registered through ProjectRegistryService with a local repository/worktree binding applied via applyLocalProjectRepositoryBindings; the bound worktree path is the actual repository the verification runs in (process.cwd()), never an invented path and never persisted here",
+    "displayName": "Daily Proof",
     "automationControls": {
       "autoSuggestions": "On",
       "autoAccept": "On",
@@ -20,12 +22,12 @@
       "hiddenFullAutoFlag": false,
       "independentlyToggled": true
     },
-    "suggestionId": "project-a:suggestion:1",
+    "suggestionId": "daily-proof:suggestion:1",
     "suggestionStatus": "proposed",
-    "suggestionProjectId": "project-a",
+    "suggestionProjectId": "daily-proof",
     "boundedSuggestionCount": 1,
     "spec147CreatedBacklogTask": false,
-    "acceptedTaskId": "project-a:backlog:1",
+    "acceptedTaskId": "daily-proof:backlog:1",
     "spec145AcceptedCount": 1,
     "spec145MarkedReady": false,
     "cascade": {
@@ -36,17 +38,17 @@
       "suggestionAcceptanceModeOnTask": "automatic"
     },
     "readyTransition": {
-      "taskId": "project-a:backlog:1",
+      "taskId": "daily-proof:backlog:1",
       "promotedCount": 1,
       "promotedExactlyOnce": true,
       "spec146StartedDevelopment": false,
       "spec146InvokedSpec144": false,
       "processSpawnInvocationsAfterCascade": 0
     },
-    "developmentRequestId": "project-a:backlog-task:project-a:backlog:1:external-development-request-draft",
-    "executionPreparationId": "project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation",
-    "executionRunId": "project-a:external-ados-execution:project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation:external-ados-execution-v1",
-    "executionResultId": "project-a:external-ados-execution-result:project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation:external-ados-execution-v1",
+    "developmentRequestId": "daily-proof:backlog-task:daily-proof:backlog:1:external-development-request-draft",
+    "executionPreparationId": "daily-proof:backlog-task:daily-proof:backlog:1:external-development-request-draft:external-ados-run-preparation",
+    "executionRunId": "daily-proof:external-ados-execution:daily-proof:backlog-task:daily-proof:backlog:1:external-development-request-draft:external-ados-run-preparation:external-ados-execution-v1",
+    "executionResultId": "daily-proof:external-ados-execution-result:daily-proof:backlog-task:daily-proof:backlog:1:external-development-request-draft:external-ados-run-preparation:external-ados-execution-v1",
     "executionDurableRecord": {
       "source": "real ExternalProjectAdosExecutionService outcome persisted into controller state (externalProjectAdosExecutions / externalProjectAdosExecutionResults / externalProjectAdosRunStatuses)",
       "status": "Completed",
@@ -62,8 +64,8 @@
       "spawnInvocationsAfterDuplicateExecutionEvent": 1
     },
     "bridgeBinding": {
-      "boundProjectId": "project-a",
-      "sourceBacklogTaskId": "project-a:backlog:1",
+      "boundProjectId": "daily-proof",
+      "sourceBacklogTaskId": "daily-proof:backlog:1",
       "crossProjectFallback": false,
       "globalLatestProjectSingleton": false,
       "taskTextShellInterpolation": false,
@@ -71,8 +73,10 @@
     }
   },
   "projectB": {
-    "projectId": "project-b",
+    "projectId": "ai-lab",
     "canonical": true,
+    "registration": "canonical ProjectRegistrySeedData entry, registered through the same ProjectRegistryService, left in its seeded not-connected state; used only for second-project isolation assertions",
+    "displayName": "AI Lab",
     "receivedSuggestion": false,
     "receivedBacklogTask": false,
     "receivedReadyTransition": false,
@@ -87,9 +91,10 @@
     }
   },
   "adosRun": {
-    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/{ados-run,candidate,validation-runtime,review-runtime}.json so evidence is stable across worktree locations. Absolute worktree/repository/source paths are intentionally omitted. The ados-run.json snapshot records status READY_FOR_IMPLEMENTATION (the implementation-handoff checkpoint). After that checkpoint the authoritative pipeline ran against candidate 693a07b0ffbeca0919589ba40fadf69b183f1b12: full configured validation PASSED and an independent Codex review was performed (see shaAlignment / externalSafetyBoundary). Exact-HEAD convergence and publication remain gated on an Approved independent Codex review of the re-validated candidate. The real ADOS execution-path semantics (preparation validation, structured request, durable run status) are additionally exercised by the real ExternalProjectAdosExecutionService in the deterministic harness.",
+    "note": "Role and candidate-ownership assignment come from durable ADOS state, not a UI or evidence label. The durable record is .agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json (gitignored, worktree-absolute paths). An allowlist of its stable identity fields is mirrored into the tracked, sanitized specs/148-autonomous-company-operations-end-to-end/ados-run.sanitized.json; absolute paths and volatile per-cycle lifecycle fields (status, nextStage, implementationFailure, implementationRecoveryAttempts, implementationRecoveryBlock) are deliberately excluded because committing this evidence advances HEAD and would immediately stale any frozen lifecycle snapshot. tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts asserts the agentAssignment below is transcribed unchanged from ados-run.sanitized.json, and - when the durable file is present in the worktree - that the sanitized copy still matches durable ADOS state field-for-field across the allowlist. The real ADOS execution-path semantics (preparation validation, structured request, durable run status records) are additionally exercised by the real ExternalProjectAdosExecutionService in the deterministic harness.",
+    "sanitizedArtifact": "specs/148-autonomous-company-operations-end-to-end/ados-run.sanitized.json",
+    "durableSource": ".agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json",
     "runId": "cc6ed14815c049ed1b97ce1c",
-    "status": "READY_FOR_IMPLEMENTATION",
     "specNumber": "148",
     "featureBranch": "codex/148-autonomous-company-operations-end-to-end",
     "authoritativeBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
@@ -103,6 +108,7 @@
       "candidateOwnerId": "claude",
       "reason": "operator preferred implementer=claude; reviewer=codex",
       "expectedReasonPerRequirement10": "explicit operator preference for Claude implementer",
+      "sequence": 1,
       "availability": { "claude": "available", "codex": "available" }
     }
   },
@@ -110,13 +116,8 @@
   "reviewer": "codex",
   "candidateOwnerIsReviewer": false,
   "externalSafetyBoundary": {
-    "note": "This implementation runtime does not publish, merge, deploy, or mutate GitHub (execution policy; the same boundary Specs 142-147 declare). Full configured validation and an independent Codex review DID run against candidate 693a07b0ffbeca0919589ba40fadf69b183f1b12 after the implementation-handoff checkpoint; their transcribed results are in shaAlignment. Only publication/merge/deploy/GitHub mutation remain the human-only gate.",
-    "reviewStarted": true,
-    "validationStarted": true,
-    "fullAdosValidationPipelineRun": true,
-    "fullAdosValidationPipelineResult": "PASS for candidate 693a07b0ffbeca0919589ba40fadf69b183f1b12 (npm test, npx tsc --noEmit, npm run build, npm run test:e2e:home-canvas, git diff --check, git diff --cached --check all exit 0; working tree unmodified)",
-    "independentReviewRan": true,
-    "independentReviewDecisionForTranscribedCandidate": "Changes Requested",
+    "note": "This implementation runtime does not publish, merge, deploy, or mutate GitHub (execution policy; the same boundary Specs 142-147 declare). ADOS runs full configured validation and an independent Codex review against the exact candidate HEAD after every implementation handoff, including the handoff that adds this evidence. This tracked artifact deliberately does not freeze a per-candidate validation result or review decision: committing it advances HEAD, so any frozen verdict is immediately stale. The live verdict lives in the durable sources named in shaAlignment.durableSources and is gated by tools/agent-workflow/reviewConvergence.js. Only publication/merge/deploy/GitHub mutation remain the human-only gate.",
+    "validationAndReviewRunByAdosPerCandidate": true,
     "published": false,
     "merged": false,
     "deployed": false,
@@ -124,34 +125,19 @@
     "githubMutated": false
   },
   "shaAlignment": {
-    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/{candidate,validation-runtime,review-runtime}.json (same provenance mechanism as adosRun). Every value below is scoped to transcribedAsOfCandidateSha, not current HEAD: the fix commit that adds this block is itself a NEW candidate that ADOS must re-run full configured validation on and Codex must independently re-review, with convergence evaluated against that new exact HEAD.",
-    "transcribedAsOfCandidateSha": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
-    "candidateOwner": "claude",
-    "candidateSha": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
-    "candidateStatus": "COMMITTED",
-    "candidateBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
-    "validatedSha": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
-    "validationHeadBefore": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
-    "validationHeadAfter": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
-    "validationStatus": "PASS",
-    "validationTreeMutated": false,
-    "validationViolations": [],
-    "validationCommands": [
-      { "command": "npm test", "exitCode": 0 },
-      { "command": "npx tsc --noEmit", "exitCode": 0 },
-      { "command": "npm run build", "exitCode": 0 },
-      { "command": "npm run test:e2e:home-canvas", "exitCode": 0 },
-      { "command": "git diff --check", "exitCode": 0 },
-      { "command": "git diff --cached --check", "exitCode": 0 }
+    "note": "Requirement 21 asks for candidate/validated/reviewed SHA 'where available' plus the exact-HEAD result. They are durably available in the sources below and resolved at validation/review time, not transcribed here: a SHA literal committed into a tracked file is stale the moment the commit lands (it changes HEAD). tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts reads those durable sources when present and asserts candidate == validated == reviewed alignment from them; it also asserts the enforcement gate directly so the check holds in a clean checkout where the durable files are absent.",
+    "durableSources": [
+      ".agent-workflow/runs/148-autonomous-company-operations-end-to-end/candidate.json",
+      ".agent-workflow/runs/148-autonomous-company-operations-end-to-end/validation-runtime.json",
+      ".agent-workflow/runs/148-autonomous-company-operations-end-to-end/review-runtime.json"
     ],
-    "reviewedSha": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
-    "reviewDecisionForTranscribedCandidate": "Changes Requested",
-    "exactHeadAlignmentForTranscribedCandidate": "candidateSha == validatedSha == reviewedSha == 693a07b0ffbeca0919589ba40fadf69b183f1b12; validation left the working tree unmodified (headBefore == headAfter, violations []).",
-    "convergenceStatusForTranscribedCandidate": "not converged: the latest independent review decision is Changes Requested, so tools/agent-workflow/reviewConvergence.js computeConvergenceStatus does not return CONVERGED and publication stays blocked (requirement 18).",
+    "candidateOwner": "claude",
+    "candidateBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
+    "exactHeadInvariant": "ADOS enforces candidateSha == validatedSha == reviewedSha == exact HEAD before publication via tools/agent-workflow/reviewConvergence.js computeConvergenceStatus (exactTargetMatch gate). validated == reviewed alignment is additionally cross-checked from candidate.json / validation-runtime.json / review-runtime.json when those durable files are present in the worktree.",
     "staleApprovalReuseAllowed": false,
-    "enforcementProvenById": "tools/agent-workflow/reviewConvergence.js computeConvergenceStatus (exactTargetMatch gate); exercised by tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts including stale-approval rejection and candidate == validated == reviewed alignment"
+    "enforcementProvenById": "tools/agent-workflow/reviewConvergence.js computeConvergenceStatus (exactTargetMatch gate); exercised by tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts including stale-approval rejection, 'converges only when validated == reviewed == exact HEAD', and durable-source validated == reviewed cross-check"
   },
-  "publicationResult": "Pending: the latest independent Codex review of candidate 693a07b0ffbeca0919589ba40fadf69b183f1b12 returned Changes Requested. Publication requires an independent Codex Approved review of the exact re-validated Spec 148 candidate, with validatedSha == reviewedSha == exact HEAD. Human-only gate.",
+  "publicationResult": "Blocked until ADOS records an Approved independent Codex review with validatedSha == reviewedSha == exact HEAD (tools/agent-workflow/reviewConvergence.js computeConvergenceStatus == CONVERGED). Human-only gate; not reached at implementation handoff. This is a standing condition, not a per-candidate status snapshot.",
   "completionState": {
     "source": "real ExternalProjectAdosExecutionService execution/result status persisted into controller state",
     "harnessExecutionStatus": "Completed",

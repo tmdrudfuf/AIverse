@@ -18,6 +18,8 @@ records one derived evidence document.
 | `ExternalProjectAdosRunPreparation` | 142 | Bridge output binding project + worktree + requirements |
 | `ExternalProjectAdosExecution` / `ExternalProjectAdosRunStatus` | ADOS | Durable run identity and stage observable by office |
 | ADOS `agentAssignment` in `ados-run.json` | ADOS | Durable implementer/reviewer/mode/reason/candidate owner |
+| `ados-run.sanitized.json` | this feature | Tracked, path-stripped mirror of `ados-run.json`; test cross-checks it against the durable file when present |
+| `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json` | ADOS | Durable candidate / validated / reviewed SHA + validation exit codes + review decision, resolved at test time |
 
 ## Derived evidence document
 
@@ -26,17 +28,17 @@ records one derived evidence document.
 | Field | Source | Notes |
 | --- | --- | --- |
 | `feature`, `evidenceVersion`, `evidencePathsAreRepositoryRelative`, `runtimeEvidencePath` | this feature | Repository-relative only |
-| `projectA.projectId` / `projectB.projectId` | harness fixture | Canonical identity + isolation identity |
+| `projectA.projectId` / `projectB.projectId` | canonical registry seed | `daily-proof` (Active company) + `ai-lab` (isolation), registered via `ProjectRegistryService` |
 | `automationControls` | harness | Four independent policy states for Project A |
 | `suggestionId` | Spec 147 -> 143 output | Proposed, project-scoped |
 | `acceptedTaskId`, `backlogState` | Spec 145 -> 141 output | `backlog`, never `ready` from 145 |
 | `readyTransition` | Spec 146 output | `promotedCount: 1`, exactly once |
 | `developmentRequestId`, `executionPreparationId`, `executionRunId` | Spec 144 -> 142/138 output | Exact project/task binding |
-| `adosRun` | transcribed from `ados-run.json` | `runId`, `agentAssignment.*`, `authoritativeBaseSha`, `featureBranch`, `specNumber`; absolute path fields deliberately dropped |
+| `adosRun` | `ados-run.sanitized.json` (mirrors `ados-run.json`) | `runId`, `agentAssignment.*`, `authoritativeBaseSha`, `featureBranch`, `specNumber`; absolute path fields deliberately dropped |
 | `candidateOwner`, `reviewer` | `agentAssignment` | `claude` / `codex` |
-| `candidateSha` | `authoritativeBaseSha` | Candidate base for this run |
-| `validatedSha`, `reviewedSha`, `exactHeadResult` | ADOS-owned | Pending until ADOS validation + Codex review; enforcement rule proven by tests U/T |
-| `publicationResult` | ADOS-owned | Pending; human-only boundary preserved |
+| `shaAlignment.candidateBaseSha` | `authoritativeBaseSha` | Stable base for this run |
+| `shaAlignment.durableSources` / `exactHeadInvariant` | ADOS-owned | candidate/validated/reviewed SHA available in the named durable files; `validated == reviewed == exact HEAD` enforced by `reviewConvergence.js`; proven by tests U/T and the durable-source cross-check |
+| `publicationResult` | ADOS-owned | Standing gate ("blocked until Approved review with validated == reviewed == exact HEAD"); human-only boundary preserved |
 | `idempotency` | harness replay | Duplicate-event counts all remain 1 |
 | `activeRunGating` | harness | Prohibited extra work count 0 with active execution |
 | `reloadPersistence` | harness | Policy + lifecycle state preserved, no re-execution |

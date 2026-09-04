@@ -57,6 +57,15 @@ exact-HEAD guarantees for this run using existing agent-workflow modules.
 
 ---
 
+## Phase 5: Independent-review fix cycle
+
+- [X] T021 Commit `ados-run.sanitized.json` (path-stripped mirror of the durable ADOS run record) and bind `spec148RoleAssignmentEvidence.test.ts` to it plus the durable file when present, so role/candidate ownership is verified against ADOS durable state (not a self-asserting evidence label)
+- [X] T022 Stop freezing candidate/validated/reviewed SHA literals and the review decision into `runtime-evidence.json`; record `shaAlignment.durableSources` + `exactHeadInvariant` + a standing `publicationResult` gate, and resolve the SHAs from the durable ADOS files at test time
+- [X] T023 Replace hand-rolled `project-a` / `project-b` records with canonical `daily-proof` / `ai-lab` entries registered through `ProjectRegistryService` + `applyLocalProjectRepositoryBindings`, bound to the real repository worktree path, and projected into controller state through the same canonical adapters production uses (`toProjectPortalProject`, `ProjectCompanyBindingService.createBindings`) instead of fabricated object literals; update identity strings in the test and `runtime-evidence.json` in lockstep
+- [X] T024 Re-run targeted Vitest, `npx tsc --noEmit`, and diff checks
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
