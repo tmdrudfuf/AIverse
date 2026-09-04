@@ -125,10 +125,11 @@ their exit codes, `validationTreeMutated: false`, and
 Changes Requested). Requirement 21 asks for those SHAs "where available" - they
 are now available and recorded; requirement 18 forbids fabricating completion,
 so the evidence records the non-converged status rather than an approval. Every
-value carries `evidenceCycle: 1` / `transcribedAsOfCandidateSha`: the fix commit
-that adds this block produces a **new** candidate that ADOS must re-validate and
-Codex must independently re-review, and `reviewConvergence.js` evaluates
-`validated == reviewed == exact HEAD` against that new SHA before publication.
+value is scoped to `transcribedAsOfCandidateSha` (not current HEAD): the fix
+commit that adds this block is itself a **new** candidate that ADOS must
+re-validate and Codex must independently re-review, and `reviewConvergence.js`
+evaluates `validated == reviewed == exact HEAD` against that new SHA before
+publication.
 
 ## Adaptive role and publication-gate evidence
 

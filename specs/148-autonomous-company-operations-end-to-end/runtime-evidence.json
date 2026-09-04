@@ -124,8 +124,7 @@
     "githubMutated": false
   },
   "shaAlignment": {
-    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/{candidate,validation-runtime,review-runtime}.json (same provenance mechanism as adosRun). These values describe evidence cycle 1, whose candidate is 693a07b0ffbeca0919589ba40fadf69b183f1b12. The fix commit that adds this block produces a NEW candidate; ADOS must re-run full configured validation and Codex must independently re-review that new SHA, and convergence is evaluated against the new exact HEAD, not 693a07b.",
-    "evidenceCycle": 1,
+    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/{candidate,validation-runtime,review-runtime}.json (same provenance mechanism as adosRun). Every value below is scoped to transcribedAsOfCandidateSha, not current HEAD: the fix commit that adds this block is itself a NEW candidate that ADOS must re-run full configured validation on and Codex must independently re-review, with convergence evaluated against that new exact HEAD.",
     "transcribedAsOfCandidateSha": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
     "candidateOwner": "claude",
     "candidateSha": "693a07b0ffbeca0919589ba40fadf69b183f1b12",
