@@ -1,0 +1,172 @@
+{
+  "feature": "148-autonomous-company-operations-end-to-end",
+  "evidenceVersion": 1,
+  "evidencePathsAreRepositoryRelative": true,
+  "runtimeEvidencePath": "specs/148-autonomous-company-operations-end-to-end/runtime-evidence.json",
+  "deterministicHarness": {
+    "chainTest": "src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts",
+    "roleAndGateTest": "tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts",
+    "suggestionProvider": "deterministic fixture (authoritative requirement 23)",
+    "adosProcessBoundary": "existing injectable externalProjectAdosExecutionService.start adapter"
+  },
+  "projectA": {
+    "projectId": "project-a",
+    "canonical": true,
+    "automationControls": {
+      "autoSuggestions": "On",
+      "autoAccept": "On",
+      "autoReady": "On",
+      "autoExecute": "On",
+      "hiddenFullAutoFlag": false,
+      "independentlyToggled": true
+    },
+    "suggestionId": "project-a:suggestion:1",
+    "suggestionStatus": "proposed",
+    "suggestionProjectId": "project-a",
+    "boundedSuggestionCount": 1,
+    "spec147CreatedBacklogTask": false,
+    "acceptedTaskId": "project-a:backlog:1",
+    "acceptedTaskStatusAfterSpec145": "backlog",
+    "spec145MarkedReady": false,
+    "readyTransition": {
+      "taskId": "project-a:backlog:1",
+      "promotedCount": 1,
+      "promotedExactlyOnce": true,
+      "spec146StartedDevelopment": false,
+      "spec146InvokedSpec144": false
+    },
+    "developmentRequestId": "project-a:backlog-task:project-a:backlog:1:external-development-request-draft",
+    "executionPreparationId": "project-a:backlog-task:project-a:backlog:1:external-development-request-draft:external-ados-run-preparation",
+    "executionRunId": "project-a:run",
+    "executionResultId": "project-a:result",
+    "bridgeBinding": {
+      "boundProjectId": "project-a",
+      "sourceBacklogTaskId": "project-a:backlog:1",
+      "crossProjectFallback": false,
+      "globalLatestProjectSingleton": false,
+      "taskTextShellInterpolation": false
+    }
+  },
+  "projectB": {
+    "projectId": "project-b",
+    "canonical": true,
+    "receivedSuggestion": false,
+    "receivedBacklogTask": false,
+    "receivedReadyTransition": false,
+    "receivedExecution": false,
+    "receivedAdosStatus": false,
+    "receivedCandidateOrReviewerState": false,
+    "automationControls": {
+      "autoSuggestions": "Off",
+      "autoAccept": "Off",
+      "autoReady": "Off",
+      "autoExecute": "Off"
+    }
+  },
+  "adosRun": {
+    "note": "Transcribed from the gitignored .agent-workflow/runs/148-autonomous-company-operations-end-to-end/ados-run.json so evidence is stable across worktree locations. Absolute worktree/repository/source paths are intentionally omitted.",
+    "runId": "cc6ed14815c049ed1b97ce1c",
+    "status": "READY_FOR_IMPLEMENTATION",
+    "specNumber": "148",
+    "featureBranch": "codex/148-autonomous-company-operations-end-to-end",
+    "authoritativeBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
+    "executionPolicyVersion": "1",
+    "agentAssignment": {
+      "mode": "adaptive",
+      "implementerId": "claude",
+      "implementerCommand": "claude -p",
+      "reviewerId": "codex",
+      "reviewerCommand": "codex exec -",
+      "candidateOwnerId": "claude",
+      "reason": "operator preferred implementer=claude; reviewer=codex",
+      "expectedReasonPerRequirement10": "explicit operator preference for Claude implementer",
+      "availability": { "claude": "available", "codex": "available" }
+    }
+  },
+  "candidateOwner": "claude",
+  "reviewer": "codex",
+  "candidateOwnerIsReviewer": false,
+  "shaAlignment": {
+    "candidateBaseSha": "bbbb0318704f612be8ec54523e59b8d7e4fda204",
+    "validatedSha": "ADOS-owned; produced after implementation validation",
+    "reviewedSha": "ADOS-owned; produced by the independent Codex review",
+    "exactHeadResult": "ADOS-owned; convergence requires validatedSha == reviewedSha == exact HEAD",
+    "staleApprovalReuseAllowed": false,
+    "enforcementProvenById": "tools/agent-workflow/reviewConvergence.js computeConvergenceStatus (exactTargetMatch gate)"
+  },
+  "publicationResult": "Pending: human-only gate. Publication requires an independent Codex Approved review of the exact validated Spec 148 candidate.",
+  "completionState": {
+    "source": "actual ADOS execution/result status",
+    "fabricatedPercentageProgressIntroduced": false
+  },
+  "idempotency": {
+    "duplicatePlanningEventSuggestions": 1,
+    "duplicateAcceptanceBacklogTasks": 1,
+    "duplicateReadinessEvaluationTransitions": 1,
+    "duplicateExecutionEventRuns": 1,
+    "reloadDuplicatePlanningOrExecution": 0
+  },
+  "activeRunGating": {
+    "spec147ExtraSuggestionsWhileActive": 0,
+    "spec147SkipReason": "Skipped: active execution exists",
+    "spec146ExtraReadyWhileActive": 0,
+    "spec146SkipReason": "Skipped: active execution exists",
+    "spec144ConcurrentExecutionsStarted": 1,
+    "spec144SecondStartBlockedReason": "ActiveRunExists"
+  },
+  "reloadPersistence": {
+    "fourAutomationPoliciesRestored": true,
+    "taskLifecycleStateRestored": "in_progress",
+    "completedStageRestartedOnRemount": false,
+    "projectBConsentGrantedOnReload": false
+  },
+  "manualWorkflows": {
+    "manualSuggestionGeneration": "valid",
+    "manualSuggestionReview": "valid",
+    "manualBacklogToReady": "valid",
+    "manualStartDevelopment": "valid",
+    "eachAutomationStageIndependentlyDisableable": true
+  },
+  "recursiveLoop": {
+    "sequentialCyclesProven": 1,
+    "uncontrolledSelfTriggerLoopIntroduced": false,
+    "byConstruction": "Spec 148 adds no production code and therefore introduces no new trigger; existing cooldown/capacity/idempotency gates (Specs 144-147) are unchanged.",
+    "laterCycleRequiresBoundedLifecycleEvent": true
+  },
+  "officeLifecycleRepresentable": {
+    "note": "Spec 148 changes no view code; these lifecycle stages are already rendered by existing office modules.",
+    "stages": [
+      "Planning -> suggestion generated",
+      "Backlog -> suggestion accepted",
+      "Ready -> task promoted",
+      "Engineering -> development execution active (ExternalProjectAdosExecutionView)",
+      "Review -> ImplementerRuntime / ReviewerRuntime / ReviewDecision views",
+      "Validation/QA -> ValidationRuntime / PostValidationReviewTarget views",
+      "Complete -> merged/completed reflects actual ADOS result"
+    ]
+  },
+  "portfolioTruthfulness": {
+    "note": "Spec 148 changes no portfolio code. Spec 140 project-scoped, read-only, no-leak derivation is covered by src/features/city-view/scene/PortfolioOperationsService.test.ts (active/attention/idle/completed/disconnected mapped independently; global run does not contaminate another portfolio item; per-policy summaries do not mutate state). The Spec 148 chain test additionally shows no cross-project state (Test N).",
+    "distinguishableStates": ["active", "needs-attention", "blocked", "idle", "recently-completed", "disconnected"],
+    "stateLeakBetweenProjects": false,
+    "coveredBy": [
+      "src/features/city-view/scene/PortfolioOperationsService.test.ts",
+      "src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts (Test N)"
+    ]
+  },
+  "nonInvocationsVerified": {
+    "spec145DirectAdosCall": false,
+    "spec146DirectAdosCall": false,
+    "spec147DirectAdosCall": false,
+    "spec146DirectSpec144Call": false,
+    "spec147AutoAcceptCascade": false,
+    "secondOrchestrationEngineIntroduced": false,
+    "productionSourceModified": false
+  },
+  "validation": {
+    "targetedVitestCommand": "npx vitest run src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts src/features/city-view/scene/PortfolioOperationsService.test.ts",
+    "chainTests": 4,
+    "roleAndGateTests": 10,
+    "portfolioTruthfulnessTests": "src/features/city-view/scene/PortfolioOperationsService.test.ts (existing, unchanged)"
+  }
+}
