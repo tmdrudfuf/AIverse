@@ -123,23 +123,19 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       .toBe(true);
     expectPolicyFlags(controller, { accept: true, ready: false, execute: false, suggest: false });
 
-    expect(internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
-      enabled: true,
-      allowedPriorities: [HIGH],
-      maxPromotionsPerEvaluation: 1,
-    })).toBe(true);
-    expectPolicyFlags(controller, { accept: true, ready: true, execute: false, suggest: false });
-
     expect(controller.updateSelectedProjectAutonomyPolicy({ enabled: true, allowedPriorities: [HIGH] })).toBe(true);
     await flushPromises();
-    expectPolicyFlags(controller, { accept: true, ready: true, execute: true, suggest: false });
+    expectPolicyFlags(controller, { accept: true, ready: false, execute: true, suggest: false });
 
-    // All four controls are now independently ON. Enabling Auto Suggestions
-    // last is the single bounded lifecycle event that seeds the cycle.
+    // Auto Ready is deliberately left off here: enabling it now would let
+    // acceptance below cascade straight to Ready in the same call, masking
+    // the intermediate `backlog` state Test C must observe. It is enabled a
+    // few steps down as its own distinct, independently-triggered event
+    // (Test D) - the same-call cascade is proven separately below.
     expect(internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 }))
       .toBe(true);
     await flushPromises();
-    expectPolicyFlags(controller, { accept: true, ready: true, execute: true, suggest: true });
+    expectPolicyFlags(controller, { accept: true, ready: false, execute: true, suggest: true });
 
     // --- Test B: Spec 147 generated a bounded, project-scoped suggestion ---
     const suggestionsA = internals.state.projectBacklogSuggestionCollections[PROJECT_A]?.candidates ?? [];
@@ -157,39 +153,51 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates)
       .toHaveLength(evidence.idempotency.duplicatePlanningEventSuggestions);
 
-    // --- Test C: Spec 145 acceptance produces the backlog task; the Ready
-    //     transition is owned by Spec 146's own evaluation, never Spec 145 ----
+    // --- Test C: with Auto Ready still off, Spec 145 acceptance alone lands
+    //     the task in `backlog` - never `ready` --------------------------
     expect(internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()).toBe(true);
     const probeAfterAccept = controller.getProjectBacklogProbeState();
     // Spec 145 performed exactly one acceptance...
     expect(probeAfterAccept.suggestionAutoAcceptAcceptedCount).toBe(evidence.projectA.cascade.spec145AcceptedCount);
-    // ...and Spec 146 (its own independent policy evaluation, the sanctioned
-    // Spec 146 FR-016 trigger) performed exactly one promotion. The Ready
-    // transition is attributed to Spec 146's audit counter, never to Spec 145.
-    expect(probeAfterAccept.backlogReadinessPromotionPromotedCount).toBe(evidence.projectA.cascade.spec146PromotedCount);
+    // ...and Spec 146's own policy has not evaluated yet (still disabled): no
+    // promotion happened as a side effect of acceptance.
+    expect(probeAfterAccept.backlogReadinessPromotionPromotedCount).toBe(0);
     const acceptedTasks = internals.state.projectBacklogCollections[PROJECT_A].tasks;
     expect(acceptedTasks).toHaveLength(evidence.projectA.cascade.spec145AcceptedCount);
     const acceptedTask = acceptedTasks[0];
     expect(acceptedTask).toMatchObject({
       projectId: PROJECT_A,
+      status: "backlog",
       suggestionAcceptanceMode: "automatic",
       sourceSuggestionId: suggestionId,
     });
     const acceptedTaskId = acceptedTask.id;
-    // Spec 146 must not start development directly, even with Auto Execute on.
-    expect(invoke).not.toHaveBeenCalled();
     expect(acceptedTask.executionRunId).toBeUndefined();
 
     // --- Test J: duplicate acceptance evaluation does not duplicate the task
     internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
-    expect(internals.state.projectBacklogCollections[PROJECT_A].tasks)
-      .toHaveLength(evidence.idempotency.duplicateAcceptanceBacklogTasks);
+    const tasksAfterDuplicateAccept = internals.state.projectBacklogCollections[PROJECT_A].tasks;
+    expect(tasksAfterDuplicateAccept).toHaveLength(evidence.idempotency.duplicateAcceptanceBacklogTasks);
+    expect(tasksAfterDuplicateAccept[0].status).toBe("backlog");
 
-    // --- Test D: Spec 146 produced Ready exactly once --------------------
+    // --- Test D: enabling Spec 146's own policy is a distinct, independently
+    //     triggered event that promotes the already-accepted task to Ready
+    //     exactly once - Spec 145 never set it, and Auto Execute being on
+    //     already still does not start development directly ---------------
+    expect(internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+      enabled: true,
+      allowedPriorities: [HIGH],
+      maxPromotionsPerEvaluation: 1,
+    })).toBe(true);
+    expectPolicyFlags(controller, { accept: true, ready: true, execute: true, suggest: true });
+    expect(controller.getProjectBacklogProbeState().backlogReadinessPromotionPromotedCount)
+      .toBe(evidence.projectA.cascade.spec146PromotedCount);
     const readyAfterCascade = internals.state.projectBacklogCollections[PROJECT_A].tasks
       .filter((task) => task.status === "ready");
     expect(readyAfterCascade).toHaveLength(evidence.projectA.readyTransition.promotedCount);
     expect(readyAfterCascade[0].id).toBe(acceptedTaskId);
+    // Spec 146 must not start development directly, even with Auto Execute on.
+    expect(invoke).not.toHaveBeenCalled();
 
     // --- Test K: duplicate readiness evaluation does not duplicate --------
     expect(internals.evaluateSelectedProjectBacklogReadinessPromotion()).toBe(false);
@@ -309,7 +317,10 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
   it("keeps the four automation controls independently disableable (Tests A, Z)", async () => {
     const storage = createMemoryStorage();
-    const controller = createController(storage, providerWith([{ title: "x", description: "y", priority: HIGH }]));
+    const controller = createController(storage, providerWith([
+      { title: "x", description: "y", priority: HIGH },
+      { title: "z", description: "w", priority: HIGH },
+    ]));
     const internals = getControllerInternals(controller);
     internals.externalProjectAdosExecutionService.start = vi.fn(startedOutcome);
     seedTwoProjects(internals);
@@ -349,9 +360,42 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       status: "ready",
     })).toBe(true);
     expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("ready");
-    // Manual suggestion generation still available.
+
+    // Manual suggestion generation still available, and the operator reviews
+    // each one by hand (Auto Accept is off, so no policy touches them):
+    // rejecting one and accepting the other are both "manual suggestion
+    // review" - review is not accept-only.
     await internals.generateProjectBacklogSuggestions();
-    expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates.length).toBeGreaterThan(0);
+    const generatedCandidates = internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates
+      .filter((candidate) => candidate.status === "proposed");
+    expect(generatedCandidates.length).toBeGreaterThanOrEqual(2);
+    internals.state.selectedBacklogSuggestionId = generatedCandidates[0].id;
+    expect(controller.rejectSelectedBacklogSuggestion()).toBe(true);
+    expect(
+      internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates
+        .find((candidate) => candidate.id === generatedCandidates[0].id)!.status,
+    ).toBe("rejected");
+
+    internals.state.selectedBacklogSuggestionId = generatedCandidates[1].id;
+    expect(controller.acceptSelectedBacklogSuggestion()).toBe(true);
+    const manuallyAcceptedTask = internals.state.projectBacklogCollections[PROJECT_A].tasks
+      .find((task) => task.id === internals.state.selectedBacklogTaskId)!;
+    expect(manuallyAcceptedTask.status).toBe("backlog"); // manual acceptance, Auto Ready off
+    expect(manuallyAcceptedTask.suggestionAcceptanceMode).toBe("manual");
+
+    // Manual backlog -> Ready, then manual Start Development (Auto Execute off).
+    expect(controller.updateSelectedBacklogTaskFromInput({
+      title: manuallyAcceptedTask.title,
+      description: manuallyAcceptedTask.description,
+      priority: manuallyAcceptedTask.priority,
+      status: "ready",
+    })).toBe(true);
+    const started = await controller.startSelectedBacklogTaskDevelopment();
+    expect(started).toBe(true);
+    const developedTask = internals.state.projectBacklogCollections[PROJECT_A].tasks
+      .find((task) => task.id === manuallyAcceptedTask.id)!;
+    expect(developedTask.status).toBe("in_progress");
+    expect(developedTask.executionRunId).toBeTruthy();
   });
 
   it("attributes accept and promote to their own policy audit records when both are enabled", async () => {

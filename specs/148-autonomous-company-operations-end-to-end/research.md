@@ -151,35 +151,51 @@ percentage.
 **Alternatives rejected**: New lifecycle enum or portfolio field - unnecessary
 and against non-goals.
 
-## Decision 7 - All four controls enabled; attribute by audit counter
+## Decision 7 - Auto Ready enabled after acceptance, as its own distinct event
 
-**Decision**: The chain test enables all four automation controls (Auto
-Suggestions, Auto Accept, Auto Ready, Auto Execute) for project A *before* the
-bounded lifecycle event, and attributes each state transition to its owning
-policy through that policy's per-evaluation audit counter, not by disabling a
-downstream stage.
+**Decision**: The chain test enables Auto Accept and Auto Execute before the
+bounded lifecycle event, but leaves Auto Ready off until *after* Spec 145
+acceptance is asserted. Auto Ready is then enabled as a separate,
+independently-triggered step, which is what performs the backlog -> Ready
+promotion (Test D). All four controls are still independently toggled (Test A)
+and all four end up on before the cycle completes; they are just not all
+enabled simultaneously before the suggestion is generated.
 
-**Rationale**: `OfficeProjectPortalController.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()`
+**Rationale**: An earlier candidate enabled all four controls before the
+bounded lifecycle event. `OfficeProjectPortalController.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()`
 calls `evaluateSelectedProjectBacklogReadinessPromotion()` at its tail - a
 *sanctioned* trigger (Spec 146 FR-016 lists "Spec 145 acceptance evaluation
-completion"). With Auto Accept and Auto Ready both on, acceptance and promotion
-happen in one synchronous cascade. Requirement 2 requires all four controls
-independently enabled for the test project, so the test must not disable
-Auto Ready to make the intermediate `backlog` state observable. Instead:
-`suggestionAutoAcceptAcceptedCount === 1` proves Spec 145 performed exactly one
-acceptance and `backlogReadinessPromotionPromotedCount === 1` proves Spec 146's
-own independent evaluation performed exactly one promotion - the Ready
-transition is attributed to Spec 146's counter, never to Spec 145. Spec 145
-never writes `ready` itself (covered by the non-invocation test G and Spec 145's
-own suite). `expect(invoke).not.toHaveBeenCalled()` after the cascade proves
-Spec 146 did not invoke Spec 144 even though Auto Execute was enabled the whole
-time - a stronger check than the reviewed candidate's, where Auto Execute was
-still off at that point.
+completion"). With Auto Ready already on at that point, acceptance and
+promotion happened in one synchronous cascade, and the review's blocking
+finding was that the test never observed the intermediate `backlog` state
+before promotion - it asserted the *counts* of each stage's audit trail but not
+the task's own status in between, so a construction that folded Spec 145
+straight into Spec 146 would have passed the same assertions. Leaving Auto
+Ready off until after acceptance makes `acceptedTask.status === "backlog"`
+directly observable (Test C), with `backlogReadinessPromotionPromotedCount ===
+0` proving Spec 146 has not run yet. Enabling Auto Ready afterward is itself
+the "task is valid and same-project" / "deterministic selection" trigger
+requirement 6 describes, and its resulting `backlogReadinessPromotionPromotedCount
+=== 1` plus the task's transition to `ready` (Test D) is attributed to that
+event, never to Spec 145. `expect(invoke).not.toHaveBeenCalled()` is checked
+right after this promotion - with Auto Execute demonstrably already on - to
+prove Spec 146 did not invoke Spec 144 directly. Requirement 2 ("each stage is
+independently enabled for the test project") is satisfied because each control
+is still toggled and asserted on its own (Test A), and all four are on by the
+time execution starts (Test E); nothing requires all four to be enabled before
+the first suggestion exists. The same-call cascade this decision no longer
+exercises inline is still covered by a dedicated test ("attributes accept and
+promote to their own policy audit records when both are enabled") that enables
+Auto Accept and Auto Ready together before generation and asserts the audit
+counters plus final `ready` status.
 
-**Alternatives rejected**: Enabling Auto Ready only after the Spec 145 assertion
-(the reviewed candidate) - rejected: it narrows requirement 2's "all four
-independently enabled for the test project" to make an intermediate assertion
-observable.
+**Alternatives rejected**: Keeping all four controls enabled before generation
+and only asserting audit counters (the reviewed candidate) - rejected: it does
+not prove the intermediate `backlog` state, narrowing requirement 5. Asserting
+the intermediate state via a mock/spy inside the cascade - rejected: adds
+test-only instrumentation to production code paths for no reason when
+reordering already makes the state observable through the real controller
+methods.
 
 ## Decision 8 - validated / reviewed / exact-HEAD SHAs are resolved at run time, never frozen
 

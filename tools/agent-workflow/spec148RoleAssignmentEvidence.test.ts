@@ -228,9 +228,13 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
 
   it("reads candidate/review SHA identity from durable ADOS sources when present (Tests S, U, X)", () => {
     if (!durableCandidate) {
-      // No live ADOS run dir (clean checkout). The exact-HEAD + no-stale-approval
-      // gate is still enforced by the computeConvergenceStatus tests above; the
-      // evidence deliberately does not freeze a candidate SHA literal.
+      // No live ADOS run dir (clean checkout): there is no durable candidate
+      // record to cross-check at all. This is not a silent pass on the
+      // requirement - the exact-HEAD + no-stale-approval gate itself is
+      // exercised unconditionally by the "Spec 148 independent-review and
+      // exact-HEAD enforcement" tests above (converges only when aligned,
+      // rejects stale approval, rejects self-review, blocks when reviewer
+      // unavailable), which do not depend on a live ADOS run dir existing.
       expect(evidence.shaAlignment.candidateOwner).toBe("claude");
       return;
     }
@@ -247,21 +251,13 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     // cycle (or be absent on the first cycle) - never the in-flight candidate.
     // Asserting reviewed_sha === candidate_sha, or that the *prior* cycle's
     // command list all exited 0, unconditionally here would fail by
-    // construction on every cycle after the first. A mismatch is the
-    // correctly-modelled "not yet (re)validated / not yet reviewed" state that
-    // computeConvergenceStatus (exercised above) already treats as
-    // non-convergent, not a defect in this test.
+    // construction on every cycle after the first.
     //
-    // What *is* still checkable without that circularity: whenever a durable
-    // record happens to name the exact current candidate - which is true any
-    // time this test runs outside of a live ADOS validation pass for a new
-    // candidate, e.g. right after a full cycle has completed and before a new
-    // one starts - the strong invariant must hold. So the exit-code / no-tree-
-    // mutation check is restored, gated on that correlation, instead of being
-    // dropped to a bare shape check.
-    if (durableReview) {
-      expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
-    }
+    // Both branches below are checkable without that circularity, and both
+    // assert a real invariant rather than a bare shape check - a durable
+    // record that names a *different* SHA than the current candidate must be
+    // provably treated as non-convergent for this candidate, never silently
+    // accepted as authorization.
     if (durableValidation) {
       expect(Array.isArray(durableValidation.commands)).toBe(true);
       if (durableValidation.head_after === durableCandidate.candidate_sha) {
@@ -272,6 +268,41 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
         for (const command of durableValidation.commands) {
           expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
         }
+      }
+    }
+    if (durableReview) {
+      expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
+      if (durableReview.reviewed_sha === durableCandidate.candidate_sha) {
+        // This durable review targeted the exact current candidate: only a
+        // genuine "Approved" decision may converge, and even that must still
+        // require exact-HEAD alignment (asserted above) to authorize
+        // publication. Assert the invariant from the decision's meaning
+        // ("Approved" converges, anything else does not) rather than a
+        // specific non-Approved status literal, since the exact spelling of a
+        // non-Approved decision is not reproducible from this repository.
+        const status = computeConvergenceStatus({
+          hasAnyReviewAttempt: true,
+          latestReviewOutcome: durableReview.decision,
+          latestCompletenessStatus: "complete",
+          activeBlockingFindingsCount: durableReview.decision === "Approved" ? 0 : 1,
+          exactTargetMatch: true,
+        });
+        if (durableReview.decision === "Approved") {
+          expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
+        } else {
+          expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+        }
+      } else {
+        // Named review targets a different (stale) SHA than the current
+        // candidate: it must never authorize the current candidate, however
+        // its own decision reads.
+        expect(computeConvergenceStatus({
+          hasAnyReviewAttempt: true,
+          latestReviewOutcome: durableReview.decision,
+          latestCompletenessStatus: "complete",
+          activeBlockingFindingsCount: 0,
+          exactTargetMatch: false,
+        })).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
       }
     }
     expect(evidence.shaAlignment.candidateOwner).toBe("claude");

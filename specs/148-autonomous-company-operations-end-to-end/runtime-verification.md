@@ -64,19 +64,28 @@ deterministic Spec 143 suggestion provider fixture and the real
    `tools/agent-workflow/reviewConvergence.js`, which requires
    `validated == reviewed == exact HEAD` plus an Approved independent review.
 
-### Attribution of the Spec 145 -> Spec 146 cascade
+### Backlog before Ready, then attribution of the Spec 145 -> Spec 146 cascade
+
+The chain test leaves Auto Ready off through Spec 145 acceptance, so the
+intermediate `backlog` state is directly observable:
+`acceptedTask.status === "backlog"` and
+`backlogReadinessPromotionPromotedCount === 0` immediately after acceptance,
+with Spec 145 never having set `ready`. Auto Ready is then enabled as its own
+distinct, independently-triggered event, which is what performs the
+backlog -> Ready promotion (`backlogReadinessPromotionPromotedCount === 1`,
+task status `ready`); `expect(invoke).not.toHaveBeenCalled()` right after that
+promotion - with Auto Execute demonstrably already on - proves Spec 146 did
+not invoke Spec 144 directly.
 
 `OfficeProjectPortalController.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()`
-calls `evaluateSelectedProjectBacklogReadinessPromotion()` at its tail - a
+also calls `evaluateSelectedProjectBacklogReadinessPromotion()` at its tail - a
 sanctioned trigger (Spec 146 FR-016 lists "Spec 145 acceptance evaluation
-completion"). With all four controls enabled, acceptance and promotion happen
-in one synchronous cascade. Each transition is attributed to its owning policy
-by that policy's per-evaluation audit counter, not by disabling a stage:
-`suggestionAutoAcceptAcceptedCount === 1` (Spec 145 accepted once) and
-`backlogReadinessPromotionPromotedCount === 1` (Spec 146's own evaluation
-promoted once). Spec 145 never sets `ready` itself, and
-`expect(invoke).not.toHaveBeenCalled()` immediately after the cascade proves
-Spec 146 did not invoke Spec 144 despite Auto Execute being enabled throughout.
+completion") - so when Auto Accept and Auto Ready are *both already* enabled
+before generation, acceptance and promotion happen in one synchronous cascade
+instead. A dedicated test ("attributes accept and promote to their own policy
+audit records when both are enabled") exercises that shape and asserts each
+transition against its owning policy's per-evaluation audit counter, not by
+disabling a stage.
 
 ## Independent automation controls
 
@@ -111,9 +120,44 @@ disabled; no consent is granted on remount.
 
 ## Manual workflows remain valid
 
-With all automation disabled, manual backlog task creation, manual
-backlog -> Ready promotion, and manual suggestion generation all continue to
-work. Each automation stage can be disabled independently.
+With all automation disabled, manual backlog task creation, manual backlog ->
+Ready promotion, manual suggestion generation, manual suggestion review and
+acceptance (`controller.acceptSelectedBacklogSuggestion()`, landing in
+`backlog` with `suggestionAcceptanceMode: "manual"` since Auto Ready is off),
+and manual Start Development (`controller.startSelectedBacklogTaskDevelopment()`,
+reaching `in_progress` with an execution id) all continue to work. Each
+automation stage can be disabled independently.
+
+## Two distinct completion levels (acceptance criteria 1-9/12-17 vs. 11/19/20)
+
+The authoritative requirements doc has two separate numbered lists that share
+numbers 1-20 for unrelated content: its 24 numbered sections (e.g. "section 3"
+= Controlled E2E Test Project) and its "Acceptance Criteria" list (e.g.
+"acceptance criterion 1" = One controlled autonomous project cycle is
+demonstrated end to end). `runtime-evidence.json.acceptanceCriteriaMapping`
+spells out which list it means every time, and names two levels that must not
+be read as one contradicting the other:
+
+1. **`verifiedCycleCompletion`** - the terminal state of the SIMULATED
+   `daily-proof` project's autonomous chain under verification
+   (`adosExecutionRecordStatus: "Completed"`). This is what acceptance
+   criterion 1 ("one controlled autonomous project cycle... demonstrated end
+   to end") and acceptance criteria 2-9 ask for, and it **is** reached: Spec
+   144 authorizes *starting* one bounded execution through the Spec 142/138
+   bridge, not chaining into a further live validate/review/publish/merge run
+   against a real repository for that simulated task. Triggering that here
+   would itself be the destructive/arbitrary repository work section 3
+   forbids, and neither Spec 142's nor Spec 144's own runtime-verification
+   suites go further than this same boundary.
+2. **`externalSafetyBoundary` / `publicationResult`** - a separate, outer gate
+   over *this Spec 148 implementation candidate itself*: whether the code
+   change providing the verification above has been reviewed and published.
+   Push, PR readiness, approval, merge, and remote deletion are human-only
+   (execution policy; the same boundary Specs 142-147 declare), so this level
+   is correctly pending/false at every implementation handoff, including this
+   one (acceptance criteria 11, 19, 20) - that is compliance with the
+   execution policy (section 18, Failure Visibility: no fabricated
+   completion), not an incomplete cycle.
 
 ## External safety boundary
 
