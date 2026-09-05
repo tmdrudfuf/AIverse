@@ -62,6 +62,37 @@ const PROJECT_B = "ai-lab";
 const PROJECT_A_NAME = "Daily Proof";
 const REPO_ROOT = process.cwd().replace(/\\/g, "/");
 
+// The tracked evidence file is the claim under test, not a source of truth:
+// every number/string pulled from it below is cross-checked against the live
+// harness value in the same assertion, so a hand-edited or stale evidence
+// file fails this suite instead of silently drifting from reality.
+const specDir = new URL("../../../../../../specs/148-autonomous-company-operations-end-to-end/", import.meta.url);
+const evidence = JSON.parse(readFileSync(fileURLToPath(new URL("runtime-evidence.json", specDir)), "utf8")) as {
+  projectA: {
+    suggestionId: string;
+    acceptedTaskId: string;
+    developmentRequestId: string;
+    executionRunId: string;
+    boundedSuggestionCount: number;
+    cascade: { spec145AcceptedCount: number; spec146PromotedCount: number };
+    readyTransition: { promotedCount: number };
+    executionDurableRecord: { processSpawnInvocations: number; spawnInvocationsAfterDuplicateExecutionEvent: number };
+  };
+  idempotency: {
+    duplicatePlanningEventSuggestions: number;
+    duplicateAcceptanceBacklogTasks: number;
+    duplicateReadinessEvaluationTransitions: number;
+    duplicateExecutionEventRuns: number;
+  };
+  activeRunGating: {
+    spec147ExtraSuggestionsWhileActive: number;
+    spec147SkipReason: string;
+    spec146SkipReason: string;
+    spec144ConcurrentExecutionsStarted: number;
+    spec144SecondStartBlockedReason: string;
+  };
+};
+
 describe("Spec 148 autonomous company operations end-to-end", () => {
   it("composes one controlled cycle in order with each transition exactly once (Tests A-F, H-N, X, Y)", async () => {
     const storage = createMemoryStorage();
@@ -112,7 +143,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
     // --- Test B: Spec 147 generated a bounded, project-scoped suggestion ---
     const suggestionsA = internals.state.projectBacklogSuggestionCollections[PROJECT_A]?.candidates ?? [];
-    expect(suggestionsA).toHaveLength(1); // bounded to maxSuggestionsPerEvaluation
+    expect(suggestionsA).toHaveLength(evidence.projectA.boundedSuggestionCount); // bounded to maxSuggestionsPerEvaluation
     expect(suggestionsA[0]).toMatchObject({ projectId: PROJECT_A, status: "proposed" });
     const suggestionId = suggestionsA[0].id;
     // Spec 147 must not create a backlog task directly, and generation does not
@@ -123,20 +154,21 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
     // --- Test I: duplicate planning event does not duplicate the suggestion
     expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("replay-planning-event")).toBe(false);
-    expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates).toHaveLength(1);
+    expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates)
+      .toHaveLength(evidence.idempotency.duplicatePlanningEventSuggestions);
 
     // --- Test C: Spec 145 acceptance produces the backlog task; the Ready
     //     transition is owned by Spec 146's own evaluation, never Spec 145 ----
     expect(internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()).toBe(true);
     const probeAfterAccept = controller.getProjectBacklogProbeState();
     // Spec 145 performed exactly one acceptance...
-    expect(probeAfterAccept.suggestionAutoAcceptAcceptedCount).toBe(1);
+    expect(probeAfterAccept.suggestionAutoAcceptAcceptedCount).toBe(evidence.projectA.cascade.spec145AcceptedCount);
     // ...and Spec 146 (its own independent policy evaluation, the sanctioned
     // Spec 146 FR-016 trigger) performed exactly one promotion. The Ready
     // transition is attributed to Spec 146's audit counter, never to Spec 145.
-    expect(probeAfterAccept.backlogReadinessPromotionPromotedCount).toBe(1);
+    expect(probeAfterAccept.backlogReadinessPromotionPromotedCount).toBe(evidence.projectA.cascade.spec146PromotedCount);
     const acceptedTasks = internals.state.projectBacklogCollections[PROJECT_A].tasks;
-    expect(acceptedTasks).toHaveLength(1);
+    expect(acceptedTasks).toHaveLength(evidence.projectA.cascade.spec145AcceptedCount);
     const acceptedTask = acceptedTasks[0];
     expect(acceptedTask).toMatchObject({
       projectId: PROJECT_A,
@@ -150,23 +182,24 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
     // --- Test J: duplicate acceptance evaluation does not duplicate the task
     internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
-    expect(internals.state.projectBacklogCollections[PROJECT_A].tasks).toHaveLength(1);
+    expect(internals.state.projectBacklogCollections[PROJECT_A].tasks)
+      .toHaveLength(evidence.idempotency.duplicateAcceptanceBacklogTasks);
 
     // --- Test D: Spec 146 produced Ready exactly once --------------------
     const readyAfterCascade = internals.state.projectBacklogCollections[PROJECT_A].tasks
       .filter((task) => task.status === "ready");
-    expect(readyAfterCascade).toHaveLength(1);
+    expect(readyAfterCascade).toHaveLength(evidence.projectA.readyTransition.promotedCount);
     expect(readyAfterCascade[0].id).toBe(acceptedTaskId);
 
     // --- Test K: duplicate readiness evaluation does not duplicate --------
     expect(internals.evaluateSelectedProjectBacklogReadinessPromotion()).toBe(false);
     const readyTasks = internals.state.projectBacklogCollections[PROJECT_A].tasks.filter((t) => t.status === "ready");
-    expect(readyTasks).toHaveLength(1);
+    expect(readyTasks).toHaveLength(evidence.idempotency.duplicateReadinessEvaluationTransitions);
     expect(controller.getProjectBacklogProbeState().backlogReadinessPromotionPromotedCount).toBe(0);
 
     // --- Test E: Spec 144 alone authorizes autonomous execution ----------
     expect(await controller.reevaluateSelectedProjectAutonomy()).toBe(true);
-    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledTimes(evidence.projectA.executionDurableRecord.processSpawnInvocations);
     const executedTask = internals.state.projectBacklogCollections[PROJECT_A].tasks
       .find((task) => task.id === acceptedTaskId)!;
     expect(executedTask.status).toBe("in_progress");
@@ -206,8 +239,9 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
     // --- Test L: duplicate execution event does not create a duplicate run
     await controller.reevaluateSelectedProjectAutonomy();
-    expect(invoke).toHaveBeenCalledTimes(1);
-    expect(Object.values(internals.state.externalProjectAdosExecutions)).toHaveLength(1);
+    expect(invoke).toHaveBeenCalledTimes(evidence.projectA.executionDurableRecord.spawnInvocationsAfterDuplicateExecutionEvent);
+    expect(Object.values(internals.state.externalProjectAdosExecutions))
+      .toHaveLength(evidence.idempotency.duplicateExecutionEventRuns);
 
     // --- Test M: active run blocks prohibited extra planning/Ready/exec ---
     internals.state.projectAutonomousSuggestionPolicies[PROJECT_A] = {
@@ -215,9 +249,10 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       lastEvaluation: undefined,
     };
     expect(await internals.evaluateSelectedProjectAutonomousSuggestionGeneration("during-active-run")).toBe(false);
-    expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates).toHaveLength(1);
+    expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A].candidates)
+      .toHaveLength(evidence.projectA.boundedSuggestionCount + evidence.activeRunGating.spec147ExtraSuggestionsWhileActive);
     expect(internals.state.projectAutonomousSuggestionPolicies[PROJECT_A]?.lastEvaluation?.latestResultText)
-      .toBe("Skipped: active execution exists");
+      .toBe(evidence.activeRunGating.spec147SkipReason);
 
     expect(controller.createBacklogTaskFromInput({
       title: "Extra high while active",
@@ -228,13 +263,13 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       .find((task) => task.title === "Extra high while active")!;
     expect(extraTask.status).toBe("backlog"); // Spec 146 skipped: active execution
     expect(internals.state.projectBacklogReadinessPromotionPolicies[PROJECT_A].lastEvaluation?.latestResultText)
-      .toBe("Skipped: active execution exists");
+      .toBe(evidence.activeRunGating.spec146SkipReason);
 
     await controller.reevaluateSelectedProjectAutonomy();
-    expect(invoke).toHaveBeenCalledTimes(1); // Spec 144 concurrency limit holds
+    expect(invoke).toHaveBeenCalledTimes(evidence.activeRunGating.spec144ConcurrentExecutionsStarted); // Spec 144 concurrency limit holds
     expect(controller.getProjectBacklogProbeState()).toMatchObject({
       autonomyState: "blocked",
-      autonomyReason: "ActiveRunExists",
+      autonomyReason: evidence.activeRunGating.spec144SecondStartBlockedReason,
     });
 
     // --- Test N: Project B is untouched by Project A automation -----------
@@ -262,12 +297,14 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     const probeKeys = Object.keys(controller.getProjectBacklogProbeState());
     expect(probeKeys.some((key) => /percent|progress/i.test(key))).toBe(false);
 
-    // Identities recorded in runtime-evidence.json for this deterministic cycle.
-    expect(suggestionId).toBe(`${PROJECT_A}:suggestion:1`);
-    expect(acceptedTaskId).toBe(`${PROJECT_A}:backlog:1`);
-    expect(draft.id).toBe(`${PROJECT_A}:backlog-task:${PROJECT_A}:backlog:1:external-development-request-draft`);
-    expect(executedTask.executionRunId).toContain(`${PROJECT_A}:external-ados-execution:`);
-    expect(executionRecord?.id).toBe(executedTask.executionRunId);
+    // Cross-check the live harness identities against the tracked evidence
+    // file, rather than duplicating literals: a stale or hand-edited evidence
+    // file fails this test.
+    expect(suggestionId).toBe(evidence.projectA.suggestionId);
+    expect(acceptedTaskId).toBe(evidence.projectA.acceptedTaskId);
+    expect(draft.id).toBe(evidence.projectA.developmentRequestId);
+    expect(executedTask.executionRunId).toBe(evidence.projectA.executionRunId);
+    expect(executionRecord?.id).toBe(evidence.projectA.executionRunId);
   });
 
   it("keeps the four automation controls independently disableable (Tests A, Z)", async () => {
@@ -459,17 +496,20 @@ function openBacklog(
 }
 
 function seedTwoProjects(internals: ReturnType<typeof getControllerInternals>) {
-  // Canonical registration path only, exactly as production wires it in
-  // OfficeProjectPortalRegistry:
-  //   1. real ProjectRegistrySeedData + ProjectRegistryService, with the
+  // Same registration *mechanism* production uses in OfficeProjectPortalRegistry:
+  //   1. real ProjectRegistrySeedData + ProjectRegistryService, with a
   //      Project A local repository/worktree binding applied through the real
   //      applyLocalProjectRepositoryBindings (ProjectRegistryService ctor);
   //   2. real toProjectPortalProject adapter -> state.projects;
   //   3. real ProjectCompanyBindingService.createBindings -> state.projectCompanyBindings.
-  // Project A ("daily-proof") is bound to the actual repository/worktree this
-  // test runs in (process.cwd()); Project B ("ai-lab") keeps its seeded
-  // not-connected lifecycle state. No hand-rolled project records, no invented
-  // repo/worktree paths, no fabricated project identity in controller internals.
+  // The binding *data* is deliberately not production's live "daily-proof"
+  // binding (which points at a separate, fixed repository/worktree path):
+  // requirement 3 forbids destructive/arbitrary repository work, so this test
+  // binds the same canonical project id to this verification worktree
+  // (process.cwd()) instead - the real applyLocalProjectRepositoryBindings
+  // function, a real registered project id, a safe target path. Project B
+  // ("ai-lab") keeps its seeded not-connected lifecycle state. No hand-rolled
+  // project records, no invented project identity in controller internals.
   const registry = new ProjectRegistryService(createDefaultProjectRegistryEntries(), [
     {
       projectId: PROJECT_A,
