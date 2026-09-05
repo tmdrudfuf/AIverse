@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -239,6 +240,12 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       return;
     }
     expect(durableCandidate.candidate_sha).toMatch(/^[0-9a-f]{40}$/);
+    // candidate.json is written for the exact commit under test, before
+    // validation runs (see the pipeline-order comment below) - so unlike
+    // reviewed_sha, this leg has no circularity and holds unconditionally:
+    // the durable candidate must name exact HEAD, not a prior or stale commit.
+    const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    expect(durableCandidate.candidate_sha).toBe(exactHead);
     // The ADOS pipeline order is candidate -> validate -> review
     // (run_pipeline.py: candidate.json is written, *then* ValidationEngine.run
     // executes every configured command including this repository's own
@@ -260,11 +267,13 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     // accepted as authorization.
     if (durableValidation) {
       expect(Array.isArray(durableValidation.commands)).toBe(true);
+      // Worktree-unmutated holds for any validation cycle, stale or current:
+      // validation must never leave HEAD different from where it started.
+      expect(durableValidation.head_before).toBe(durableValidation.head_after);
       if (durableValidation.head_after === durableCandidate.candidate_sha) {
-        // This durable validation record targeted the exact current candidate
-        // (not a stale prior cycle): the strong invariant applies - the
-        // worktree was left unmutated and every command must have exited 0.
-        expect(durableValidation.head_before).toBe(durableValidation.head_after);
+        // This durable validation record additionally targeted the exact
+        // current candidate (not a stale prior cycle): every command must
+        // have exited 0.
         for (const command of durableValidation.commands) {
           expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
         }
