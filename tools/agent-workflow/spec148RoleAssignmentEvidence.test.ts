@@ -64,6 +64,24 @@ const sanitized = readJson(new URL("ados-run.sanitized.json", specDir)) as {
 const durableRun = readJsonIfPresent(new URL("ados-run.json", runDir)) as
   | { runId: string; featureBranch: string; authoritativeBaseSha: string; executionPolicyVersion: string; status: string; agentAssignment: Record<string, unknown> }
   | undefined;
+// A clean checkout has no `.agent-workflow` run dir at all (gitignored), so the
+// durable cross-check below simply does not apply. But if any *other* durable
+// run artifact is present, the run dir is live and `ados-run.json` - the role
+// assignment source of truth - must be present too; it may not be selectively
+// deleted while its siblings remain. Under authoritative ADOS validation the run
+// dir is fully populated (this branch's dir currently holds ados-run.json,
+// candidate.json, implementer-runtime.json, validation-runtime.json,
+// review-runtime.json), so the field-for-field check does execute there.
+const RUN_DIR_SIBLING_ARTIFACTS = [
+  "candidate.json",
+  "implementer-runtime.json",
+  "validation-runtime.json",
+  "review-runtime.json",
+  "bootstrap-runtime.json",
+];
+const runDirIsPopulated = RUN_DIR_SIBLING_ARTIFACTS.some((name) =>
+  existsSync(fileURLToPath(new URL(name, runDir))),
+);
 const VOLATILE_DURABLE_FIELDS = [
   "status",
   "nextStage",
@@ -126,21 +144,30 @@ describe("Spec 148 durable ADOS role assignment", () => {
     expect(JSON.stringify(sanitized)).not.toMatch(/[A-Za-z]:[\\/]/);
   });
 
-  it("matches the durable ADOS run record field-for-field when it is present in the worktree (Tests P, Q, S)", () => {
-    if (!durableRun) {
-      // Clean checkout without a live ADOS run dir: nothing to cross-check here;
-      // the sanitized artifact is the tracked source and the assertions above
-      // plus the transcription check below still bind it to the evidence.
-      return;
-    }
-    // Every allowlisted field is transcribed unchanged from durable ADOS state.
-    for (const field of sanitized._derivedFields) {
-      expect(
-        (sanitized as Record<string, unknown>)[field],
-        `sanitized.${field} must equal durable ados-run.json`,
-      ).toEqual((durableRun as Record<string, unknown>)[field]);
-    }
+  it("requires the durable ADOS run record whenever the run dir is populated (Tests P, Q, S)", () => {
+    // Not dodgeable by deleting ados-run.json alone inside a live run dir: if any
+    // sibling run artifact exists, the durable role-assignment record must too.
+    if (!runDirIsPopulated) return;
+    expect(
+      durableRun,
+      "ados-run.json must exist when the .agent-workflow run dir is populated",
+    ).toBeDefined();
   });
+
+  it.skipIf(!durableRun)(
+    "matches the durable ADOS run record field-for-field when it is present in the worktree (Tests P, Q, S)",
+    () => {
+      // Every allowlisted field is transcribed unchanged from durable ADOS state.
+      // Reported as skipped (not passed) in a clean checkout with no run dir, so
+      // it can never be a silent green that never proved provenance.
+      for (const field of sanitized._derivedFields) {
+        expect(
+          (sanitized as Record<string, unknown>)[field],
+          `sanitized.${field} must equal durable ados-run.json`,
+        ).toEqual((durableRun as Record<string, unknown>)[field]);
+      }
+    },
+  );
 
   it("has runtime-evidence.json transcribe the sanitized assignment unchanged (Tests P, Q, R, S)", () => {
     const transcribed = evidence.adosRun.agentAssignment;

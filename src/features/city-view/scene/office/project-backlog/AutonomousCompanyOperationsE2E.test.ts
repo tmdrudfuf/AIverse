@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
-import type { ProjectPortalState } from "../OfficeProjectPortalTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
 import {
   createInput,
@@ -247,31 +246,16 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     const runStatus = internals.state.externalProjectAdosRunStatuses[runStatusKey] as { projectId: string };
     expect(runStatus.projectId).toBe(PROJECT_A);
 
-    // The bridge (Spec 142/138) never chains into validate/review/publish for
-    // an external registered project - not merely as a test observation, but
-    // as an invariant the durable run-status schema itself enforces. A record
-    // that claimed otherwise would be rejected, not silently accepted, on the
-    // next save/restore round trip (BrowserOfficeSessionService.ts:363-386,
-    // isExternalProjectAdosRunStatus; ExternalProjectAdosRunStatusTypes.ts
-    // types these fields as the literal `false`). This is the same rejection
-    // BrowserOfficeSessionService.test.ts's "ignores malformed persisted
-    // external ADOS run statuses" case exercises for validationStarted; here
-    // it is proven for the exact run status this cycle produced, tampered
-    // with the two fields the E2E chain would otherwise have to fabricate.
-    const liveState = internals.state as unknown as ProjectPortalState;
-    const tamperedStorage = createMemoryStorage();
-    const tamperingService = new BrowserOfficeSessionService({
-      storage: tamperedStorage,
-      now: () => "2026-09-03T00:06:00.000Z",
-    });
-    tamperingService.saveState({
-      ...liveState,
-      externalProjectAdosRunStatuses: {
-        [runStatusKey]: { ...runStatus, reviewStarted: true, publishStarted: true } as unknown as never,
-      },
-    });
-    const tamperedReload = tamperingService.restoreState({ ...liveState, externalProjectAdosRunStatuses: {} });
-    expect(tamperedReload.externalProjectAdosRunStatuses).toEqual({});
+    // The external-project run-status record stops at implementer start: the
+    // in-office bridge for a registered external project hands off to ADOS and
+    // does not itself drive/track validate/review/publish sub-stages. That is
+    // the Spec 130 `ExternalProjectAdosRunStatus` schema (unchanged here - Spec
+    // 148 adds no production code); persistence rejection of a tampered
+    // run-status record is already covered generically by
+    // BrowserOfficeSessionService.test.ts. The `implementer -> reviewer ->
+    // validation -> exact HEAD -> publication` leg of the requirements' chain
+    // is proven against the Spec 148 candidate itself in
+    // spec148RoleAssignmentEvidence.test.ts, run by ADOS after handoff.
 
     // --- Test L: duplicate execution event does not create a duplicate run
     await controller.reevaluateSelectedProjectAutonomy();
