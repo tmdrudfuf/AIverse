@@ -286,66 +286,75 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     expect(durableCandidate.candidate_sha).toMatch(/^[0-9a-f]{40}$/);
     expect(durableCandidate.candidate_sha).toBe(exactHead);
 
-    // A populated run dir (durableCandidate present => candidate.json present)
-    // must also carry validation-runtime.json and review-runtime.json: a
-    // selectively-deleted durable file must fail this test, not skip it (the
-    // same sibling-artifact rule the ados-run.json check above applies).
-    expect(durableValidation, "validation-runtime.json must exist alongside candidate.json").toBeDefined();
-    expect(durableReview, "review-runtime.json must exist alongside candidate.json").toBeDefined();
-    if (!durableValidation || !durableReview) return; // unreachable after the assertions; narrows the type
+    // Pipeline order is candidate -> validate -> review, and this suite runs
+    // inside `npm test` *during* the validate stage. So a later-stage durable
+    // file that is simply ABSENT means that stage has not completed yet (on the
+    // first cycle of a run dir neither validation-runtime.json nor
+    // review-runtime.json exists) - skip, don't fail. But a later-stage file
+    // present WITHOUT its earlier-stage sibling is tampering - fail. This is
+    // the pipeline-order form of the sibling-artifact rule the ados-run.json
+    // check above applies.
+    if (durableReview) {
+      expect(
+        durableValidation,
+        "review-runtime.json present without validation-runtime.json (pipeline order candidate -> validate -> review)",
+      ).toBeDefined();
+    }
 
-    // Validation must never leave the worktree at a different commit than it
-    // started (no mutation during the run), for any cycle, stale or current.
-    expect(durableValidation.head_before).toBe(durableValidation.head_after);
-    expect(Array.isArray(durableValidation.commands)).toBe(true);
-    expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
-
-    // Compare the three durable targets (candidate/validated/reviewed) against
-    // exact HEAD with the SAME comparator production uses - validationPolicy.js
+    // Compare the durable targets (candidate/validated/reviewed) against exact
+    // HEAD with the SAME comparator production uses - validationPolicy.js
     // `targetsMatch`, reached in production through validationPlan.js
     // `isFinalValidationSatisfied` (orchestrateCommand.js final-verification
     // stage) - not a test-local `===`. The exactTargetMatch fed to
     // computeConvergenceStatus below is therefore DERIVED from the real durable
     // SHAs, not synthesised.
     const headTarget = shaTarget(exactHead);
-    const validatedMatchesHead = targetsMatch(shaTarget(durableValidation.head_after), headTarget);
-    const reviewedMatchesHead = targetsMatch(shaTarget(durableReview.reviewed_sha), headTarget);
-    const reviewedMatchesValidated = targetsMatch(
-      shaTarget(durableReview.reviewed_sha),
-      shaTarget(durableValidation.head_after),
-    );
-    const allThreeAligned = validatedMatchesHead && reviewedMatchesHead && reviewedMatchesValidated;
-
-    // When the durable validation record names exact HEAD, every configured
-    // command must have exited 0 (a stale prior cycle's list is not asserted -
-    // per the pipeline order candidate -> validate -> review, this suite runs
-    // inside `npm test` during validation, so on every cycle after the first
-    // the durable review, and sometimes the durable validation, describe an
-    // already-finished earlier candidate).
-    if (validatedMatchesHead) {
-      for (const command of durableValidation.commands) {
-        expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
+    let validatedMatchesHead = false;
+    if (durableValidation) {
+      // Validation must never leave the worktree at a different commit than it
+      // started (no mutation during the run), for any cycle, stale or current.
+      expect(durableValidation.head_before).toBe(durableValidation.head_after);
+      expect(Array.isArray(durableValidation.commands)).toBe(true);
+      validatedMatchesHead = targetsMatch(shaTarget(durableValidation.head_after), headTarget);
+      // When the durable validation record names exact HEAD, every configured
+      // command must have exited 0 (a stale prior cycle's list is not
+      // asserted - after cycle one the durable validation, and always the
+      // durable review, describe an already-finished earlier candidate).
+      if (validatedMatchesHead) {
+        for (const command of durableValidation.commands) {
+          expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
+        }
       }
     }
 
-    // The publication gate, fed the REAL durable review decision and the
-    // exactTargetMatch DERIVED above. Biconditional: converge iff an Approved
-    // review is aligned on all three SHAs. Both branches carry a real
-    // invariant - a stale review (reviewed_sha != HEAD, the state on every
-    // cycle after the first) derives exactTargetMatch=false and must not
-    // authorize publication; a "Changes Requested" against exact HEAD (the
-    // current durable state as this candidate is reviewed) must not either.
-    const status = computeConvergenceStatus({
-      hasAnyReviewAttempt: true,
-      latestReviewOutcome: durableReview.decision,
-      latestCompletenessStatus: "complete",
-      activeBlockingFindingsCount: durableReview.decision === "Approved" ? 0 : 1,
-      exactTargetMatch: allThreeAligned,
-    });
-    if (durableReview.decision === "Approved" && allThreeAligned) {
-      expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
-    } else {
-      expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+    if (durableReview) {
+      expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
+      const reviewedMatchesHead = targetsMatch(shaTarget(durableReview.reviewed_sha), headTarget);
+      const reviewedMatchesValidated = durableValidation
+        ? targetsMatch(shaTarget(durableReview.reviewed_sha), shaTarget(durableValidation.head_after))
+        : false;
+      const allThreeAligned = validatedMatchesHead && reviewedMatchesHead && reviewedMatchesValidated;
+
+      // The publication gate, fed the REAL durable review decision and the
+      // exactTargetMatch DERIVED above. Biconditional: converge iff an Approved
+      // review is aligned on candidate == validated == reviewed == exact HEAD.
+      // Both branches carry a real invariant - a stale review (reviewed_sha !=
+      // HEAD, the state on every cycle after the first) derives
+      // exactTargetMatch=false and must not authorize publication; a "Changes
+      // Requested" against exact HEAD (the durable state while this candidate
+      // is under review) must not either.
+      const status = computeConvergenceStatus({
+        hasAnyReviewAttempt: true,
+        latestReviewOutcome: durableReview.decision,
+        latestCompletenessStatus: "complete",
+        activeBlockingFindingsCount: durableReview.decision === "Approved" ? 0 : 1,
+        exactTargetMatch: allThreeAligned,
+      });
+      if (durableReview.decision === "Approved" && allThreeAligned) {
+        expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
+      } else {
+        expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+      }
     }
 
     expect(evidence.shaAlignment.candidateOwner).toBe("claude");
