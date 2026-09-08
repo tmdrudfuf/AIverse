@@ -232,8 +232,6 @@
   },
   "validation": {
     "targetedVitestCommand": "npx vitest run src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts src/features/city-view/scene/PortfolioOperationsService.test.ts",
-    "chainTests": 5,
-    "roleAndGateTests": 16,
     "portfolioTruthfulnessTests": "src/features/city-view/scene/PortfolioOperationsService.test.ts (existing, unchanged)"
   }
 }
