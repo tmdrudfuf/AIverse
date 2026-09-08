@@ -73,19 +73,21 @@ rejected. `runtime-evidence.json.shaAlignment` instead names the durable ADOS
 sources where those SHAs are available and `spec148RoleAssignmentEvidence.test.ts`
 resolves them at run time.
 
-**Fake outcome shape**: the fake `ImplementerRuntimeProvider` returns
-`status: "Completed"` (the spawn succeeded, the run is launched) with
-`evidence.started: true` and `evidence.completed: false` - a *launched but not
-finished* run. This is the office's model of an ADOS execution, not a bug fit
-to a test: `ExternalProjectAdosExecution` carries
-`validationStarted / reviewStarted / publishStarted: false` for exactly this
-reason, `ProjectAutonomousSuggestionPolicyService.countActiveExecutions` keys
-the active-run gate on `status === "Completed" && implementerStarted &&
-!evidence.completed`, and the pre-existing `execution()` helper in this test
-file and the Spec 144 suite already encode the same shape. Returning
-`evidence.completed: true` would represent a *terminated* run and would
-(correctly) not register as an active run, defeating the active-run safety
-checks in requirements 15-16.
+**Fake outcome shape**: `ImplementerRuntimeStatus` `"Completed"` means only that
+the spawn succeeded and the subprocess exited - it is NOT ADOS run-level
+completion. Run-level completion is `evidence.completed`, which every automation
+policy's `countActiveExecutions` and `OfficeProjectPortalController.isActiveExternalProjectAdosExecution`
+key on (`status === "Completed" && implementerStarted && !evidence.completed` =
+active). The main chain test therefore holds the run in flight
+(`evidence.completed: false`) so the active-run safety checks (requirements
+15-16) have something to gate on, while `ExternalProjectAdosExecution` carries
+`validationStarted / reviewStarted / publishStarted` as literal `false` (Spec
+130, unchanged). The dedicated Test X drives both values: `evidence.completed:
+true` makes production derive run stage `Completed` and drop the active-execution
+count to 0, which is precisely how the office distinguishes a finished ADOS run
+from a launched one - the daily-proof cycle then closes to a truthful terminal
+`completed` through the existing operator transition. `evidence.completed: true`
+is a *terminated* run and correctly does not register as active.
 
 ## Decision 4 - `.agent-workflow/` is gitignored; commit a sanitized ADOS mirror
 

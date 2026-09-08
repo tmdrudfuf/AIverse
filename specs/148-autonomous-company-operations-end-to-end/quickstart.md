@@ -31,7 +31,9 @@ transition, development request / preparation / execution ids, the durable
 execution record the office observes, the ADOS durable run id, the ADOS role
 assignment (implementer Claude, reviewer Codex, mode adaptive) mirrored from the
 sanitized `ados-run.sanitized.json`, candidate owner, reviewer identity, the
-`externalSafetyBoundary` block, and the `shaAlignment` block. `shaAlignment`
+`dailyProofCycleCompletion` block (the daily-proof cycle's truthful terminal
+`completed` state), the `spec148CandidatePublicationGate` block (this candidate's
+own human-only publication gate), and the `shaAlignment` block. `shaAlignment`
 names the durable ADOS sources where the candidate / validated / reviewed SHAs
 are available and the module that enforces `validated == reviewed == exact HEAD`,
 rather than freezing a SHA literal or a review decision that goes stale the

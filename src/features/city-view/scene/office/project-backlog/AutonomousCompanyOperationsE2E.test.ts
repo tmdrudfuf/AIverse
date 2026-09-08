@@ -15,6 +15,7 @@ import {
   getControllerInternals,
 } from "../OfficeProjectPortalController.testHelpers";
 import { ExternalProjectAdosExecutionService } from "../external-ados-execution/ExternalProjectAdosExecutionService";
+import { deriveExternalProjectAdosRunStatus } from "../external-ados-run-status/ExternalProjectAdosRunStatusService";
 import type {
   StartExternalProjectAdosExecutionInput,
   StartExternalProjectAdosExecutionOutcome,
@@ -96,7 +97,7 @@ const evidence = JSON.parse(readFileSync(fileURLToPath(new URL("runtime-evidence
 };
 
 describe("Spec 148 autonomous company operations end-to-end", () => {
-  it("composes one controlled cycle in order with each transition exactly once (Tests A-F, H-N, X, Y)", async () => {
+  it("composes one controlled cycle in order with each transition exactly once (Tests A-F, H-N, Y)", async () => {
     const storage = createMemoryStorage();
     const provider = providerWith([
       { title: "A11y audit doc", description: "Add a short accessibility checklist to docs/.", priority: HIGH },
@@ -232,10 +233,15 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(command.files?.some((file) => file.content.length > 0)).toBe(true);
     expect(JSON.stringify(command)).not.toContain(PROJECT_B);
 
-    // --- Test X: the durable execution record the office observes reflects the
-    //     real ADOS service outcome ---------------------------------------
+    // --- The durable execution/result/run-status records the office observes
+    //     come from the real ADOS service, not hardcoded values. This asserts
+    //     the *launch* record shape only. `status: "Completed"` here is
+    //     ImplementerRuntimeStatus and means merely "the implementer subprocess
+    //     exited" - the ADOS run itself is still in flight
+    //     (evidence.completed === false). Run-level completion fidelity is
+    //     Test X, proven in its own test below. ------------------------------
     const executionResult = Object.values(internals.state.externalProjectAdosExecutionResults)[0];
-    expect(executionResult?.status).toBe("Completed"); // from the real service, not hardcoded
+    expect(executionResult?.status).toBe("Completed"); // subprocess exited; from the real service
     expect(executionResult?.projectId).toBe(PROJECT_A);
     const executionRecord = Object.values(internals.state.externalProjectAdosExecutions)[0];
     expect(executionRecord?.projectId).toBe(PROJECT_A);
@@ -278,15 +284,24 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     // fabricates completion, and the Project A task does not advance past
     // in_progress.
     expect(computeConvergenceStatus({ hasAnyReviewAttempt: false })).toBe(CONVERGENCE_STATUSES.NOT_STARTED);
-    expect(
-      computeConvergenceStatus({
-        hasAnyReviewAttempt: true,
-        latestReviewOutcome: "Approved",
-        latestCompletenessStatus: "complete",
-        activeBlockingFindingsCount: 0,
-        exactTargetMatch: false, // stale / not-yet-aligned review target
-      }),
-    ).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+    // Publication convergence is a biconditional: it is reached IFF an Approved
+    // independent review is aligned on candidate == validated == reviewed ==
+    // exact HEAD. Both directions, through the real production module:
+    const alignedApprovedReview = {
+      hasAnyReviewAttempt: true,
+      latestReviewOutcome: "Approved",
+      latestCompletenessStatus: "complete",
+      activeBlockingFindingsCount: 0,
+    } as const;
+    expect(computeConvergenceStatus({ ...alignedApprovedReview, exactTargetMatch: true }))
+      .toBe(CONVERGENCE_STATUSES.CONVERGED);
+    expect(computeConvergenceStatus({ ...alignedApprovedReview, exactTargetMatch: false }))
+      .not.toBe(CONVERGENCE_STATUSES.CONVERGED); // stale / not-yet-aligned review target
+    // This scenario deliberately holds the ADOS run in flight
+    // (evidence.completed === false) so Test M below can prove active-run
+    // safety. The cycle's terminal completion - the office reflecting real ADOS
+    // run-level completion and the task reaching `completed` - is proven in the
+    // dedicated Test X test ("reflects real ADOS run-level completion ...").
     const chainTaskAfterExecution = internals.state.projectBacklogCollections[PROJECT_A].tasks
       .find((task) => task.id === acceptedTaskId)!;
     expect(chainTaskAfterExecution.status).toBe("in_progress");
@@ -360,6 +375,104 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(draft.id).toBe(evidence.projectA.developmentRequestId);
     expect(executedTask.executionRunId).toBe(evidence.projectA.executionRunId);
     expect(executionRecord?.id).toBe(evidence.projectA.executionRunId);
+  });
+
+  it("reflects real ADOS run-level completion in the office and reaches a represented terminal state (Test X)", async () => {
+    // ImplementerRuntimeStatus "Completed" means only that the implementer
+    // subprocess exited. Production keys *run-level* completion off
+    // execution.evidence.completed - every automation policy's
+    // countActiveExecutions (Spec 144 ProjectAutonomousExecutionPolicyService,
+    // Spec 146 ProjectBacklogReadinessPromotionPolicyService, Spec 147
+    // ProjectAutonomousSuggestionPolicyService) and
+    // OfficeProjectPortalController.isActiveExternalProjectAdosExecution all
+    // gate on `!evidence.completed`. Drive the real ExternalProjectAdosExecutionService
+    // twice, differing only in that signal, and assert the office-observable
+    // state tracks the actual ADOS run state, not the bare subprocess exit.
+    for (const runCompleted of [false, true]) {
+      const storage = createMemoryStorage();
+      const controller = createController(
+        storage,
+        providerWith([{ title: "Doc task", description: "Add a short docs note.", priority: HIGH }]),
+      );
+      const internals = getControllerInternals(controller);
+      const invoke = vi.fn(
+        async (command: ImplementerRuntimeProviderCommand): Promise<ImplementerRuntimeProviderResult> => ({
+          status: "Completed",
+          evidence: {
+            providerId: "claude",
+            agentId: "Claude",
+            role: "Implementer",
+            commandDisplay: [command.command, ...command.arguments].join(" "),
+            workingDirectory: command.workingDirectory,
+            started: true,
+            completed: runCompleted,
+            timedOut: false,
+            cancelled: false,
+            durationMs: 5,
+            stdoutSummary: "",
+            stderrSummary: "",
+            outputTruncated: false,
+          },
+        }),
+      );
+      internals.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(
+        { providerId: "claude", invoke } as ImplementerRuntimeProvider,
+      );
+      seedTwoProjects(internals);
+      controller.open();
+      controller.updateInput(createInput({}));
+      openBacklog(controller, internals, PROJECT_A);
+
+      internals.updateSelectedProjectSuggestionAcceptancePolicy({ enabled: true, allowedPriorities: [HIGH] });
+      controller.updateSelectedProjectAutonomyPolicy({ enabled: true, allowedPriorities: [HIGH] });
+      internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 });
+      await flushPromises();
+      internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
+      internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+        enabled: true,
+        allowedPriorities: [HIGH],
+        maxPromotionsPerEvaluation: 1,
+      });
+      expect(await controller.reevaluateSelectedProjectAutonomy()).toBe(true);
+
+      const task = internals.state.projectBacklogCollections[PROJECT_A].tasks[0];
+      // The autonomous chain always hands off at `in_progress`; there is no
+      // autonomous `in_progress -> completed` path and Spec 148 adds none.
+      expect(task.status).toBe("in_progress");
+
+      const execution = Object.values(internals.state.externalProjectAdosExecutions)[0]!;
+      expect(execution.evidence.completed).toBe(runCompleted); // adapter signal propagates faithfully
+
+      // Production's own run-status derivation reflects the ACTUAL ADOS run
+      // stage from that signal.
+      const runStatus = deriveExternalProjectAdosRunStatus({ projectId: PROJECT_A, execution })!;
+      expect(runStatus.stage).toBe(runCompleted ? "Completed" : "Started");
+
+      // The office-observable active-execution count (Spec 144 policy, surfaced
+      // on the probe) agrees: a still-running ADOS run counts as active; a
+      // completed one does not.
+      expect(controller.getProjectBacklogProbeState().autonomyActiveExecutionCount).toBe(runCompleted ? 0 : 1);
+
+      internals.state.selectedBacklogTaskId = task.id;
+      if (!runCompleted) {
+        // Run in flight: a second autonomy pass is blocked as an active run,
+        // and nothing anywhere reads as complete.
+        await controller.reevaluateSelectedProjectAutonomy();
+        expect(controller.getProjectBacklogProbeState().autonomyReason).toBe("ActiveRunExists");
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
+      } else {
+        // ADOS reports run-level completion -> the office no longer treats the
+        // run as active, and the operator closes the task through the existing
+        // manual transition. The cycle reaches a represented terminal state.
+        expect(controller.updateSelectedBacklogTaskFromInput({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: "completed",
+        })).toBe(true);
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("completed");
+      }
+    }
   });
 
   it("keeps the four automation controls independently disableable (Tests A, Z)", async () => {

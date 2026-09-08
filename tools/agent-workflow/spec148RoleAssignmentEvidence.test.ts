@@ -316,11 +316,25 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       expect(durableValidation.head_before).toBe(durableValidation.head_after);
       expect(Array.isArray(durableValidation.commands)).toBe(true);
       validatedMatchesHead = targetsMatch(shaTarget(durableValidation.head_after), headTarget);
-      // When the durable validation record names exact HEAD, every configured
-      // command must have exited 0 (a stale prior cycle's list is not
-      // asserted - after cycle one the durable validation, and always the
-      // durable review, describe an already-finished earlier candidate).
+      // When the durable validation record names exact HEAD, the FULL configured
+      // validation set (acceptance criterion 19) must be present and every
+      // command must have exited 0 (a stale prior cycle's list is not asserted -
+      // after cycle one the durable validation, and always the durable review,
+      // describe an already-finished earlier candidate).
       if (validatedMatchesHead) {
+        const CONFIGURED_VALIDATION_COMMANDS = [
+          "npm test",
+          "npx tsc --noEmit",
+          "npm run build",
+          "npm run test:e2e:home-canvas",
+          "git diff --check",
+          "git diff --cached --check",
+        ];
+        const ranCommands = durableValidation.commands.map((command) => command.command);
+        for (const configured of CONFIGURED_VALIDATION_COMMANDS) {
+          expect(ranCommands, `configured validation command "${configured}" must have run at exact HEAD`)
+            .toContain(configured);
+        }
         for (const command of durableValidation.commands) {
           expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
         }

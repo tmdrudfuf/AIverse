@@ -76,6 +76,13 @@ exact-HEAD guarantees for this run using existing agent-workflow modules.
 
 ---
 
+## Phase 7: Independent-review fix cycle (3)
+
+- [X] T030 Fix Test X so it proves *run-level* ADOS completion fidelity, not subprocess exit: add a dedicated `AutonomousCompanyOperationsE2E.test.ts` test that drives the real `ExternalProjectAdosExecutionService` twice differing only in `execution.evidence.completed`, and asserts production's `deriveExternalProjectAdosRunStatus` stage (`Started` vs `Completed`) and the Spec 144 active-execution count (`1` vs `0`) track it, then closes the daily-proof cycle to a truthful terminal `completed` via the existing operator transition (no autonomous completion path added). Add the positive `computeConvergenceStatus == CONVERGED` direction alongside the existing negative in the chain test.
+- [X] T031 Restructure `runtime-evidence.json`: split the buried-in-prose distinction into two top-level blocks — `dailyProofCycleCompletion` (daily-proof cycle's truthful terminal state + full-validation-PASS-at-exact-HEAD evidence, derived not transcribed) and `spec148CandidatePublicationGate` (this candidate's own human-only gate, citing the Spec 130 literal-`false` schema types). Update `acceptanceCriteriaMapping` (criterion 19 proven now; only 20 pending), `requirementsChainProof.links`, `publicationResult`, and the `executionDurableRecord.status` meaning. Mirror the rename in `runtime-verification.md`, `quickstart.md`, `data-model.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.

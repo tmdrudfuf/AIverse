@@ -157,8 +157,14 @@ The role file asserts durable role assignment (Tests P, Q), distinctness
 (Test R), candidate owner Claude (Test S), stale approval rejection (Test T),
 validated/reviewed/exact-HEAD alignment (Test U), reviewer-unavailable blocks
 (Test V), and no self-review fallback (Test W). Test X (completion reflects
-actual ADOS completion) is asserted in the E2E file against the recorded ADOS
-run status.
+actual ADOS completion) is a dedicated E2E test that drives the real
+`ExternalProjectAdosExecutionService` twice, differing only in
+`execution.evidence.completed`: it asserts production's
+`deriveExternalProjectAdosRunStatus` stage (`Started` vs `Completed`) and the
+Spec 144 active-execution count (`1` vs `0`) track that signal, then closes the
+daily-proof cycle to a truthful terminal `completed` via the existing operator
+transition. The `computeConvergenceStatus == CONVERGED` positive direction is
+also asserted in the chain test alongside the existing negative.
 
 ## Validation
 

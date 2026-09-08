@@ -36,13 +36,17 @@ Ready, and Auto Execute all explicitly enabled, fire one bounded lifecycle
 event and confirm the ordered progression suggestion -> accepted backlog task ->
 Ready -> autonomous execution -> development bridge -> ADOS run, each transition
 occurring exactly once; then confirm the chain continues into review (reviewer
-Codex, distinct from the Claude implementer) and that publication does not
-converge without an Approved review aligned on
-`validated == reviewed == exact HEAD` - the task does not advance past
-`in_progress` and nothing auto-approves or fabricates completion. The
-review / validation / exact-HEAD / publication legs are executed by the real
-ADOS pipeline against this feature branch (authoritative section 23; acceptance
-criterion 20).
+Codex, distinct from the Claude implementer), that `computeConvergenceStatus`
+reaches `CONVERGED` **iff** an Approved review is aligned on
+`validated == reviewed == exact HEAD` (both directions asserted), and that when
+the ADOS run reports run-level completion (`execution.evidence.completed`) the
+office reflects run stage `Completed`, the active-execution count drops to 0, and
+the daily-proof task reaches `completed` through the existing operator
+transition. While the run is still in flight the task stays `in_progress` and
+nothing auto-approves or fabricates completion. This Spec 148 candidate's *own*
+review / validation / exact-HEAD / publication is a separate human-only gate,
+executed by the real ADOS pipeline against this feature branch (authoritative
+section 23; acceptance criterion 20).
 
 **Acceptance Scenarios**:
 
@@ -66,8 +70,13 @@ criterion 20).
 6. **Given** the ADOS run has started, **When** review is assigned, **Then**
    the reviewer is Codex (distinct from the Claude implementer) and publication
    does not converge until an Approved independent review is aligned on
-   `validated == reviewed == exact HEAD`; until then the task stays
-   `in_progress` and no completion is fabricated.
+   `validated == reviewed == exact HEAD`; while the run is in flight the task
+   stays `in_progress` and no completion is fabricated.
+7. **Given** the ADOS run reports run-level completion
+   (`execution.evidence.completed`), **When** the office derives run status,
+   **Then** the derived stage is `Completed`, the active-execution count is 0,
+   and the daily-proof task reaches `completed` through the existing operator
+   transition - no autonomous `in_progress -> completed` path exists or is added.
 
 ---
 
