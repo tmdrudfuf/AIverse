@@ -6,6 +6,16 @@ import { describe, expect, it } from "vitest";
 
 import { resolveEffectiveRoles } from "./roleResolver.js";
 import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "./reviewConvergence.js";
+import { targetsMatch } from "./validationPolicy.js";
+
+// Adapt a bare durable SHA string into the { commit, dirty, dirtyHash } target
+// shape the production comparator (validationPolicy.js `targetsMatch`, reached
+// in production via validationPlan.js `isFinalValidationSatisfied`) expects.
+// The durable validation record separately proves the worktree was unmutated
+// across the run (head_before === head_after), i.e. `dirty: false`.
+function shaTarget(sha: string | undefined): { commit: string; dirty: false; dirtyHash: null } | null {
+  return sha ? { commit: sha, dirty: false, dirtyHash: null } : null;
+}
 
 // Spec 148 - Adaptive agent role and exact-candidate-ownership evidence
 // (authoritative requirements 10, 11; Required Tests P-W, and part of X/U).
@@ -254,7 +264,7 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     expect(evidence.shaAlignment.staleApprovalReuseAllowed).toBe(false);
   });
 
-  it("reads candidate/review SHA identity from durable ADOS sources when present (Tests S, U, X)", () => {
+  it("enforces validated == reviewed == exact HEAD from durable ADOS state before publication (Tests S, U, X)", () => {
     if (!durableCandidate) {
       // No live ADOS run dir (clean checkout): there is no durable candidate
       // record to cross-check at all. This is not a silent pass on the
@@ -266,82 +276,80 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       expect(evidence.shaAlignment.candidateOwner).toBe("claude");
       return;
     }
-    expect(durableCandidate.candidate_sha).toMatch(/^[0-9a-f]{40}$/);
-    // candidate.json is written for the exact commit under test, before
-    // validation runs (see the pipeline-order comment below) - so unlike
-    // reviewed_sha, this leg has no circularity and holds unconditionally:
-    // the durable candidate must name exact HEAD, not a prior or stale commit.
+
     const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    expect(exactHead).toMatch(/^[0-9a-f]{40}$/);
+
+    // candidate.json is written for the exact commit under test *before*
+    // validation runs, so this leg has no pipeline-order circularity and holds
+    // unconditionally: the durable candidate must name exact HEAD.
+    expect(durableCandidate.candidate_sha).toMatch(/^[0-9a-f]{40}$/);
     expect(durableCandidate.candidate_sha).toBe(exactHead);
-    // The ADOS pipeline order is candidate -> validate -> review
-    // (run_pipeline.py: candidate.json is written, *then* ValidationEngine.run
-    // executes every configured command including this repository's own
-    // `npm test`, and only after that full run returns does it write
-    // validation-runtime.json; review-runtime.json is written later still,
-    // only once validation has already passed). This suite itself runs as
-    // part of that `npm test` command. So at the moment this test executes for
-    // a freshly-committed candidate, validation-runtime.json and
-    // review-runtime.json on disk can only reflect a *prior*, already-finished
-    // cycle (or be absent on the first cycle) - never the in-flight candidate.
-    // Asserting reviewed_sha === candidate_sha, or that the *prior* cycle's
-    // command list all exited 0, unconditionally here would fail by
-    // construction on every cycle after the first.
-    //
-    // Both branches below are checkable without that circularity, and both
-    // assert a real invariant rather than a bare shape check - a durable
-    // record that names a *different* SHA than the current candidate must be
-    // provably treated as non-convergent for this candidate, never silently
-    // accepted as authorization.
-    if (durableValidation) {
-      expect(Array.isArray(durableValidation.commands)).toBe(true);
-      // Worktree-unmutated holds for any validation cycle, stale or current:
-      // validation must never leave HEAD different from where it started.
-      expect(durableValidation.head_before).toBe(durableValidation.head_after);
-      if (durableValidation.head_after === durableCandidate.candidate_sha) {
-        // This durable validation record additionally targeted the exact
-        // current candidate (not a stale prior cycle): every command must
-        // have exited 0.
-        for (const command of durableValidation.commands) {
-          expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
-        }
+
+    // A populated run dir (durableCandidate present => candidate.json present)
+    // must also carry validation-runtime.json and review-runtime.json: a
+    // selectively-deleted durable file must fail this test, not skip it (the
+    // same sibling-artifact rule the ados-run.json check above applies).
+    expect(durableValidation, "validation-runtime.json must exist alongside candidate.json").toBeDefined();
+    expect(durableReview, "review-runtime.json must exist alongside candidate.json").toBeDefined();
+    if (!durableValidation || !durableReview) return; // unreachable after the assertions; narrows the type
+
+    // Validation must never leave the worktree at a different commit than it
+    // started (no mutation during the run), for any cycle, stale or current.
+    expect(durableValidation.head_before).toBe(durableValidation.head_after);
+    expect(Array.isArray(durableValidation.commands)).toBe(true);
+    expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
+
+    // Compare the three durable targets (candidate/validated/reviewed) against
+    // exact HEAD with the SAME comparator production uses - validationPolicy.js
+    // `targetsMatch`, reached in production through validationPlan.js
+    // `isFinalValidationSatisfied` (orchestrateCommand.js final-verification
+    // stage) - not a test-local `===`. The exactTargetMatch fed to
+    // computeConvergenceStatus below is therefore DERIVED from the real durable
+    // SHAs, not synthesised.
+    const headTarget = shaTarget(exactHead);
+    const validatedMatchesHead = targetsMatch(shaTarget(durableValidation.head_after), headTarget);
+    const reviewedMatchesHead = targetsMatch(shaTarget(durableReview.reviewed_sha), headTarget);
+    const reviewedMatchesValidated = targetsMatch(
+      shaTarget(durableReview.reviewed_sha),
+      shaTarget(durableValidation.head_after),
+    );
+    const allThreeAligned = validatedMatchesHead && reviewedMatchesHead && reviewedMatchesValidated;
+
+    // When the durable validation record names exact HEAD, every configured
+    // command must have exited 0 (a stale prior cycle's list is not asserted -
+    // per the pipeline order candidate -> validate -> review, this suite runs
+    // inside `npm test` during validation, so on every cycle after the first
+    // the durable review, and sometimes the durable validation, describe an
+    // already-finished earlier candidate).
+    if (validatedMatchesHead) {
+      for (const command of durableValidation.commands) {
+        expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
       }
     }
-    if (durableReview) {
-      expect(durableReview.reviewed_sha).toMatch(/^[0-9a-f]{40}$/);
-      if (durableReview.reviewed_sha === durableCandidate.candidate_sha) {
-        // This durable review targeted the exact current candidate: only a
-        // genuine "Approved" decision may converge, and even that must still
-        // require exact-HEAD alignment (asserted above) to authorize
-        // publication. Assert the invariant from the decision's meaning
-        // ("Approved" converges, anything else does not) rather than a
-        // specific non-Approved status literal, since the exact spelling of a
-        // non-Approved decision is not reproducible from this repository.
-        const status = computeConvergenceStatus({
-          hasAnyReviewAttempt: true,
-          latestReviewOutcome: durableReview.decision,
-          latestCompletenessStatus: "complete",
-          activeBlockingFindingsCount: durableReview.decision === "Approved" ? 0 : 1,
-          exactTargetMatch: true,
-        });
-        if (durableReview.decision === "Approved") {
-          expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
-        } else {
-          expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
-        }
-      } else {
-        // Named review targets a different (stale) SHA than the current
-        // candidate: it must never authorize the current candidate, however
-        // its own decision reads.
-        expect(computeConvergenceStatus({
-          hasAnyReviewAttempt: true,
-          latestReviewOutcome: durableReview.decision,
-          latestCompletenessStatus: "complete",
-          activeBlockingFindingsCount: 0,
-          exactTargetMatch: false,
-        })).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
-      }
+
+    // The publication gate, fed the REAL durable review decision and the
+    // exactTargetMatch DERIVED above. Biconditional: converge iff an Approved
+    // review is aligned on all three SHAs. Both branches carry a real
+    // invariant - a stale review (reviewed_sha != HEAD, the state on every
+    // cycle after the first) derives exactTargetMatch=false and must not
+    // authorize publication; a "Changes Requested" against exact HEAD (the
+    // current durable state as this candidate is reviewed) must not either.
+    const status = computeConvergenceStatus({
+      hasAnyReviewAttempt: true,
+      latestReviewOutcome: durableReview.decision,
+      latestCompletenessStatus: "complete",
+      activeBlockingFindingsCount: durableReview.decision === "Approved" ? 0 : 1,
+      exactTargetMatch: allThreeAligned,
+    });
+    if (durableReview.decision === "Approved" && allThreeAligned) {
+      expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
+    } else {
+      expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
     }
+
     expect(evidence.shaAlignment.candidateOwner).toBe("claude");
+    expect(evidence.shaAlignment.staleApprovalReuseAllowed).toBe(false);
   });
 
   it("keeps publicationResult a standing gate, not a frozen per-candidate verdict (Tests U, X, Y)", () => {

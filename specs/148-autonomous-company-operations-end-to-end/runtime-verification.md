@@ -48,21 +48,26 @@ deterministic Spec 143 suggestion provider fixture and the real
    false`). The task becomes `in_progress` with the real execution id
    `daily-proof:external-ados-execution:...:external-ados-execution-v1`. A
    replayed execution event starts no second run and no second process spawn.
-5. **Review / Validation / Complete** - The independent reviewer is Codex per the
-   durable ADOS role assignment. Completion state derives from the real
-   execution result, not a hardcoded value; no fabricated percentage progress
-   is introduced. ADOS runs full configured validation (`npm test`,
-   `npx tsc --noEmit`, `npm run build`, `npm run test:e2e:home-canvas`,
-   `git diff --check`, `git diff --cached --check`) and an independent Codex
-   review against the exact candidate HEAD after every implementation handoff,
-   including the one that adds this evidence. The live per-candidate verdict is
-   in the durable
+5. **Review / Validation / Complete** - handled by this candidate's own real
+   ADOS run (see "The target chain is verified in two exercised halves"). The
+   independent reviewer is Codex per the durable ADOS role assignment.
+   Completion state derives from the real execution result, not a hardcoded
+   value; no fabricated percentage progress is introduced. ADOS runs full
+   configured validation (`npm test`, `npx tsc --noEmit`, `npm run build`,
+   `npm run test:e2e:home-canvas`, `git diff --check`, `git diff --cached
+   --check`) and an independent Codex review against the exact candidate HEAD
+   after every implementation handoff, including the one that adds this
+   evidence. The live per-candidate verdict is in the durable
    `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`
    sources; this tracked artifact does not freeze it, because committing the
    artifact advances HEAD and staleifies any frozen verdict. Exact-HEAD
-   convergence and publication remain gated by
-   `tools/agent-workflow/reviewConvergence.js`, which requires
-   `validated == reviewed == exact HEAD` plus an Approved independent review.
+   convergence and publication remain gated in production by
+   `validationPlan.js` `isFinalValidationSatisfied` (`validationPolicy.js`
+   `targetsMatch`) at the `orchestrateCommand.js` final-verification stage plus
+   `reviewConvergence.js` `computeConvergenceStatus`, which together require
+   `validated == reviewed == exact HEAD` plus an Approved independent review;
+   `spec148RoleAssignmentEvidence.test.ts` cross-checks the same three durable
+   SHAs with the same `targetsMatch` comparator against `git rev-parse HEAD`.
 
 ### Backlog before Ready, then attribution of the Spec 145 -> Spec 146 cascade
 
@@ -128,36 +133,36 @@ and manual Start Development (`controller.startSelectedBacklogTaskDevelopment()`
 reaching `in_progress` with an execution id) all continue to work. Each
 automation stage can be disabled independently.
 
-## Two distinct completion levels (acceptance criteria 1-9/12-17 vs. 11/19/20)
+## The target chain is verified in two exercised halves
 
-The authoritative requirements doc has two separate numbered lists that share
-numbers 1-20 for unrelated content: its 24 numbered sections (e.g. "section 3"
-= Controlled E2E Test Project) and its "Acceptance Criteria" list (e.g.
-"acceptance criterion 1" = One controlled autonomous project cycle is
-demonstrated end to end). `runtime-evidence.json.acceptanceCriteriaMapping`
-spells out which list it means every time, and names two levels that must not
-be read as one contradicting the other:
+The `daily-proof` in-office execution record cannot represent
+review/validation/publish sub-stages: the Spec 130 schema types
+`validationStarted` / `reviewStarted` / `repositoryMutationStarted` /
+`githubMutationStarted` / `publishStarted` / `mergeStarted` / `deployStarted`
+as the literal `false`
+(`src/features/city-view/scene/office/external-ados-execution/ExternalProjectAdosExecutionTypes.ts:41-47`,
+`src/features/city-view/scene/office/external-ados-run-status/ExternalProjectAdosRunStatusTypes.ts:29-35`),
+and Spec 148 adds no production code. Those sub-stages live in ADOS durable
+state, so the chain is verified in two halves that share one feature branch and
+worktree:
 
-1. **`verifiedCycleCompletion`** - the terminal state of the SIMULATED
-   `daily-proof` project's autonomous chain under verification
-   (`adosExecutionRecordStatus: "Completed"`). This is what acceptance
-   criterion 1 ("one controlled autonomous project cycle... demonstrated end
-   to end") and acceptance criteria 2-9 ask for, and it **is** reached: Spec
-   144 authorizes *starting* one bounded execution through the Spec 142/138
-   bridge, not chaining into a further live validate/review/publish/merge run
-   against a real repository for that simulated task. Triggering that here
-   would itself be the destructive/arbitrary repository work section 3
-   forbids, and neither Spec 142's nor Spec 144's own runtime-verification
-   suites go further than this same boundary.
-2. **`externalSafetyBoundary` / `publicationResult`** - a separate, outer gate
-   over *this Spec 148 implementation candidate itself*: whether the code
-   change providing the verification above has been reviewed and published.
-   Push, PR readiness, approval, merge, and remote deletion are human-only
-   (execution policy; the same boundary Specs 142-147 declare), so this level
-   is correctly pending/false at every implementation handoff, including this
-   one (acceptance criteria 11, 19, 20) - that is compliance with the
-   execution policy (section 18, Failure Visibility: no fabricated
-   completion), not an incomplete cycle.
+1. **Deterministic daily-proof harness** - drives Spec 147 -> 145 -> 141 -> 146
+   -> 144 -> 142/138 -> ADOS with the real services (acceptance criteria 1-9,
+   12-17). `implementerLaunchStatus: "Completed"` is only the implementer
+   subprocess exiting cleanly.
+2. **This candidate's own real ADOS run** - drives ADOS -> implementer ->
+   independent Codex reviewer -> validation -> exact HEAD -> publication.
+   `spec148RoleAssignmentEvidence.test.ts` reads the durable ADOS records
+   (`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`),
+   compares candidate/validated/reviewed SHA to `git rev-parse HEAD` with the
+   same comparator production uses (`validationPolicy.js` `targetsMatch`,
+   reached via `validationPlan.js` `isFinalValidationSatisfied` at the
+   `orchestrateCommand.js` final-verification stage), and asserts
+   `computeConvergenceStatus` converges iff an Approved review is aligned on all
+   three. Push, PR readiness, approval, merge, and remote deletion are
+   human-only (execution policy), so publication is correctly pending at every
+   implementation handoff (acceptance criteria 11, 19, 20) - section 18
+   compliance, not an incomplete cycle.
 
 ## External safety boundary
 
@@ -173,24 +178,33 @@ tracked artifact advances HEAD, so any frozen verdict is immediately stale.
 
 `runtime-evidence.json.shaAlignment` names, rather than transcribes, the durable
 sources where the candidate/validated/reviewed SHAs are available
-(`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`).
-`spec148RoleAssignmentEvidence.test.ts` reads those sources when present. The
-ADOS pipeline order is candidate -> validate (this repository's own `npm test`
-included) -> review, and `validation-runtime.json` / `review-runtime.json` are
-only written once the corresponding stage fully completes - so while this test
-runs *as part of* a live `npm test` validation pass for a fresh candidate, the
-durable files on disk necessarily describe an older, already-finished cycle.
-The test therefore asserts every validation command exited `0` only when the
-durable record's `head_after` actually names the current candidate (true any
-time this test is run outside of that in-flight window); it checks shape
-otherwise. When durable sources are absent entirely (clean checkout) it
-asserts the enforcement gate directly. Requirement 21's "where available" is satisfied by naming the durable
-location plus the test that resolves it; requirement 18's ban on fabricated
-completion is satisfied because no approval is asserted anywhere. Exact-HEAD
-convergence and publication remain gated by
-`tools/agent-workflow/reviewConvergence.js` `computeConvergenceStatus`, which
-requires `validated == reviewed == exact HEAD` (`exactTargetMatch`) plus an
-Approved, complete, unblocked independent review before returning `converged`.
+(`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`)
+- a SHA literal committed into a tracked file is stale the moment the commit
+lands. `spec148RoleAssignmentEvidence.test.ts` reads those sources; in a
+populated run dir it requires `validation-runtime.json` and `review-runtime.json`
+to be present (a selectively-deleted sibling fails, not skips). It asserts
+`candidate.json`'s `candidate_sha` equals `git rev-parse HEAD` unconditionally
+(`candidate.json` is written for the exact commit before validation runs, so
+this leg has no pipeline-order circularity), asserts validation left the
+worktree unmutated (`head_before == head_after`), then compares
+candidate/validated/reviewed targets against exact HEAD with the **same
+comparator production uses** - `validationPolicy.js` `targetsMatch`, reached in
+production via `validationPlan.js` `isFinalValidationSatisfied` at the
+`orchestrateCommand.js` final-verification stage - and feeds that *derived*
+`exactTargetMatch` plus the *real* durable review decision into
+`computeConvergenceStatus`, asserting it converges iff an Approved review is
+aligned on all three SHAs. The ADOS pipeline order is candidate -> validate
+(this repository's own `npm test` included) -> review, so on every cycle after
+the first `review-runtime.json` (and briefly `validation-runtime.json`) still
+names the prior finished candidate; the derivation then yields
+`exactTargetMatch: false` and the assertion is "must not authorize publication"
+- a real invariant on both branches, and the validation-command exit-0 loop
+runs only when the durable validation record itself names exact HEAD. When
+durable sources are absent entirely (clean checkout) the enforcement gate is
+still exercised directly by the tests below. Requirement 21's "where available"
+is satisfied by naming the durable location plus the test that resolves it;
+requirement 18's ban on fabricated completion is satisfied because no approval
+is asserted anywhere.
 
 ## Adaptive role and publication-gate evidence
 
@@ -211,6 +225,12 @@ agent-workflow enforcement modules:
   when the review is Approved, complete, unblocked, and `exactTargetMatch` is
   true; a stale approval against an older SHA (`exactTargetMatch: false`) or any
   validated/reviewed/HEAD SHA mismatch does not converge.
+- The durable ADOS records `candidate.json` / `validation-runtime.json` /
+  `review-runtime.json` are cross-checked with the production comparator
+  `validationPolicy.js` `targetsMatch` against `git rev-parse HEAD`; the
+  resulting `exactTargetMatch` is fed to `computeConvergenceStatus` with the
+  real durable review decision, and convergence is asserted iff an Approved
+  review is aligned on candidate == validated == reviewed == exact HEAD.
 
 ## Office lifecycle representation (authoritative requirement 12)
 

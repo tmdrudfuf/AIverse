@@ -100,7 +100,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       { title: "A11y audit doc", description: "Add a short accessibility checklist to docs/.", priority: HIGH },
       { title: "Bounded-out extra", description: "This second candidate must be bounded out.", priority: HIGH },
     ]);
-    const { provider: implementerProvider, invoke } = completedImplementerProvider();
+    const { provider: implementerProvider, invoke } = launchedImplementerProvider();
     const controller = createController(storage, provider);
     const internals = getControllerInternals(controller);
     // Drive the *real* ExternalProjectAdosExecutionService; only the OS process
@@ -230,32 +230,31 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(command.files?.some((file) => file.content.length > 0)).toBe(true);
     expect(JSON.stringify(command)).not.toContain(PROJECT_B);
 
-    // --- Test X: completion state reflects the real ADOS service outcome and
-    //     the durable execution record the office observes ------------------
+    // --- Test X: the durable execution record the office observes reflects the
+    //     real ADOS service outcome ---------------------------------------
     const executionResult = Object.values(internals.state.externalProjectAdosExecutionResults)[0];
     expect(executionResult?.status).toBe("Completed"); // from the real service, not hardcoded
     expect(executionResult?.projectId).toBe(PROJECT_A);
-    expect(executionResult?.reviewStarted).toBe(false);
-    expect(executionResult?.publishStarted).toBe(false);
     const executionRecord = Object.values(internals.state.externalProjectAdosExecutions)[0];
     expect(executionRecord?.projectId).toBe(PROJECT_A);
     expect(executionRecord?.implementerStarted).toBe(true);
-    expect(executionRecord?.reviewStarted).toBe(false);
-    expect(executionRecord?.githubMutationStarted).toBe(false);
     const runStatusKey = Object.keys(internals.state.externalProjectAdosRunStatuses)[0];
     const runStatus = internals.state.externalProjectAdosRunStatuses[runStatusKey] as { projectId: string };
     expect(runStatus.projectId).toBe(PROJECT_A);
 
-    // The external-project run-status record stops at implementer start: the
-    // in-office bridge for a registered external project hands off to ADOS and
-    // does not itself drive/track validate/review/publish sub-stages. That is
-    // the Spec 130 `ExternalProjectAdosRunStatus` schema (unchanged here - Spec
-    // 148 adds no production code); persistence rejection of a tampered
-    // run-status record is already covered generically by
-    // BrowserOfficeSessionService.test.ts. The `implementer -> reviewer ->
-    // validation -> exact HEAD -> publication` leg of the requirements' chain
-    // is proven against the Spec 148 candidate itself in
-    // spec148RoleAssignmentEvidence.test.ts, run by ADOS after handoff.
+    // review/validation/publish sub-stage flags on these in-office records are
+    // typed as the literal `false` by the Spec 130 schema
+    // (ExternalProjectAdosExecutionTypes.ts:41-47,
+    // ExternalProjectAdosRunStatusTypes.ts:29-35), unchanged by Spec 148: the
+    // in-office bridge hands a registered external project's run off to ADOS and
+    // does not itself track those sub-stages. That
+    // `implementer -> reviewer -> validation -> exact HEAD -> publication` leg
+    // is exercised against this candidate's own real ADOS run and enforced from
+    // durable ADOS state in spec148RoleAssignmentEvidence.test.ts.
+    expect(executionResult?.reviewStarted).toBe(false);
+    expect(executionResult?.publishStarted).toBe(false);
+    expect(executionRecord?.reviewStarted).toBe(false);
+    expect(executionRecord?.githubMutationStarted).toBe(false);
 
     // --- Test L: duplicate execution event does not create a duplicate run
     await controller.reevaluateSelectedProjectAutonomy();
@@ -584,13 +583,20 @@ function seedTwoProjects(internals: ReturnType<typeof getControllerInternals>) {
   internals.state.projectCompanyBindings = new ProjectCompanyBindingService().createBindings(CITY_BUILDINGS, entries);
 }
 
-// A deterministic ADOS process-boundary fake: the implementer subprocess spawn
-// succeeds and the run is launched (status "Completed", started true), but the
-// ADOS run as a whole is still in flight (evidence.completed false) -- the same
-// "run launched, not finished" shape the Spec 144 suite and this file's other
-// tests use, and the shape the active-run gate in
-// ProjectAutonomousSuggestionPolicyService.countActiveExecutions keys on.
-function completedImplementerProvider() {
+// A deterministic ADOS process-boundary fake. `status: "Completed"` is the only
+// success value of ImplementerRuntimeStatus and means only "the implementer
+// subprocess exited cleanly"; `evidence.completed: false` means the ADOS run as
+// a whole is still in flight. That is the "run launched, not finished" shape the
+// Spec 144 suite and this file's other tests use, and the shape the active-run
+// gate in ProjectAutonomousSuggestionPolicyService.countActiveExecutions keys
+// on. The review / validation / exact-HEAD / publication leg is not represented
+// on this in-office record - the Spec 130 ExternalProjectAdosExecution /
+// ExternalProjectAdosRunStatus schema types those sub-stage flags as the
+// literal `false` (ExternalProjectAdosExecutionTypes.ts:41-47,
+// ExternalProjectAdosRunStatusTypes.ts:29-35), unchanged by Spec 148 - it lives
+// in ADOS durable state and is enforced by spec148RoleAssignmentEvidence.test.ts
+// against the real ADOS run of this candidate.
+function launchedImplementerProvider() {
   const invoke = vi.fn(
     async (command: ImplementerRuntimeProviderCommand): Promise<ImplementerRuntimeProviderResult> => ({
       status: "Completed",
