@@ -67,6 +67,15 @@ exact-HEAD guarantees for this run using existing agent-workflow modules.
 
 ---
 
+## Phase 6: Independent-review fix cycle (2)
+
+- [X] T026 Stop framing the target chain as "two exercised halves" in `runtime-verification.md` and `runtime-evidence.json` (`acceptanceCriteriaMapping`, `verifiedCycleCompletion`, `requirementsChainProof`); replace with one continuous chain whose review/validation/exact-HEAD/publication legs are executed by the real ADOS pipeline (section 23, acceptance criterion 20). Move acceptance criterion 11 out of the pending list — it is enforced now.
+- [X] T027 De-narrow `spec.md` User Story 1: the independent test runs through review (reviewer Codex, distinct from Claude implementer), the `validated == reviewed == exact HEAD` convergence gate, and the human-only publication gate — not "ADOS run". Add acceptance scenario 6.
+- [X] T028 Continue the single Project A chain in `AutonomousCompanyOperationsE2E.test.ts` past ADOS execution: assert `roleResolver.js` resolves a distinct Codex reviewer and `reviewConvergence.js` `computeConvergenceStatus` stays below `CONVERGED` without an aligned Approved review, with the task not advancing past `in_progress` (Test H continuation).
+- [X] T029 Add deterministic failure-visibility coverage (authoritative requirement 18): suggestion provider unavailable halts at Spec 147 with a block reason and no backlog task; acceptance ineligible (`PriorityNotAllowed`) halts at Spec 145 without mutating the backlog; ADOS execution-stage failure via the real `ExternalProjectAdosExecutionService` leaves the task `ready`, records a `Failed` result, and fabricates no completion. Record reasons in `runtime-evidence.json.failureVisibility` and `runtime-verification.md`.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.

@@ -92,3 +92,21 @@ For this run:
 
 No new fabricated percentage-progress field is introduced. Completion state
 reflects actual ADOS completion, not a hardcoded value.
+
+## C10 - Failure visibility
+
+When a stage fails, the authoritative prior state MUST be preserved, a concise
+block reason MUST be observable, and the chain MUST NOT advance / auto-approve /
+fabricate completion:
+
+- Suggestion provider throws: Spec 147 `lastEvaluation.latestResultText ===
+  "Failed: suggestion generation unavailable"`; no suggestion, no backlog task;
+  policy `enabled` stays `true`.
+- Suggestion ineligible for Auto Accept (e.g. priority not allowed): Spec 145
+  `lastEvaluation.skipped[0].reason === "PriorityNotAllowed"`;
+  `projectBacklogCollections` unchanged; suggestion `status === "proposed"`.
+- ADOS execution stage fails (implementer runtime error): the real service
+  returns `status === "Failed"`, `started === false`,
+  `reasonCodes` includes `EXTERNAL_ADOS_EXECUTION_INTERNAL_FAILURE`; no
+  `externalProjectAdosExecutions` entry; task `status` stays `"ready"`;
+  development request draft `status === "Failed"`.

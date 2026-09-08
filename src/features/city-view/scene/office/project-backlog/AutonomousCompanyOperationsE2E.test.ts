@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { resolveEffectiveRoles } from "../../../../../../tools/agent-workflow/roleResolver.js";
+import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "../../../../../../tools/agent-workflow/reviewConvergence.js";
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
@@ -242,19 +244,53 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     const runStatus = internals.state.externalProjectAdosRunStatuses[runStatusKey] as { projectId: string };
     expect(runStatus.projectId).toBe(PROJECT_A);
 
-    // review/validation/publish sub-stage flags on these in-office records are
-    // typed as the literal `false` by the Spec 130 schema
+    // The in-office ADOS execution/run-status records carry no
+    // review/validation/publish advancement of their own: the Spec 130 schema
+    // types those sub-stage flags as the literal `false`
     // (ExternalProjectAdosExecutionTypes.ts:41-47,
-    // ExternalProjectAdosRunStatusTypes.ts:29-35), unchanged by Spec 148: the
-    // in-office bridge hands a registered external project's run off to ADOS and
-    // does not itself track those sub-stages. That
-    // `implementer -> reviewer -> validation -> exact HEAD -> publication` leg
-    // is exercised against this candidate's own real ADOS run and enforced from
-    // durable ADOS state in spec148RoleAssignmentEvidence.test.ts.
+    // ExternalProjectAdosRunStatusTypes.ts:29-35), unchanged by Spec 148. The
+    // chain does not stop here - it continues immediately below into the
+    // Review -> Validation -> exact HEAD -> publication gate that ADOS runs
+    // against this exact feature branch and worktree (authoritative section 23,
+    // acceptance criterion 20).
     expect(executionResult?.reviewStarted).toBe(false);
     expect(executionResult?.publishStarted).toBe(false);
     expect(executionRecord?.reviewStarted).toBe(false);
     expect(executionRecord?.githubMutationStarted).toBe(false);
+
+    // --- Test H (continued): the same Project A chain continues past ADOS
+    //     execution into Review -> Validation -> exact HEAD -> publication,
+    //     using the real agent-workflow enforcement modules ----------------
+    // Review stage: this run's implementer is Claude per the durable execution
+    // evidence, so its independent reviewer must be a distinct agent - Codex.
+    // Claude never reviews its own work.
+    expect(executionRecord?.evidence.providerId).toBe("claude");
+    const chainRoles = resolveEffectiveRoles({
+      state: {},
+      requestedImplementerId: executionRecord!.evidence.providerId,
+    });
+    expect(chainRoles.ok).toBe(true);
+    // toEqual on the whole object already proves reviewer != implementer.
+    expect(chainRoles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
+    // Publication gate: with no Approved independent review aligned on
+    // candidate == validated == reviewed == exact HEAD, convergence is not
+    // reached, so publication stays blocked. Nothing auto-approves, nothing
+    // fabricates completion, and the Project A task does not advance past
+    // in_progress.
+    expect(computeConvergenceStatus({ hasAnyReviewAttempt: false })).toBe(CONVERGENCE_STATUSES.NOT_STARTED);
+    expect(
+      computeConvergenceStatus({
+        hasAnyReviewAttempt: true,
+        latestReviewOutcome: "Approved",
+        latestCompletenessStatus: "complete",
+        activeBlockingFindingsCount: 0,
+        exactTargetMatch: false, // stale / not-yet-aligned review target
+      }),
+    ).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+    const chainTaskAfterExecution = internals.state.projectBacklogCollections[PROJECT_A].tasks
+      .find((task) => task.id === acceptedTaskId)!;
+    expect(chainTaskAfterExecution.status).toBe("in_progress");
+    expect(executionResult?.publishStarted).toBe(false);
 
     // --- Test L: duplicate execution event does not create a duplicate run
     await controller.reevaluateSelectedProjectAutonomy();
@@ -510,6 +546,123 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     // Project B stays disabled after reload (no consent granted on remount).
     openBacklog(reloaded, reloadedInternals, PROJECT_B);
     expect(reloaded.getProjectBacklogProbeState().autonomousSuggestionEnabled).toBe(false);
+  });
+
+  // --- Failure visibility (authoritative requirement 18) -------------------
+  // Each stage failure must preserve the authoritative prior state, expose a
+  // concise block reason, and not silently advance / auto-approve / fabricate
+  // completion.
+
+  it("halts at Spec 147 with a block reason when the suggestion provider is unavailable", async () => {
+    const storage = createMemoryStorage();
+    const controller = createController(storage, {
+      generateSuggestions: vi.fn(() => {
+        throw new Error("suggestion provider offline");
+      }),
+    });
+    const internals = getControllerInternals(controller);
+    internals.externalProjectAdosExecutionService.start = vi.fn(startedOutcome);
+    seedTwoProjects(internals);
+    controller.open();
+    controller.updateInput(createInput({}));
+    openBacklog(controller, internals, PROJECT_A);
+
+    expect(internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 }))
+      .toBe(true);
+    await flushPromises();
+
+    // No suggestion produced and no backlog task created: prior state preserved.
+    expect(internals.state.projectBacklogSuggestionCollections[PROJECT_A]?.candidates ?? []).toEqual([]);
+    expect(internals.state.projectBacklogCollections[PROJECT_A]?.tasks ?? []).toEqual([]);
+    // Concise block reason exposed; the policy is not silently flipped off.
+    const policy = internals.state.projectAutonomousSuggestionPolicies[PROJECT_A]!;
+    expect(policy.enabled).toBe(true);
+    expect(policy.lastEvaluation?.latestResultText).toBe("Failed: suggestion generation unavailable");
+  });
+
+  it("halts at Spec 145 without mutating the backlog when the suggestion is ineligible", async () => {
+    const storage = createMemoryStorage();
+    // Suggestion is generated at "normal" priority; Auto Accept only allows HIGH.
+    const controller = createController(storage, providerWith([
+      { title: "Low-priority idea", description: "Not eligible for auto-accept.", priority: "normal" },
+    ]));
+    const internals = getControllerInternals(controller);
+    internals.externalProjectAdosExecutionService.start = vi.fn(startedOutcome);
+    seedTwoProjects(internals);
+    controller.open();
+    controller.updateInput(createInput({}));
+    openBacklog(controller, internals, PROJECT_A);
+
+    internals.updateSelectedProjectSuggestionAcceptancePolicy({ enabled: true, allowedPriorities: [HIGH] });
+    internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 });
+    await flushPromises();
+
+    const suggestions = internals.state.projectBacklogSuggestionCollections[PROJECT_A]?.candidates ?? [];
+    expect(suggestions).toHaveLength(1);
+
+    // Spec 145 evaluated and skipped it: backlog stays empty, the suggestion
+    // stays proposed, and the ineligibility reason is exposed structurally.
+    expect(internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept()).toBe(false);
+    expect(internals.state.projectBacklogCollections[PROJECT_A]?.tasks ?? []).toEqual([]);
+    expect(suggestions[0].status).toBe("proposed");
+    const acceptancePolicy = internals.state.projectBacklogSuggestionAcceptancePolicies[PROJECT_A]!;
+    expect(acceptancePolicy.lastEvaluation?.skipped[0]?.reason).toBe("PriorityNotAllowed");
+    expect(acceptancePolicy.lastEvaluation?.latestResultText).toMatch(/^Skipped:/);
+  });
+
+  it("preserves prior state and surfaces a block reason when the ADOS execution stage fails", async () => {
+    const storage = createMemoryStorage();
+    const controller = createController(storage, providerWith([
+      { title: "Doc task", description: "Add a short docs note.", priority: HIGH },
+    ]));
+    const internals = getControllerInternals(controller);
+    // Real ExternalProjectAdosExecutionService; the implementer runtime fails to
+    // spawn, which the real service maps to a Failed result with no execution
+    // record (EXTERNAL_ADOS_EXECUTION_INTERNAL_FAILURE).
+    const invoke = vi.fn(async () => {
+      throw new Error("implementer runtime unavailable");
+    });
+    internals.externalProjectAdosExecutionService =
+      new ExternalProjectAdosExecutionService({ providerId: "claude", invoke } as ImplementerRuntimeProvider);
+    seedTwoProjects(internals);
+    controller.open();
+    controller.updateInput(createInput({}));
+    openBacklog(controller, internals, PROJECT_A);
+
+    internals.updateSelectedProjectSuggestionAcceptancePolicy({ enabled: true, allowedPriorities: [HIGH] });
+    controller.updateSelectedProjectAutonomyPolicy({ enabled: true, allowedPriorities: [HIGH] });
+    internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 });
+    await flushPromises();
+    internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
+    internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+      enabled: true,
+      allowedPriorities: [HIGH],
+      maxPromotionsPerEvaluation: 1,
+    });
+    const readyTask = internals.state.projectBacklogCollections[PROJECT_A].tasks[0];
+    expect(readyTask.status).toBe("ready");
+
+    // Spec 144 authorizes execution; the real ADOS service runs and fails.
+    expect(await controller.reevaluateSelectedProjectAutonomy()).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1); // real ADOS path exercised, not skipped
+
+    // Prior authoritative state preserved: task stays Ready, never in_progress,
+    // no execution record, no fabricated completion.
+    const taskAfter = internals.state.projectBacklogCollections[PROJECT_A].tasks
+      .find((task) => task.id === readyTask.id)!;
+    expect(taskAfter.status).toBe("ready");
+    expect(taskAfter.executionRunId).toBeUndefined();
+    expect(Object.values(internals.state.externalProjectAdosExecutions)).toEqual([]);
+
+    // Concise block reason exposed on the durable records the office observes.
+    const result = Object.values(internals.state.externalProjectAdosExecutionResults)[0] as
+      | { status: string; reasonCodes: string[]; started: boolean }
+      | undefined;
+    expect(result?.status).toBe("Failed");
+    expect(result?.started).toBe(false);
+    expect(result?.reasonCodes).toContain("EXTERNAL_ADOS_EXECUTION_INTERNAL_FAILURE");
+    const draftKey = Object.keys(internals.state.externalProjectDevelopmentRequestDrafts)[0];
+    expect(internals.state.externalProjectDevelopmentRequestDrafts[draftKey].status).toBe("Failed");
   });
 });
 

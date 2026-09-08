@@ -24,9 +24,10 @@ implementer -> independent reviewer -> validation -> exact HEAD -> publication.
 ### User Story 1 - One Controlled Autonomous Cycle (Priority: P1)
 
 An operator who has independently enabled all four automation controls for one
-canonical project observes a single suggestion travel the full chain to an
-active ADOS development execution without any stage being skipped or any safety
-gate being disabled.
+canonical project observes a single suggestion travel the full chain - Spec 147
+generation through ADOS execution, independent Codex review assignment,
+validation, exact HEAD, and the human-only publication gate - without any stage
+being skipped or any safety gate being disabled.
 
 **Why this priority**: This is the entire purpose of Spec 148.
 
@@ -34,7 +35,14 @@ gate being disabled.
 Ready, and Auto Execute all explicitly enabled, fire one bounded lifecycle
 event and confirm the ordered progression suggestion -> accepted backlog task ->
 Ready -> autonomous execution -> development bridge -> ADOS run, each transition
-occurring exactly once.
+occurring exactly once; then confirm the chain continues into review (reviewer
+Codex, distinct from the Claude implementer) and that publication does not
+converge without an Approved review aligned on
+`validated == reviewed == exact HEAD` - the task does not advance past
+`in_progress` and nothing auto-approves or fabricates completion. The
+review / validation / exact-HEAD / publication legs are executed by the real
+ADOS pipeline against this feature branch (authoritative section 23; acceptance
+criterion 20).
 
 **Acceptance Scenarios**:
 
@@ -55,6 +63,11 @@ occurring exactly once.
 5. **Given** the bridge produced a development request, **When** execution
    starts, **Then** a durable ADOS run identity is recorded and observable by
    the office.
+6. **Given** the ADOS run has started, **When** review is assigned, **Then**
+   the reviewer is Codex (distinct from the Claude implementer) and publication
+   does not converge until an Approved independent review is aligned on
+   `validated == reviewed == exact HEAD`; until then the task stays
+   `in_progress` and no completion is fabricated.
 
 ---
 

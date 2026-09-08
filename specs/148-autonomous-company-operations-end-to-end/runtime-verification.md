@@ -48,9 +48,19 @@ deterministic Spec 143 suggestion provider fixture and the real
    false`). The task becomes `in_progress` with the real execution id
    `daily-proof:external-ados-execution:...:external-ados-execution-v1`. A
    replayed execution event starts no second run and no second process spawn.
-5. **Review / Validation / Complete** - handled by this candidate's own real
-   ADOS run (see "The target chain is verified in two exercised halves"). The
-   independent reviewer is Codex per the durable ADOS role assignment.
+5. **Review / Validation / exact HEAD / Complete** - the same Project A chain
+   continues past ADOS execution. `AutonomousCompanyOperationsE2E.test.ts`
+   drives the real `roleResolver.js` and `reviewConvergence.js` immediately
+   after execution: the reviewer for this run resolves to Codex, distinct from
+   the Claude implementer, and `computeConvergenceStatus` does not reach
+   `CONVERGED` without an Approved independent review aligned on
+   `candidate == validated == reviewed == exact HEAD`, so publication stays
+   blocked and the task does not advance past `in_progress`. The review /
+   validation / exact-HEAD / publication legs are executed by the real ADOS
+   pipeline against this exact feature branch and worktree (authoritative
+   section 23; acceptance criterion 20), and enforced from durable ADOS state
+   by `spec148RoleAssignmentEvidence.test.ts`. The independent reviewer is
+   Codex per the durable ADOS role assignment.
    Completion state derives from the real execution result, not a hardcoded
    value; no fabricated percentage progress is introduced. ADOS runs full
    configured validation (`npm test`, `npx tsc --noEmit`, `npm run build`,
@@ -109,6 +119,29 @@ While Project A has an active execution:
 - Spec 144 does not start a second execution; the probe reports
   `autonomyReason: ActiveRunExists`.
 
+## Failure visibility (authoritative requirement 18)
+
+Deterministic coverage in `AutonomousCompanyOperationsE2E.test.ts` for stage
+failures preserving prior state and exposing a concise block reason:
+
+- **Suggestion provider unavailable** - the Spec 143 provider throws; Spec 147
+  records `Failed: suggestion generation unavailable`, no suggestion and no
+  backlog task are created, and the policy stays enabled (not silently flipped).
+- **Acceptance ineligible** - a `normal`-priority suggestion under an Auto
+  Accept policy that allows only `high`; Spec 145 skips it with structured
+  reason `PriorityNotAllowed` (`latestResultText` `Skipped: ...`), the backlog
+  is not mutated, and the suggestion stays `proposed`.
+- **ADOS execution-stage failure** - the real `ExternalProjectAdosExecutionService`
+  with an implementer runtime that fails to spawn; the service returns a
+  `Failed` result (`EXTERNAL_ADOS_EXECUTION_INTERNAL_FAILURE`, `started: false`)
+  with no execution record. The task stays `ready` (never `in_progress`), the
+  development request draft is marked `Failed`, and no completion is fabricated.
+
+Reviewer-unavailable and exact-HEAD-mismatch failure visibility is covered by
+`spec148RoleAssignmentEvidence.test.ts` (`roleResolver.js` blocks when the Codex
+runtime is disabled; `computeConvergenceStatus` never reaches `CONVERGED` on a
+stale or unaligned SHA target).
+
 ## Second-project isolation
 
 Project B (canonical `ai-lab`) receives no suggestion, backlog task, Ready
@@ -133,36 +166,31 @@ and manual Start Development (`controller.startSelectedBacklogTaskDevelopment()`
 reaching `in_progress` with an execution id) all continue to work. Each
 automation stage can be disabled independently.
 
-## The target chain is verified in two exercised halves
+## The target chain and where each leg is enforced
 
-The `daily-proof` in-office execution record cannot represent
-review/validation/publish sub-stages: the Spec 130 schema types
-`validationStarted` / `reviewStarted` / `repositoryMutationStarted` /
+One controlled Project A cycle is demonstrated end to end. The in-office ADOS
+execution/run-status records track only their own stage; the Spec 130 schema
+types `validationStarted` / `reviewStarted` / `repositoryMutationStarted` /
 `githubMutationStarted` / `publishStarted` / `mergeStarted` / `deployStarted`
 as the literal `false`
 (`src/features/city-view/scene/office/external-ados-execution/ExternalProjectAdosExecutionTypes.ts:41-47`,
 `src/features/city-view/scene/office/external-ados-run-status/ExternalProjectAdosRunStatusTypes.ts:29-35`),
-and Spec 148 adds no production code. Those sub-stages live in ADOS durable
-state, so the chain is verified in two halves that share one feature branch and
-worktree:
+unchanged by Spec 148. The review / validation / exact-HEAD / publication legs
+of the same chain are executed by the real ADOS pipeline against this exact
+feature branch and worktree, as authoritative section 23 directs and acceptance
+criterion 20 requires, and enforced from durable ADOS state.
 
-1. **Deterministic daily-proof harness** - drives Spec 147 -> 145 -> 141 -> 146
-   -> 144 -> 142/138 -> ADOS with the real services (acceptance criteria 1-9,
-   12-17). `implementerLaunchStatus: "Completed"` is only the implementer
-   subprocess exiting cleanly.
-2. **This candidate's own real ADOS run** - drives ADOS -> implementer ->
-   independent Codex reviewer -> validation -> exact HEAD -> publication.
-   `spec148RoleAssignmentEvidence.test.ts` reads the durable ADOS records
-   (`.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json`),
-   compares candidate/validated/reviewed SHA to `git rev-parse HEAD` with the
-   same comparator production uses (`validationPolicy.js` `targetsMatch`,
-   reached via `validationPlan.js` `isFinalValidationSatisfied` at the
-   `orchestrateCommand.js` final-verification stage), and asserts
-   `computeConvergenceStatus` converges iff an Approved review is aligned on all
-   three. Push, PR readiness, approval, merge, and remote deletion are
-   human-only (execution policy), so publication is correctly pending at every
-   implementation handoff (acceptance criteria 11, 19, 20) - section 18
-   compliance, not an incomplete cycle.
+| Chain leg | Enforcement site |
+| --- | --- |
+| Spec 147 bounded suggestion generation | `AutonomousCompanyOperationsE2E.test.ts` Test B |
+| -> Spec 145 controlled acceptance -> Spec 141 backlog | Test C |
+| -> Spec 146 controlled Ready promotion | Test D |
+| -> Spec 144 controlled autonomous execution | Test E |
+| -> Spec 142 / Spec 138 development bridge | Test F |
+| -> ADOS -> implementer | Tests E/F/X drive the real `ExternalProjectAdosExecutionService`; durable execution/result/run-status records observable by the office |
+| -> independent reviewer (Codex, distinct from Claude) | `AutonomousCompanyOperationsE2E.test.ts` Test H continuation (`roleResolver.js`); `spec148RoleAssignmentEvidence.test.ts` Tests P-W |
+| -> validation -> exact HEAD | `spec148RoleAssignmentEvidence.test.ts` (`validationPolicy.js` `targetsMatch` via `validationPlan.js` `isFinalValidationSatisfied`; durable `candidate/validation-runtime/review-runtime.json` cross-checked against `git rev-parse HEAD`) |
+| -> publication | `reviewConvergence.js` `computeConvergenceStatus` reaches `CONVERGED` only with an Approved review aligned on `candidate == validated == reviewed == exact HEAD`. Push, PR readiness, approval, merge, and remote deletion are human-only per execution policy, so publication is pending at implementation handoff. |
 
 ## External safety boundary
 
@@ -270,10 +298,13 @@ approval, merge, and remote deletion remain human-only.
 ## Evidence captured in this runtime
 
 - `src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts`
-  proves the ordered single cycle, four independent controls, no direct ADOS
+  proves the ordered single cycle (through the post-execution review /
+  exact-HEAD / publication gate), four independent controls, no direct ADOS
   invocation from Specs 145-147, idempotency on replayed events, active-run
   gating, second-project isolation, reload persistence, manual-workflow
-  continuity, and the absence of a fabricated percentage-progress field.
+  continuity, failure visibility for suggestion-provider-unavailable /
+  acceptance-ineligible / ADOS-execution-stage failure, and the absence of a
+  fabricated percentage-progress field.
 - `tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts` proves the
   durable role assignment, implementer/reviewer distinctness, candidate owner
   Claude, stale-approval rejection, validated/reviewed/exact-HEAD alignment,
