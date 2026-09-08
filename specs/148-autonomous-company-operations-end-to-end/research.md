@@ -83,9 +83,11 @@ active). The main chain test therefore holds the run in flight
 15-16) have something to gate on, while `ExternalProjectAdosExecution` carries
 `validationStarted / reviewStarted / publishStarted` as literal `false` (Spec
 130, unchanged). The dedicated Test X drives both values: `evidence.completed:
-true` makes production derive run stage `Completed` and drop the active-execution
-count to 0, which is precisely how the office distinguishes a finished ADOS run
-from a launched one - the daily-proof cycle then closes to a truthful terminal
+true` drops the office-observable Spec 144 active-execution count from 1 to 0
+(`ProjectAutonomousExecutionPolicyService.countActiveExecutions`), which is how
+the office distinguishes a finished ADOS run from a launched one, with
+`deriveExternalProjectAdosRunStatus` stage `Started`/`Completed` as a derivation
+unit check - the daily-proof cycle then closes to a truthful terminal
 `completed` through the existing operator transition. `evidence.completed: true`
 is a *terminated* run and correctly does not register as active.
 

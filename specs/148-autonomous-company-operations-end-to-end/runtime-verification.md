@@ -58,14 +58,16 @@ deterministic Spec 143 suggestion provider fixture and the real
    biconditional are asserted (positive and negative). **Terminal completion of
    the daily-proof cycle is demonstrated** (Test X): when the ADOS run reports
    run-level completion (`execution.evidence.completed === true`, distinct from
-   the implementer subprocess merely exiting), production's
-   `deriveExternalProjectAdosRunStatus` derives run stage `Completed`, the
-   Spec 144 policy's active-execution count drops to 0, and the task reaches
-   `completed` through the existing operator transition - no autonomous
-   `in_progress -> completed` path exists and Spec 148 adds none. The
-   still-in-flight scenario (`evidence.completed === false`) keeps the task
-   `in_progress` and the run counted active, proving the office reflects the
-   *actual* ADOS run state rather than relabelling subprocess exit. This
+   the implementer subprocess merely exiting), the office-observable Spec 144
+   active-execution count (probe `autonomyActiveExecutionCount`, via
+   `ProjectAutonomousExecutionPolicyService.countActiveExecutions`) drops from 1
+   to 0, and the task reaches `completed` through the existing operator
+   transition - no autonomous `in_progress -> completed` path exists and Spec
+   148 adds none. `deriveExternalProjectAdosRunStatus`'s execution-sourced
+   branch maps the same signal to stage `Started` vs `Completed` (derivation
+   unit check). The still-in-flight scenario (`evidence.completed === false`)
+   keeps the task `in_progress` and the run counted active, proving the office
+   reflects the *actual* ADOS run state rather than relabelling subprocess exit. This
    Spec 148 candidate's *own* review / validation / publication is a separate
    human-only gate (`spec148CandidatePublicationGate`), executed by the real
    ADOS pipeline against this exact feature branch and worktree (authoritative
@@ -201,7 +203,7 @@ criterion 20 requires, and enforced from durable ADOS state.
 | -> ADOS -> implementer | Tests E/F/X drive the real `ExternalProjectAdosExecutionService`; durable execution/result/run-status records observable by the office |
 | -> independent reviewer (Codex, distinct from Claude) | `AutonomousCompanyOperationsE2E.test.ts` Test H continuation (`roleResolver.js`); `spec148RoleAssignmentEvidence.test.ts` Tests P-W |
 | -> validation -> exact HEAD | `spec148RoleAssignmentEvidence.test.ts` + `AutonomousCompanyOperationsE2E.test.ts` (`validationPolicy.js` `targetsMatch` via `validationPlan.js` `isFinalValidationSatisfied`; durable `candidate/validation-runtime/review-runtime.json` cross-checked against `git rev-parse HEAD`; `computeConvergenceStatus` biconditional asserted both directions). Durable `validation-runtime.json` currently PASS at exact HEAD. |
-| -> completion (daily-proof cycle) | `AutonomousCompanyOperationsE2E.test.ts` Test X: `evidence.completed === true` -> derived run stage `Completed`, active-execution count 0, task -> `completed` via the existing operator transition (no autonomous completion path exists or is added) |
+| -> completion (daily-proof cycle) | `AutonomousCompanyOperationsE2E.test.ts` Test X: `evidence.completed === true` -> office-observable Spec 144 active-execution count drops 1 -> 0, task -> `completed` via the existing operator transition (no autonomous completion path exists or is added); `deriveExternalProjectAdosRunStatus` maps the signal to stage `Started`/`Completed` as a derivation unit check |
 | -> publication (Spec 148 candidate) | `reviewConvergence.js` `computeConvergenceStatus` reaches `CONVERGED` only with an Approved review aligned on `candidate == validated == reviewed == exact HEAD`. Push, PR readiness, approval, merge, and remote deletion are human-only per execution policy, so this candidate's publication is pending at implementation handoff (`spec148CandidatePublicationGate`). |
 
 ## External safety boundary

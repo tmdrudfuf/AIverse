@@ -443,15 +443,18 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
       const execution = Object.values(internals.state.externalProjectAdosExecutions)[0]!;
       expect(execution.evidence.completed).toBe(runCompleted); // adapter signal propagates faithfully
 
-      // Production's own run-status derivation reflects the ACTUAL ADOS run
-      // stage from that signal.
+      // Office-observable, production-consumed: the Spec 144 policy's
+      // active-execution count (surfaced on the probe, via
+      // ProjectAutonomousExecutionPolicyService.countActiveExecutions keyed on
+      // `!evidence.completed`) tracks the ACTUAL ADOS run state - a still-running
+      // run counts as active; a completed one does not.
+      expect(controller.getProjectBacklogProbeState().autonomyActiveExecutionCount).toBe(runCompleted ? 0 : 1);
+
+      // Derivation-layer unit check: deriveExternalProjectAdosRunStatus's
+      // execution-sourced branch (toExecutionStage) maps the same signal to
+      // stage Started vs Completed.
       const runStatus = deriveExternalProjectAdosRunStatus({ projectId: PROJECT_A, execution })!;
       expect(runStatus.stage).toBe(runCompleted ? "Completed" : "Started");
-
-      // The office-observable active-execution count (Spec 144 policy, surfaced
-      // on the probe) agrees: a still-running ADOS run counts as active; a
-      // completed one does not.
-      expect(controller.getProjectBacklogProbeState().autonomyActiveExecutionCount).toBe(runCompleted ? 0 : 1);
 
       internals.state.selectedBacklogTaskId = task.id;
       if (!runCompleted) {

@@ -159,9 +159,11 @@ validated/reviewed/exact-HEAD alignment (Test U), reviewer-unavailable blocks
 (Test V), and no self-review fallback (Test W). Test X (completion reflects
 actual ADOS completion) is a dedicated E2E test that drives the real
 `ExternalProjectAdosExecutionService` twice, differing only in
-`execution.evidence.completed`: it asserts production's
-`deriveExternalProjectAdosRunStatus` stage (`Started` vs `Completed`) and the
-Spec 144 active-execution count (`1` vs `0`) track that signal, then closes the
+`execution.evidence.completed`: it asserts the office-observable Spec 144
+active-execution count (probe `autonomyActiveExecutionCount`, via
+`ProjectAutonomousExecutionPolicyService.countActiveExecutions`) tracks that
+signal (`1` vs `0`), with `deriveExternalProjectAdosRunStatus` stage
+(`Started` vs `Completed`) as a derivation unit check, then closes the
 daily-proof cycle to a truthful terminal `completed` via the existing operator
 transition. The `computeConvergenceStatus == CONVERGED` positive direction is
 also asserted in the chain test alongside the existing negative.
