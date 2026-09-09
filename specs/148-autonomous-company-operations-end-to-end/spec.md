@@ -35,21 +35,23 @@ being skipped or any safety gate being disabled.
 Ready, and Auto Execute all explicitly enabled, fire one bounded lifecycle
 event and confirm the ordered progression suggestion -> accepted backlog task ->
 Ready -> autonomous execution -> development bridge -> ADOS run, each transition
-occurring exactly once; then confirm the chain continues into review (reviewer
-Codex, distinct from the Claude implementer), that `computeConvergenceStatus`
-reaches `CONVERGED` **iff** an Approved review is aligned on
-`validated == reviewed == exact HEAD` (both directions asserted), and that when
-the ADOS run reports run-level completion (`execution.evidence.completed`) the
-office-observable Spec 144 active-execution count drops from 1 to 0 and the
-daily-proof task reaches `completed` through the existing operator transition.
-While the run is still in flight the task stays `in_progress` and
-nothing auto-approves or fabricates completion. `exactTargetMatch` is derived
-with the production comparator (`validationPolicy.js` `targetsMatch`) from this
-worktree's real HEAD, not a hand-built object. The full ADOS validation pipeline
-and independent Codex review of the Spec 148 *implementation candidate itself*
-run post-handoff per the execution policy's human-only boundary (acceptance
-criteria 19-20); that same convergence biconditional is additionally enforced
-from durable ADOS state by `spec148RoleAssignmentEvidence.test.ts`.
+occurring exactly once; then confirm the chain continues into review - the
+reviewer for the run resolves from its own durable implementer id (Codex,
+distinct from the Claude implementer) - and that when the ADOS run reports
+run-level completion (`execution.evidence.completed`) the office-observable
+Spec 144 active-execution count drops from 1 to 0 and the daily-proof task
+reaches `completed` through the existing operator transition. While the run is
+still in flight the task stays `in_progress` and nothing auto-approves or
+fabricates completion. The full ADOS validation pipeline and independent Codex
+review of the Spec 148 *implementation candidate itself* run post-handoff per
+the execution policy's human-only boundary (acceptance criteria 19-20) - the
+in-office ADOS types cannot represent those legs. The
+`candidate == validated == reviewed == exact HEAD` + Approved-review
+convergence biconditional is enforced **iff**-style (both directions),
+**unconditionally**, from durable ADOS state by
+`spec148RoleAssignmentEvidence.test.ts`, using the production comparator
+`validationPolicy.js` `targetsMatch` and the real `computeConvergenceStatus`,
+not a hand-built object.
 
 **Acceptance Scenarios**:
 

@@ -451,7 +451,23 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     if (reviewDecision === "Approved" && allAligned) {
       expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
     } else {
+      // A non-Approved or non-aligned review must not merely fail to converge -
+      // it must resolve to a SPECIFIC non-converged status and leave no
+      // publication-authorizing state behind. This branch cannot be turned into
+      // a hard failure when the durable review is "Changes Requested": this
+      // suite runs inside `npm test` (validation command #1), `npm test` must
+      // pass before ADOS validation, and ADOS validation must pass before the
+      // Codex review runs, so a test that fails here would deadlock the very
+      // review it is waiting on. The enforceable invariant is the block itself.
+      const expected = durableReview
+        ? CONVERGENCE_STATUSES.IN_PROGRESS   // e.g. "Changes Requested", or a stale/trailing reviewed_sha
+        : CONVERGENCE_STATUSES.NOT_STARTED;  // clean checkout, no review attempt yet
+      expect(status).toBe(expected);
       expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+      // No publication-authorizing side effect: the tracked evidence keeps
+      // publicationResult a standing "Blocked until ..." gate, never a frozen
+      // per-candidate "published" verdict.
+      expect(evidence.publicationResult).toMatch(/^Blocked until\b/);
     }
 
     expect(evidence.shaAlignment.candidateOwner).toBe("claude");

@@ -169,8 +169,13 @@ active-execution count (probe `autonomyActiveExecutionCount`, via
 signal (`1` vs `0`), with `deriveExternalProjectAdosRunStatus` stage
 (`Started` vs `Completed`) as a derivation unit check, then closes the
 daily-proof cycle to a truthful terminal `completed` via the existing operator
-transition. The `computeConvergenceStatus == CONVERGED` positive direction is
-also asserted in the chain test alongside the existing negative.
+transition. The `computeConvergenceStatus` biconditional
+(`CONVERGED` iff an Approved review is aligned on
+`candidate == validated == reviewed == exact HEAD`, both directions) is
+enforced unconditionally against the real durable ADOS records by
+`spec148RoleAssignmentEvidence.test.ts`, not simulated in-cycle with a
+hand-built object; its negative branch pins the specific non-converged status
+and asserts `publicationResult` stays a standing "Blocked until ..." gate.
 
 ## Validation
 
