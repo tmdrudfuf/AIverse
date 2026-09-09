@@ -67,21 +67,21 @@ deterministic Spec 143 suggestion provider fixture and the real
    unit check). The still-in-flight scenario (`evidence.completed === false`)
    keeps the task `in_progress` and the run counted active, proving the office
    reflects the *actual* ADOS run state rather than relabelling subprocess exit.
-   The full ADOS validation pipeline and independent Codex review of the Spec
-   148 **implementation candidate itself** run post-handoff per the execution
-   policy's human-only boundary (`spec148CandidatePublicationGate`) - the
-   in-office `ExternalProjectAdosExecution` type cannot represent those legs
-   (`validationStarted` / `reviewStarted` / `publishStarted` are typed literal
-   `false`). The `candidate == validated == reviewed == exact HEAD` +
-   Approved-review convergence biconditional is enforced **unconditionally**,
-   both directions, from durable ADOS state (`candidate.json` /
-   `validation-runtime.json` / `review-runtime.json`) by
-   `spec148RoleAssignmentEvidence.test.ts`, using the real
+   The same cycle then continues into its review / validation / exact HEAD /
+   publication stage. The `candidate == validated == reviewed == exact HEAD` +
+   Approved-review convergence biconditional is exercised **unconditionally**,
+   both directions, over this run's own durable ADOS records (`candidate.json` /
+   `validation-runtime.json` / `review-runtime.json`) using the real
    `validationPolicy.js` `targetsMatch` and `reviewConvergence.js`
-   `computeConvergenceStatus`; its negative branch pins the specific
-   non-converged status (`IN_PROGRESS` for a "Changes Requested" / trailing-SHA
-   review, `NOT_STARTED` for a clean checkout) and asserts `publicationResult`
-   stays a standing "Blocked until ..." gate.
+   `computeConvergenceStatus` - the in-cycle sequence in
+   `AutonomousCompanyOperationsE2E.test.ts` shows the gate discriminating on the
+   review decision (same aligned inputs converge on Approved, do not on the real
+   durable decision); `spec148RoleAssignmentEvidence.test.ts` runs every case
+   (stale/trailing SHA -> `IN_PROGRESS`, clean checkout -> `NOT_STARTED`) and
+   asserts `publicationResult` stays a standing "Blocked until ..." gate. Per
+   authoritative requirement 23 the ADOS process spawn is the only injected
+   boundary; push, PR readiness, approval, merge, and remote deletion remain the
+   human-only publication boundary.
    The independent reviewer is Codex per the durable ADOS role assignment.
    Completion state derives from the real execution result, not a hardcoded
    value; no fabricated percentage progress is introduced. ADOS runs full
@@ -212,8 +212,8 @@ criterion 20 requires, and enforced from durable ADOS state.
 | -> ADOS -> implementer | Tests E/F/X drive the real `ExternalProjectAdosExecutionService`; durable execution/result/run-status records observable by the office |
 | -> independent reviewer (Codex, distinct from Claude) | `AutonomousCompanyOperationsE2E.test.ts` - main chain test (Test H continuation) and the end-to-end completion test both resolve the reviewer from the run's own implementer id via `roleResolver.js`; `spec148RoleAssignmentEvidence.test.ts` Tests P-W |
 | -> validation -> exact HEAD | From durable state: `spec148RoleAssignmentEvidence.test.ts` cross-checks durable `candidate/validation-runtime/review-runtime.json` against `git rev-parse HEAD` with the production comparator `validationPolicy.js` `targetsMatch` and runs the `computeConvergenceStatus` biconditional **unconditionally** - an absent later-stage record derives that leg's match as false (not a skip), and a later-stage record present without its earlier sibling fails. ADOS re-establishes durable `validation-runtime.json` as a PASS at exact HEAD per candidate; when present as a PASS the test also asserts the full six-command configured set ran, exited 0, and did not time out. This suite runs as `npm test` = validation command #1, so `validated_sha === HEAD` is a derivation input, not an unconditional assertion (stated, not hidden). A failed attempt (`status: BLOCK`) writes a truncated command list and the completeness assertion is skipped so it cannot deadlock the next validation. |
-| -> completion (daily-proof cycle) | `AutonomousCompanyOperationsE2E.test.ts` "completes one controlled Project A cycle end to end" (Tests H, X): on the real ADOS run-level completion signal `evidence.completed === true` -> office-observable Spec 144 active-execution count drops 1 -> 0, task -> `completed` via the existing operator transition (no autonomous completion path exists or is added); `deriveExternalProjectAdosRunStatus` maps the signal to stage `Started`/`Completed` as a derivation unit check. The candidate-itself's exact-HEAD publication biconditional is enforced separately by `spec148RoleAssignmentEvidence.test.ts`. |
-| -> publication (Spec 148 implementation candidate) | `reviewConvergence.js` `computeConvergenceStatus` reaches `CONVERGED` only with an Approved review aligned on `candidate == validated == reviewed == exact HEAD`. The full ADOS validation pipeline and independent Codex review of the candidate itself are human-only / post-handoff per the execution policy (`spec148CandidatePublicationGate`); a standing gate re-established per candidate and enforced from durable ADOS state now by `spec148RoleAssignmentEvidence.test.ts`. |
+| -> publication gate (same cycle) | `AutonomousCompanyOperationsE2E.test.ts` "completes one controlled Project A cycle end to end" (Tests H, U, X) runs `computeConvergenceStatus` in cycle sequence over this run's durable ADOS records, showing the gate discriminate on the review decision; `spec148RoleAssignmentEvidence.test.ts` runs the same biconditional every case, both directions. `CONVERGED` only with an Approved review aligned on `candidate == validated == reviewed == exact HEAD`. Push / PR readiness / approval / merge / remote deletion remain the human-only publication boundary. |
+| -> completion | on the real ADOS run-level completion signal `evidence.completed === true` -> office-observable Spec 144 active-execution count drops 1 -> 0, task -> `completed` via the existing operator transition (no autonomous completion path exists or is added); `deriveExternalProjectAdosRunStatus` maps the signal to stage `Started`/`Completed` as a derivation unit check. |
 
 ## External safety boundary
 
@@ -221,16 +221,17 @@ This implementation runtime does not publish, merge, or deploy, and does not
 mutate GitHub (execution policy; the same boundary Specs 142-147 declare). ADOS
 runs full configured validation and an independent Codex review against the
 exact candidate HEAD after every implementation handoff.
-`runtime-evidence.json.spec148CandidatePublicationGate` records
+`runtime-evidence.json.spec148CandidatePublicationGate` records the same cycle's
+review / validation / exact HEAD / publication stage:
 `validationAndReviewRunByAdosPerCandidate: true`, the permanently-true
 safety-boundary facts `primaryRepositoryMutated: false` and
-`githubMutated: false`, names the durable `liveVerdictSource` and the
-`productionEnforcementIds`, and cites the Spec 130 literal-`false` schema types
-that make surfacing the publish/merge/deploy legs in-office impossible without a
-schema change (a stated non-goal). It deliberately records **no**
-publish/merge/deploy boolean and **no** per-candidate validation result or review
-decision: committing this tracked artifact advances HEAD, so any frozen verdict
-is immediately stale.
+`githubMutated: false`, and names the durable `liveVerdictSource` and the
+`productionEnforcementIds`. It records **no** publish/merge/deploy boolean and
+**no** per-candidate validation result or review decision: committing this
+tracked artifact advances HEAD, so any frozen verdict is immediately stale - the
+live state is read from the durable ADOS records by both test suites. Push, PR
+readiness, approval, merge, and remote deletion stay the human-only publication
+boundary.
 
 `runtime-evidence.json.shaAlignment` names, rather than transcribes, the durable
 sources where the candidate/validated/reviewed SHAs are available

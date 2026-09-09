@@ -167,15 +167,20 @@ actual ADOS completion) is a dedicated E2E test that drives the real
 active-execution count (probe `autonomyActiveExecutionCount`, via
 `ProjectAutonomousExecutionPolicyService.countActiveExecutions`) tracks that
 signal (`1` vs `0`), with `deriveExternalProjectAdosRunStatus` stage
-(`Started` vs `Completed`) as a derivation unit check, then closes the
-daily-proof cycle to a truthful terminal `completed` via the existing operator
-transition. The `computeConvergenceStatus` biconditional
-(`CONVERGED` iff an Approved review is aligned on
-`candidate == validated == reviewed == exact HEAD`, both directions) is
-enforced unconditionally against the real durable ADOS records by
-`spec148RoleAssignmentEvidence.test.ts`, not simulated in-cycle with a
-hand-built object; its negative branch pins the specific non-converged status
-and asserts `publicationResult` stays a standing "Blocked until ..." gate.
+(`Started` vs `Completed`) as a derivation unit check, then continues the same
+cycle into its review / validation / exact HEAD / publication stage - running
+the real `reviewConvergence.js` `computeConvergenceStatus` over this run's own
+durable ADOS records and showing the gate discriminate on the review decision -
+and closes the cycle to a truthful terminal `completed` via the existing
+operator transition. The `computeConvergenceStatus` biconditional (`CONVERGED`
+iff an Approved review is aligned on
+`candidate == validated == reviewed == exact HEAD`, both directions) is also
+run in every case, unconditionally, against the same durable ADOS records by
+`spec148RoleAssignmentEvidence.test.ts` (never a hand-built object); its
+negative branch pins the specific non-converged status and asserts
+`publicationResult` stays a standing "Blocked until ..." gate. Per authoritative
+requirement 23 the ADOS process spawn is the only injected boundary; push,
+approval and merge stay the human-only publication boundary.
 
 ## Validation
 

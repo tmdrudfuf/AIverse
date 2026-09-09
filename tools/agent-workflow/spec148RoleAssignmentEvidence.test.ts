@@ -20,6 +20,12 @@ function shaTarget(sha: string | undefined): { commit: string; dirty: false; dir
 // Spec 148 - Adaptive agent role and exact-candidate-ownership evidence
 // (authoritative requirements 10, 11; Required Tests P-W, and part of X/U).
 //
+// This is the review / validation / exact-HEAD / publication stage of the one
+// demonstrated controlled cycle (its earlier stages are in
+// AutonomousCompanyOperationsE2E.test.ts) - it runs the real agent-workflow
+// enforcement modules against the run's durable ADOS records, both directions,
+// unconditionally. It is not a separate post-handoff concern.
+//
 // The durable ADOS role assignment lives in
 // `.agent-workflow/runs/<feature>/ados-run.json` (gitignored, worktree-absolute
 // paths). Its non-path fields are mirrored into the tracked, sanitized
@@ -451,14 +457,10 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     if (reviewDecision === "Approved" && allAligned) {
       expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
     } else {
-      // A non-Approved or non-aligned review must not merely fail to converge -
-      // it must resolve to a SPECIFIC non-converged status and leave no
-      // publication-authorizing state behind. This branch cannot be turned into
-      // a hard failure when the durable review is "Changes Requested": this
-      // suite runs inside `npm test` (validation command #1), `npm test` must
-      // pass before ADOS validation, and ADOS validation must pass before the
-      // Codex review runs, so a test that fails here would deadlock the very
-      // review it is waiting on. The enforceable invariant is the block itself.
+      // A non-Approved or non-aligned review must resolve to a SPECIFIC
+      // non-converged status and leave no publication-authorizing state behind.
+      // Pipeline order: this suite runs as validation command #1, before ADOS
+      // validation and the Codex review, so it asserts the block, not a verdict.
       const expected = durableReview
         ? CONVERGENCE_STATUSES.IN_PROGRESS   // e.g. "Changes Requested", or a stale/trailing reviewed_sha
         : CONVERGENCE_STATUSES.NOT_STARTED;  // clean checkout, no review attempt yet
