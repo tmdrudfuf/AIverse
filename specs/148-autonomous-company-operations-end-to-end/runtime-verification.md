@@ -222,13 +222,15 @@ mutate GitHub (execution policy; the same boundary Specs 142-147 declare). ADOS
 runs full configured validation and an independent Codex review against the
 exact candidate HEAD after every implementation handoff.
 `runtime-evidence.json.spec148CandidatePublicationGate` records
-`validationAndReviewRunByAdosPerCandidate: true`, names the durable
-`liveVerdictSource` and the `productionEnforcementIds`, and cites the Spec 130
-literal-`false` schema types that make surfacing the publish/merge/deploy legs
-in-office impossible without a schema change (a stated non-goal). It deliberately
-records **no** publish/merge/deploy boolean and **no** per-candidate validation
-result or review decision: committing this tracked artifact advances HEAD, so any
-frozen verdict is immediately stale.
+`validationAndReviewRunByAdosPerCandidate: true`, the permanently-true
+safety-boundary facts `primaryRepositoryMutated: false` and
+`githubMutated: false`, names the durable `liveVerdictSource` and the
+`productionEnforcementIds`, and cites the Spec 130 literal-`false` schema types
+that make surfacing the publish/merge/deploy legs in-office impossible without a
+schema change (a stated non-goal). It deliberately records **no**
+publish/merge/deploy boolean and **no** per-candidate validation result or review
+decision: committing this tracked artifact advances HEAD, so any frozen verdict
+is immediately stale.
 
 `runtime-evidence.json.shaAlignment` names, rather than transcribes, the durable
 sources where the candidate/validated/reviewed SHAs are available
