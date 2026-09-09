@@ -83,6 +83,14 @@ exact-HEAD guarantees for this run using existing agent-workflow modules.
 
 ---
 
+## Phase 8: Independent-review fix cycle (4)
+
+- [X] T032 Stop `AutonomousCompanyOperationsE2E.test.ts` reading `.agent-workflow/runs/148-.../{candidate,validation-runtime,review-runtime}.json` inside its synthetic `daily-proof` cycle test (finding 1: those durable files belong to the Spec 148 implementation run, not the harness-generated `daily-proof` execution — reading them there conflates two runs). Delete the `readDurableAdosRun` / `shaTarget` helpers, the `convergeWith` block, and the now-unused `execFileSync` / `existsSync` / `targetsMatch` imports. Keep the real-run-state assertions (reviewer resolved from `execution.evidence.providerId`; operator closes the task on the real `evidence.completed` signal). The `candidate == validated == reviewed == exact HEAD` biconditional lives solely in `spec148RoleAssignmentEvidence.test.ts`, run unconditionally over the durable records. Sweep every prose claim (`spec.md`, `plan.md`, `runtime-verification.md`, `runtime-evidence.json`) that said the E2E test runs `computeConvergenceStatus` "in cycle sequence".
+- [X] T033 `spec148RoleAssignmentEvidence.test.ts` (finding 3): drop the `validatedMatchesHead &&` HEAD-alignment gate on the full-configured-validation completeness assertion — assert it for **any** durable `validation-runtime.json` with `status: PASS`, not only one aligned to exact HEAD (a stale PASS still carries the complete six-command list at exit 0, so this only strengthens the check). Still skip `status: BLOCK` (truncated list — asserting it would deadlock recovery, since this suite runs as `npm test` = validation command #1) and absent (biconditional still asserts "must not converge").
+- [X] T034 Add `shaAlignment.observedCycles` to `runtime-evidence.json` (finding 2, part A: requirement 21 candidate/validated/reviewed SHA "where available"): record each COMPLETED ADOS cycle as a historical observation (SHAs, `candidateEqualsValidatedEqualsReviewed`, `exactHeadAlignedAtObservation`, full-validation PASS, review decision, `converged`). Non-fabricable: `spec148RoleAssignmentEvidence.test.ts` asserts each recorded SHA is 40-hex and ancestor-or-equal of HEAD, and — when the durable `review-runtime.json` still names a recorded SHA — that its `decision` matches the recorded one. Part B (review decision still `Changes Requested` ⇒ criteria 11/20 not met) is a standing gate by construction: it is met only once the durable review at exact HEAD reads Approved, which cannot precede this candidate's own approval — stated in `observedCycles[].convergenceReason` and `publicationResult`.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.

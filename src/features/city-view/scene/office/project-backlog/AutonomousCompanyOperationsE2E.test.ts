@@ -1,12 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveEffectiveRoles } from "../../../../../../tools/agent-workflow/roleResolver.js";
 import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "../../../../../../tools/agent-workflow/reviewConvergence.js";
-import { targetsMatch } from "../../../../../../tools/agent-workflow/validationPolicy.js";
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
@@ -49,19 +47,26 @@ import type {
 //     -> Spec 146 controlled Ready promotion
 //     -> Spec 144 controlled autonomous execution
 //     -> Spec 142 / Spec 138 development bridge -> ADOS execution
-//     -> independent reviewer (roleResolver.js) -> validation / exact HEAD /
-//        publication gate (validationPolicy.js targetsMatch +
-//        reviewConvergence.js computeConvergenceStatus, over this run's own
-//        durable ADOS records).
+//     -> independent reviewer resolved for the run from its own durable
+//        implementer id (roleResolver.js: Claude -> distinct Codex)
+//     -> real ADOS run-level completion reflected by the office
+//     -> terminal `completed` via the existing operator transition.
 //
 // Per authoritative requirement 23 the process boundaries use existing
 // injectable adapters: the Spec 143 suggestion provider is a deterministic
 // fixture and the ADOS process spawn uses the injectable ImplementerRuntimeProvider
-// (as the Spec 144 suite does). The review / exact-HEAD / publication leg is
-// exercised through the real agent-workflow production modules against the real
-// durable ADOS records; spec148RoleAssignmentEvidence.test.ts runs the same
-// convergence biconditional unconditionally in both directions. No src/
-// production source is changed by Spec 148.
+// (as the Spec 144 suite does).
+//
+// The review / validation / exact-HEAD / publication enforcement leg is NOT
+// exercised in this file. The office ExternalProjectAdosExecution schema types
+// its review/validation/publish sub-stage flags as the literal `false`, so this
+// in-office chain structurally cannot represent those legs. That leg is covered
+// by spec148RoleAssignmentEvidence.test.ts, which runs the real agent-workflow
+// production modules (roleResolver.js, validationPolicy.js targetsMatch,
+// reviewConvergence.js computeConvergenceStatus) over this run's own durable
+// ADOS records (.agent-workflow/runs/148-.../{candidate,validation-runtime,
+// review-runtime}.json), unconditionally, both directions. No src/ production
+// source is changed by Spec 148.
 
 const HIGH = "high" as const;
 
@@ -265,10 +270,12 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     // types those sub-stage flags as the literal `false`
     // (ExternalProjectAdosExecutionTypes.ts:41-47,
     // ExternalProjectAdosRunStatusTypes.ts:29-35), unchanged by Spec 148. The
-    // chain does not stop here - it continues immediately below into the
-    // Review -> Validation -> exact HEAD -> publication gate that ADOS runs
-    // against this exact feature branch and worktree (authoritative section 23,
-    // acceptance criterion 20).
+    // review / validation / exact-HEAD / publication enforcement leg therefore
+    // cannot be represented on these in-office records; it is exercised over
+    // this run's durable ADOS records by spec148RoleAssignmentEvidence.test.ts
+    // (authoritative section 23, acceptance criteria 19-20). Below, the same
+    // chain still resolves its independent reviewer from the run's own durable
+    // implementer id.
     expect(executionResult?.reviewStarted).toBe(false);
     expect(executionResult?.publishStarted).toBe(false);
     expect(executionRecord?.reviewStarted).toBe(false);
@@ -292,10 +299,9 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     // This scenario deliberately holds the ADOS run in flight
     // (evidence.completed === false) so Test M below can prove active-run
     // safety. While the run is in flight there is no review attempt, so the
-    // real publication gate (computeConvergenceStatus) is NOT_STARTED, nothing
-    // auto-approves, and the Project A task does not advance past in_progress.
-    // The converged path of the same cycle runs in the "completes one
-    // controlled Project A cycle end to end" test below.
+    // convergence helper reports NOT_STARTED, nothing auto-approves, and the
+    // Project A task does not advance past in_progress. The full durable-record
+    // convergence biconditional is spec148RoleAssignmentEvidence.test.ts's job.
     expect(computeConvergenceStatus({ hasAnyReviewAttempt: false })).toBe(CONVERGENCE_STATUSES.NOT_STARTED);
     const chainTaskAfterExecution = internals.state.projectBacklogCollections[PROJECT_A].tasks
       .find((task) => task.id === acceptedTaskId)!;
@@ -372,7 +378,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(executionRecord?.id).toBe(evidence.projectA.executionRunId);
   });
 
-  it("completes one controlled Project A cycle end to end: ADOS execution -> independent Codex reviewer (from the run's own implementer id) -> validation / exact HEAD / publication gate over durable ADOS state -> real run-level completion -> terminal completion (Tests H, U, X)", async () => {
+  it("completes one controlled Project A cycle end to end: ADOS execution -> independent Codex reviewer resolved from the run's own durable implementer id -> real ADOS run-level completion reflected by the office -> terminal completion via the existing operator transition (Tests H, X)", async () => {
     // ImplementerRuntimeStatus "Completed" means only that the implementer
     // subprocess exited. Production keys *run-level* completion off
     // execution.evidence.completed - every automation policy's
@@ -472,41 +478,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
         expect(roles.ok).toBe(true);
         expect(roles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
 
-        // (b) Validation -> exact HEAD -> publication gate, same cycle, through
-        //     the real agent-workflow production modules over THIS run's own
-        //     durable ADOS records (.agent-workflow/runs/148-.../{candidate,
-        //     validation-runtime,review-runtime}.json). candidate/validated/
-        //     reviewed SHAs are compared to this worktree's real HEAD with the
-        //     production comparator (validationPolicy.js targetsMatch) and fed
-        //     to the real reviewConvergence.js computeConvergenceStatus. The
-        //     gate is shown discriminating on the review-decision axis over
-        //     THIS run's real SHA alignment: the same aligned inputs converge
-        //     with an Approved review and do NOT with a Changes Requested one.
-        //     No task transition is driven off this gate. The full
-        //     both-directions biconditional, including absent-record and
-        //     stale-SHA cases and the real durable decision, is run
-        //     unconditionally over the same records by
-        //     spec148RoleAssignmentEvidence.test.ts.
-        const durable = readDurableAdosRun();
-        const headTarget = shaTarget(execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim());
-        const aligned =
-          targetsMatch(shaTarget(durable.candidate?.candidate_sha), headTarget) &&
-          targetsMatch(shaTarget(durable.validation?.head_after), headTarget) &&
-          targetsMatch(shaTarget(durable.review?.reviewed_sha), headTarget);
-        const convergeWith = (decision: string) =>
-          computeConvergenceStatus({
-            hasAnyReviewAttempt: true,
-            latestReviewOutcome: decision,
-            latestCompletenessStatus: "complete",
-            activeBlockingFindingsCount: decision === "Approved" ? 0 : 1,
-            exactTargetMatch: aligned,
-          });
-        expect(convergeWith("Approved")).toBe(
-          aligned ? CONVERGENCE_STATUSES.CONVERGED : CONVERGENCE_STATUSES.IN_PROGRESS,
-        );
-        expect(convergeWith("Changes Requested")).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
-
-        // (c) Run complete: the operator closes the task through the existing
+        // (b) Run complete: the operator closes the task through the existing
         //     manual transition. No autonomous in_progress -> completed path
         //     exists or is added.
         expect(controller.updateSelectedBacklogTaskFromInput({
@@ -825,34 +797,6 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 });
 
 // --- helpers ----------------------------------------------------------------
-
-// This run's own durable ADOS records. Absent on a clean checkout (the run dir
-// is gitignored); the caller treats absence as "not aligned", never as a skip.
-function readDurableAdosRun(): {
-  candidate?: { candidate_sha: string };
-  validation?: { head_after: string };
-  review?: { reviewed_sha: string; decision: string };
-} {
-  const dir = new URL(
-    "../../../../../../.agent-workflow/runs/148-autonomous-company-operations-end-to-end/",
-    import.meta.url,
-  );
-  const read = (name: string): unknown => {
-    const path = fileURLToPath(new URL(name, dir));
-    return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
-  };
-  return {
-    candidate: read("candidate.json") as { candidate_sha: string } | undefined,
-    validation: read("validation-runtime.json") as { head_after: string } | undefined,
-    review: read("review-runtime.json") as { reviewed_sha: string; decision: string } | undefined,
-  };
-}
-
-// Adapt a bare SHA into the { commit, dirty, dirtyHash } target the production
-// comparator (validationPolicy.js targetsMatch) expects; null when absent.
-function shaTarget(sha: string | undefined): { commit: string; dirty: false; dirtyHash: null } | null {
-  return sha ? { commit: sha, dirty: false, dirtyHash: null } : null;
-}
 
 function expectPolicyFlags(
   controller: OfficeProjectPortalController,

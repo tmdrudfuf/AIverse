@@ -42,18 +42,18 @@ run-level completion (`execution.evidence.completed`) the office-observable
 Spec 144 active-execution count drops from 1 to 0 and the daily-proof task
 reaches `completed` through the existing operator transition. While the run is
 still in flight the task stays `in_progress` and nothing auto-approves or
-fabricates completion. The same cycle then continues into its review /
-validation / exact HEAD / publication stage: the reviewer resolves through the
-real `roleResolver.js`, and the
+fabricates completion. The same cycle's review / validation / exact HEAD /
+publication stage cannot be represented on the in-office chain (the office
+`ExternalProjectAdosExecution` schema types its review/validation/publish
+sub-stage flags as the literal `false`); it is exercised by
+`spec148RoleAssignmentEvidence.test.ts`, which runs the
 `candidate == validated == reviewed == exact HEAD` + Approved-review
-convergence biconditional is exercised **iff**-style (both directions),
+convergence biconditional **iff**-style (both directions),
 **unconditionally**, over this run's own durable ADOS records
 (`candidate.json` / `validation-runtime.json` / `review-runtime.json`) using
 the production comparator `validationPolicy.js` `targetsMatch` and the real
-`reviewConvergence.js` `computeConvergenceStatus` - split across
-`AutonomousCompanyOperationsE2E.test.ts` (in cycle sequence) and
-`spec148RoleAssignmentEvidence.test.ts` (both directions, every case), not a
-hand-built object. Per authoritative requirement 23 the ADOS process spawn is
+`reviewConvergence.js` `computeConvergenceStatus`, carrying the real durable
+review decision - not a hand-built object. Per authoritative requirement 23 the ADOS process spawn is
 the only injected boundary; push, PR readiness, approval, merge, and remote
 deletion remain the human-only publication boundary and are not performed by
 the runtime.
