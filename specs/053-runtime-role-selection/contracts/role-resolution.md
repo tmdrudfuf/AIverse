@@ -13,7 +13,7 @@ Pure function. No filesystem or process access.
 
 1. **Resume check first.** If `existingRunRoles` is provided:
    - If `requestedImplementerId` is provided and differs from `existingRunRoles.implementer`, return `{ ok: false, source: "resume-conflict", diagnostics: [...] }` naming the existing run roles, the requested override, and stating the run's roles are already fixed.
-   - Otherwise return `{ ok: true, roles: { ...existingRunRoles }, source: existingRunRoles.source }` — the pinned roles, unchanged.
+   - Otherwise return `{ ok: true, roles: { ...existingRunRoles }, source: existingRunRoles.source }` — the pinned roles, unchanged, **provided they still pass the self-review and reviewer-availability guards below** (Spec 148 C8 strengthens this path: a pin that puts one agent in both seats, or names a reviewer whose runner is missing/disabled/unsafe, returns `{ ok: false, source: "resume-invalid", diagnostics: [...] }` and blocks before spawn rather than self-reviewing).
 2. **CLI override.** If no `existingRunRoles` and `requestedImplementerId` is provided:
    - Reject if the requested agent does not exist in the merged `agentRunners` map (default diagnostics list the available roster).
    - Reject if the requested agent is `enabled: false`.

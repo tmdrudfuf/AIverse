@@ -226,6 +226,37 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     expect(result.diagnostics.join(" ").toLowerCase()).toContain("codex");
   });
 
+  // The durable/resumed ADOS role path is authoritative per requirement 10, so
+  // it must enforce the same guards as a fresh resolution - not wave through
+  // whatever roles are pinned.
+  it("rejects durable/resumed roles that put one agent in both seats (no self-review from ADOS state) (Tests P, W)", () => {
+    const result = resolveEffectiveRoles({
+      state: {},
+      existingRunRoles: { implementer: "claude", reviewer: "claude", source: "resume" },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.join(" ")).toContain("review its own candidate");
+  });
+
+  it("blocks a resumed run whose durable Codex reviewer runtime is unavailable (Tests Q, V)", () => {
+    const result = resolveEffectiveRoles({
+      state: { agentRunners: { codex: { enabled: false } } },
+      existingRunRoles: { implementer: "claude", reviewer: "codex", source: "resume" },
+    });
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.join(" ").toLowerCase()).toContain("codex");
+  });
+
+  it("preserves valid durable Claude implementer / Codex reviewer roles on resume (Tests P, Q, R)", () => {
+    const result = resolveEffectiveRoles({
+      state: {},
+      existingRunRoles: { implementer: "claude", reviewer: "codex", source: "cli-override" },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.roles).toEqual({ implementer: "claude", reviewer: "codex" });
+    expect(result.roles?.implementer).not.toBe(result.roles?.reviewer);
+  });
+
   it("does not converge without any reviewer attempt (no self-review fallback) (Test W)", () => {
     expect(computeConvergenceStatus({ hasAnyReviewAttempt: false })).toBe(CONVERGENCE_STATUSES.NOT_STARTED);
   });
@@ -285,22 +316,21 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     expect(exactHead).toMatch(/^[0-9a-f]{40}$/);
 
-    // In the authoritative pipeline candidate.json is written for the exact
-    // commit under test just before validation runs, so it names exact HEAD and
-    // the strict check below fires. During implementation recovery the
-    // implementer may commit fixes *after* that record was written, so the
-    // durable run dir can trail HEAD until the pipeline re-enters validation -
-    // the same shape as every cycle after the first, and the same class of
-    // stale-durable-file-read-inside-`npm test` deadlock that the
-    // validation-runtime.json `status: "BLOCK"` gate further down already guards.
-    // The invariant that holds unconditionally: the durable candidate names a
-    // commit on this branch's history - exact HEAD or an ancestor of it - never
-    // one that diverges from or leads HEAD (which would be tampering). When it
-    // names exact HEAD, criterion 11's durable exact-HEAD proof is asserted
-    // strictly; when it trails, the exact-HEAD + no-stale-approval strength is
-    // carried by the "must not authorize publication" branch of the convergence
-    // biconditional below (a trailing candidate makes validatedMatchesHead
-    // false, so nothing here can reach CONVERGED).
+    // The durable candidate must name a commit on this branch's history - exact
+    // HEAD or an ancestor of it, never one that diverges from or leads HEAD
+    // (which would be tampering). A trailing candidate is a legitimate *state*
+    // during implementation recovery (the implementer may commit fixes after
+    // candidate.json was written, the same shape as every cycle after the
+    // first), so the ancestor check below tolerates it - but it is never an
+    // *authorization*: `candidateMatchesHead` (derived just below) is folded
+    // into the alignment conjunction, so a candidate that is not exact HEAD
+    // forces `exactTargetMatch=false` and nothing can reach CONVERGED.
+    // Criterion 11 requires candidate == validated == reviewed == exact HEAD -
+    // all four - before publication. (In this worktree the durable candidate
+    // currently trails HEAD per the recovery commits, so the CONVERGED branch
+    // of the biconditional does not execute here; its positive direction is
+    // exercised unconditionally by the synthesized "converges only when
+    // validated == reviewed == exact HEAD" test above.)
     expect(durableCandidate.candidate_sha).toMatch(/^[0-9a-f]{40}$/);
     const candidateNamesExactHead = durableCandidate.candidate_sha === exactHead;
     if (candidateNamesExactHead) {
@@ -342,6 +372,10 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     // computeConvergenceStatus below is therefore DERIVED from the real durable
     // SHAs, not synthesised.
     const headTarget = shaTarget(exactHead);
+    // Derived from the real durable candidate SHA with the production comparator
+    // (criterion 11: candidate must equal exact HEAD, not merely be an ancestor,
+    // to authorize publication).
+    const candidateMatchesHead = targetsMatch(shaTarget(durableCandidate.candidate_sha), headTarget);
     let validatedMatchesHead = false;
     if (durableValidation) {
       // Validation must never leave the worktree at a different commit than it
@@ -390,7 +424,7 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       const reviewedMatchesValidated = durableValidation
         ? targetsMatch(shaTarget(durableReview.reviewed_sha), shaTarget(durableValidation.head_after))
         : false;
-      const allThreeAligned = validatedMatchesHead && reviewedMatchesHead && reviewedMatchesValidated;
+      const allAligned = candidateMatchesHead && validatedMatchesHead && reviewedMatchesHead && reviewedMatchesValidated;
 
       // The publication gate, fed the REAL durable review decision and the
       // exactTargetMatch DERIVED above. Biconditional: converge iff an Approved
@@ -405,9 +439,9 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
         latestReviewOutcome: durableReview.decision,
         latestCompletenessStatus: "complete",
         activeBlockingFindingsCount: durableReview.decision === "Approved" ? 0 : 1,
-        exactTargetMatch: allThreeAligned,
+        exactTargetMatch: allAligned,
       });
-      if (durableReview.decision === "Approved" && allThreeAligned) {
+      if (durableReview.decision === "Approved" && allAligned) {
         expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
       } else {
         expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
