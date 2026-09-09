@@ -103,7 +103,12 @@ const durableCandidate = readJsonIfPresent(new URL("candidate.json", runDir)) as
   | { candidate_sha: string; status: string }
   | undefined;
 const durableValidation = readJsonIfPresent(new URL("validation-runtime.json", runDir)) as
-  | { head_before: string; head_after: string; commands: Array<{ command: string; exit_code: number }> }
+  | {
+      head_before: string;
+      head_after: string;
+      status?: string;
+      commands: Array<{ command: string; exit_code: number; timed_out?: boolean }>;
+    }
   | undefined;
 const durableReview = readJsonIfPresent(new URL("review-runtime.json", runDir)) as
   | { reviewed_sha: string; status: string; decision: string }
@@ -316,12 +321,21 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       expect(durableValidation.head_before).toBe(durableValidation.head_after);
       expect(Array.isArray(durableValidation.commands)).toBe(true);
       validatedMatchesHead = targetsMatch(shaTarget(durableValidation.head_after), headTarget);
-      // When the durable validation record names exact HEAD, the FULL configured
-      // validation set (acceptance criterion 19) must be present and every
-      // command must have exited 0 (a stale prior cycle's list is not asserted -
-      // after cycle one the durable validation, and always the durable review,
-      // describe an already-finished earlier candidate).
-      if (validatedMatchesHead) {
+      // When a COMPLETE, passing durable validation record names exact HEAD, the
+      // FULL configured validation set (acceptance criterion 19) must be present
+      // and every command must have passed. Only a passing run has the full list:
+      // ADOS also writes validation-runtime.json for a FAILED attempt (status
+      // "BLOCK") at this same HEAD, with the command list truncated at the first
+      // failing / timed-out command. This suite runs inside `npm test` -
+      // validation command #1 - so asserting completeness against a prior
+      // failed-at-HEAD record would deadlock recovery (the full list can only
+      // exist once every command, this one included, has already passed once).
+      // Gate fail-closed: run the assertion for an explicit PASS (and any
+      // unknown status token), skip it only for an explicit BLOCK. (A stale prior
+      // cycle's list is not asserted either - after cycle one the durable
+      // validation, and always the durable review, describe an already-finished
+      // earlier candidate, caught by validatedMatchesHead above.)
+      if (validatedMatchesHead && durableValidation.status !== "BLOCK") {
         const CONFIGURED_VALIDATION_COMMANDS = [
           "npm test",
           "npx tsc --noEmit",
@@ -337,6 +351,7 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
         }
         for (const command of durableValidation.commands) {
           expect(command.exit_code, `${command.command} must exit 0`).toBe(0);
+          expect(command.timed_out ?? false, `${command.command} must not have timed out`).toBe(false);
         }
       }
     }

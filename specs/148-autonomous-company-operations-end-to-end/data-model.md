@@ -38,8 +38,8 @@ records one derived evidence document.
 | `candidateOwner`, `reviewer` | `agentAssignment` | `claude` / `codex` |
 | `shaAlignment.candidateBaseSha` | `authoritativeBaseSha` | Stable base for this run |
 | `shaAlignment.durableSources` / `exactHeadInvariant` | ADOS-owned | candidate/validated/reviewed SHA available in the named durable files; `validated == reviewed == exact HEAD` enforced by `reviewConvergence.js`; proven by tests U/T and the durable-source cross-check |
-| `dailyProofCycleCompletion` | harness + production `deriveExternalProjectAdosRunStatus` | Daily-proof cycle's terminal `completed` state: `evidence.completed` drives derived run stage `Completed`, active-execution count 0, task `completed` via existing operator transition; full validation PASS at exact HEAD (derived, not transcribed) |
-| `spec148CandidatePublicationGate` | ADOS-owned / execution policy | This candidate's own review/validation/publication; `published`/`merged`/`deployed`/`primaryRepositoryMutated`/`githubMutated` all `false`; criterion 20 review pending post-handoff, never fabricated |
+| `dailyProofCycleCompletion` | harness + production `deriveExternalProjectAdosRunStatus` | Daily-proof cycle's terminal `completed` state: `evidence.completed` drives derived run stage `Completed`, active-execution count 0, task `completed` via existing operator transition; full configured validation re-established as a PASS at exact HEAD by ADOS per candidate (standing gate, derived not transcribed; not proven at implementation handoff) |
+| `spec148CandidatePublicationGate` | ADOS-owned / execution policy | This candidate's own review/validation/publication; `published`/`merged`/`deployed`/`primaryRepositoryMutated`/`githubMutated` all `false`; criteria 19 (full configured validation) and 20 (independent review) pending post-handoff, never fabricated |
 | `publicationResult` | ADOS-owned | Standing gate ("blocked until Approved review with validated == reviewed == exact HEAD"); human-only boundary preserved |
 | `idempotency` | harness replay | Duplicate-event counts all remain 1 |
 | `activeRunGating` | harness | Prohibited extra work count 0 with active execution |
