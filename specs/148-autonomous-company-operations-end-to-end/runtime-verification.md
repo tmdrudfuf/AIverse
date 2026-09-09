@@ -228,13 +228,13 @@ sources where the candidate/validated/reviewed SHAs are available
 lands. `spec148RoleAssignmentEvidence.test.ts` reads those sources; in a
 populated run dir it requires `validation-runtime.json` and `review-runtime.json`
 to be present (a selectively-deleted sibling fails, not skips). It asserts
-`candidate.json`'s `candidate_sha` equals `git rev-parse HEAD` when the ADOS
-snapshot is current (the authoritative-pipeline case: `candidate.json` is
+`candidate.json`'s `candidate_sha` equals `git rev-parse HEAD` when the durable
+record names exact HEAD (the authoritative-pipeline case: `candidate.json` is
 written for the exact commit just before validation runs); during
-implementation recovery the implementer commits fixes after that snapshot and
-ADOS re-snapshots on re-entry, so the durable record transiently trails HEAD,
-and the unconditional invariant is then that `candidate_sha` is exact HEAD or
-an ancestor of it - never divergent or ahead - with the exact-HEAD strength
+implementation recovery the implementer may commit fixes after that record was
+written, so it can trail HEAD until the pipeline re-enters validation. The
+unconditional invariant is then that `candidate_sha` is exact HEAD or an
+ancestor of it - never divergent or ahead - with the exact-HEAD strength
 carried by the "must not authorize publication" convergence branch (a trailing
 candidate makes `validatedMatchesHead` false). It asserts validation left the
 worktree unmutated (`head_before == head_after`), then compares

@@ -285,18 +285,18 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     expect(exactHead).toMatch(/^[0-9a-f]{40}$/);
 
-    // In the authoritative pipeline ADOS snapshots candidate.json at HEAD just
-    // before validation runs, so it names exact HEAD and the strict check below
-    // fires. During implementation recovery the implementer legitimately commits
-    // fixes *after* that snapshot (ADOS re-snapshots when it re-enters validation
-    // post-handoff), so the durable run dir transiently trails HEAD - the same
-    // shape as every cycle after the first, and the same class of
+    // In the authoritative pipeline candidate.json is written for the exact
+    // commit under test just before validation runs, so it names exact HEAD and
+    // the strict check below fires. During implementation recovery the
+    // implementer may commit fixes *after* that record was written, so the
+    // durable run dir can trail HEAD until the pipeline re-enters validation -
+    // the same shape as every cycle after the first, and the same class of
     // stale-durable-file-read-inside-`npm test` deadlock that the
     // validation-runtime.json `status: "BLOCK"` gate further down already guards.
     // The invariant that holds unconditionally: the durable candidate names a
     // commit on this branch's history - exact HEAD or an ancestor of it - never
-    // one that diverges from or leads HEAD (which would be tampering). When the
-    // snapshot is current, criterion 11's durable exact-HEAD proof is asserted
+    // one that diverges from or leads HEAD (which would be tampering). When it
+    // names exact HEAD, criterion 11's durable exact-HEAD proof is asserted
     // strictly; when it trails, the exact-HEAD + no-stale-approval strength is
     // carried by the "must not authorize publication" branch of the convergence
     // biconditional below (a trailing candidate makes validatedMatchesHead
