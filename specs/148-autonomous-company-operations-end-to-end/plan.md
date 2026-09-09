@@ -9,9 +9,13 @@
 Prove that Specs 142-147 plus the Spec 142/138 development bridge and the real
 ADOS integration compose into one safe controlled autonomous cycle. This is a
 verification feature: it adds deterministic tests and stable repository-relative
-runtime evidence, and it makes no production source changes. Existing stage
-coordinators remain the single source of truth; the verification layer only
-observes state transitions.
+runtime evidence, and it makes no `src/` production source changes. Its one
+production change is an 18-line self-review / reviewer-availability guard in
+`tools/agent-workflow/roleResolver.js` (Spec 148 C8), required by authoritative
+requirement 10 so a resumed/durable run with one agent in both seats, or an
+unavailable Codex reviewer, blocks before spawn instead of self-reviewing.
+Existing stage coordinators remain the single source of truth; the verification
+layer only observes state transitions.
 
 ## Technical Context
 

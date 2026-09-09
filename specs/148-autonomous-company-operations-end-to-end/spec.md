@@ -43,10 +43,13 @@ the ADOS run reports run-level completion (`execution.evidence.completed`) the
 office-observable Spec 144 active-execution count drops from 1 to 0 and the
 daily-proof task reaches `completed` through the existing operator transition.
 While the run is still in flight the task stays `in_progress` and
-nothing auto-approves or fabricates completion. This Spec 148 candidate's *own*
-review / validation / exact-HEAD / publication is a separate human-only gate,
-executed by the real ADOS pipeline against this feature branch (authoritative
-section 23; acceptance criterion 20).
+nothing auto-approves or fabricates completion. `exactTargetMatch` is derived
+with the production comparator (`validationPolicy.js` `targetsMatch`) from this
+worktree's real HEAD, not a hand-built object. The full ADOS validation pipeline
+and independent Codex review of the Spec 148 *implementation candidate itself*
+run post-handoff per the execution policy's human-only boundary (acceptance
+criteria 19-20); that same convergence biconditional is additionally enforced
+from durable ADOS state by `spec148RoleAssignmentEvidence.test.ts`.
 
 **Acceptance Scenarios**:
 

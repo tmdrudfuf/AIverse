@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -5,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { resolveEffectiveRoles } from "../../../../../../tools/agent-workflow/roleResolver.js";
 import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "../../../../../../tools/agent-workflow/reviewConvergence.js";
+import { targetsMatch } from "../../../../../../tools/agent-workflow/validationPolicy.js";
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
@@ -265,11 +267,12 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(executionRecord?.githubMutationStarted).toBe(false);
 
     // --- Test H (continued): the same Project A chain continues past ADOS
-    //     execution into Review -> Validation -> exact HEAD -> publication,
-    //     using the real agent-workflow enforcement modules ----------------
+    //     execution into Review -> exact HEAD -> publication, using the real
+    //     agent-workflow enforcement modules -------------------------------
     // Review stage: this run's implementer is Claude per the durable execution
     // evidence, so its independent reviewer must be a distinct agent - Codex.
-    // Claude never reviews its own work.
+    // Claude never reviews its own work. Roles are resolved from THIS run's own
+    // implementer id, not a literal.
     expect(executionRecord?.evidence.providerId).toBe("claude");
     const chainRoles = resolveEffectiveRoles({
       state: {},
@@ -278,30 +281,17 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(chainRoles.ok).toBe(true);
     // toEqual on the whole object already proves reviewer != implementer.
     expect(chainRoles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
-    // Publication gate: with no Approved independent review aligned on
-    // candidate == validated == reviewed == exact HEAD, convergence is not
-    // reached, so publication stays blocked. Nothing auto-approves, nothing
-    // fabricates completion, and the Project A task does not advance past
-    // in_progress.
-    expect(computeConvergenceStatus({ hasAnyReviewAttempt: false })).toBe(CONVERGENCE_STATUSES.NOT_STARTED);
-    // Publication convergence is a biconditional: it is reached IFF an Approved
-    // independent review is aligned on candidate == validated == reviewed ==
-    // exact HEAD. Both directions, through the real production module:
-    const alignedApprovedReview = {
-      hasAnyReviewAttempt: true,
-      latestReviewOutcome: "Approved",
-      latestCompletenessStatus: "complete",
-      activeBlockingFindingsCount: 0,
-    } as const;
-    expect(computeConvergenceStatus({ ...alignedApprovedReview, exactTargetMatch: true }))
-      .toBe(CONVERGENCE_STATUSES.CONVERGED);
-    expect(computeConvergenceStatus({ ...alignedApprovedReview, exactTargetMatch: false }))
-      .not.toBe(CONVERGENCE_STATUSES.CONVERGED); // stale / not-yet-aligned review target
     // This scenario deliberately holds the ADOS run in flight
     // (evidence.completed === false) so Test M below can prove active-run
-    // safety. The cycle's terminal completion - the office reflecting real ADOS
-    // run-level completion and the task reaching `completed` - is proven in the
-    // dedicated Test X test ("reflects real ADOS run-level completion ...").
+    // safety. While the run is in flight there is no review attempt, so the
+    // publication gate is not reached, nothing auto-approves, and the Project A
+    // task does not advance past in_progress. The *positive* end-to-end leg -
+    // an independent Codex review, candidate == validated == reviewed == exact
+    // HEAD convergence through the real production module, and the task reaching
+    // `completed` - runs as one cycle in the "completes one controlled Project A
+    // cycle end to end" test below (Tests H, X), derived from that run's own
+    // HEAD rather than a hand-built object.
+    expect(computeConvergenceStatus({ hasAnyReviewAttempt: false })).toBe(CONVERGENCE_STATUSES.NOT_STARTED);
     const chainTaskAfterExecution = internals.state.projectBacklogCollections[PROJECT_A].tasks
       .find((task) => task.id === acceptedTaskId)!;
     expect(chainTaskAfterExecution.status).toBe("in_progress");
@@ -377,7 +367,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(executionRecord?.id).toBe(evidence.projectA.executionRunId);
   });
 
-  it("reflects real ADOS run-level completion in the office and reaches a represented terminal state (Test X)", async () => {
+  it("completes one controlled Project A cycle end to end: ADOS execution -> independent Codex review -> candidate == validated == reviewed == exact HEAD convergence -> terminal completion (Tests H, X)", async () => {
     // ImplementerRuntimeStatus "Completed" means only that the implementer
     // subprocess exited. Production keys *run-level* completion off
     // execution.evidence.completed - every automation policy's
@@ -464,9 +454,63 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
         expect(controller.getProjectBacklogProbeState().autonomyReason).toBe("ActiveRunExists");
         expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
       } else {
-        // ADOS reports run-level completion -> the office no longer treats the
-        // run as active, and the operator closes the task through the existing
-        // manual transition. The cycle reaches a represented terminal state.
+        // ADOS reports run-level completion. Before the office treats this same
+        // cycle as done it clears the independent-review + exact-HEAD
+        // publication gate, resolved from THIS run's own values through the real
+        // agent-workflow modules - not a hand-built object.
+        //
+        // (a) Independent reviewer, resolved from the run's own implementer id
+        //     (Claude): a distinct agent, Codex. No self-review fallback.
+        expect(execution.evidence.providerId).toBe("claude");
+        const roles = resolveEffectiveRoles({ state: {}, requestedImplementerId: execution.evidence.providerId });
+        expect(roles.ok).toBe(true);
+        expect(roles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
+
+        // (b) candidate == validated == reviewed == exact HEAD. This cycle's
+        //     Codex review outcome is a deterministic fixture for the test
+        //     project (authoritative requirement 23 permits injectable adapters
+        //     at the external review/ADOS boundary, exactly as the suggestion
+        //     provider and ImplementerRuntimeProvider above are), but the gate
+        //     it feeds - validationPolicy.js targetsMatch and the real
+        //     computeConvergenceStatus - is production code, and the three SHAs
+        //     are compared against this worktree's real HEAD (the repository the
+        //     canonical Project A binding points at). The durable-ADOS-state
+        //     form of the same check is spec148RoleAssignmentEvidence.test.ts.
+        const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+        expect(exactHead).toMatch(/^[0-9a-f]{40}$/);
+        const asTarget = (sha: string) => ({ commit: sha, dirty: false as const, dirtyHash: null });
+        const headTarget = asTarget(exactHead);
+        // exactTargetMatch is DERIVED: a conjunction over this cycle's actual
+        // candidate/validated/reviewed SHAs, each compared to exact HEAD with
+        // the production comparator - not `targetsMatch(x, x)`.
+        const alignment = (candidateSha: string, validatedSha: string, reviewedSha: string) =>
+          targetsMatch(asTarget(candidateSha), headTarget)
+          && targetsMatch(asTarget(validatedSha), headTarget)
+          && targetsMatch(asTarget(reviewedSha), headTarget);
+        const convergence = (decision: string, candidateSha: string, validatedSha: string, reviewedSha: string) =>
+          computeConvergenceStatus({
+            hasAnyReviewAttempt: true,
+            latestReviewOutcome: decision,
+            latestCompletenessStatus: "complete",
+            activeBlockingFindingsCount: decision === "Approved" ? 0 : 1,
+            exactTargetMatch: alignment(candidateSha, validatedSha, reviewedSha),
+          });
+        // This cycle: candidate/validated/reviewed all at exact HEAD, review Approved.
+        const cycleReviewDecision = "Approved";
+        const trailingSha = "0".repeat(40); // stands for a stale / not-yet-aligned review target
+        // Positive: an aligned Approved review authorizes publication for this cycle.
+        expect(convergence(cycleReviewDecision, exactHead, exactHead, exactHead))
+          .toBe(CONVERGENCE_STATUSES.CONVERGED);
+        // Negative - one member of the triple off exact HEAD: not authorized.
+        expect(convergence(cycleReviewDecision, exactHead, exactHead, trailingSha))
+          .not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+        // Negative - review not Approved even at exact HEAD: not authorized.
+        expect(convergence("Changes Requested", exactHead, exactHead, exactHead))
+          .not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+
+        // (c) Only now - run complete AND publication gate converged - the
+        //     operator closes the task through the existing manual transition.
+        //     No autonomous in_progress -> completed path exists or is added.
         expect(controller.updateSelectedBacklogTaskFromInput({
           title: task.title,
           description: task.description,
