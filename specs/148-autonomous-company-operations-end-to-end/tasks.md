@@ -117,6 +117,36 @@ artifacts.
 
 ---
 
+## Phase 10: Independent-review fix cycle (6)
+
+Reviewed SHA `e1f5e34` (the Phase 9 recovery itself) drew two blocking findings:
+
+- **Finding 1** — the candidate does not record a *completed* cycle through
+  Approved Codex review + exact HEAD + publication. This is unsatisfiable by
+  construction: a durable Codex `Approved` review of SHA `X` cannot exist inside
+  the commit that becomes SHA `X`. Criteria 11/19/20 are standing per-candidate
+  ADOS gates. No evidence mutation can honestly assert this leg is done; doing so
+  would be the fabrication every prior round was re-blocked for. Surfaced to the
+  operator in the handoff — not "fixed" in the artifact. `publicationResult`
+  stays a standing `^Blocked until … Approved … exact HEAD` gate.
+- **Finding 2** — the E2E "Complete" transition (`updateSelectedBacklogTaskFromInput({status:"completed"})`)
+  sits next to a comment that says the review/validation/exact-HEAD/publication
+  gate "is not simulated here", reading as a self-documented gap. Directly
+  re-litigates the Phase 9 (round-6) resolution, which *removed* the synthetic
+  convergence gate on that same transition. Narrow, non-reverting fix below.
+
+- [X] T040 `AutonomousCompanyOperationsE2E.test.ts` completion test: before the operator `completed` transition, assert `execution.reviewStarted` / `execution.publishStarted` / `execution.githubMutationStarted` are `false` — proving the in-office chain carries no publication leg for the completion to skip over, rather than excusing its absence in prose. Reword comment (b) and the file header away from "not simulated here" to state what the transition is (the operator's existing manual close, production's only `in_progress -> completed` authority). No synthetic durable triple, no `mkdtempSync`, no `deriveDurableAlignment` import (Phase 9 removed those; not reintroduced).
+- [X] T041 `runtime-evidence.json` `requirementsChainProof.links`: trim the `-> validation / exact HEAD / publication gate` and `-> completion` entries (net deletion of repeated defensive prose); note the new `reviewStarted`/`publishStarted`/`githubMutationStarted` false assertions. `publicationResult`, `observedCycles`, `dailyProofCycleCompletion` unchanged — Finding 1 is not satisfiable in-artifact.
+- [X] T042 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`, `spec148RoleAssignmentEvidence.test.ts`) + `npx tsc --noEmit`. Both green (30 tests). Diff checks clean.
+
+> Finding 1 and Finding 2 cannot both be satisfied in the candidate: Finding 2
+> (round 6) forced removal of the convergence-gated completion; Finding 1
+> (round 7) asks for a completed publication result that cannot exist until the
+> real Codex review of *this* candidate returns Approved. The operator owns the
+> review/approval/merge boundary; this is where that gate closes.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
