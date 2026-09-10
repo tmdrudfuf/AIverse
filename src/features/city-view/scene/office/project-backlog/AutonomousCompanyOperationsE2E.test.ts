@@ -57,18 +57,14 @@ import type {
 // fixture and the ADOS process spawn uses the injectable ImplementerRuntimeProvider
 // (as the Spec 144 suite does).
 //
-// The office ExternalProjectAdosExecution schema types its review/validation/
-// publish sub-stage flags as the literal `false`, so the in-office chain cannot
-// carry those sub-stages on its own records. This test covers the office-
-// observable stages: reviewer resolution from the run's own durable implementer
-// id (roleResolver.js) and a terminal `completed` transition that follows the
-// real ADOS run-level completion signal (execution.evidence.completed) via the
-// operator's existing manual transition - with the in-office records asserted to
-// carry no review/publish advancement, so no publication leg is skipped. The
+// This test covers the office-observable stages: reviewer resolution from the
+// run's own durable implementer id (roleResolver.js) and a terminal `completed`
+// transition driven by the operator's existing manual transition once the real
+// ADOS run-level completion signal (execution.evidence.completed) is set. The
 // candidate == validated == reviewed == exact HEAD + Approved-review publication
-// gate is the same cycle's final leg; it is enforced over this run's own durable
-// ADOS records by spec148RoleAssignmentEvidence.test.ts, unconditionally and in
-// both directions. No src/ production source is changed by Spec 148.
+// gate is enforced over this run's own durable ADOS records by
+// spec148RoleAssignmentEvidence.test.ts, unconditionally and in both directions.
+// No src/ production source is changed by Spec 148.
 
 const HIGH = "high" as const;
 
@@ -445,6 +441,15 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
       const execution = Object.values(internals.state.externalProjectAdosExecutions)[0]!;
       expect(execution.evidence.completed).toBe(runCompleted); // adapter signal propagates faithfully
+      // The Spec 130 ExternalProjectAdosExecution schema types the review /
+      // validation / publish sub-stage flags as the literal `false`, so an
+      // in-office record never advances past implementer work in either run
+      // state. The candidate == validated == reviewed == exact HEAD +
+      // Approved-review publication gate is enforced over this run's durable
+      // ADOS records by spec148RoleAssignmentEvidence.test.ts.
+      expect(execution.reviewStarted).toBe(false);
+      expect(execution.publishStarted).toBe(false);
+      expect(execution.githubMutationStarted).toBe(false);
 
       // Office-observable, production-consumed: the Spec 144 policy's
       // active-execution count (surfaced on the probe, via
@@ -482,19 +487,11 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
         // (b) The office reflects real ADOS run-level completion (asserted
         //     above: evidence.completed true, Spec 144 active count 0,
-        //     deriveExternalProjectAdosRunStatus stage "Completed"). The
-        //     in-office records carry no review or publish advancement of their
-        //     own - the schema types those flags as the literal `false` - so
-        //     this chain has no publication leg for the completion below to skip
-        //     over. The candidate == validated == reviewed == exact HEAD +
-        //     Approved-review gate runs over the run's durable ADOS records in
-        //     spec148RoleAssignmentEvidence.test.ts.
-        expect(execution.reviewStarted).toBe(false);
-        expect(execution.publishStarted).toBe(false);
-        expect(execution.githubMutationStarted).toBe(false);
-        // No autonomous in_progress -> completed path exists in production and
-        // Spec 148 adds none: the operator closes the task by hand, the same
-        // human publication boundary Specs 142-147 declare.
+        //     deriveExternalProjectAdosRunStatus stage "Completed"). The task
+        //     still reads in_progress: production has no autonomous
+        //     in_progress -> completed path and Spec 148 adds none. The operator
+        //     closes it by hand through updateSelectedBacklogTaskFromInput - the
+        //     same human publication boundary Specs 142-147 declare.
         expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
         expect(controller.updateSelectedBacklogTaskFromInput({
           title: task.title,

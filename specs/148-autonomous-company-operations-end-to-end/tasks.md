@@ -147,6 +147,29 @@ Reviewed SHA `e1f5e34` (the Phase 9 recovery itself) drew two blocking findings:
 
 ---
 
+## Phase 11: Independent-review fix cycle (7)
+
+Reviewed SHA `6e123e6` (the Phase 10 recovery itself) drew the same two findings
+again. Finding 1 stays the by-construction deadlock documented in Phase 10 -
+durable ADOS state at HEAD now shows `candidate.json` == `validation-runtime.json`
+(PASS, all six commands exit 0) == `review-runtime.json` on the exact HEAD SHA;
+the only unmet convergence conjunct is the review decision, which is this review.
+No in-artifact change can honestly assert Approved. Finding 2 was re-read as the
+T040 `reviewStarted`/`publishStarted`/`githubMutationStarted` false assertions
+sitting adjacent to the operator `completed` transition ("confirmed absent, then
+declared done").
+
+- [X] T043 `AutonomousCompanyOperationsE2E.test.ts` completion test: relocate the three `execution.reviewStarted`/`publishStarted`/`githubMutationStarted` false assertions out of the `runCompleted` branch up next to the `execution.evidence.completed` shape assertion, so they run unconditionally in both run states as a schema-shape check rather than a pre-completion gap check. Reword comment (b) and trim the file header. Completion transition then stands only on the real ADOS signals asserted above it. No synthetic durable triple / `mkdtempSync` / `deriveDurableAlignment`.
+- [X] T044 `runtime-evidence.json` `requirementsChainProof.links`: reword the `-> validation / exact HEAD / publication gate` entry to describe the relocated assertions as an unconditional shape check (net wording deletion). `publicationResult`, `observedCycles`, `dailyProofCycleCompletion` unchanged - Finding 1 is not satisfiable in-artifact.
+- [X] T045 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`, `spec148RoleAssignmentEvidence.test.ts`) + `npx tsc --noEmit`.
+
+> Finding 1 remains the round-6/round-7 deadlock (see Phase 10). It closes only
+> when the real Codex review of this exact candidate at exact HEAD returns
+> Approved - which the operator owns and which cannot exist inside the commit
+> under review. Escalated to the operator in the handoff.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
