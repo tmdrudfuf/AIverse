@@ -1,18 +1,10 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveEffectiveRoles } from "../../../../../../tools/agent-workflow/roleResolver.js";
 import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "../../../../../../tools/agent-workflow/reviewConvergence.js";
-import {
-  CONFIGURED_VALIDATION_COMMANDS,
-  convergenceForAlignment,
-  deriveDurableAlignment,
-} from "../../../../../../tools/agent-workflow/spec148DurableAlignment.js";
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
@@ -67,16 +59,15 @@ import type {
 //
 // The office ExternalProjectAdosExecution schema types its review/validation/
 // publish sub-stage flags as the literal `false`, so the in-office chain cannot
-// carry those sub-stages on its own records. The review / validation /
-// exact-HEAD / publication leg of the same cycle is therefore exercised through
-// the real agent-workflow production modules (roleResolver.js, validationPolicy.js
-// targetsMatch via deriveDurableAlignment, reviewConvergence.js
-// computeConvergenceStatus): the "completes one controlled Project A cycle end
-// to end" test below drives that leg to CONVERGED over a deterministic real-SHA
-// durable triple and gates its terminal completion on it, and
-// spec148RoleAssignmentEvidence.test.ts additionally runs it over this run's own
-// durable ADOS records, unconditionally, both directions. No src/ production
-// source is changed by Spec 148.
+// carry those sub-stages on its own records. This test carries the cycle only
+// as far as the real, office-observable ADOS signals reach: reviewer resolution
+// from the run's own durable implementer id (roleResolver.js) and a terminal
+// `completed` transition gated on the real ADOS run-level completion signal
+// (execution.evidence.completed). The candidate == validated == reviewed ==
+// exact HEAD + Approved-review publication gate is enforced over this run's own
+// durable ADOS records by spec148RoleAssignmentEvidence.test.ts, unconditionally
+// and in both directions - it is not simulated here. No src/ production source
+// is changed by Spec 148.
 
 const HIGH = "high" as const;
 
@@ -488,59 +479,25 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
         expect(roles.ok).toBe(true);
         expect(roles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
 
-        // (b) Validation / exact-HEAD / publication gate of THIS cycle. The
-        //     office ExternalProjectAdosExecution records cannot carry these
-        //     sub-stages (schema literal `false`), so the leg runs through the
-        //     real production modules over a deterministic durable triple
-        //     (authoritative requirement 23: the review runtime is a process
-        //     boundary, like the implementer spawn). Real git SHAs, written as
-        //     real durable-shaped JSON in a temp dir, read back through the
-        //     shared deriveDurableAlignment (validationPolicy.js targetsMatch)
-        //     and folded by the real reviewConvergence.js
-        //     computeConvergenceStatus - never a hand-built options object,
-        //     never a write into the live .agent-workflow run dir.
-        const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-        const runDir = mkdtempSync(join(tmpdir(), "spec148-e2e-"));
-        const writeDurable = (name: string, body: unknown): void =>
-          writeFileSync(join(runDir, name), `${JSON.stringify(body, null, 2)}\n`);
-        try {
-          writeDurable("candidate.json", { candidate_sha: exactHead, changed_files: [], status: "COMMITTED" });
-          writeDurable("validation-runtime.json", {
-            head_before: exactHead,
-            head_after: exactHead,
-            status: "PASS",
-            commands: CONFIGURED_VALIDATION_COMMANDS.map((command) => ({ command, exit_code: 0, timed_out: false })),
-          });
-
-          // A "Changes Requested" review at exact HEAD does NOT converge, and the
-          // operator completion below is gated on convergence - so the task must
-          // stay in_progress in that state.
-          writeDurable("review-runtime.json", { reviewed_sha: exactHead, status: "PASS", decision: "Changes Requested" });
-          const blocked = convergenceForAlignment(deriveDurableAlignment(runDir, exactHead));
-          expect(blocked).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
-
-          // An Approved independent review aligned on candidate == validated ==
-          // reviewed == exact HEAD converges through the real gate.
-          writeDurable("review-runtime.json", { reviewed_sha: exactHead, status: "PASS", decision: "Approved" });
-          const convergence = convergenceForAlignment(deriveDurableAlignment(runDir, exactHead));
-          expect(convergence).toBe(CONVERGENCE_STATUSES.CONVERGED);
-
-          // (c) Only once the publication gate is CONVERGED does the operator
-          //     close the task through the existing manual transition. No
-          //     autonomous in_progress -> completed path exists or is added.
-          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
-          if (convergence === CONVERGENCE_STATUSES.CONVERGED) {
-            expect(controller.updateSelectedBacklogTaskFromInput({
-              title: task.title,
-              description: task.description,
-              priority: task.priority,
-              status: "completed",
-            })).toBe(true);
-          }
-          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("completed");
-        } finally {
-          rmSync(runDir, { recursive: true, force: true });
-        }
+        // (b) The office reflects real ADOS run-level completion:
+        //     execution.evidence.completed is true, the Spec 144
+        //     active-execution count has already dropped to 0, and
+        //     deriveExternalProjectAdosRunStatus reports stage "Completed" (all
+        //     asserted above). Only then does the operator close the task
+        //     through the existing manual transition - there is no autonomous
+        //     in_progress -> completed path and Spec 148 adds none. The
+        //     candidate == validated == reviewed == exact HEAD + Approved-review
+        //     publication gate is enforced over this run's own durable ADOS
+        //     records by spec148RoleAssignmentEvidence.test.ts, not simulated
+        //     here.
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
+        expect(controller.updateSelectedBacklogTaskFromInput({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: "completed",
+        })).toBe(true);
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("completed");
       }
     }
   });

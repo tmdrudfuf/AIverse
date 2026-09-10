@@ -91,6 +91,32 @@ exact-HEAD guarantees for this run using existing agent-workflow modules.
 
 ---
 
+## Phase 9: Independent-review fix cycle (5)
+
+T032's deletions **were** applied at `389c317` (the E2E completion test closed
+the task on the real `evidence.completed` signal, no durable-file reads). The
+next commit, `e32fe3a`, then reintroduced an equivalent synthetic block under
+new names — `mkdtempSync` temp run dir + `writeDurable` candidate/validation/
+review JSON + `deriveDurableAlignment` / `convergenceForAlignment`, gating the
+terminal `completed` transition on that fixture convergence — and added the new
+`tools/agent-workflow/spec148DurableAlignment.js` helper. Reviewed SHA
+`138b782` carries that reintroduced block; review findings 2 and 3 flag it.
+This phase removes it again and strips the over-claim it left in the generated
+artifacts.
+
+- [X] T035 `AutonomousCompanyOperationsE2E.test.ts`: delete the synthetic durable-triple block in the "completes one controlled Project A cycle end to end" test (`execFileSync` HEAD read, `mkdtempSync` run dir, `writeDurable` candidate/validation/review JSON, `deriveDurableAlignment` / `convergenceForAlignment` calls). Gate the terminal operator `completed` transition ONLY on the real ADOS run-level completion signal already asserted above it (`execution.evidence.completed === true`, `autonomyActiveExecutionCount === 0`, `deriveExternalProjectAdosRunStatus` stage `Completed`). Remove the now-dead imports (`execFileSync`, `mkdtempSync`, `rmSync`, `writeFileSync`, `tmpdir`, `join`, and all of `spec148DurableAlignment.js`). Keep `resolveEffectiveRoles` (reviewer resolution) and `computeConvergenceStatus` / `CONVERGENCE_STATUSES` (NOT_STARTED assertion in the main chain test).
+- [X] T036 `spec148RoleAssignmentEvidence.test.ts`: keep the real-SHA fixture-triple test as unit coverage of the gate biconditional (Tests U, T, W) — authoritative requirement 23 sanctions a deterministic stand-in for the review runtime — but drop its dependency on `evidence.deterministicConvergedDemonstration` and reframe its name/comment away from "demonstrates the converged publication path end to end … of the one demonstrated cycle". `spec148DurableAlignment.js` is now imported only by this suite.
+- [X] T037 `runtime-evidence.json`: delete the top-level `deterministicConvergedDemonstration` block (it framed a fixture triple as the demonstrated cycle's publication leg "completed", over-claiming criteria 19-20). Net deletion. Update `acceptanceCriteriaMapping.note`, `dailyProofCycleCompletion.note`/`source`, `requirementsChainProof.links`, `spec148CandidatePublicationGate.note`, `publicationResult`, `observedCycles[1].convergenceReason`, and `nonInvocationsVerified.toolsAgentWorkflowTestOnlyHelperAdded` so nothing says the E2E test drives `computeConvergenceStatus` to CONVERGED or gates completion on it. `publicationResult` stays a standing "Blocked until … Approved … exact HEAD" gate.
+- [X] T038 Sweep `runtime-verification.md` for the same over-claim (Evidence-captured bullet said the E2E test proves the cycle "through the post-execution review / exact-HEAD gate … `computeConvergenceStatus` biconditional asserted both directions"). `spec.md` and `plan.md` already attribute the biconditional solely to `spec148RoleAssignmentEvidence.test.ts` — left unchanged.
+- [X] T039 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`, `spec148RoleAssignmentEvidence.test.ts`, `PortfolioOperationsService.test.ts`), `npx tsc --noEmit`, and diff checks.
+
+> Note on T032: its `readDurableAdosRun` / `convergeWith` helper names did
+> exist (at `9431c5e`–`f2693af`) and `T032`/`389c317` removed them as claimed —
+> the `[X]` was accurate at the time. `e32fe3a` regressed it by adding the
+> `writeDurable` + `deriveDurableAlignment` equivalent, which T035 removes.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.

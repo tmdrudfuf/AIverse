@@ -338,12 +338,13 @@ PR readiness, approval, merge, and remote deletion remain human-only.
 ## Evidence captured in this runtime
 
 - `src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts`
-  proves the ordered single cycle (through the post-execution review /
-  exact-HEAD gate, with `exactTargetMatch` derived via `targetsMatch` from real
-  HEAD and the `computeConvergenceStatus` biconditional asserted both
-  directions), the daily-proof cycle's truthful terminal `completed` state
-  driven by real ADOS run-level completion ("completes one controlled Project A
-  cycle end to end", Tests H, X), four independent controls,
+  proves the ordered single cycle through ADOS execution and independent reviewer
+  resolution from the run's own durable implementer id, then the daily-proof
+  cycle's truthful terminal `completed` state driven **only** by the real ADOS
+  run-level completion signal (`execution.evidence.completed`) and the existing
+  operator transition - it does not simulate the review / exact-HEAD /
+  publication leg ("completes one controlled Project A cycle end to end",
+  Tests H, X); four independent controls,
   no direct ADOS invocation from Specs 145-147, idempotency on replayed events,
   active-run gating, second-project isolation, reload persistence,
   manual-workflow continuity, failure visibility for

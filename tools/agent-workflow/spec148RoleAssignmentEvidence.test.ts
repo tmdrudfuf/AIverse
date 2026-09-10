@@ -59,7 +59,6 @@ const evidence = readJson(new URL("runtime-evidence.json", specDir)) as {
   candidateOwner: string;
   reviewer: string;
   publicationResult: string;
-  deterministicConvergedDemonstration: { convergedStatus: string; method: string; test: string };
   shaAlignment: {
     staleApprovalReuseAllowed: boolean;
     candidateOwner: string;
@@ -360,17 +359,21 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     expect(evidence.shaAlignment.staleApprovalReuseAllowed).toBe(false);
   });
 
-  it("demonstrates the converged publication path end to end over a real-SHA durable triple, and refuses every non-aligned variant (Tests U, X)", () => {
-    // The review / validation / exact-HEAD / publication leg of the one
-    // demonstrated cycle, exercised deterministically. Authoritative requirement
-    // 23: the review runtime is a process boundary in the same category as the
-    // implementer spawn and the Spec 143 suggestion provider - a deterministic
-    // durable record set may stand in for it while the REAL enforcement code
-    // runs over it. Real git SHAs, written as real durable-shaped JSON in a temp
-    // run dir, read back through the SAME `deriveDurableAlignment` +
-    // `convergenceForAlignment` path the live check above uses - never a
-    // hand-built options object, never a write into the live .agent-workflow
-    // run dir (that is live ADOS state mid-run).
+  it("exercises the publication-gate biconditional over a real-SHA durable triple: converges only on an Approved review aligned on candidate == validated == reviewed == exact HEAD (Tests U, T, W)", () => {
+    // Unit coverage of the shared `deriveDurableAlignment` +
+    // `convergenceForAlignment` path over realistic durable-shaped records.
+    // Authoritative requirement 23: the review runtime is a process boundary in
+    // the same category as the implementer spawn and the Spec 143 suggestion
+    // provider - a deterministic durable record set may stand in for it while
+    // the REAL enforcement code runs over it. Real git SHAs, written as real
+    // durable-shaped JSON in a temp run dir, read back through the SAME
+    // `deriveDurableAlignment` + `convergenceForAlignment` path the live check
+    // above uses - never a hand-built options object, never a write into the
+    // live .agent-workflow run dir. This is not a claim that a completed
+    // converged cycle exists for this candidate: that gate (acceptance criteria
+    // 19-20) is satisfied only when the real independent Codex review of this
+    // exact candidate returns Approved, which cannot be recorded inside the
+    // candidate under review.
     const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     const ancestor = execFileSync("git", ["rev-parse", "HEAD~1"], { encoding: "utf8" }).trim();
     const dir = mkdtempSync(join(tmpdir(), "spec148-converged-"));
@@ -424,13 +427,6 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
-
-    // The tracked evidence records this deterministic demonstration under its
-    // own key (NOT in observedCycles, which is real historical observation).
-    expect(evidence.deterministicConvergedDemonstration).toMatchObject({
-      convergedStatus: CONVERGENCE_STATUSES.CONVERGED,
-    });
-    expect(evidence.deterministicConvergedDemonstration.method).toMatch(/targetsMatch/);
   });
 
   it("records completed ADOS cycles as non-forgeable historical SHA observations (Tests S, T, U)", () => {
