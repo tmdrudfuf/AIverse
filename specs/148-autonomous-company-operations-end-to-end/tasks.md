@@ -170,6 +170,50 @@ declared done").
 
 ---
 
+## Phase 12: Independent-review fix cycle (8)
+
+Reviewed SHA `9c6f124` (the Phase 11 recovery itself) drew the same two findings
+a third time. Both are unsatisfiable inside the candidate:
+
+- **Finding 1** (`runtime-evidence.json:129` / `AutonomousCompanyOperationsE2E.test.ts:450`,
+  `:496`) — the E2E test does not thread the chain through review / validation /
+  exact HEAD / publication and closes via the operator's manual `completed`
+  transition. This re-litigates the Phase 9 (round-6) resolution, which *forced
+  removal* of any convergence-gated completion from that test, and the Phase 11
+  relocation, which moved the `reviewStarted`/`publishStarted`/`githubMutationStarted`
+  false assertions to an unconditional schema-shape check. The office
+  `ExternalProjectAdosExecution` schema types those sub-stage flags as the
+  literal `false`, so the in-office chain has no review/validation/publication
+  leg to thread; that leg is enforced only over durable ADOS records in
+  `spec148RoleAssignmentEvidence.test.ts`. Moving or re-adding the assertions a
+  fourth time converges on nothing.
+- **Finding 2** (`runtime-evidence.json:209` / `spec148RoleAssignmentEvidence.test.ts:339`)
+  — `publicationResult` is a standing `Blocked until … Approved … exact HEAD`
+  gate, not a completed result, and the role suite pins the specific
+  non-converged status instead of failing the candidate. The finding's premise
+  that `review-runtime.json` still reviews `6e123e6` is stale: the reviewer read
+  the file before its own result was written. Durable ADOS state at HEAD now
+  shows **all four SHA conjuncts aligned at exact HEAD** — `candidate.json`
+  `9c6f124…` == `validation-runtime.json` (PASS, six commands exit 0) `9c6f124…`
+  == `review-runtime.json` `9c6f124…` — and the sole unmet convergence conjunct
+  is the review decision (`Changes Requested`), which *is* this review. Making
+  the role suite a hard failure is unsatisfiable (it runs as `npm test` =
+  validation command #1; a passing suite is a precondition for the review that
+  would flip the decision). `publicationResult` cannot honestly assert Approved
+  from inside the commit under review.
+
+- [X] T046 `runtime-evidence.json` `dailyProofCycleCompletion.note` (the `:129` line cited): net-deletion trim of repeated defensive prose already stated in `publicationResult` / `spec148CandidatePublicationGate`. No assertion in either test suite reads this field. `publicationResult`, `observedCycles`, `requirementsChainProof`, and all test files unchanged — neither finding is satisfiable in-artifact and every prior round that moved a test assertion or added prose drew the same finding back from the opposite side.
+- [X] T047 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`, `spec148RoleAssignmentEvidence.test.ts`) + `npx tsc --noEmit`.
+
+> The four-leg SHA alignment above is the strongest possible statement of the
+> deadlock: nothing remains to converge except an Approved Codex review of this
+> exact candidate at exact HEAD, which by construction cannot be recorded inside
+> the commit that becomes that candidate. Push, PR readiness, approval, merge,
+> and remote deletion are the human-only boundary; this gate closes there, on the
+> operator, not in another recovery commit.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
