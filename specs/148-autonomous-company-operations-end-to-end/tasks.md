@@ -212,6 +212,35 @@ a third time. Both are unsatisfiable inside the candidate:
 > and remote deletion are the human-only boundary; this gate closes there, on the
 > operator, not in another recovery commit.
 
+## Phase 13: Independent-review fix cycle (9)
+
+Reviewed SHA `69487eb` (the Phase 12 recovery itself) drew the same two findings
+a fourth time, plus a third finding citing `spec148RoleAssignmentEvidence.test.ts:339`.
+Findings 1 and 2 are the unchanged unsatisfiable pair from Phases 9-12; no test
+or production change addresses them (see Phase 12 rationale, still current).
+Finding 3's factual premise — "durable review still names `9c6f124`" — was
+already stale when written: `review-runtime.json` at the time of this recovery
+names `69487eb` (current HEAD) with decision `Changes Requested`, `PASS` on
+validation. The reviewer read the file before its own result was persisted,
+same ordering artifact as Phase 12's `6e123e6` citation.
+
+The one actionable defect finding 3 pointed at: the role suite's own comment at
+`spec148RoleAssignmentEvidence.test.ts:346-349` asserted in prose that "on the
+branch's current HEAD every SHA leg is aligned" — a claim that is true only at
+the moment of writing and goes false the instant this commits (HEAD advances,
+`review-runtime.json` trails at the parent until ADOS re-reviews). That is a
+self-invalidating provenance claim in the reviewed file itself.
+
+- [X] T048 Delete the stale-by-construction "on the branch's current HEAD every SHA leg is aligned" comment from `spec148RoleAssignmentEvidence.test.ts` (kept: the surrounding non-converged-status assertions, unchanged).
+- [X] T049 Net-deletion trim of `runtime-evidence.json` `publicationResult` prose, preserving every assertion the role suite makes on it (`^Blocked until`, contains `Approved`, contains `exact head`, no 40-hex SHA).
+- [X] T050 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`, `spec148RoleAssignmentEvidence.test.ts`) + `npx tsc --noEmit`.
+
+> Same deadlock as Phase 12, restated because it recurred: an Approved Codex
+> review of this exact candidate at exact HEAD cannot be recorded inside the
+> commit that becomes that candidate. This is not a defect to keep fixing in
+> recovery commits; it closes only when the operator's independent review of
+> this candidate returns Approved.
+
 ---
 
 ## Dependencies & Execution Order

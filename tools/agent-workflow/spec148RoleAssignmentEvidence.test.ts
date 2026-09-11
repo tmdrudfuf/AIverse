@@ -343,10 +343,7 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     } else {
       // Non-Approved or non-aligned: a SPECIFIC non-converged status, and the
       // tracked evidence keeps publicationResult a standing "Blocked until ..."
-      // gate. On the branch's current HEAD every SHA leg is aligned
-      // (candidate/validation/review all name exact HEAD) and only the review
-      // decision - "Changes Requested" while this candidate is under review -
-      // holds the gate below CONVERGED.
+      // gate.
       const expected = alignment.hasReview
         ? CONVERGENCE_STATUSES.IN_PROGRESS   // "Changes Requested", or a stale/trailing reviewed_sha
         : CONVERGENCE_STATUSES.NOT_STARTED;  // clean checkout, no review attempt yet
