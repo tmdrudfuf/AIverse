@@ -439,6 +439,48 @@ passing outcome rather than a plain subsumed fact.
 
 ---
 
+## Phase 19: Independent-review fix cycle (15)
+
+Reviewed SHA `659a1bf` (the Phase 18 recovery) drew findings 1 and 2 a tenth
+time — unchanged from Phases 9-18: durable state at reviewed HEAD has all
+four SHA legs aligned (`candidate.json` == `validation-runtime.json` PASS,
+six commands exit 0 == `review-runtime.json`, all naming
+`659a1bf3ae326d5ff8f9159fb3fb29b56ed2a215`), sole unmet conjunct the review
+decision (`Changes Requested`), which is this review. No change to
+`publicationResult` or `AutonomousCompanyOperationsE2E.test.ts`.
+
+Finding 3 literally re-cites the same `:339` branch split rounds 10-14 also
+drew; that code is unchanged since Phase 18 and still correct (this file runs
+under `npm test` = validation command #1, so it cannot require an Approved
+durable review of the candidate that contains it). What was actually deleted
+this round is a *different* thing near the same topic, not the cited line
+itself: `git diff bbbb031..HEAD --stat -- src/` confirmed the only `src/`
+change is the test file itself (no production `src/` code), and the
+`roleResolver.js` "18-line" claim and `spec148DurableAlignment.js`
+test-only-import claim both still hold — so the evidence-JSON prose making
+those claims is accurate and untouched. The one unasserted, self-documented-
+gap sentence still surviving in `runtime-evidence.json`'s
+`spec148CandidatePublicationGate.note` ("AutonomousCompanyOperationsE2E.test.ts
+does NOT simulate this leg...") is the same texture round 7's finding 2
+objected to when it lived as a test-file comment (round 7 reworded that
+copy; this evidence-JSON copy survived). Confirmed via grep that neither
+`spec148CandidatePublicationGate` nor `requirementsChainProof` is asserted by
+either test suite, so it is safe to cut with no replacement text.
+
+- [X] T061 `runtime-evidence.json`: delete the "AutonomousCompanyOperationsE2E.test.ts
+  does NOT simulate this leg..." sentence from `spec148CandidatePublicationGate.note`
+  (unasserted by any test; surrounding sentences already state the mechanism).
+- [X] T062 Validate JSON parses; confirm `spec148CandidatePublicationGate` and
+  `requirementsChainProof` remain unreferenced by both test suites — no test
+  or production code change this round.
+
+> Findings 1 and 2 remain the round-7+ by-construction deadlock (unchanged
+> from Phase 18's note). Finding 3's specific `:339` citation is unchanged
+> and correct; the deletion above addresses adjacent unasserted prose in the
+> same evidence section, not the cited line.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
