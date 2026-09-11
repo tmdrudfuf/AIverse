@@ -342,8 +342,7 @@ PR readiness, approval, merge, and remote deletion remain human-only.
   resolution from the run's own durable implementer id, then the daily-proof
   cycle's truthful terminal `completed` state driven **only** by the real ADOS
   run-level completion signal (`execution.evidence.completed`) and the existing
-  operator transition - it does not simulate the review / exact-HEAD /
-  publication leg ("completes one controlled Project A cycle end to end",
+  operator transition ("completes one controlled Project A cycle end to end",
   Tests H, X); four independent controls,
   no direct ADOS invocation from Specs 145-147, idempotency on replayed events,
   active-run gating, second-project isolation, reload persistence,

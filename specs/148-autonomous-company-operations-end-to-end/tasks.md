@@ -461,11 +461,19 @@ test-only-import claim both still hold — so the evidence-JSON prose making
 those claims is accurate and untouched. The one unasserted, self-documented-
 gap sentence still surviving in `runtime-evidence.json`'s
 `spec148CandidatePublicationGate.note` ("AutonomousCompanyOperationsE2E.test.ts
-does NOT simulate this leg...") is the same texture round 7's finding 2
-objected to when it lived as a test-file comment (round 7 reworded that
-copy; this evidence-JSON copy survived). Confirmed via grep that neither
-`spec148CandidatePublicationGate` nor `requirementsChainProof` is asserted by
-either test suite, so it is safe to cut with no replacement text.
+does NOT simulate this leg...") is the same "does not simulate" texture. A
+follow-up sweep (`grep -rniE "not simulate|NOT exercised|cannot be
+represented|does not carry|no publication leg" specs/148-...`) found two more
+surviving copies of the identical texture: `runtime-evidence.json`'s
+`dailyProofCycleCompletion.note` ("...and the E2E test does not simulate a
+review/convergence result") and `runtime-verification.md`'s evidence list
+("...it does not simulate the review / exact-HEAD / publication leg").
+Confirmed via grep that none of `spec148CandidatePublicationGate`,
+`requirementsChainProof`, or `dailyProofCycleCompletion` is asserted by
+either test suite, so all three copies are safe to cut with no replacement
+text; the surrounding sentences in each already state the mechanism
+positively (real completion signal, operator transition, gate enforced by
+production modules over durable records).
 
 - [X] T061 `runtime-evidence.json`: delete the "AutonomousCompanyOperationsE2E.test.ts
   does NOT simulate this leg..." sentence from `spec148CandidatePublicationGate.note`
@@ -473,10 +481,19 @@ either test suite, so it is safe to cut with no replacement text.
 - [X] T062 Validate JSON parses; confirm `spec148CandidatePublicationGate` and
   `requirementsChainProof` remain unreferenced by both test suites — no test
   or production code change this round.
+- [X] T063 `runtime-evidence.json`: delete the same-texture clause from
+  `dailyProofCycleCompletion.note` ("...and the E2E test does not simulate a
+  review/convergence result"); `runtime-verification.md`: delete the matching
+  clause from its evidence bullet ("...it does not simulate the review /
+  exact-HEAD / publication leg"). Both unasserted by either test suite.
+- [X] T064 Re-validate JSON parses; re-run targeted Vitest
+  (`spec148RoleAssignmentEvidence.test.ts`, 21/21) and `npx tsc --noEmit`
+  (clean) after the T063 sweep.
 
 > Findings 1 and 2 remain the round-7+ by-construction deadlock (unchanged
 > from Phase 18's note). Finding 3's specific `:339` citation is unchanged
-> and correct; the deletion above addresses adjacent unasserted prose in the
+> and correct; the deletions above address adjacent unasserted "does not
+> simulate" prose across three artifacts in the
 > same evidence section, not the cited line.
 
 ---
