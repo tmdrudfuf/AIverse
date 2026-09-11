@@ -241,6 +241,43 @@ self-invalidating provenance claim in the reviewed file itself.
 > recovery commits; it closes only when the operator's independent review of
 > this candidate returns Approved.
 
+## Phase 14: Independent-review fix cycle (10)
+
+Reviewed SHA `37463bed` (the Phase 13 recovery itself) drew the same two
+findings a fifth time. Finding 1 is the unchanged unsatisfiable deadlock from
+Phases 9-13 (no test or production change addresses it). Finding 2 re-cited
+`spec148RoleAssignmentEvidence.test.ts:339` for a stale `review-runtime.json`
+SHA; that premise was already stale when written — at the time of this
+recovery, durable ADOS state at HEAD has **all four SHA conjuncts aligned**:
+`candidate.json` == `validation-runtime.json` (PASS, six commands exit 0) ==
+`review-runtime.json`, all naming `37463bed…`, sole unmet conjunct is the
+review decision (`Changes Requested`), which *is* this review. Same ordering
+artifact as Phases 12 and 13.
+
+The comment finding 2 points near (`spec148RoleAssignmentEvidence.test.ts:339`)
+was already deleted at Phase 13 (T048). The one remaining actionable defect
+this round: `runtime-evidence.json` `shaAlignment.note` asserted as a general
+rule that "on every cycle after the first the durable review still names the
+prior finished candidate" — false this cycle, where review-runtime.json caught
+up to exact HEAD before the next candidate landed. Not asserted by either test
+suite (verified: only `.staleApprovalReuseAllowed`, `.candidateOwner`,
+`.observedCycles` are read).
+
+- [X] T051 `runtime-evidence.json` `shaAlignment.note`: delete the false
+  "on every cycle after the first the durable review still names the prior
+  finished candidate, the derivation yields exactTargetMatch=false" clause.
+  Pure deletion, no replacement snapshot claim (that pattern is exactly what
+  drew findings in rounds 9-11). Surrounding sentence still states the
+  mechanism.
+- [X] T052 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`,
+  `spec148RoleAssignmentEvidence.test.ts`) + `npx tsc --noEmit`.
+
+> Same deadlock as Phase 12/13, restated a third time: an Approved Codex review
+> of this exact candidate at exact HEAD cannot be recorded inside the commit
+> that becomes that candidate. The four-leg SHA alignment above is the
+> strongest possible statement of that fact for this cycle. Closes only when
+> the operator's independent review of this candidate returns Approved.
+
 ---
 
 ## Dependencies & Execution Order
