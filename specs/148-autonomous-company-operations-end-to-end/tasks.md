@@ -280,6 +280,47 @@ suite (verified: only `.staleApprovalReuseAllowed`, `.candidateOwner`,
 
 ---
 
+## Phase 15: Independent-review fix cycle (11)
+
+Reviewed SHA `6ae64e9` (the Phase 14 recovery itself) drew the same two
+findings a sixth time. Finding 1 is the unchanged unsatisfiable deadlock from
+Phases 9-14 (no test or production change addresses it). Finding 2 re-cited
+`spec148RoleAssignmentEvidence.test.ts:339` claiming `review-runtime.json`
+"still names prior SHA `37463bed`"; checked at recovery time, `review-runtime.json`
+already named exact HEAD `6ae64e9` with full validation PASS (six commands
+exit 0) — same read-before-write ordering artifact as Phases 12-14.
+
+Re-verified `spec148CandidatePublicationGate.note`'s specific "18-line"
+production-change claim against `git diff bbbb0318..HEAD -- tools/agent-workflow/roleResolver.js`:
+exactly 18 insertions, 0 deletions — the claim holds, not a defect. No other
+`src/` or production `tools/` file changed since base SHA. The one remaining
+actionable defect this round: `acceptanceCriteriaMapping.note` repeated the
+"real-SHA fixture triple (authoritative requirement 23 - the review runtime is
+a process boundary)" rationale verbatim from `spec148CandidatePublicationGate.note`
+(also duplicated in `requirementsChainProof.links` and
+`observedCycles[1].convergenceReason`). Not asserted by either test suite
+(verified: `acceptanceCriteriaMapping` is never read by
+`spec148RoleAssignmentEvidence.test.ts` or `AutonomousCompanyOperationsE2E.test.ts`).
+
+- [X] T053 `runtime-evidence.json` `acceptanceCriteriaMapping.note`: delete the
+  redundant "real-SHA fixture triple (authoritative requirement 23 ...)" clause
+  duplicated from `spec148CandidatePublicationGate.note`. Pure deletion, no
+  replacement text.
+- [X] T054 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`,
+  `spec148RoleAssignmentEvidence.test.ts`) + `npx tsc --noEmit`.
+
+> Same deadlock as Phases 12-14, restated a fourth time: an Approved Codex
+> review of this exact candidate at exact HEAD cannot be recorded inside the
+> commit that becomes that candidate. Durable ADOS state at reviewed SHA
+> `6ae64e9` had all four SHA conjuncts aligned (candidate == validation PASS ==
+> review, all naming `6ae64e9`); the sole unmet conjunct was the review
+> decision, which *is* the review that cited it. Closes only when the
+> operator's independent review of this candidate returns Approved, or the
+> operator decides to change the ADOS protocol to permit post-commit
+> re-review against a standing-gate semantics.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
