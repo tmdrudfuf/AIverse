@@ -321,6 +321,47 @@ a process boundary)" rationale verbatim from `spec148CandidatePublicationGate.no
 
 ---
 
+## Phase 16: Independent-review fix cycle (12)
+
+Reviewed SHA `11a0944` (the Phase 15 recovery itself, changed only
+`next-env.d.ts` from `81a0023` — a Next.js-regenerated file, no substantive
+diff) drew the same finding-1/finding-2 pair a seventh time, plus a new
+finding 3 against `spec148RoleAssignmentEvidence.test.ts:339`: the `else`
+branch pins a specific non-converged status but never asserts *why*
+convergence is withheld when the SHA legs are otherwise aligned.
+
+Finding 3 is the one actionable defect. Durable ADOS state at reviewed SHA
+`11a0944` has all four SHA conjuncts aligned (`candidate.json` ==
+`validation-runtime.json` PASS (six commands exit 0) == `review-runtime.json`,
+all naming `11a0944ee98e92372de3b980f711fa03eacbc453`) — the sole unmet
+conjunct is the review decision (`Changes Requested`), which *is* this
+review. Strengthened the test to assert that fact directly instead of leaving
+it implicit in the branch split: when `alignment.allAligned` is true inside
+the non-converged branch, assert `alignment.decision !== "Approved"`. Strictly
+stronger (same class as Phase 9's `status === "PASS"` fix) and still
+satisfiable post-commit — once HEAD advances, `review-runtime.json` trails and
+`allAligned` goes false, so the new assertion is skipped, not failed.
+
+- [X] T055 `spec148RoleAssignmentEvidence.test.ts`: in the "enforces validated
+  == reviewed == exact HEAD" test's non-converged branch, add
+  `if (alignment.allAligned) { expect(alignment.decision).not.toBe("Approved"); }`.
+- [X] T056 Re-run targeted Vitest
+  (`spec148RoleAssignmentEvidence.test.ts`) — 21/21 passed at reviewed HEAD.
+
+Findings 1 and 2 are the unchanged unsatisfiable deadlock from Phases 9-15: a
+durable Codex `Approved` of this exact candidate cannot be recorded inside the
+commit that becomes that candidate, and the office `ExternalProjectAdosExecution`
+schema types the review/validate/publish sub-stage flags as literal `false`, so
+there is no in-office leg to exercise. No `runtime-evidence.json` or
+`AutonomousCompanyOperationsE2E.test.ts` change addresses either — six prior
+rounds of prose edits there drew the identical findings back. Per the handoff's
+own instruction ("if explicit requirements conflict with a smaller slice, stop
+and surface the conflict instead of redefining the feature"): this conflict is
+surfaced here, not resolved in-candidate. Closes only when the operator's own
+independent review of this exact candidate returns Approved.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.

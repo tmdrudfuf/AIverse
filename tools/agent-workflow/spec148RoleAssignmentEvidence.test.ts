@@ -350,6 +350,14 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       expect(status).toBe(expected);
       expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
       expect(evidence.publicationResult).toMatch(/^Blocked until\b/);
+
+      // When candidate == validated == reviewed == exact HEAD already holds,
+      // the ONLY conjunct withholding CONVERGED can be the review decision
+      // itself - assert that directly instead of leaving it implicit in the
+      // branch split above.
+      if (alignment.allAligned) {
+        expect(alignment.decision).not.toBe("Approved");
+      }
     }
 
     expect(evidence.shaAlignment.candidateOwner).toBe("claude");
