@@ -411,7 +411,7 @@ prior rounds of edits there drew the identical findings back. Verified the
 still shows exactly 18 insertions) and that `spec148DurableAlignment.js` is
 still imported only by the test file — both still accurate, no change needed.
 
-Finding 3 re-cites the `:339` branch split, the same citation rounds 10-14
+Finding 3 re-cites the `:339` branch split, the same citation rounds 10-13
 drew against this same unsatisfiable class (this file runs under `npm test` =
 validation command #1, so it cannot require an Approved durable review of the
 candidate that contains it). The one actionable defect nearby: the
