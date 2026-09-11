@@ -362,6 +362,41 @@ independent review of this exact candidate returns Approved.
 
 ---
 
+## Phase 17: Independent-review fix cycle (13)
+
+Reviewed SHA `eb8f249` (the Phase 16 recovery) drew findings 1 and 2 an eighth
+time — unchanged from Phases 9-16: durable state at reviewed HEAD has all four
+SHA legs aligned (`candidate.json` == `validation-runtime.json` PASS, six
+commands exit 0 == `review-runtime.json`, all naming
+`eb8f24921a8b7f6e8ed6e311dbb1c4bb47882683`), sole unmet conjunct the review
+decision (`Changes Requested`), which is this review. No change to
+`runtime-evidence.json` or `AutonomousCompanyOperationsE2E.test.ts` — seven
+prior rounds of edits there drew the identical findings back.
+
+Finding 3 re-cites the `:339` branch split (`if (alignment.decision ===
+"Approved" && alignment.allAligned)`), the same citation rounds 10-12 drew
+against this same unsatisfiable class: this file runs under `npm test` =
+validation command #1, so it cannot require an Approved durable review of the
+candidate that contains it. The responsive fix — pin the specific
+non-converged status plus the `^Blocked until` assertion — is already present
+at the lines just below the branch split.
+
+The one genuinely wrong-direction thing in that vicinity was Phase 16's own
+T055 addition: `expect(alignment.decision).not.toBe("Approved")` inside the
+non-converged branch encodes "review was not Approved" as an expected,
+passing outcome rather than leaving convergence-withholding implicit in the
+existing status pin. Deleted.
+
+- [X] T057 `spec148RoleAssignmentEvidence.test.ts`: delete the
+  `if (alignment.allAligned) { expect(alignment.decision).not.toBe("Approved"); }`
+  block added by T055. The surrounding non-converged-status assertions
+  (`expected`, `status`, `publicationResult`) already cover the required
+  behavior without asserting a non-approval outcome as correct.
+- [X] T058 Re-run targeted Vitest (`spec148RoleAssignmentEvidence.test.ts`) —
+  green after the revert.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
