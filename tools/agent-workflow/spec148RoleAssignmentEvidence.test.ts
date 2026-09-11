@@ -341,14 +341,14 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       // validated == reviewed == exact HEAD and an Approved independent review.
       expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
     } else {
-      // Non-Approved or non-aligned: a SPECIFIC non-converged status, and the
-      // tracked evidence keeps publicationResult a standing "Blocked until ..."
-      // gate.
+      // A SPECIFIC non-converged status (IN_PROGRESS/NOT_STARTED are distinct
+      // string values from CONVERGED, so toBe(expected) below already proves
+      // not-converged), and the tracked evidence keeps publicationResult a
+      // standing "Blocked until ..." gate.
       const expected = alignment.hasReview
         ? CONVERGENCE_STATUSES.IN_PROGRESS   // "Changes Requested", or a stale/trailing reviewed_sha
         : CONVERGENCE_STATUSES.NOT_STARTED;  // clean checkout, no review attempt yet
       expect(status).toBe(expected);
-      expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
       expect(evidence.publicationResult).toMatch(/^Blocked until\b/);
     }
 

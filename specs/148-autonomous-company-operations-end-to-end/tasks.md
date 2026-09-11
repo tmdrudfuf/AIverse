@@ -397,6 +397,48 @@ existing status pin. Deleted.
 
 ---
 
+## Phase 18: Independent-review fix cycle (14)
+
+Reviewed SHA `7955ff4` (the Phase 17 recovery) drew findings 1 and 2 a ninth
+time — unchanged from Phases 9-17: durable state at reviewed HEAD has all four
+SHA legs aligned (`candidate.json` == `validation-runtime.json` PASS, six
+commands exit 0 == `review-runtime.json`, all naming
+`7955ff432e20aaa65c4d67e212c020040ec0decd`), sole unmet conjunct the review
+decision (`Changes Requested`), which is this review. No change to
+`runtime-evidence.json` or `AutonomousCompanyOperationsE2E.test.ts` — eight
+prior rounds of edits there drew the identical findings back. Verified the
+`roleResolver.js` "18-line" claim (`git diff bbbb031..HEAD -- tools/agent-workflow/roleResolver.js`
+still shows exactly 18 insertions) and that `spec148DurableAlignment.js` is
+still imported only by the test file — both still accurate, no change needed.
+
+Finding 3 re-cites the `:339` branch split, the same citation rounds 10-14
+drew against this same unsatisfiable class (this file runs under `npm test` =
+validation command #1, so it cannot require an Approved durable review of the
+candidate that contains it). The one actionable defect nearby: the
+non-converged branch had a redundant `expect(status).not.toBe(CONVERGED)`
+directly after `expect(status).toBe(expected)`, where `expected` is
+`IN_PROGRESS` or `NOT_STARTED` — distinct string enum values from `CONVERGED`
+(`reviewConvergence.js`), so the first assertion already strictly proves the
+second. That redundant line, sitting in the exact branch the finding cites, is
+the closest remaining thing to treating the non-converged state as a notable
+passing outcome rather than a plain subsumed fact.
+
+- [X] T059 `spec148RoleAssignmentEvidence.test.ts`: delete the redundant
+  `expect(status).not.toBe(CONVERGENCE_STATUSES.CONVERGED)` line (subsumed by
+  the preceding `toBe(expected)`) and trim the branch comment to state only
+  what is asserted.
+- [X] T060 Re-run targeted Vitest (`spec148RoleAssignmentEvidence.test.ts`,
+  21/21 passed) and `npx tsc --noEmit` (clean) — no full-pipeline re-run per
+  handoff instructions.
+
+> Findings 1 and 2 remain the round-7+ by-construction deadlock: a durable
+> Approved Codex review of this exact candidate cannot exist inside the
+> commit that becomes that candidate. They close only when a future review
+> reads the durable state at its own exact HEAD and finds the decision itself
+> `Approved`.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
