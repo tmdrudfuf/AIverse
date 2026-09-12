@@ -257,12 +257,11 @@ production via `validationPlan.js` `isFinalValidationSatisfied` at the
 `exactTargetMatch` plus the *real* durable review decision into
 `computeConvergenceStatus`, asserting it converges iff an Approved review is
 aligned on all three SHAs. The ADOS pipeline order is candidate -> validate
-(this repository's own `npm test` included) -> review, so on every cycle after
-the first `review-runtime.json` (and briefly `validation-runtime.json`) still
-names the prior finished candidate; the derivation then yields
-`exactTargetMatch: false` and the assertion is "must not authorize publication"
-- a real invariant on both branches, and the validation-command exit-0 loop
-runs only when the durable validation record itself names exact HEAD. When
+(this repository's own `npm test` included) -> review; whichever leg trails
+exact HEAD, the derivation yields that leg's match as false and the assertion
+is "must not authorize publication" - a real invariant on both branches, and
+the validation-command exit-0 loop runs only when the durable validation
+record itself names exact HEAD. When
 durable sources are absent entirely (clean checkout) the enforcement gate is
 still exercised directly by the tests below. Requirement 21's "where available"
 is satisfied by naming the durable location plus the test that resolves it;

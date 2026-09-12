@@ -498,6 +498,56 @@ production modules over durable records).
 
 ---
 
+## Phase 20: Independent-review fix cycle (16)
+
+Reviewed SHA `f45f709` (the Phase 19 recovery) drew findings 1 and 2 an
+eleventh time — unchanged from Phases 9-19: durable state at reviewed HEAD has
+all four SHA legs aligned (`candidate.json` == `validation-runtime.json`
+(PASS, six commands exit 0, `head_before == head_after`) ==
+`review-runtime.json`, all naming
+`f45f709921e4476ff79ec81caa3fa488b45e7c2a`), sole unmet conjunct the review
+decision (`Changes Requested`), which is this review. No change to
+`publicationResult` or `AutonomousCompanyOperationsE2E.test.ts`.
+
+Finding 3 literally re-cites the same `:339` branch split rounds 10-15 also
+drew; that code is unchanged since Phase 19 and still correct. Per-round
+verification re-run clean: `git diff bbbb031..HEAD --stat -- src/` shows only
+the test file changed (no production `src/` code); `roleResolver.js` "18-line"
+claim still exactly 18 insertions; `spec148DurableAlignment.js` still imported
+only by `spec148RoleAssignmentEvidence.test.ts`.
+
+The actual defect found this round is a sibling copy of the false
+generalization Phase 15 (T051) already deleted from `runtime-evidence.json`'s
+`shaAlignment.note` ("on every cycle after the first the durable review still
+names the prior finished candidate"). That exact texture survived untouched in
+`runtime-verification.md`'s prose describing the same pipeline-order
+mechanism, and Phase 15's sweep never re-checked that file. It is false this
+cycle specifically (`review-runtime.json` already names exact HEAD
+`f45f709`, not a prior candidate) and, as an unconditional "every cycle" rule,
+was never a sound generalization to begin with. Not asserted by any test
+(grepped `**/*.ts` for the phrase, no hits).
+
+- [X] T065 `runtime-verification.md`: delete the "so on every cycle after the
+  first `review-runtime.json` ... still names the prior finished candidate;
+  the derivation then yields `exactTargetMatch: false`" clause, replacing it
+  with a plain conditional statement of the same mechanism ("whichever leg
+  trails exact HEAD, the derivation yields that leg's match as false") — no
+  new snapshot claim, no self-referential defense of the deletion.
+- [X] T066 Re-run targeted Vitest (`spec148RoleAssignmentEvidence.test.ts`,
+  21/21) and `npx tsc --noEmit` (clean); `git diff --check` clean.
+
+> Findings 1 and 2 remain the round-7+ by-construction deadlock. Finding 3's
+> `:339` citation is unchanged and correct; the fix above addresses a sibling
+> copy of a false generalization Phase 15 already fixed once elsewhere, found
+> by re-sweeping adjacent artifacts rather than the cited line itself.
+> Operator note: at reviewed HEAD `f45f709`, all four durable SHA legs
+> (candidate/validated/reviewed) already align exactly — the sole remaining
+> gap to criteria 11/20 is the review decision itself, which by construction
+> cannot be Approved inside the commit it is reviewing. This closes only when
+> the operator's independent review of this exact candidate returns Approved.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.
