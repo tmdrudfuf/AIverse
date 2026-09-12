@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -5,6 +6,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { resolveEffectiveRoles } from "../../../../../../tools/agent-workflow/roleResolver.js";
 import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "../../../../../../tools/agent-workflow/reviewConvergence.js";
+import {
+  convergenceForAlignment,
+  deriveDurableAlignment,
+} from "../../../../../../tools/agent-workflow/spec148DurableAlignment.js";
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
@@ -40,7 +45,10 @@ import type {
 // Spec 148 - Autonomous Company Operations End-to-End Verification.
 //
 // This file drives the real OfficeProjectPortalController and the real
-// Spec 141-147 services through one controlled autonomous cycle:
+// Spec 141-147 services through one controlled autonomous cycle FOR THE
+// SIMULATED TEST PROJECT. This chain ends at that simulated project's own
+// operator-closed task status - it makes no claim about Spec 148's own
+// candidate:
 //
 //   Spec 147 bounded suggestion generation
 //     -> Spec 145 controlled acceptance -> Spec 141 backlog
@@ -48,23 +56,28 @@ import type {
 //     -> Spec 144 controlled autonomous execution
 //     -> Spec 142 / Spec 138 development bridge -> ADOS execution
 //     -> independent reviewer resolved for the run from its own durable
-//        implementer id (roleResolver.js: Claude -> distinct Codex)
+//        implementer id (roleResolver.js: Claude -> distinct Codex), with no
+//        task transition driven off this resolution
 //     -> real ADOS run-level completion reflected by the office
-//     -> terminal `completed` via the existing operator transition.
+//     -> the SIMULATED PROJECT'S task closed to `completed` via the existing
+//        operator transition.
 //
 // Per authoritative requirement 23 the process boundaries use existing
 // injectable adapters: the Spec 143 suggestion provider is a deterministic
 // fixture and the ADOS process spawn uses the injectable ImplementerRuntimeProvider
 // (as the Spec 144 suite does).
 //
-// This test covers the office-observable stages: reviewer resolution from the
-// run's own durable implementer id (roleResolver.js) and a terminal `completed`
-// transition driven by the operator's existing manual transition once the real
-// ADOS run-level completion signal (execution.evidence.completed) is set. The
-// candidate == validated == reviewed == exact HEAD + Approved-review publication
-// gate is enforced over this run's own durable ADOS records by
-// spec148RoleAssignmentEvidence.test.ts, unconditionally and in both directions.
-// No src/ production source is changed by Spec 148.
+// Separately - not a further link of the chain above, but a parallel, standing,
+// per-candidate gate over Spec 148's OWN candidate (acceptance criteria 19-20) -
+// this file also asserts, immediately after the simulated task closes, that
+// Spec 148's own candidate == validated == reviewed == exact HEAD +
+// Approved-review publication gate (read from this run's real durable ADOS
+// records via the shared spec148DurableAlignment.js helper) is NOT converged,
+// and that no repository/GitHub mutation occurred. The gate's full biconditional
+// coverage (both directions, unconditional) lives in
+// spec148RoleAssignmentEvidence.test.ts; this file only proves the two
+// concerns - simulated task completion and Spec 148's own candidate gate - stay
+// separate in practice. No src/ production source is changed by Spec 148.
 
 const HIGH = "high" as const;
 
@@ -83,6 +96,7 @@ const REPO_ROOT = process.cwd().replace(/\\/g, "/");
 // harness value in the same assertion, so a hand-edited or stale evidence
 // file fails this suite instead of silently drifting from reality.
 const specDir = new URL("../../../../../../specs/148-autonomous-company-operations-end-to-end/", import.meta.url);
+const runDir = new URL("../../../../../../.agent-workflow/runs/148-autonomous-company-operations-end-to-end/", import.meta.url);
 const evidence = JSON.parse(readFileSync(fileURLToPath(new URL("runtime-evidence.json", specDir)), "utf8")) as {
   projectA: {
     suggestionId: string;
@@ -106,6 +120,10 @@ const evidence = JSON.parse(readFileSync(fileURLToPath(new URL("runtime-evidence
     spec146SkipReason: string;
     spec144ConcurrentExecutionsStarted: number;
     spec144SecondStartBlockedReason: string;
+  };
+  spec148CandidatePublicationGate: {
+    primaryRepositoryMutated: boolean;
+    githubMutated: boolean;
   };
 };
 
@@ -500,6 +518,20 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
           status: "completed",
         })).toBe(true);
         expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("completed");
+
+        // (c) This operator-closed status is for the SIMULATED test project's
+        //     own task, a distinct concern from Spec 148's own candidate
+        //     publication gate - it does not represent, and must not be read
+        //     as, that gate converging. This is the machine-checked form of
+        //     that claim, not a guard: Spec 148's own gate, read from the run's
+        //     real durable ADOS records at the moment this simulated task
+        //     closes, is not converged, and no repository/GitHub mutation has
+        //     occurred.
+        const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+        const alignment = deriveDurableAlignment(fileURLToPath(runDir), exactHead);
+        expect(convergenceForAlignment(alignment)).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+        expect(evidence.spec148CandidatePublicationGate.primaryRepositoryMutated).toBe(false);
+        expect(evidence.spec148CandidatePublicationGate.githubMutated).toBe(false);
       }
     }
   });

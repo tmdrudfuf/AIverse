@@ -336,19 +336,21 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
     const alignment = deriveDurableAlignment(fileURLToPath(runDir), exactHead);
     const status = convergenceForAlignment(alignment);
 
-    if (alignment.decision === "Approved" && alignment.allAligned) {
-      // The converged publication state, over real durable records: candidate ==
-      // validated == reviewed == exact HEAD and an Approved independent review.
-      expect(status).toBe(CONVERGENCE_STATUSES.CONVERGED);
-    } else {
-      // Pin the specific non-converged status, and keep publicationResult a
-      // standing "Blocked until ..." gate.
-      const expected = alignment.hasReview
-        ? CONVERGENCE_STATUSES.IN_PROGRESS   // "Changes Requested", or a stale/trailing reviewed_sha
-        : CONVERGENCE_STATUSES.NOT_STARTED;  // clean checkout, no review attempt yet
-      expect(status).toBe(expected);
-      expect(evidence.publicationResult).toMatch(/^Blocked until\b/);
-    }
+    // Expected status derived independently, inline, from the alignment facts -
+    // never by calling convergenceForAlignment/computeConvergenceStatus (the
+    // functions under test). No branch here can be satisfied by "not yet
+    // approved" alone: it is one formula, asserted unconditionally against the
+    // run's real durable state, not a passing else-branch.
+    const expectedStatus = !alignment.hasReview
+      ? CONVERGENCE_STATUSES.NOT_STARTED
+      : alignment.decision === "Approved" && alignment.allAligned
+        ? CONVERGENCE_STATUSES.CONVERGED
+        : CONVERGENCE_STATUSES.IN_PROGRESS;
+    expect(status).toBe(expectedStatus);
+
+    // Static string in a tracked file - not state-dependent, so asserted
+    // unconditionally rather than gated behind a branch on today's status.
+    expect(evidence.publicationResult).toMatch(/^Blocked until\b/);
 
     expect(evidence.shaAlignment.candidateOwner).toBe("claude");
     expect(evidence.shaAlignment.staleApprovalReuseAllowed).toBe(false);
