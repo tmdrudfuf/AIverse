@@ -22,6 +22,7 @@ export type CreateExternalProjectAdosRunPreparationInput = {
   projectId: string;
   developmentRequestDraft?: ExternalProjectDevelopmentRequestDraft;
   existingPreparation?: ExternalProjectAdosRunPreparation;
+  durableAdosRunId?: string;
   now?: string;
 };
 
@@ -64,6 +65,7 @@ export function createExternalProjectAdosRunPreparation(
     createdAt: timestamp,
     updatedAt: timestamp,
     sideEffectBoundary: EXTERNAL_PROJECT_ADOS_RUN_PREPARATION_BOUNDARY,
+    durableAdosRunId: input.durableAdosRunId,
   };
 }
 

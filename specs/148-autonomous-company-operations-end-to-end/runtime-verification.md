@@ -8,7 +8,17 @@ its non-path fields are mirrored into the tracked, sanitized
 `ados-run.sanitized.json`, and `spec148RoleAssignmentEvidence.test.ts` asserts
 `runtime-evidence.json` transcribes them unchanged (and, when the durable file is
 present, that the sanitized copy still matches it). Role and candidate ownership
-therefore come from ADOS durable state, not a free-standing evidence label.
+therefore come from ADOS durable state, not a free-standing evidence label. This
+durable run is the one this verification session's own candidate is running
+under, and Project A's local repository binding (`seedTwoProjects` in
+`AutonomousCompanyOperationsE2E.test.ts`) points at this exact worktree/branch,
+so this run's id is carried machine-verifiably through Project A's own
+request/preparation/execution chain: `LocalProjectRepositoryBinding
+.durableAdosRunId` -> `ExternalProjectAdosRunPreparation.durableAdosRunId` ->
+`ExternalProjectAdosExecution.durableAdosRunId`, each asserted equal to the
+sanitized `runId`. Project A's resolved reviewer/implementer are asserted equal
+to this run's own recorded `agentAssignment`, not merely produced by the same
+generic `roleResolver.js` mechanism.
 
 ## Demonstrated controlled cycle (Project A = canonical `daily-proof`)
 
@@ -48,8 +58,9 @@ deterministic Spec 143 suggestion provider fixture and the real
    false`). The task becomes `in_progress` with the real execution id
    `daily-proof:external-ados-execution:...:external-ados-execution-v1`. A
    replayed execution event starts no second run and no second process spawn.
-5. **Review / exact HEAD / Complete** - the same Project A cycle continues past
-   ADOS execution in one test
+5. **Review / exact HEAD / Complete** - the same Project A cycle, machine-bound
+   to the durable ADOS run named above (see the opening paragraph), continues
+   past ADOS execution in one test
    (`AutonomousCompanyOperationsE2E.test.ts` -> "completes one controlled
    Project A cycle end to end", Tests H, X). It drives the real
    `roleResolver.js`: the reviewer for this run resolves **from the run's own
@@ -318,9 +329,13 @@ Spec 148 chain test additionally demonstrates no cross-project state (Test N).
 ## No uncontrolled recursive autonomy loop (authoritative requirement 19)
 
 By construction: Spec 148 adds no automation/orchestration production code and
-therefore introduces no new trigger (its only production change is an 18-line
+therefore introduces no new trigger. Its production changes are an 18-line
 self-review / reviewer-availability guard in
-`tools/agent-workflow/roleResolver.js`, which blocks rather than triggers). The
+`tools/agent-workflow/roleResolver.js` (blocks rather than triggers) and an
+additive `durableAdosRunId` identity field threaded through existing
+request/preparation/execution/run-status creation functions (a passive value,
+read by nothing that schedules work - see `runtime-evidence.json`
+`nonInvocationsVerified.srcProductionSourceModifiedDetail`). The
 existing cooldown, planning-capacity, concurrency, and idempotency gates of
 Specs 144-147 are unchanged, and the chain test proves one sequential cycle with
 replayed events producing no further work.
@@ -328,11 +343,17 @@ replayed events producing no further work.
 ## Not part of readiness / execution
 
 No second orchestration engine, no change to Spec 144-147 policy semantics, no
-`src/` production source modification, no bypass of independent Codex review, no
-bypass of exact HEAD, and no removal of operator controls. The only production
-change is the `roleResolver.js` guard above, required by authoritative
-requirement 10 (reviewer-unavailable and self-review must block safely). Push,
-PR readiness, approval, merge, and remote deletion remain human-only.
+bypass of independent Codex review, no bypass of exact HEAD, and no removal of
+operator controls. Production changes are the `roleResolver.js` guard above
+(authoritative requirement 10: reviewer-unavailable and self-review must block
+safely) and an additive `durableAdosRunId` identity field threaded through 9
+existing `src/` modules (`ProjectRegistryTypes.ts`,
+`LocalProjectRepositoryBinding.ts`, the ADOS run preparation/execution/run-status
+types and services, `ProjectBacklogDevelopmentBridgeService.ts`) - optional,
+defaults undefined, mirrors the existing `featureBranch`/`branchName` plumbing,
+introduces no new control flow (`runtime-evidence.json`
+`nonInvocationsVerified.srcProductionSourceModifiedDetail`). Push, PR readiness,
+approval, merge, and remote deletion remain human-only.
 
 ## Evidence captured in this runtime
 

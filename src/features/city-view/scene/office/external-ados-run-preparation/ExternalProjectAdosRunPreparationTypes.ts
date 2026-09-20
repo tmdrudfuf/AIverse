@@ -18,6 +18,10 @@ export type ExternalProjectAdosRunPreparation = {
   createdAt: string;
   updatedAt: string;
   sideEffectBoundary: string;
+  // Carried from the project's local repository binding when known (see
+  // LocalProjectRepositoryBinding.durableAdosRunId): the durable ADOS run
+  // identity this request's bound repository/branch corresponds to.
+  durableAdosRunId?: string;
 };
 
 export type ExternalProjectAdosRunPreparations = Record<string, ExternalProjectAdosRunPreparation>;

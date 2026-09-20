@@ -128,7 +128,11 @@ function deriveDurableAlignment(dir, exactHead) {
         }
       }
     }
-    validatedMatchesHead = targetsMatch(shaTarget(validation.head_after), headTarget);
+    // A BLOCK (failed) validation record can still name exact HEAD as
+    // head_after (e.g. a lint/type failure that touched no files) - that must
+    // never authorize publication. Only a PASS record's SHA can match.
+    validatedMatchesHead =
+      validation.status === "PASS" && targetsMatch(shaTarget(validation.head_after), headTarget);
   }
 
   let reviewedMatchesHead = false;

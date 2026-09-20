@@ -24,6 +24,10 @@ export type ExternalProjectAdosExecution = {
   preparationId: string;
   developmentRequestDraftId: string;
   status: ExternalProjectAdosExecutionStatus;
+  // Carried from the preparation's LocalProjectRepositoryBinding.durableAdosRunId
+  // when known - the durable ADOS run identity this execution's bound
+  // repository/branch corresponds to (see specs/148-.../runtime-evidence.json).
+  durableAdosRunId?: string;
   featureId?: string;
   featureBranch: string;
   authoritativeBaseSha: string;
@@ -54,6 +58,7 @@ export type ExternalProjectAdosExecutionResult = {
   projectId: string;
   preparationId?: string;
   executionId?: string;
+  durableAdosRunId?: string;
   status: ExternalProjectAdosExecutionStatus;
   reasonCodes: ExternalProjectAdosExecutionReasonCode[];
   started: boolean;

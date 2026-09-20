@@ -121,6 +121,7 @@ export class ProjectBacklogDevelopmentBridgeService {
     const preparation = createExternalProjectAdosRunPreparation({
       projectId: input.project.id,
       developmentRequestDraft: draft,
+      durableAdosRunId: input.project.localRepositoryBinding?.durableAdosRunId,
       now: input.now,
     });
     if (!preparation) return { ok: false, reason: "PreparationUnavailable" };

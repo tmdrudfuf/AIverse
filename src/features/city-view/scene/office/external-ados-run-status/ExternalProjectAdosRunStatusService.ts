@@ -39,6 +39,7 @@ function createStatusFromResult(input: DeriveExternalProjectAdosRunStatusInput):
     source: "result",
     preparationId: result.preparationId ?? preparation?.id,
     executionId: result.executionId ?? execution?.id,
+    durableAdosRunId: result.durableAdosRunId ?? execution?.durableAdosRunId ?? preparation?.durableAdosRunId,
     reasonCodes: normalizeReasonCodes(result.status, result.reasonCodes),
     featureBranch: execution?.featureBranch ?? preparation?.featureBranch,
     worktreePath: execution?.worktreePath,
@@ -56,6 +57,7 @@ function createStatusFromExecution(input: DeriveExternalProjectAdosRunStatusInpu
     source: "execution",
     preparationId: execution.preparationId,
     executionId: execution.id,
+    durableAdosRunId: execution.durableAdosRunId,
     reasonCodes: normalizeReasonCodes(execution.status, []),
     featureBranch: execution.featureBranch,
     worktreePath: execution.worktreePath,
@@ -73,6 +75,7 @@ function createStatusFromPreparation(
     status: preparation.status,
     source: "preparation",
     preparationId: preparation.id,
+    durableAdosRunId: preparation.durableAdosRunId,
     reasonCodes: [],
     featureBranch: preparation.featureBranch,
     updatedAt: preparation.updatedAt,
@@ -86,6 +89,7 @@ function createStatus(input: {
   source: ExternalProjectAdosRunStatus["source"];
   preparationId?: string;
   executionId?: string;
+  durableAdosRunId?: string;
   reasonCodes: ExternalProjectAdosRunStatus["reasonCodes"];
   featureBranch?: string;
   worktreePath?: string;
@@ -99,6 +103,7 @@ function createStatus(input: {
     source: input.source,
     preparationId: input.preparationId,
     executionId: input.executionId,
+    durableAdosRunId: input.durableAdosRunId,
     reasonCodes: [...input.reasonCodes],
     featureBranch: input.featureBranch,
     worktreePath: input.worktreePath,

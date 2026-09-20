@@ -409,8 +409,25 @@ describe("Spec 148 independent-review and exact-HEAD enforcement", () => {
       expect(alignment.allAligned).toBe(false);
       expect(convergenceForAlignment(alignment)).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
 
-      // Negative 3 - no review attempt yet: NOT_STARTED, never a self-review
+      // Negative 3 - a BLOCK (failed) validation record whose head_after still
+      // names exact HEAD, paired with an Approved review at the same SHA: a
+      // failed validation must never authorize publication even when every SHA
+      // leg lines up.
+      write("validation-runtime.json", {
+        head_before: exactHead,
+        head_after: exactHead,
+        status: "BLOCK",
+        commands: [{ command: "npm test", exit_code: 1, timed_out: false }],
+      });
+      write("review-runtime.json", { reviewed_sha: exactHead, status: "PASS", decision: "Approved" });
+      alignment = deriveDurableAlignment(dir, exactHead);
+      expect(alignment.validatedMatchesHead).toBe(false);
+      expect(alignment.allAligned).toBe(false);
+      expect(convergenceForAlignment(alignment)).not.toBe(CONVERGENCE_STATUSES.CONVERGED);
+
+      // Negative 4 - no review attempt yet: NOT_STARTED, never a self-review
       // fallback to CONVERGED.
+      write("validation-runtime.json", passingValidation(exactHead));
       rmSync(join(dir, "review-runtime.json"));
       alignment = deriveDurableAlignment(dir, exactHead);
       expect(alignment.hasReview).toBe(false);

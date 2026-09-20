@@ -59,10 +59,12 @@ function normalizeBinding(
   const specPath = trimOptional(binding.specPath);
   const source = trimOptional(binding.source);
   const boundAt = trimOptional(binding.boundAt);
+  const durableAdosRunId = trimOptional(binding.durableAdosRunId);
   if (branchName) normalized.branchName = branchName;
   if (specPath) normalized.specPath = specPath;
   if (source) normalized.source = source;
   if (boundAt) normalized.boundAt = boundAt;
+  if (durableAdosRunId) normalized.durableAdosRunId = durableAdosRunId;
   return normalized;
 }
 
