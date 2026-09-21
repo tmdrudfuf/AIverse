@@ -33,11 +33,6 @@ export type LocalProjectRepositoryBinding = {
   specPath?: string;
   source?: string;
   boundAt?: string;
-  // The durable ADOS run identity already known for this bound repository/branch
-  // (e.g. .agent-workflow/runs/<feature>/ados-run.json's runId), when the caller
-  // has one. Absent for the general case; only set when this project's local
-  // binding is known to correspond to an active/observed real ADOS run.
-  durableAdosRunId?: string;
 };
 
 export type NormalizedLocalProjectRepositoryBinding = {
@@ -48,7 +43,6 @@ export type NormalizedLocalProjectRepositoryBinding = {
   specPath?: string;
   source?: string;
   boundAt?: string;
-  durableAdosRunId?: string;
 };
 
 export type LocalProjectRepositoryBindingRejectionReason = "UnknownProject" | "MissingLocalPath";

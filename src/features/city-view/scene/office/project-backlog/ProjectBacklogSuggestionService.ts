@@ -172,7 +172,12 @@ export class ProjectBacklogSuggestionService {
     if (!taskResult.ok) {
       return {
         ok: false,
-        reason: taskResult.reason === "TaskNotFound" ? "InvalidInput" : taskResult.reason,
+        // createTask (unlike updateTask) never actually produces TaskNotFound
+        // or PublicationNotReady; narrowed here only to satisfy the shared
+        // ProjectBacklogMutationResult["reason"] union.
+        reason: taskResult.reason === "TaskNotFound" || taskResult.reason === "PublicationNotReady"
+          ? "InvalidInput"
+          : taskResult.reason,
       };
     }
 

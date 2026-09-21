@@ -10,12 +10,14 @@ its non-path fields are mirrored into the tracked, sanitized
 present, that the sanitized copy still matches it). Role and candidate ownership
 therefore come from ADOS durable state, not a free-standing evidence label. This
 durable run is the one this verification session's own candidate is running
-under, and Project A's local repository binding (`seedTwoProjects` in
-`AutonomousCompanyOperationsE2E.test.ts`) points at this exact worktree/branch,
-so this run's id is carried machine-verifiably through Project A's own
-request/preparation/execution chain: `LocalProjectRepositoryBinding
-.durableAdosRunId` -> `ExternalProjectAdosRunPreparation.durableAdosRunId` ->
-`ExternalProjectAdosExecution.durableAdosRunId`, each asserted equal to the
+under. Finding 1 (independent review, post-round-18) requires this identity to
+be received through the execution boundary being exercised rather than
+pre-seeded onto an input: Project A's local repository binding and preparation
+carry no `durableAdosRunId` of their own. Instead, the deterministic
+`ImplementerRuntimeProvider` fake returns it as part of its own result
+evidence (the same shape a real ADOS-observing provider would use), and it
+flows only `ExternalProjectAdosExecution.durableAdosRunId` ->
+`ExternalProjectAdosRunStatus.durableAdosRunId`, each asserted equal to the
 sanitized `runId`. Project A's resolved reviewer/implementer are asserted equal
 to this run's own recorded `agentAssignment`, not merely produced by the same
 generic `roleResolver.js` mechanism.
@@ -65,18 +67,26 @@ deterministic Spec 143 suggestion provider fixture and the real
    Project A cycle end to end", Tests H, X). It drives the real
    `roleResolver.js`: the reviewer for this run resolves **from the run's own
    durable implementer id** (`execution.evidence.providerId` -> Codex, distinct
-   from the Claude implementer). Terminal completion is then demonstrated from
-   the **real** ADOS signal, not a hand-built object: when the ADOS run reports
-   run-level completion (`execution.evidence.completed === true`, distinct from
-   the implementer subprocess merely exiting), the office-observable Spec 144
-   active-execution count (probe `autonomyActiveExecutionCount`, via
+   from the Claude implementer). Execution-level completion is then demonstrated
+   from the **real** ADOS signal, not a hand-built object: when the ADOS run
+   reports run-level completion (`execution.evidence.completed === true`,
+   distinct from the implementer subprocess merely exiting), the
+   office-observable Spec 144 active-execution count (probe
+   `autonomyActiveExecutionCount`, via
    `ProjectAutonomousExecutionPolicyService.countActiveExecutions`) drops from 1
-   to 0, and the task reaches `completed` through the existing operator
-   transition - no autonomous `in_progress -> completed` path exists and Spec
-   148 adds none. `deriveExternalProjectAdosRunStatus`'s execution-sourced
-   branch maps the same signal to stage `Started` vs `Completed` (derivation
-   unit check). The still-in-flight scenario (`evidence.completed === false`)
-   keeps the task `in_progress` and the run counted active, proving the office
+   to 0, and `deriveExternalProjectAdosRunStatus`'s execution-sourced branch maps
+   the same signal to stage `Started` vs `Completed` (derivation unit check).
+   There is still no autonomous `in_progress -> completed` path and Spec 148
+   adds none, but Finding 2 (independent review, post-round-18) means the
+   operator's existing transition no longer closes the task on execution-level
+   completion alone: `ProjectBacklogService.updateTask` now requires
+   `publicationReadinessConfirmed` for any task with an `executionRunId`,
+   derived beforehand from this SAME bound execution's real durable ADOS
+   alignment, and refuses the `completed` transition otherwise. Today that
+   alignment is honestly not converged, so production refuses the attempt and
+   the task stays `in_progress` - a stronger demonstration than an unenforced
+   close. The still-in-flight scenario (`evidence.completed === false`) keeps
+   the task `in_progress` and the run counted active, proving the office
    reflects the *actual* ADOS run state rather than relabelling subprocess exit.
    The same cycle's review / validation / exact HEAD / publication stage cannot
    be represented on this in-office chain - the office
@@ -328,14 +338,17 @@ Spec 148 chain test additionally demonstrates no cross-project state (Test N).
 
 ## No uncontrolled recursive autonomy loop (authoritative requirement 19)
 
-By construction: Spec 148 adds no automation/orchestration production code and
+By construction: Spec 148 adds no new automation/orchestration engine and
 therefore introduces no new trigger. Its production changes are an 18-line
 self-review / reviewer-availability guard in
-`tools/agent-workflow/roleResolver.js` (blocks rather than triggers) and an
-additive `durableAdosRunId` identity field threaded through existing
-request/preparation/execution/run-status creation functions (a passive value,
-read by nothing that schedules work - see `runtime-evidence.json`
-`nonInvocationsVerified.srcProductionSourceModifiedDetail`). The
+`tools/agent-workflow/roleResolver.js` (blocks rather than triggers), an
+additive `durableAdosRunId` identity field received from the execution
+boundary's own result and threaded through existing
+execution/run-status creation functions (a passive value, read by nothing that
+schedules work), and an additive publication-readiness gate that ONLY
+constrains (never triggers) an existing operator-initiated transition - see
+`runtime-evidence.json`
+`nonInvocationsVerified.srcProductionSourceModifiedDetail`. The
 existing cooldown, planning-capacity, concurrency, and idempotency gates of
 Specs 144-147 are unchanged, and the chain test proves one sequential cycle with
 replayed events producing no further work.
@@ -346,12 +359,19 @@ No second orchestration engine, no change to Spec 144-147 policy semantics, no
 bypass of independent Codex review, no bypass of exact HEAD, and no removal of
 operator controls. Production changes are the `roleResolver.js` guard above
 (authoritative requirement 10: reviewer-unavailable and self-review must block
-safely) and an additive `durableAdosRunId` identity field threaded through 9
-existing `src/` modules (`ProjectRegistryTypes.ts`,
-`LocalProjectRepositoryBinding.ts`, the ADOS run preparation/execution/run-status
-types and services, `ProjectBacklogDevelopmentBridgeService.ts`) - optional,
-defaults undefined, mirrors the existing `featureBranch`/`branchName` plumbing,
-introduces no new control flow (`runtime-evidence.json`
+safely) plus two additive changes across 10 existing `src/` modules, made in
+response to independent review findings on candidate `c07d80b`
+(post-round-18): a `durableAdosRunId` identity field received from the
+execution boundary's own result evidence (never pre-seeded onto an input) and
+threaded through the ADOS execution/run-status types and services, and a
+publication-readiness gate (`publicationReadinessConfirmed`) that
+`ProjectBacklogService.updateTask` now requires before allowing a `completed`
+transition on any task with an `executionRunId`, including a resync of
+`CompanyOfficeScene.ts`'s manual status control on any rejected update so it
+does not silently no-op (requirement 18) - optional, defaults
+undefined/false, manual tasks unaffected (asserted in the E2E manual-workflow
+test), introduces no new control flow (see
+`runtime-evidence.json`
 `nonInvocationsVerified.srcProductionSourceModifiedDetail`). Push, PR readiness,
 approval, merge, and remote deletion remain human-only.
 
@@ -359,11 +379,13 @@ approval, merge, and remote deletion remain human-only.
 
 - `src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts`
   proves the ordered single cycle through ADOS execution and independent reviewer
-  resolution from the run's own durable implementer id, then the daily-proof
-  cycle's truthful terminal `completed` state driven **only** by the real ADOS
-  run-level completion signal (`execution.evidence.completed`) and the existing
-  operator transition ("completes one controlled Project A cycle end to end",
-  Tests H, X); four independent controls,
+  resolution from the run's own durable implementer id, then attempts the
+  daily-proof cycle's terminal transition through the existing operator path -
+  now itself gated on `publicationReadinessConfirmed`, derived beforehand from
+  this SAME bound execution's real durable ADOS alignment - and proves
+  production truthfully REFUSES the transition while that alignment is not
+  converged, leaving the task `in_progress` ("completes one controlled
+  Project A cycle end to end", Tests H, X); four independent controls,
   no direct ADOS invocation from Specs 145-147, idempotency on replayed events,
   active-run gating, second-project isolation, reload persistence,
   manual-workflow continuity, failure visibility for

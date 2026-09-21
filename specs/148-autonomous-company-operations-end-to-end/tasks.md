@@ -6,7 +6,9 @@
 
 **Tests**: Required by the authoritative requirements (Required Tests A-Z).
 
-**Organization**: Verification-only feature. No production source changes.
+**Organization**: Primarily a verification-only feature. Phase 21 documents two
+narrow, additive `src/` production changes required by a human-authorized
+post-review fix continuation (see Phase 21).
 
 ## Phase 1: Setup
 
@@ -109,6 +111,22 @@ artifacts.
 - [X] T037 `runtime-evidence.json`: delete the top-level `deterministicConvergedDemonstration` block (it framed a fixture triple as the demonstrated cycle's publication leg "completed", over-claiming criteria 19-20). Net deletion. Update `acceptanceCriteriaMapping.note`, `dailyProofCycleCompletion.note`/`source`, `requirementsChainProof.links`, `spec148CandidatePublicationGate.note`, `publicationResult`, `observedCycles[1].convergenceReason`, and `nonInvocationsVerified.toolsAgentWorkflowTestOnlyHelperAdded` so nothing says the E2E test drives `computeConvergenceStatus` to CONVERGED or gates completion on it. `publicationResult` stays a standing "Blocked until … Approved … exact HEAD" gate.
 - [X] T038 Sweep `runtime-verification.md` for the same over-claim (Evidence-captured bullet said the E2E test proves the cycle "through the post-execution review / exact-HEAD gate … `computeConvergenceStatus` biconditional asserted both directions"). `spec.md` and `plan.md` already attribute the biconditional solely to `spec148RoleAssignmentEvidence.test.ts` — left unchanged.
 - [X] T039 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`, `spec148RoleAssignmentEvidence.test.ts`, `PortfolioOperationsService.test.ts`), `npx tsc --noEmit`, and diff checks.
+
+> Note added in Phase 21 (re-reviewed candidate `c07d80b`): T035's instruction
+> to remove all `spec148DurableAlignment.js` imports from
+> `AutonomousCompanyOperationsE2E.test.ts` was correct for what it was fixing —
+> a synthetic durable-triple fabricated with `mkdtempSync` to manufacture a
+> converged completion. Phase 21 legitimately reintroduces
+> `deriveDurableAlignment` / `convergenceForAlignment` in that same test file
+> for a categorically different purpose: computing the real input
+> (`publicationReadinessConfirmed`) that the new production gate
+> (`ProjectBacklogService.updateTask`, T067 below) itself requires before
+> allowing task completion. This is not the T035 regression pattern — no
+> `mkdtempSync`, no fabricated durable files, and the read targets the real
+> `.agent-workflow/runs/148-.../` directory this run's own execution is
+> machine-bound to (T067's Finding 1 fix), not a conflated or synthetic run.
+> T035 stays `[X]` (accurate for its own finding); this note reconciles the
+> apparent contradiction a later reviewer would otherwise flag.
 
 > Note on T032: its `readDurableAdosRun` / `convergeWith` helper names did
 > exist (at `9431c5e`–`f2693af`) and `T032`/`389c317` removed them as claimed —
@@ -545,6 +563,137 @@ was never a sound generalization to begin with. Not asserted by any test
 > gap to criteria 11/20 is the review decision itself, which by construction
 > cannot be Approved inside the commit it is reviewing. This closes only when
 > the operator's independent review of this exact candidate returns Approved.
+
+---
+
+## Phase 21: Human-authorized post-review fix continuation (findings on `c07d80b`)
+
+Commits `e1188d4` (round-17) and `c07d80b` (round-18, "machine-bind Project A's
+execution to the durable ADOS run and gate publication readiness before task
+closure") landed the first real `src/` production changes on this branch
+without a dedicated tasks.md phase — that gap is itself part of what this
+phase's Finding 3 corrects. `c07d80b` added a `durableAdosRunId` field
+pre-seeded onto `LocalProjectRepositoryBinding` and threaded it through
+preparation/execution/run-status (9 `src/` modules), and derived a
+publication-readiness result in the E2E test before manually setting the task
+to `completed`.
+
+Independent review of `c07d80b` (Authorization ID
+`human-post-review-fix-cc6ed14815c049ed1b97ce1c-c07d80bf33b9`) returned three
+blocking findings, explicitly overriding the "unsatisfiable, document the
+deadlock" playbook of Phases 9-20 for the findings it names:
+
+- **Finding 1 (causal provenance)**: the harness pre-seeded the known durable
+  run id into Project A's repository binding and merely propagated it — not
+  machine-verifiable causality between the generated request and its ADOS
+  candidate/validation/review records.
+- **Finding 2 (completion before publication gate)**: the test derived a
+  publication-readiness result, manually set the task to `completed`, and only
+  afterward branched on convergence — inverting the required sequence; no
+  production code required validation/review/exact-HEAD alignment before
+  completion.
+- **Finding 3 (stale Spec Kit artifacts)**: `plan.md` said no `src/` changes;
+  `tasks.md` repeated that; T035 was checked complete while requiring removal
+  of `spec148DurableAlignment.js` imports from the E2E test, which the
+  candidate re-added.
+
+- [X] T067 Finding 1 fix: remove `durableAdosRunId` from
+  `LocalProjectRepositoryBinding` / `NormalizedLocalProjectRepositoryBinding`
+  (`ProjectRegistryTypes.ts`, `LocalProjectRepositoryBinding.ts`) and from
+  `ExternalProjectAdosRunPreparation` (`ExternalProjectAdosRunPreparationTypes.ts`,
+  `ExternalProjectAdosRunPreparationService.ts`,
+  `ProjectBacklogDevelopmentBridgeService.ts`) entirely — no pre-seeding, and
+  not relocated to another input-side fixture. Add `durableAdosRunId?: string`
+  to `ImplementerRuntimeEvidence` (`ImplementerRuntimeTypes.ts`) and read it
+  from `providerResult.evidence` in `ExternalProjectAdosExecutionService.createExecution`
+  (`ExternalProjectAdosExecutionService.ts`, `ExternalProjectAdosExecutionTypes.ts`)
+  instead of from the preparation. `ExternalProjectAdosRunStatusService.ts` /
+  `ExternalProjectAdosRunStatusTypes.ts` derive it only from
+  execution/result, dropping the preparation fallback. The identity is now
+  received FROM the execution boundary being exercised (the deterministic
+  `ImplementerRuntimeProvider` fake's own result, in tests; a real
+  ADOS-observing provider in production), never propagated from a literal set
+  before that boundary is invoked. `AutonomousCompanyOperationsE2E.test.ts`:
+  removed the pre-seed from `seedTwoProjects` and the now-invalid
+  `prep.durableAdosRunId` assertion (preparation genuinely cannot know this
+  before invocation); both fake providers (`launchedImplementerProvider`, the
+  completion test's inline fake) now return it in `evidence.durableAdosRunId`.
+- [X] T068 Finding 2 fix: `ProjectBacklogService.updateTask` (`ProjectBacklogService.ts`)
+  now rejects a `completed` transition (`{ ok: false, reason: "PublicationNotReady" }`)
+  on any task carrying an `executionRunId` unless the caller passes
+  `publicationReadinessConfirmed: true` — added to `ProjectBacklogTypes.ts`
+  (`PublicationNotReady` reason), threaded through
+  `OfficeProjectPortalController.updateSelectedBacklogTaskFromInput`, and
+  narrowed in `ProjectBacklogSuggestionService.ts` (reason-union compile fix
+  only, `createTask` never produces this reason). Manual tasks (no
+  `executionRunId`) are unaffected — requirement 20 preserved. In
+  `AutonomousCompanyOperationsE2E.test.ts`'s completion test, the
+  publication-readiness result is still derived BEFORE the transition attempt
+  (via `deriveDurableAlignment`/`convergenceForAlignment` against the real
+  `.agent-workflow/runs/148-.../` directory this execution is bound to per
+  T067), but is now passed IN as `publicationReadinessConfirmed` and the
+  transition's own return value is asserted: today (non-converged) the call
+  returns `false` and the task stays `in_progress` — production refuses the
+  close, not merely a fact asserted beside an unconditional transition. The
+  converged arm (return `true`, task reaches `completed`) is asserted as the
+  goal state, unreachable today, not forbidden.
+- [X] T069 Finding 3 fix: `plan.md` Summary/Constitution Check/Complexity
+  Tracking rewritten to name the real 9-module production surface (T067 + T068
+  above) instead of "no production source files change". `tasks.md`
+  Organization line and this phase reconcile T035 (see the note above Phase 9's
+  closing callout): the reintroduced `spec148DurableAlignment.js` import in the
+  E2E test is legitimate here — it computes the real gate input T068's
+  production code requires, not a fabricated completion. Swept
+  `runtime-evidence.json` (`projectA.durableAdosRunIdBinding`,
+  `nonInvocationsVerified.srcProductionSourceModifiedDetail`,
+  `spec148CandidatePublicationGate.note`, `dailyProofCycleCompletion.note`/
+  `terminalTaskStatus`/`terminalTransitionAuthority`, `requirementsChainProof.note`
+  and its two sub-notes), `runtime-verification.md` (opening paragraph, step 5,
+  the recursive-loop and "not part of readiness" sections, the evidence-bullet
+  list), and `spec.md` (Overview's User Story 1 scenario and acceptance
+  scenario 7) for the same two stale claims: the old
+  `LocalProjectRepositoryBinding.durableAdosRunId -> preparation ->
+  execution` chain description, and "the task reaches `completed`" /
+  "no autonomous ... path and Spec 148 adds none" stated as if unconditional
+  rather than now gated on `publicationReadinessConfirmed`.
+- [X] T070 Re-run targeted Vitest (`AutonomousCompanyOperationsE2E.test.ts`,
+  `spec148RoleAssignmentEvidence.test.ts`, `PortfolioOperationsService.test.ts`
+  — 45/45 passed), `npx tsc --noEmit` (clean), and validate
+  `runtime-evidence.json` still parses.
+- [X] T071 Advisor follow-up on T068: the manual status dropdown's
+  `updateHandler` in `CompanyOfficeScene.ts` ignored
+  `updateSelectedBacklogTaskFromInput`'s return value, so an operator picking
+  "completed" for an ADOS-executed task got a silent no-op with the dropdown
+  stuck on an unapplied value (requirement 18 requires a concise, exposed
+  failure/block reason, not silence; the non-goal list forbids removing
+  operator controls). Fixed by resyncing `statusSelect` to the task's real
+  current status whenever the update is rejected, for any reason - not new UI
+  machinery, since no error-toast mechanism exists anywhere in this file for
+  ANY existing rejection reason either. The manual dropdown remains unable to
+  supply `publicationReadinessConfirmed` (the browser office cannot itself
+  evaluate durable ADOS state), so closing an ADOS-executed task to
+  `completed` is intentionally not available from this control - stated in
+  the handler's own comment.
+- [X] T072 Advisor follow-up on T068: added the coverage the plan/evidence
+  claims rested on but no test asserted. In the "keeps the four automation
+  controls independently disableable" test's manual-workflow (Test Z) block,
+  assert a manual task (no `executionRunId`) closes to `completed` with NO
+  `publicationReadinessConfirmed` supplied at all, proving requirement 20
+  rather than only documenting it. In the completion test's non-converged
+  arm, added a control assertion: the same task updated to a non-`completed`
+  status (`blocked`) still returns `true`, so the prior `false` is
+  attributable to the publication gate specifically, not a broken mutation
+  context.
+- [X] T073 Re-run targeted Vitest (same three files, 45/45) and
+  `npx tsc --noEmit` after T071/T072.
+
+> Findings 1-3 are addressed with real production code and reconciled docs,
+> per the authorization's own instruction not to satisfy them by documenting
+> that identities are unrelated. The Phases 9-20 deadlock (a durable Approved
+> Codex review of this exact candidate cannot be recorded inside the commit
+> that becomes that candidate) is unrelated to these three findings and
+> remains open, closing only when the operator's independent review of this
+> candidate returns Approved.
 
 ---
 

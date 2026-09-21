@@ -62,6 +62,12 @@ export type ImplementerRuntimeEvidence = {
   stdoutSummary: string;
   stderrSummary: string;
   outputTruncated: boolean;
+  // The durable ADOS run identity this invocation was executed under, when the
+  // provider that talked to the actual process/run knows one (e.g. the
+  // tools/agent-workflow run id). Absent by default; only a provider that
+  // genuinely observed the run (never a caller-supplied input elsewhere in the
+  // chain) may set it.
+  durableAdosRunId?: string;
 };
 
 export type ImplementerRuntime = {

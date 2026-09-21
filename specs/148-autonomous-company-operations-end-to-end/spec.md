@@ -39,10 +39,13 @@ occurring exactly once; then confirm the chain continues into review - the
 reviewer for the run resolves from its own durable implementer id (Codex,
 distinct from the Claude implementer) - and that when the ADOS run reports
 run-level completion (`execution.evidence.completed`) the office-observable
-Spec 144 active-execution count drops from 1 to 0 and the daily-proof task
-reaches `completed` through the existing operator transition. While the run is
-still in flight the task stays `in_progress` and nothing auto-approves or
-fabricates completion. The same cycle's review / validation / exact HEAD /
+Spec 144 active-execution count drops from 1 to 0 and the operator's existing
+transition may attempt to close the daily-proof task to `completed` - a
+transition that itself now requires publication-readiness confirmation,
+derived beforehand from the same bound execution's real durable ADOS
+alignment, and is refused (task stays `in_progress`) while that alignment is
+not converged. While the run is still in flight the task stays `in_progress`
+and nothing auto-approves or fabricates completion. The same cycle's review / validation / exact HEAD /
 publication stage cannot be represented on the in-office chain (the office
 `ExternalProjectAdosExecution` schema types its review/validation/publish
 sub-stage flags as the literal `false`); it is exercised by
@@ -85,9 +88,13 @@ the runtime.
 7. **Given** the ADOS run reports run-level completion
    (`execution.evidence.completed`), **When** the office evaluates it, **Then**
    the Spec 144 active-execution count drops to 0 (probe
-   `autonomyActiveExecutionCount`) and the daily-proof task reaches `completed`
-   through the existing operator transition - no autonomous
-   `in_progress -> completed` path exists or is added.
+   `autonomyActiveExecutionCount`) and the operator MAY attempt to close the
+   daily-proof task to `completed` through the existing transition - no
+   autonomous `in_progress -> completed` path exists or is added. That
+   transition itself requires publication-readiness confirmation, derived
+   beforehand from the same bound execution's real durable ADOS alignment (see
+   scenario 6), for any task with an execution identity; while that alignment
+   is not converged the transition is refused and the task stays `in_progress`.
 
 ---
 

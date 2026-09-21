@@ -745,6 +745,12 @@ export class OfficeProjectPortalController {
     priority?: ProjectBacklogPriority;
     status?: ProjectBacklogPlanningStatus;
     blockedReason?: string;
+    // Finding 2 (independent review, post-round-18): required to be explicitly
+    // true when closing a task that carries an executionRunId to `completed`.
+    // The office cannot itself read durable ADOS state (browser-bundled, no
+    // node:fs), so this confirmation must come from a caller that already
+    // evaluated real validation/review/exact-HEAD alignment - never defaulted.
+    publicationReadinessConfirmed?: boolean;
   }) {
     const context = this.getBacklogMutationContext();
     const task = this.getSelectedBacklogTask();

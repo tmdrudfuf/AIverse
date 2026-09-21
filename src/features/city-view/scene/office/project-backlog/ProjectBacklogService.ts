@@ -120,7 +120,17 @@ export class ProjectBacklogService {
       | "sourceSuggestionId"
       | "suggestionAcceptanceMode"
       | "suggestionAcceptedAt"
-    >>,
+    >> & {
+      // Finding 2 (independent review, post-round-18): a task that carries an
+      // executionRunId went through real ADOS autonomous execution, so closing
+      // it to `completed` requires the caller to confirm publication readiness
+      // (validation PASS, independent review approval, exact candidate ==
+      // validated == reviewed == HEAD alignment) - evaluated from durable ADOS
+      // state outside this browser-bundled layer (it cannot read those files
+      // itself), never assumed true. Manual tasks (no executionRunId) are
+      // unaffected - requirement 20 keeps manual completion working.
+      publicationReadinessConfirmed?: boolean;
+    },
   ): ProjectBacklogMutationResult {
     const resolution = this.resolveMutationProjectId(context);
     if (!resolution.ok) return resolution;
@@ -140,6 +150,9 @@ export class ProjectBacklogService {
     if (input.suggestionAcceptanceMode !== undefined && input.suggestionAcceptanceMode !== "manual" && input.suggestionAcceptanceMode !== "automatic") return { ok: false, reason: "InvalidInput" };
     if (input.title !== undefined && input.title.trim().length === 0) return { ok: false, reason: "InvalidInput" };
     if (input.description !== undefined && input.description.trim().length === 0) return { ok: false, reason: "InvalidInput" };
+    if (input.status === "completed" && existing.executionRunId && !input.publicationReadinessConfirmed) {
+      return { ok: false, reason: "PublicationNotReady" };
+    }
 
     const updatedTask: ProjectBacklogTask = {
       ...existing,

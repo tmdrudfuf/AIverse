@@ -236,7 +236,10 @@ function createExecution(input: {
     projectId: input.input.projectId,
     preparationId: input.preparation.id,
     developmentRequestDraftId: input.preparation.developmentRequestDraftId,
-    durableAdosRunId: input.preparation.durableAdosRunId,
+    // Received through the execution boundary itself (the provider's own
+    // result evidence), never propagated from an input-side literal - see
+    // ExternalProjectAdosExecutionTypes.ts.
+    durableAdosRunId: input.evidence.durableAdosRunId,
     status: input.status,
     featureId: input.preparation.featureId,
     featureBranch: input.preparation.featureBranch,

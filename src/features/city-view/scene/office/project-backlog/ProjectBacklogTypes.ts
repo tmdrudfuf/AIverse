@@ -50,4 +50,7 @@ export type ProjectBacklogSummary = {
 
 export type ProjectBacklogMutationResult =
   | { ok: true; collection: ProjectBacklogCollection; task: ProjectBacklogTask }
-  | { ok: false; reason: "MissingProject" | "UnavailableProject" | "TaskNotFound" | "ProjectMismatch" | "InvalidInput" };
+  | {
+    ok: false;
+    reason: "MissingProject" | "UnavailableProject" | "TaskNotFound" | "ProjectMismatch" | "InvalidInput" | "PublicationNotReady";
+  };

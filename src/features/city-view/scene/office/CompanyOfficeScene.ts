@@ -887,13 +887,25 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         });
       };
       const updateHandler = () => {
-        this.officeProjectPortalController?.updateSelectedBacklogTaskFromInput({
+        const updated = this.officeProjectPortalController?.updateSelectedBacklogTaskFromInput({
           title: titleInput.value,
           description: descriptionInput.value,
           priority: prioritySelect.value as never,
           status: statusSelect.value as never,
           blockedReason: blockedReasonInput.value,
         });
+        if (!updated) {
+          // Rejected (e.g. PublicationNotReady for a task with an
+          // executionRunId, or any pre-existing rejection reason) - resync the
+          // status dropdown to the task's real current status instead of
+          // leaving it stuck on a value that was never applied. This form has
+          // no path to supply publicationReadinessConfirmed: the browser
+          // office cannot itself evaluate durable ADOS validation/review/
+          // exact-HEAD alignment, so closing an ADOS-executed task to
+          // `completed` is intentionally not available from this control.
+          const current = this.officeProjectPortalController?.getSelectedProjectBacklogTaskInput();
+          if (current) statusSelect.value = current.status;
+        }
       };
       const startDevelopmentHandler = () => {
         void this.officeProjectPortalController?.startSelectedBacklogTaskDevelopment();

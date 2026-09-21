@@ -7,15 +7,46 @@
 ## Summary
 
 Prove that Specs 142-147 plus the Spec 142/138 development bridge and the real
-ADOS integration compose into one safe controlled autonomous cycle. This is a
-verification feature: it adds deterministic tests and stable repository-relative
-runtime evidence, and it makes no `src/` production source changes. Its one
-production change is an 18-line self-review / reviewer-availability guard in
-`tools/agent-workflow/roleResolver.js` (Spec 148 C8), required by authoritative
-requirement 10 so a resumed/durable run with one agent in both seats, or an
-unavailable Codex reviewer, blocks before spawn instead of self-reviewing.
-Existing stage coordinators remain the single source of truth; the verification
-layer only observes state transitions.
+ADOS integration compose into one safe controlled autonomous cycle. This is
+primarily a verification feature (deterministic tests plus stable
+repository-relative runtime evidence), but a human-authorized post-review fix
+continuation (independent review findings on candidate `c07d80b`) required two
+narrow, additive `src/` production changes that the original "no production
+changes" framing no longer describes truthfully:
+
+1. **Causal provenance for the durable ADOS run identity** (finding: do not
+   pre-seed the known run id into Project A's repository binding - it must be
+   received through the execution boundary being exercised). `durableAdosRunId`
+   moved off `LocalProjectRepositoryBinding` entirely and now flows only from
+   `ImplementerRuntimeProvider`'s own result evidence through
+   `ExternalProjectAdosExecutionService` into `ExternalProjectAdosExecution` /
+   `ExternalProjectAdosRunStatus`. Touches
+   `ImplementerRuntimeTypes.ts`,
+   `ExternalProjectAdosExecutionService.ts`,
+   `ExternalProjectAdosExecutionTypes.ts`,
+   `ExternalProjectAdosRunStatusService.ts`,
+   `ExternalProjectAdosRunStatusTypes.ts`.
+2. **Publication-readiness gate on task completion** (finding: the production
+   `completed` transition must require publication-readiness evidence, and a
+   blocked publication state must leave the task non-completed).
+   `ProjectBacklogService.updateTask` now rejects a `completed` update on any
+   task carrying an `executionRunId` unless the caller passes an explicit
+   `publicationReadinessConfirmed: true` - evaluated from real durable ADOS
+   state outside this browser-bundled layer, never defaulted or assumed.
+   Manual tasks (no `executionRunId`) are unaffected, preserving requirement 20.
+   Touches `ProjectBacklogService.ts`, `ProjectBacklogTypes.ts`,
+   `ProjectBacklogSuggestionService.ts` (reason-union narrowing only),
+   `OfficeProjectPortalController.ts`, and `CompanyOfficeScene.ts` (the manual
+   status control resyncs to the task's real status on any rejected update
+   instead of leaving it stuck on an unapplied value - requirement 18's
+   failure-visibility bar, not a new UI feature).
+
+Both changes are additive/optional-field plumbing with no new orchestration
+engine, no new provider abstraction, and no change to Spec 144-147 policy
+semantics - existing stage coordinators remain the single source of truth.
+The pre-existing 18-line self-review / reviewer-availability guard in
+`tools/agent-workflow/roleResolver.js` (Spec 148 C8, authoritative requirement
+10) is unchanged by this continuation.
 
 ## Technical Context
 
@@ -54,12 +85,16 @@ Project B isolation) in the existing multi-project portfolio.
 
 - Spec First: PASS. `spec.md` captures the integration goal, user value,
   acceptance criteria, boundaries, and edge cases.
-- Plan Before Code: PASS. This plan defines the verification surface and
-  validation before any test source is added.
+- Plan Before Code: PASS (re-checked for the post-review fix continuation
+  described in Summary; this revision documents the two production changes
+  that continuation required before them, per Phase 21 of `tasks.md`).
 - Tasks Gate Implementation: PASS. Implementation begins after `tasks.md` is
   generated.
-- Preserve Application Stability: PASS. No production source files change; only
-  new spec docs and new deterministic test files are added.
+- Preserve Application Stability: PASS. Both production changes are additive
+  optional-field plumbing on existing types/services (see Summary); no new
+  production module, orchestrator, or provider abstraction is introduced, and
+  no existing behavior changes for tasks/executions that don't opt into the
+  new fields.
 - Validation Is Required: PASS. Targeted Vitest and diff checks run in this
   runtime; full configured validation is intentionally ADOS-owned per handoff.
 
@@ -202,5 +237,17 @@ ADOS-owned authoritative pipeline: `npm test`, `npx tsc --noEmit`,
 
 ## Complexity Tracking
 
-No constitution violations. No new production module. Two new test files plus
-feature docs.
+No constitution violations and no new production module. The post-review fix
+continuation (see Summary) added two additive optional fields/gates across ten
+existing `src/` modules (`OfficeProjectPortalController.ts`,
+`ExternalProjectAdosExecutionService.ts`,
+`ExternalProjectAdosExecutionTypes.ts`,
+`ExternalProjectAdosRunStatusService.ts`,
+`ExternalProjectAdosRunStatusTypes.ts`, `ImplementerRuntimeTypes.ts`,
+`ProjectBacklogService.ts`, `ProjectBacklogSuggestionService.ts`,
+`ProjectBacklogTypes.ts`, `CompanyOfficeScene.ts` - the last one resyncs the
+manual status control on any rejected update instead of leaving it stuck on an
+unapplied value, per requirement 18's failure-visibility bar) plus the
+pre-existing 18-line `roleResolver.js` guard and the test-only
+`spec148DurableAlignment.js` helper. Two new test files plus feature docs
+remain the bulk of the change.
