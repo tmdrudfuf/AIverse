@@ -625,6 +625,8 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
           // Control: the refusal above is attributable to the publication
           // gate specifically, not a broken mutation context - the same task,
           // same call shape, updated to a non-'completed' status succeeds.
+          // Transitioned back to in_progress afterward so this test's own
+          // final state matches runtime-evidence.json's terminalTaskStatus.
           expect(controller.updateSelectedBacklogTaskFromInput({
             title: task.title,
             description: task.description,
@@ -633,6 +635,13 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
             blockedReason: "control assertion",
           })).toBe(true);
           expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("blocked");
+          expect(controller.updateSelectedBacklogTaskFromInput({
+            title: task.title,
+            description: task.description,
+            priority: task.priority,
+            status: "in_progress",
+          })).toBe(true);
+          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
         }
       }
     }
