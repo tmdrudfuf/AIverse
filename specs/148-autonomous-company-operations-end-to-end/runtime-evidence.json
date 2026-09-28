@@ -3,6 +3,7 @@
   "evidenceVersion": 1,
   "evidencePathsAreRepositoryRelative": true,
   "runtimeEvidencePath": "specs/148-autonomous-company-operations-end-to-end/runtime-evidence.json",
+  "readFirst": "Two DISTINCT gates are described in this file, and are not in tension with each other. (1) The CHILD ADOS run Project A's own execution causally creates (dailyProofCycleCompletion, requirementsChainProof.childRunCandidateGate) is genuinely COMPLETE this cycle: real Approved review, real candidate == validated == reviewed == exact HEAD, terminalTaskStatus 'completed'. (2) The PARENT Spec 148 candidate's OWN standing publication gate (publicationResult, spec148CandidatePublicationGate, requirementsChainProof.parentCandidateGate) is a separate fact and stays a standing 'Blocked until ...' gate - a durable Approved Codex review of this exact commit cannot be recorded inside the commit that becomes it. 'completed' and 'Blocked until' both being true simultaneously is the correct, non-contradictory state; they describe two different runs.",
   "deterministicHarness": {
     "chainTest": "src/features/city-view/scene/office/project-backlog/AutonomousCompanyOperationsE2E.test.ts",
     "roleAndGateTest": "tools/agent-workflow/spec148RoleAssignmentEvidence.test.ts",
@@ -174,7 +175,9 @@
       "tools/agent-workflow/reviewConvergence.js computeConvergenceStatus"
     ],
     "primaryRepositoryMutated": false,
-    "githubMutated": false
+    "githubMutated": false,
+    "remotePublicationState": "NOT_REQUESTED",
+    "remotePublicationAuthority": "HUMAN_REQUIRED"
   },
   "shaAlignment": {
     "note": "Requirement 21 asks for candidate/validated/reviewed SHA 'where available' plus the exact-HEAD result. Two forms are recorded: (1) the LIVE per-candidate values are not transcribed as literals - a SHA for the candidate currently under review is stale the moment this evidence commit lands - they are resolved at validation/review time from durableSources below; (2) COMPLETED cycles are recorded as historical observations in observedCycles below (an already-finished candidate's SHAs are permanent branch history, never stale). Both test suites read durableSources and run the convergence biconditional over them: each of candidateMatchesHead / validatedMatchesHead / reviewedMatchesHead defaults false and is only raised by a present, format-valid, exact-HEAD-aligned record, so an absent record can never authorize CONVERGED. Pipeline order candidate -> validate -> review is a presence rule: a later-stage record present without its earlier sibling fails, not skips. spec148RoleAssignmentEvidence.test.ts runs as validation command #1, so validated_sha === HEAD is a derivation input there (stated, not a hidden guard); the assertion is 'must not authorize publication'. The comparator is the production one (validationPolicy.js targetsMatch, reached via validationPlan.js isFinalValidationSatisfied at the orchestrateCommand.js final-verification stage).",
