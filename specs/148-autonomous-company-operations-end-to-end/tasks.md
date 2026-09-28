@@ -695,6 +695,64 @@ deadlock" playbook of Phases 9-20 for the findings it names:
 > remains open, closing only when the operator's independent review of this
 > candidate returns Approved.
 
+## Phase 21: Real child-run architecture (final human-authorized implementation)
+
+Authorization `human-spec148-final-implementation-cc6ed14815c049ed1b97ce1c-226c3e64bfba`
+superseded the round-18-era mechanism reviewed above: `childRunIdAuthority:
+"ADOS"` requires a genuinely ADOS-generated child run id in a separate
+disposable verification repository, not identity plumbing alone.
+
+- [X] T074 `tools/agent-workflow/externalAdosChildRunGateway.js`: real
+  prepare/continue/inspect boundary. `prepareChildRun` creates a fresh
+  disposable local git repository under `.agent-workflow/disposable-projects/`
+  with a real `tools/agent-workflow/cli.js`-shaped state file;
+  `continueChildRun` spawns the real, unmodified `cli.js orchestrate` engine
+  against it; `inspectChildRun` reads back readiness from that engine's own
+  `getRunSummaryForDisplay()`. Hand-verified end to end before any product
+  wiring (real `git`/`node` subprocesses, real `humanGate.ready: true`).
+- [X] T075 `tools/agent-workflow/fixtures/deterministicChild{Implementer,Reviewer}.js`:
+  the deterministic Claude/Codex process-boundary stand-ins authoritative
+  requirement 23 sanctions - real subprocesses, real stdout the real
+  `orchestrateCommand.js`/`reviewCommand.js` machinery parses, never
+  fabricated durable artifacts.
+- [X] T076 `ExternalAdosChildRunImplementerProvider` (implementer-runtime):
+  implements `ImplementerRuntimeProvider` by constructor-injecting the
+  gateway module (never imported directly from this browser-bundled file -
+  `tools/agent-workflow/*.js` is not a `node:` builtin webpack can
+  externalize) and surfacing `childRunTechnicalReadiness` as evidence.
+  Production browser wiring supplies no module, so it reports `Blocked`
+  identically to `ClaudeImplementerRuntimeProvider`'s guard.
+- [X] T077 `deriveExecutionPublicationReadiness`
+  (`ExternalProjectAdosExecutionTypes.ts`): re-verifies readiness from the
+  execution's own evidence, recomputed from the individual conjuncts, never
+  trusting the gateway's own precomputed `ready` flag (an early draft did
+  trust it, alongside a tautological id cross-check where both sides were
+  the same expression - caught and fixed before commit).
+  `OfficeProjectPortalController.updateSelectedBacklogTaskFromInput` self-
+  derives this instead of accepting a caller-supplied
+  `publicationReadinessConfirmed`, which is removed from the public input
+  type entirely.
+- [X] T078 `AutonomousCompanyOperationsE2E.test.ts`: added "proves one
+  genuinely complete Project A cycle through a real ADOS child run", which
+  injects the real gateway and drives Project A's task to a genuine,
+  non-fabricated `completed` status. The existing "completes one controlled
+  Project A cycle end to end" test now proves the negative case: a
+  completed-but-not-ready fixture run still cannot close the task. Removed
+  the parent-run-id injection (`sanitizedAdosRun.runId`) from every fixture
+  provider; fixtures now use a clearly-labeled literal that never claims
+  realism.
+- [X] T079 Reconciled `spec.md`, `runtime-verification.md`, and
+  `runtime-evidence.json` (`durableAdosRunIdBinding`, `dailyProofCycleCompletion`,
+  `requirementsChainProof`, `nonInvocationsVerified`) with the real
+  architecture: Project A's execution binds to its own distinct child run,
+  never the parent Spec 148 run's id; `terminalTaskStatus` flips to
+  `"completed"`; the PARENT candidate's own standing publication gate
+  (`publicationResult`) stays textually distinct from the CHILD run's real,
+  converged gate - conflating them would fabricate the parent's own review.
+- [X] T080 `npx tsc --noEmit` and targeted `npx vitest run` (E2E suite, role
+  suite, portfolio truthfulness, implementer-runtime, external-ados-execution,
+  ProjectBacklogService) green after T074-T079.
+
 ---
 
 ## Dependencies & Execution Order
