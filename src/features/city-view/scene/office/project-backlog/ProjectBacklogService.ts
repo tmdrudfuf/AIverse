@@ -121,14 +121,18 @@ export class ProjectBacklogService {
       | "suggestionAcceptanceMode"
       | "suggestionAcceptedAt"
     >> & {
-      // Finding 2 (independent review, post-round-18): a task that carries an
-      // executionRunId went through real ADOS autonomous execution, so closing
-      // it to `completed` requires the caller to confirm publication readiness
+      // Finding 3 (independent review, post-round-18/final-implementation): a
+      // task that carries an executionRunId went through real ADOS autonomous
+      // execution, so closing it to `completed` requires this flag to be
+      // true. This service does not compute it and never trusts an arbitrary
+      // caller: OfficeProjectPortalController (the only production caller)
+      // derives it itself, unconditionally, via
+      // deriveExecutionPublicationReadiness(execution) - the execution's own
+      // real evidence from a provider that causally drove the ADOS child run
       // (validation PASS, independent review approval, exact candidate ==
-      // validated == reviewed == HEAD alignment) - evaluated from durable ADOS
-      // state outside this browser-bundled layer (it cannot read those files
-      // itself), never assumed true. Manual tasks (no executionRunId) are
-      // unaffected - requirement 20 keeps manual completion working.
+      // validated == reviewed == HEAD alignment), never a value any caller
+      // declares. Manual tasks (no executionRunId) are unaffected -
+      // requirement 20 keeps manual completion working.
       publicationReadinessConfirmed?: boolean;
     },
   ): ProjectBacklogMutationResult {

@@ -896,13 +896,14 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         });
         if (!updated) {
           // Rejected (e.g. PublicationNotReady for a task with an
-          // executionRunId, or any pre-existing rejection reason) - resync the
-          // status dropdown to the task's real current status instead of
-          // leaving it stuck on a value that was never applied. This form has
-          // no path to supply publicationReadinessConfirmed: the browser
-          // office cannot itself evaluate durable ADOS validation/review/
-          // exact-HEAD alignment, so closing an ADOS-executed task to
-          // `completed` is intentionally not available from this control.
+          // executionRunId whose ADOS child run has not reached verified
+          // technical readiness, or any pre-existing rejection reason) -
+          // resync the status dropdown to the task's real current status
+          // instead of leaving it stuck on a value that was never applied.
+          // This form has no input for publication readiness at all: the
+          // controller re-derives it itself from the execution's own real
+          // evidence (deriveExecutionPublicationReadiness), so there is
+          // nothing for this control to supply.
           const current = this.officeProjectPortalController?.getSelectedProjectBacklogTaskInput();
           if (current) statusSelect.value = current.status;
         }

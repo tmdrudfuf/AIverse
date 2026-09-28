@@ -41,6 +41,7 @@ import {
 } from "./external-ados-run-preparation/ExternalProjectAdosRunPreparationService";
 import { ExternalProjectAdosExecutionService } from "./external-ados-execution/ExternalProjectAdosExecutionService";
 import type { ExternalProjectAdosExecution } from "./external-ados-execution/ExternalProjectAdosExecutionTypes";
+import { deriveExecutionPublicationReadiness } from "./external-ados-execution/ExternalProjectAdosExecutionTypes";
 import { deriveExternalProjectAdosRunStatus } from "./external-ados-run-status/ExternalProjectAdosRunStatusService";
 import {
   canCreateExternalProjectDevelopmentRequestDraft,
@@ -71,6 +72,10 @@ import {
   createRuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
 import { ClaudeImplementerRuntimeProvider } from "./implementer-runtime/ClaudeImplementerRuntimeProvider";
+import {
+  ExternalAdosChildRunImplementerProvider,
+  type ExternalAdosChildRunGatewayModule,
+} from "./implementer-runtime/ExternalAdosChildRunImplementerProvider";
 import { ImplementerRuntimeService } from "./implementer-runtime/ImplementerRuntimeService";
 import {
   IMPLEMENTER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
@@ -366,6 +371,12 @@ export type OfficeProjectPortalControllerOptions = {
   activeProjectBuildingId?: string;
   activeProjectCompanyName?: string;
   projectBacklogSuggestionProvider?: ProjectBacklogSuggestionProvider;
+  // Node-only real gateway (tools/agent-workflow/externalAdosChildRunGateway.js),
+  // never supplied by browser production wiring -- see
+  // ExternalAdosChildRunImplementerProvider for why it can't be imported
+  // from this browser-bundled file directly. Only a genuine Node context
+  // (a Vitest suite, or a manual smoke script) passes one.
+  externalAdosChildRunGatewayModule?: ExternalAdosChildRunGatewayModule;
 };
 
 export class OfficeProjectPortalController {
@@ -504,7 +515,9 @@ export class OfficeProjectPortalController {
     this.projectBacklogReadinessPromotionPolicyService = new ProjectBacklogReadinessPromotionPolicyService();
     this.projectBacklogSuggestionProvider = options.projectBacklogSuggestionProvider
       ?? new DeterministicProjectBacklogSuggestionProvider();
-    this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(new ClaudeImplementerRuntimeProvider());
+    this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(
+      new ExternalAdosChildRunImplementerProvider(options.externalAdosChildRunGatewayModule),
+    );
     this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
@@ -745,12 +758,6 @@ export class OfficeProjectPortalController {
     priority?: ProjectBacklogPriority;
     status?: ProjectBacklogPlanningStatus;
     blockedReason?: string;
-    // Finding 2 (independent review, post-round-18): required to be explicitly
-    // true when closing a task that carries an executionRunId to `completed`.
-    // The office cannot itself read durable ADOS state (browser-bundled, no
-    // node:fs), so this confirmation must come from a caller that already
-    // evaluated real validation/review/exact-HEAD alignment - never defaulted.
-    publicationReadinessConfirmed?: boolean;
   }) {
     const context = this.getBacklogMutationContext();
     const task = this.getSelectedBacklogTask();
@@ -760,11 +767,20 @@ export class OfficeProjectPortalController {
       title: input.title?.trim() ? input.title : undefined,
       description: input.description?.trim() ? input.description : undefined,
     };
+    // Finding 3 (independent review, post-round-18/final-implementation): a
+    // task carrying an executionRunId can only close to `completed` when
+    // this controller itself re-derives publication readiness from the
+    // execution's own real evidence (deriveExecutionPublicationReadiness) -
+    // never from a caller-supplied confirmation. There is intentionally no
+    // way for CompanyOfficeScene's form to influence this.
+    const publicationReadinessConfirmed = deriveExecutionPublicationReadiness(
+      this.getAssociatedAdosExecution(task),
+    ).ready;
     const result = this.projectBacklogService.updateTask(
       this.state.projectBacklogCollections,
       context,
       task.id,
-      normalizedInput,
+      { ...normalizedInput, publicationReadinessConfirmed },
     );
     if (!result.ok) return false;
     this.state.selectedBacklogTaskId = result.task.id;

@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -6,10 +5,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { resolveEffectiveRoles } from "../../../../../../tools/agent-workflow/roleResolver.js";
 import { CONVERGENCE_STATUSES, computeConvergenceStatus } from "../../../../../../tools/agent-workflow/reviewConvergence.js";
-import {
-  convergenceForAlignment,
-  deriveDurableAlignment,
-} from "../../../../../../tools/agent-workflow/spec148DurableAlignment.js";
 import { BrowserOfficeSessionService } from "../browser-session/BrowserOfficeSessionService";
 import type { BrowserOfficeSessionStorage } from "../browser-session/BrowserOfficeSessionTypes";
 import { OfficeProjectPortalController } from "../OfficeProjectPortalController";
@@ -47,47 +42,44 @@ import type {
 // This file drives the real OfficeProjectPortalController and the real
 // Spec 141-147 services through one controlled autonomous cycle for Project A
 // ("daily-proof"). Project A's real local repository binding (seedTwoProjects)
-// points at THIS exact worktree/branch, but carries no durable ADOS run
-// identity of its own (Finding 1, independent review, post-round-18): the
-// identity is received FROM the execution boundary itself - the
-// ImplementerRuntimeProvider invocation's own result evidence
-// (ExternalProjectAdosExecution.durableAdosRunId, asserted throughout below) -
-// never pre-seeded onto an input the test controls ahead of that call. This is
-// not a claim that Project A's synthetic request text became this candidate's
-// actual diff, but a real, checkable identity binding for the repository/
-// branch/run they share, established at the same point a real ADOS-observing
-// provider would establish it:
+// points at THIS exact worktree/branch for registry/UI purposes only; the
+// actual ADOS execution boundary never performs git work there.
 //
 //   Spec 147 bounded suggestion generation
 //     -> Spec 145 controlled acceptance -> Spec 141 backlog
 //     -> Spec 146 controlled Ready promotion
 //     -> Spec 144 controlled autonomous execution
 //     -> Spec 142 / Spec 138 development bridge -> ADOS execution
-//        (durableAdosRunId received from the provider's own result)
+//        (durableAdosRunId received from the provider's own result evidence,
+//        never pre-seeded onto an input ahead of that call)
 //     -> independent reviewer resolved for the run from its own durable
-//        implementer id (roleResolver.js: Claude -> distinct Codex), asserted
-//        equal to the bound run's own recorded agentAssignment
+//        implementer id (roleResolver.js: Claude -> distinct Codex)
 //     -> real ADOS run-level completion reflected by the office
 //        (execution-level: the implementer runtime finished)
-//     -> publication-readiness gate for that SAME bound execution, derived
-//        (not manually declared) from the run's real durable ADOS records via
-//        the shared spec148DurableAlignment.js helper
-//     -> Project A's task-closing transition to `completed`, which production
-//        now REQUIRES that same derived gate to confirm (Finding 2,
-//        independent review, post-round-18:
-//        ProjectBacklogService.updateTask's `publicationReadinessConfirmed`)
-//        - honestly not CONVERGED today, so production refuses the close and
-//        the task stays `in_progress`; a standing per-candidate gate
-//        re-derived from durable state, not a frozen verdict.
+//     -> Project A's task-closing transition to `completed`, which
+//        production requires the controller to itself re-derive verified
+//        technical publication readiness for (Finding 2/3, independent
+//        review, final child-run implementation:
+//        deriveExecutionPublicationReadiness over the execution's own real
+//        evidence - never a caller-supplied confirmation).
 //
-// Per authoritative requirement 23 the process boundaries use existing
-// injectable adapters: the Spec 143 suggestion provider is a deterministic
-// fixture and the ADOS process spawn uses the injectable ImplementerRuntimeProvider
-// (as the Spec 144 suite does). The gate's full biconditional coverage (both
-// directions, unconditional) lives in spec148RoleAssignmentEvidence.test.ts;
-// this file proves the binding onto one execution object and that production
-// itself, not merely an assertion beside it, refuses to read that gate's
-// non-convergence as publication.
+// Most tests below (including "composes one controlled cycle in order")
+// inject a lightweight deterministic ImplementerRuntimeProvider fake for the
+// ADOS process boundary, per authoritative requirement 23 - these prove
+// plumbing (the identity/status the provider returns propagates faithfully
+// through the real services) and never claim their fixture id is a real ADOS
+// run. Exactly one test, "proves one genuinely complete Project A cycle
+// through a real ADOS child run", injects the REAL
+// ExternalAdosChildRunImplementerProvider backed by the real
+// tools/agent-workflow/externalAdosChildRunGateway.js (Findings 1-4): it
+// spawns a real `cli.js orchestrate` subprocess against a fresh disposable
+// local repository, reads back a genuinely ADOS-generated child run id and
+// verified readiness, and drives Project A's task all the way to a real,
+// non-fabricated `completed` status - the one genuinely complete cycle
+// acceptance criterion 1 requires. The gate's full biconditional coverage
+// (both directions, unconditional, over the PARENT Spec 148 run's own
+// durable records) lives separately in spec148RoleAssignmentEvidence.test.ts
+// and is not re-derived here.
 
 const HIGH = "high" as const;
 
@@ -106,7 +98,6 @@ const REPO_ROOT = process.cwd().replace(/\\/g, "/");
 // harness value in the same assertion, so a hand-edited or stale evidence
 // file fails this suite instead of silently drifting from reality.
 const specDir = new URL("../../../../../../specs/148-autonomous-company-operations-end-to-end/", import.meta.url);
-const runDir = new URL("../../../../../../.agent-workflow/runs/148-autonomous-company-operations-end-to-end/", import.meta.url);
 // The durable-run-identity binding is cross-checked against this tracked,
 // sanitized mirror of the gitignored ADOS run record, not against
 // runtime-evidence.json's own copy of the same value - reading the same
@@ -121,7 +112,6 @@ const evidence = JSON.parse(readFileSync(fileURLToPath(new URL("runtime-evidence
     acceptedTaskId: string;
     developmentRequestId: string;
     executionRunId: string;
-    durableAdosRunId: string;
     boundedSuggestionCount: number;
     cascade: { spec145AcceptedCount: number; spec146PromotedCount: number };
     readyTransition: { promotedCount: number };
@@ -144,12 +134,10 @@ const evidence = JSON.parse(readFileSync(fileURLToPath(new URL("runtime-evidence
     primaryRepositoryMutated: boolean;
     githubMutated: boolean;
   };
-  // The durable ADOS run this verification session's own candidate is running
-  // under. Project A's local repository binding (seedTwoProjects below) points
-  // at this exact worktree/branch, so this run's identity is the one Project
-  // A's request/preparation/execution chain is machine-bound to below - not a
-  // hand-built literal, and not a claim that Project A's synthetic request
-  // text became this candidate's actual diff.
+  // The durable ADOS run this verification session's own (parent) candidate
+  // is running under - a separate fact from Project A's execution below,
+  // which since Finding 1 binds to its own distinct, freshly ADOS-generated
+  // child run id (see "proves one genuinely complete Project A cycle").
   adosRun: { runId: string; agentAssignment: { implementerId: string; reviewerId: string; candidateOwnerId: string } };
 };
 
@@ -309,26 +297,28 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     const executionRecord = Object.values(internals.state.externalProjectAdosExecutions)[0];
     expect(executionRecord?.projectId).toBe(PROJECT_A);
     expect(executionRecord?.implementerStarted).toBe(true);
-    // Finding 1 (independent review, post-round-18): the durable run identity
-    // is received FROM the execution boundary's own result evidence (the
-    // deterministic ImplementerRuntimeProvider fake below returns it, the same
-    // way a real ADOS-observing provider would), not propagated from a literal
-    // set on the input side before the boundary was ever invoked.
-    expect(executionRecord?.durableAdosRunId).toBe(sanitizedAdosRun.runId);
+    // The durable run identity is received FROM the execution boundary's own
+    // result evidence (the deterministic ImplementerRuntimeProvider fake
+    // below returns it, the same shape a real ADOS-observing provider would
+    // use), not propagated from a literal set on the input side before the
+    // boundary was ever invoked. This fixture is plumbing-only; a real,
+    // ADOS-generated child run id is proven by the dedicated
+    // "proves one genuinely complete Project A cycle" test below.
+    expect(executionRecord?.durableAdosRunId).toBe("fixture-launched-run-id");
     const runStatusKey = Object.keys(internals.state.externalProjectAdosRunStatuses)[0];
     const runStatus = internals.state.externalProjectAdosRunStatuses[runStatusKey] as {
       projectId: string;
       durableAdosRunId?: string;
     };
     expect(runStatus.projectId).toBe(PROJECT_A);
-    expect(runStatus.durableAdosRunId).toBe(sanitizedAdosRun.runId);
+    expect(runStatus.durableAdosRunId).toBe("fixture-launched-run-id");
 
-    // Cross-check requirement 21's non-circularity: runtime-evidence.json's own
-    // adosRun.runId / projectA.durableAdosRunId copies match the tracked
-    // sanitized artifact they claim to transcribe (not asserted by comparing
-    // the evidence file against itself).
+    // Cross-check requirement 21's non-circularity: runtime-evidence.json's
+    // own adosRun.runId (this verification session's own parent run
+    // identity - a separate fact from Project A's execution, see Finding 1)
+    // matches the tracked sanitized artifact it claims to transcribe (not
+    // asserted by comparing the evidence file against itself).
     expect(evidence.adosRun.runId).toBe(sanitizedAdosRun.runId);
-    expect(evidence.projectA.durableAdosRunId).toBe(sanitizedAdosRun.runId);
 
     // The in-office ADOS execution/run-status records carry no
     // review/validation/publish advancement of their own: the Spec 130 schema
@@ -361,12 +351,6 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(chainRoles.ok).toBe(true);
     // toEqual on the whole object already proves reviewer != implementer.
     expect(chainRoles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
-    // Finding 3: this is not merely "the same resolution mechanism, coincidentally
-    // the same result" - executionRecord is machine-bound (durableAdosRunId
-    // above) to the durable run whose own recorded agentAssignment is asserted
-    // equal here, field for field.
-    expect(chainRoles.roles!.implementer).toBe(evidence.adosRun.agentAssignment.implementerId);
-    expect(chainRoles.roles!.reviewer).toBe(evidence.adosRun.agentAssignment.reviewerId);
     // This scenario deliberately holds the ADOS run in flight
     // (evidence.completed === false) so Test M below can prove active-run
     // safety. While the run is in flight there is no review attempt, so the
@@ -449,7 +433,7 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     expect(executionRecord?.id).toBe(evidence.projectA.executionRunId);
   });
 
-  it("completes one controlled Project A cycle end to end: ADOS execution -> independent Codex reviewer resolved from the run's own durable implementer id -> real ADOS run-level completion reflected by the office -> terminal completion via the existing operator transition (Tests H, X)", async () => {
+  it("completes one controlled Project A cycle end to end: ADOS execution -> independent Codex reviewer resolved from the run's own durable implementer id -> real ADOS run-level completion reflected by the office -> a completed-but-not-ready run still cannot close the task (Tests H, X)", async () => {
     // ImplementerRuntimeStatus "Completed" means only that the implementer
     // subprocess exited. Production keys *run-level* completion off
     // execution.evidence.completed - every automation policy's
@@ -460,6 +444,14 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
     // gate on `!evidence.completed`. Drive the real ExternalProjectAdosExecutionService
     // twice, differing only in that signal, and assert the office-observable
     // state tracks the actual ADOS run state, not the bare subprocess exit.
+    //
+    // Finding 2/3 (independent review, final child-run implementation):
+    // `evidence.completed` (the subprocess exited) is a different signal from
+    // verified technical publication readiness. This loop's fixture provider
+    // never sets childRunTechnicalReadiness, so even the runCompleted ===
+    // true iteration proves a completed-but-not-ready run cannot close the
+    // task - the SEPARATE, re-verified signal a real child run produces is
+    // proven genuinely ready in the dedicated test below.
     for (const runCompleted of [false, true]) {
       const storage = createMemoryStorage();
       const controller = createController(
@@ -484,7 +476,11 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
             stdoutSummary: "",
             stderrSummary: "",
             outputTruncated: false,
-            durableAdosRunId: sanitizedAdosRun.runId,
+            // Fixture-only id for this lightweight plumbing loop - never the
+            // parent Spec 148 run id, and this fixture never sets
+            // childRunTechnicalReadiness, so it never claims to be a real,
+            // ready ADOS child run. That is proven separately below.
+            durableAdosRunId: "fixture-launched-run-id",
           },
         }),
       );
@@ -520,12 +516,12 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
 
       const execution = Object.values(internals.state.externalProjectAdosExecutions)[0]!;
       expect(execution.evidence.completed).toBe(runCompleted); // adapter signal propagates faithfully
-      // Finding 1 (independent review, post-round-18): this execution is
-      // machine-bound to the real durable ADOS run this verification session
-      // itself is running under, received FROM the execution boundary's own
-      // result evidence above - not pre-seeded onto Project A's repository
-      // binding or preparation ahead of the invocation.
-      expect(execution.durableAdosRunId).toBe(sanitizedAdosRun.runId);
+      // The durable run identity is received FROM the execution boundary's
+      // own result evidence above (plumbing only here - a real,
+      // ADOS-generated child run id is proven by the dedicated test below),
+      // never pre-seeded onto Project A's repository binding or preparation
+      // ahead of the invocation.
+      expect(execution.durableAdosRunId).toBe("fixture-launched-run-id");
       // The Spec 130 ExternalProjectAdosExecution schema types the review /
       // validation / publish sub-stage flags as the literal `false`, so an
       // in-office record never advances past implementer work in either run
@@ -561,91 +557,137 @@ describe("Spec 148 autonomous company operations end-to-end", () => {
         // signal every automation policy's countActiveExecutions keys on) and
         // the office-observable active count has already dropped to 0 above.
         //
-        // (a) Independent reviewer, resolved from THIS run's own durable
-        //     implementer id (Claude) through the real roleResolver.js: a
-        //     distinct agent, Codex. No self-review fallback. This is derived
-        //     from real run state, not a literal.
+        // Independent reviewer, resolved from THIS run's own durable
+        // implementer id (Claude) through the real roleResolver.js: a
+        // distinct agent, Codex. No self-review fallback. This is derived
+        // from real run state, not a literal.
         expect(execution.evidence.providerId).toBe("claude");
         const roles = resolveEffectiveRoles({ state: {}, requestedImplementerId: execution.evidence.providerId });
         expect(roles.ok).toBe(true);
         expect(roles.roles).toEqual({ implementer: "claude", reviewer: "codex" });
-        // Bound to the durable run's own recorded assignment, not merely the
-        // same mechanism producing a coincidentally-equal result.
-        expect(roles.roles!.implementer).toBe(evidence.adosRun.agentAssignment.implementerId);
-        expect(roles.roles!.reviewer).toBe(evidence.adosRun.agentAssignment.reviewerId);
-        expect(evidence.adosRun.agentAssignment.candidateOwnerId).toBe(roles.roles!.implementer);
 
-        // (b) Publication-readiness gate for THIS SAME bound execution
-        //     (execution.durableAdosRunId === sanitizedAdosRun.runId, asserted
-        //     above), derived BEFORE attempting the task-closing transition -
-        //     not a manually-declared verdict. Computed from this run's own
-        //     real durable ADOS records (candidate/validation/review) via the
-        //     shared spec148DurableAlignment.js helper production and
-        //     spec148RoleAssignmentEvidence.test.ts both use.
-        const exactHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-        const alignment = deriveDurableAlignment(fileURLToPath(runDir), exactHead);
-        const publicationReadiness = convergenceForAlignment(alignment);
-        const converged = publicationReadiness === CONVERGENCE_STATUSES.CONVERGED;
-
-        // (c) Finding 2 (independent review, post-round-18): the production
-        //     `completed` transition itself now REQUIRES this same derived
-        //     result via `publicationReadinessConfirmed`
-        //     (ProjectBacklogService.updateTask rejects a `completed` update
-        //     on a task with an executionRunId when this is not true - see
-        //     "PublicationNotReady"). The gate is evaluated before the call
-        //     and the call's own return value is the enforcement, not a
-        //     fact asserted next to an unconditional transition.
+        // Finding 2/3 (independent review, final child-run implementation):
+        // this fixture's provider exited (evidence.completed === true) but
+        // never performed the real child-run boundary, so it never set
+        // childRunTechnicalReadiness. The controller's own re-derivation
+        // (deriveExecutionPublicationReadiness) reads not-ready from that
+        // absence and production refuses the close outright - a completed
+        // subprocess is not, by itself, technical publication readiness.
+        expect(execution.evidence.childRunTechnicalReadiness).toBeUndefined();
         expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
         const closeAttempted = controller.updateSelectedBacklogTaskFromInput({
           title: task.title,
           description: task.description,
           priority: task.priority,
           status: "completed",
-          publicationReadinessConfirmed: converged,
         });
-
-        // (d) Both arms assert real, non-fabricated state; neither is
-        //     forbidden. Today's real state is the non-converged arm:
-        //     production refuses the transition outright and the task stays
-        //     `in_progress` - a stronger demonstration than a manual close
-        //     next to an unenforced fact. When a later re-review returns
-        //     Approved at unmoved exact HEAD, the converged arm holds instead
-        //     and production allows the close - that is the goal state
-        //     (acceptance criterion 20), not an error.
-        if (converged) {
-          expect(alignment.allAligned).toBe(true);
-          expect(alignment.decision).toBe("Approved");
-          expect(closeAttempted).toBe(true);
-          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("completed");
-        } else {
-          expect(evidence.spec148CandidatePublicationGate.primaryRepositoryMutated).toBe(false);
-          expect(evidence.spec148CandidatePublicationGate.githubMutated).toBe(false);
-          expect(closeAttempted).toBe(false);
-          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
-          // Control: the refusal above is attributable to the publication
-          // gate specifically, not a broken mutation context - the same task,
-          // same call shape, updated to a non-'completed' status succeeds.
-          // Transitioned back to in_progress afterward so this test's own
-          // final state matches runtime-evidence.json's terminalTaskStatus.
-          expect(controller.updateSelectedBacklogTaskFromInput({
-            title: task.title,
-            description: task.description,
-            priority: task.priority,
-            status: "blocked",
-            blockedReason: "control assertion",
-          })).toBe(true);
-          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("blocked");
-          expect(controller.updateSelectedBacklogTaskFromInput({
-            title: task.title,
-            description: task.description,
-            priority: task.priority,
-            status: "in_progress",
-          })).toBe(true);
-          expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
-        }
+        expect(closeAttempted).toBe(false);
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
+        // Control: the refusal above is attributable to the publication
+        // gate specifically, not a broken mutation context - the same task,
+        // same call shape, updated to a non-'completed' status succeeds.
+        expect(controller.updateSelectedBacklogTaskFromInput({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: "blocked",
+          blockedReason: "control assertion",
+        })).toBe(true);
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("blocked");
+        expect(controller.updateSelectedBacklogTaskFromInput({
+          title: task.title,
+          description: task.description,
+          priority: task.priority,
+          status: "in_progress",
+        })).toBe(true);
+        expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("in_progress");
       }
     }
   });
+
+  it("proves one genuinely complete Project A cycle through a real ADOS child run: real prepare/continue/inspect -> ADOS-generated child run id -> Approved review -> exact HEAD -> technical readiness -> genuine task completion (Findings 1-4, final child-run implementation)", async () => {
+    // Unlike the fixture loop above, this test injects the REAL Node-only
+    // gateway (tools/agent-workflow/externalAdosChildRunGateway.js) into the
+    // REAL ExternalAdosChildRunImplementerProvider - the exact composition
+    // OfficeProjectPortalController performs when a genuine Node caller
+    // supplies options.externalAdosChildRunGatewayModule (never supplied by
+    // browser production wiring; see that provider's docblock for why it
+    // can't statically import its own gateway). This spawns a real
+    // `tools/agent-workflow/cli.js orchestrate` subprocess against a fresh
+    // disposable local repository under .agent-workflow/disposable-projects/
+    // with deterministic Claude/Codex stand-in executables (authoritative
+    // requirement 23) - never Project A's own worktree, and never dailyProof
+    // (explicitHumanDecisions.forbiddenRepositories).
+    const originalSpawnAllowEnv = process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN;
+    process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN = "1";
+    try {
+      const gatewayNamespace = await import("../../../../../../tools/agent-workflow/externalAdosChildRunGateway.js");
+      const gatewayModule = (gatewayNamespace as { default?: unknown }).default ?? gatewayNamespace;
+
+      const storage = createMemoryStorage();
+      const controller = createController(
+        storage,
+        providerWith([{ title: "Doc task", description: "Add a short docs note.", priority: HIGH }]),
+        { externalAdosChildRunGatewayModule: gatewayModule as never },
+      );
+      const internals = getControllerInternals(controller);
+      seedTwoProjects(internals);
+      controller.open();
+      controller.updateInput(createInput({}));
+      openBacklog(controller, internals, PROJECT_A);
+
+      internals.updateSelectedProjectSuggestionAcceptancePolicy({ enabled: true, allowedPriorities: [HIGH] });
+      controller.updateSelectedProjectAutonomyPolicy({ enabled: true, allowedPriorities: [HIGH] });
+      internals.updateSelectedProjectAutonomousSuggestionPolicy({ enabled: true, maxSuggestionsPerEvaluation: 1 });
+      await flushPromises();
+      internals.evaluateSelectedProjectBacklogSuggestionsForAutoAccept();
+      internals.updateSelectedProjectBacklogReadinessPromotionPolicy({
+        enabled: true,
+        allowedPriorities: [HIGH],
+        maxPromotionsPerEvaluation: 1,
+      });
+      expect(await controller.reevaluateSelectedProjectAutonomy()).toBe(true);
+
+      const task = internals.state.projectBacklogCollections[PROJECT_A].tasks[0];
+      expect(task.status).toBe("in_progress");
+
+      const execution = Object.values(internals.state.externalProjectAdosExecutions)[0]!;
+      expect(execution.evidence.completed).toBe(true);
+      // Finding 1: the durable child run id is real - ADOS-generated
+      // (runSummary.js's run.runId, derived from the real first agent
+      // invocation's own timestamp), never invented by this gateway and
+      // never the parent Spec 148 run's own id.
+      expect(execution.durableAdosRunId).toBeTruthy();
+      expect(execution.durableAdosRunId).not.toBe(sanitizedAdosRun.runId);
+      expect(execution.durableAdosRunId).toMatch(/^run-\d{4}-\d{2}-\d{2}T/);
+
+      const readiness = execution.evidence.childRunTechnicalReadiness;
+      expect(readiness).toBeDefined();
+      expect(readiness!.childRunId).not.toBe(sanitizedAdosRun.runId);
+      expect(readiness!.reviewDecision).toBe("Approved");
+      expect(readiness!.validatedMatchesCandidate).toBe(true);
+      expect(readiness!.reviewedMatchesCandidate).toBe(true);
+      expect(readiness!.exactHeadMatch).toBe(true);
+      expect(readiness!.ready).toBe(true);
+
+      internals.state.selectedBacklogTaskId = task.id;
+      // Finding 2/3/4: the controller re-derives readiness itself
+      // (deriveExecutionPublicationReadiness) from this SAME execution's
+      // real evidence - no caller-supplied confirmation exists on this
+      // input type at all - and production allows the close for real.
+      const closeAttempted = controller.updateSelectedBacklogTaskFromInput({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+        status: "completed",
+      });
+      expect(closeAttempted).toBe(true);
+      expect(internals.state.projectBacklogCollections[PROJECT_A].tasks[0].status).toBe("completed");
+    } finally {
+      if (originalSpawnAllowEnv === undefined) delete process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN;
+      else process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN = originalSpawnAllowEnv;
+    }
+  }, 30000);
 
   it("keeps the four automation controls independently disableable (Tests A, Z)", async () => {
     const storage = createMemoryStorage();
@@ -981,10 +1023,15 @@ function expectPolicyFlags(
   }).toEqual(expected);
 }
 
-function createController(storage: BrowserOfficeSessionStorage, provider: ProjectBacklogSuggestionProvider) {
+function createController(
+  storage: BrowserOfficeSessionStorage,
+  provider: ProjectBacklogSuggestionProvider,
+  extraOptions: Partial<ConstructorParameters<typeof OfficeProjectPortalController>[1]> = {},
+) {
   return new OfficeProjectPortalController(createSceneStub(), {
     browserOfficeSessionService: new BrowserOfficeSessionService({ storage, now: () => "2026-09-03T00:00:00.000Z" }),
     projectBacklogSuggestionProvider: provider,
+    ...extraOptions,
   });
 }
 
@@ -1069,11 +1116,15 @@ function launchedImplementerProvider() {
         stdoutSummary: "",
         stderrSummary: "",
         outputTruncated: false,
-        // Finding 1 (independent review, post-round-18): the durable ADOS run
-        // identity is returned FROM this execution-boundary invocation's own
-        // result, the same shape a real ADOS-observing provider would use -
-        // never pre-seeded onto the request/binding before this call.
-        durableAdosRunId: sanitizedAdosRun.runId,
+        // Fixture-only id (plumbing check only: execution.durableAdosRunId
+        // faithfully mirrors whatever the invoked provider's own result
+        // evidence carries). Never the parent Spec 148 run id, and this
+        // fixture never performs the real child-run boundary, so it never
+        // sets childRunTechnicalReadiness - a genuinely real, ADOS-generated
+        // child run id and verified readiness are proven by the dedicated
+        // "proves one genuinely complete Project A cycle" test, which
+        // injects the real ExternalAdosChildRunImplementerProvider/gateway.
+        durableAdosRunId: "fixture-launched-run-id",
       },
     }),
   );

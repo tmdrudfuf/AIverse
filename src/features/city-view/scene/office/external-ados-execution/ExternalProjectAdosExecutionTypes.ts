@@ -105,6 +105,29 @@ export function copyExternalProjectAdosExecution(
   };
 }
 
+/**
+ * Completion coordinator (Spec 148 finding 3, independent review): re-derives
+ * whether a task's execution reached verified technical publication
+ * readiness directly from the execution's own evidence -- the same
+ * evidence a real ExternalAdosChildRunImplementerProvider run populated by
+ * causally driving the child run and reading back its durable summary. This
+ * never accepts a caller-supplied confirmation; a caller with no real
+ * execution, or an execution whose provider never performed the child-run
+ * boundary, always gets `ready: false`.
+ */
+export function deriveExecutionPublicationReadiness(
+  execution: ExternalProjectAdosExecution | undefined,
+): { ready: boolean; reasonCode: string } {
+  const readiness = execution?.evidence.childRunTechnicalReadiness;
+  if (!readiness) return { ready: false, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_EVIDENCE_MISSING" };
+  if (execution?.durableAdosRunId !== readiness.childRunId) {
+    return { ready: false, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_ID_MISMATCH" };
+  }
+  return readiness.ready
+    ? { ready: true, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_READY" }
+    : { ready: false, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_NOT_READY" };
+}
+
 export function copyExternalProjectAdosExecutionResult(
   result: ExternalProjectAdosExecutionResult,
 ): ExternalProjectAdosExecutionResult {

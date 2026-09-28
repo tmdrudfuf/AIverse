@@ -157,7 +157,10 @@ function deriveChildRunReadiness(inspected) {
     && exactHeadMatch;
 
   return {
-    childRunId: inspected.childRunId,
+    // The same ADOS-authored identity surfaced as durableAdosRunId below
+    // (summary.run.runId), not this gateway's own directory-naming choice
+    // (inspected.childRunId / state.featureId) - see childRunIdAuthority.
+    childRunId: summary.run.runId,
     candidateSha,
     reviewDecision,
     validatedMatchesCandidate,
