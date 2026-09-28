@@ -34,32 +34,34 @@ being skipped or any safety gate being disabled.
 **Independent Test**: With Project A having Auto Suggestions, Auto Accept, Auto
 Ready, and Auto Execute all explicitly enabled, fire one bounded lifecycle
 event and confirm the ordered progression suggestion -> accepted backlog task ->
-Ready -> autonomous execution -> development bridge -> ADOS run, each transition
-occurring exactly once; then confirm the chain continues into review - the
-reviewer for the run resolves from its own durable implementer id (Codex,
-distinct from the Claude implementer) - and that when the ADOS run reports
-run-level completion (`execution.evidence.completed`) the office-observable
-Spec 144 active-execution count drops from 1 to 0 and the operator's existing
-transition may attempt to close the daily-proof task to `completed` - a
-transition that itself now requires publication-readiness confirmation,
-derived beforehand from the same bound execution's real durable ADOS
-alignment, and is refused (task stays `in_progress`) while that alignment is
-not converged. While the run is still in flight the task stays `in_progress`
-and nothing auto-approves or fabricates completion. The same cycle's review / validation / exact HEAD /
-publication stage cannot be represented on the in-office chain (the office
-`ExternalProjectAdosExecution` schema types its review/validation/publish
-sub-stage flags as the literal `false`); it is exercised by
-`spec148RoleAssignmentEvidence.test.ts`, which runs the
-`candidate == validated == reviewed == exact HEAD` + Approved-review
-convergence biconditional **iff**-style (both directions),
-**unconditionally**, over this run's own durable ADOS records
-(`candidate.json` / `validation-runtime.json` / `review-runtime.json`) using
-the production comparator `validationPolicy.js` `targetsMatch` and the real
-`reviewConvergence.js` `computeConvergenceStatus`, carrying the real durable
-review decision - not a hand-built object. Per authoritative requirement 23 the ADOS process spawn is
-the only injected boundary; push, PR readiness, approval, merge, and remote
-deletion remain the human-only publication boundary and are not performed by
-the runtime.
+Ready -> autonomous execution -> development bridge -> ADOS execution, each
+transition occurring exactly once. The ADOS execution boundary
+(`ExternalAdosChildRunImplementerProvider`) drives a real, disposable child
+ADOS run: a fresh local verification repository (never Project A's own
+worktree, never a real user project), a real `tools/agent-workflow/cli.js
+orchestrate` subprocess against it with deterministic implementer/reviewer
+executables standing in for the Claude/Codex process boundary (authoritative
+requirement 23), and an ADOS-generated child run id read back from that real
+run's own durable summary - never injected ahead of time, and never the
+parent Spec 148 run's own id. The reviewer for that child run resolves from
+its own durable implementer id (Codex, distinct from the Claude implementer).
+Once the child run reaches verified technical readiness - an Approved review
+aligned on candidate == validated == reviewed == exact HEAD, re-derived by
+the controller from the execution's own evidence
+(`deriveExecutionPublicationReadiness`), never a caller-supplied confirmation
+- the operator's existing task-closing transition succeeds for real and the
+daily-proof task reaches `completed`. A completed-but-not-yet-ready run (the
+implementer subprocess exited but the child run has not reached that
+readiness) still refuses the close, proving `evidence.completed` alone is not
+sufficient. Push, PR readiness, approval, merge, and remote deletion remain
+the human-only publication boundary and are not performed by the runtime -
+this readiness is technical, not remote-publication, authority
+(`remotePublicationState` stays `NOT_REQUESTED`). The PARENT Spec 148
+candidate's own publication gate (independent Codex review of the exact
+commit under review) is a separate, standing per-candidate gate - a durable
+Approved review of a candidate cannot be recorded inside the commit that
+becomes that candidate - and is exercised over the parent run's own durable
+records by `spec148RoleAssignmentEvidence.test.ts`, not by this cycle.
 
 **Acceptance Scenarios**:
 
@@ -91,10 +93,15 @@ the runtime.
    `autonomyActiveExecutionCount`) and the operator MAY attempt to close the
    daily-proof task to `completed` through the existing transition - no
    autonomous `in_progress -> completed` path exists or is added. That
-   transition itself requires publication-readiness confirmation, derived
-   beforehand from the same bound execution's real durable ADOS alignment (see
-   scenario 6), for any task with an execution identity; while that alignment
-   is not converged the transition is refused and the task stays `in_progress`.
+   transition itself requires the controller to re-derive verified technical
+   publication readiness from the same execution's own real evidence
+   (`deriveExecutionPublicationReadiness`), for any task with an execution
+   identity - never a caller-supplied confirmation. A completed-but-not-ready
+   run (the subprocess exited but the child run has not reached an Approved
+   review aligned on candidate == validated == reviewed == exact HEAD) is
+   refused and the task stays `in_progress`; a genuinely ready real child run
+   (`ExternalAdosChildRunImplementerProvider`, see scenario 1) succeeds and
+   the task reaches `completed`.
 
 ---
 
