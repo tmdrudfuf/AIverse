@@ -592,7 +592,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.readinessPromotionEvaluateButton.textContent = "Evaluate Readiness";
       form.readinessPromotionMaxInput.value = String(probe?.backlogReadinessPromotionMaxPromotions ?? 1);
       form.readinessPromotionReason.textContent = `Auto Ready: ${probe?.backlogReadinessPromotionEnabled ? "On" : "Off"} | ${formatAutonomyPriorities(probe?.backlogReadinessPromotionAllowedPriorities ?? [])} | Max ${probe?.backlogReadinessPromotionMaxPromotions ?? 1} | ${probe?.backlogReadinessPromotionLatestResult || "Manual promotion"}`;
-      form.runtimeBridgeEnablementReason.textContent = formatRuntimeBridgeEnablement(this.officeProjectPortalController?.getRuntimeBridgeEnablement());
+      const cancelOutcomeSuffix = this.runtimeBridgeLastCancelOutcome === null
+        ? ""
+        : this.runtimeBridgeLastCancelOutcome
+          ? " | Last cancel: accepted"
+          : " | Last cancel: not accepted (run may have already finished)";
+      form.runtimeBridgeEnablementReason.textContent = `${formatRuntimeBridgeEnablement(this.officeProjectPortalController?.getRuntimeBridgeEnablement())}${cancelOutcomeSuffix}`;
       const activeRuntimeBridgeRunId = this.officeProjectPortalController?.getActiveRuntimeBridgeRunId() ?? null;
       form.runtimeBridgeCancelButton.textContent = "Cancel Real Run";
       form.runtimeBridgeCancelButton.title = activeRuntimeBridgeRunId
@@ -943,7 +948,15 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       // provider reference, not a state transition the per-frame update
       // loop needs to validate (Spec 149 T029).
       const runtimeBridgeCancelHandler = () => {
-        void this.officeProjectPortalController?.cancelActiveRuntimeBridgeRun();
+        void this.officeProjectPortalController?.cancelActiveRuntimeBridgeRun().then((accepted) => {
+          // Round-7 review findings (N-009, N-011, non-blocking): surface
+          // whether the cancel was actually accepted (a rejected cancel was
+          // previously invisible to the operator), and re-check enablement
+          // right after, since a run finishing or a server restart could
+          // have changed it since the office was last entered.
+          this.runtimeBridgeLastCancelOutcome = accepted;
+          void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
+        });
       };
       const autonomyPriorityChangeHandler = () => {
         this.projectBacklogFormPendingPriorityChange = true;
@@ -1076,6 +1089,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       return this.projectBacklogForm;
     }
 
+    private runtimeBridgeLastCancelOutcome: boolean | null = null;
     private projectBacklogFormPendingToggleAutonomy = false;
     private projectBacklogFormPendingReevaluateAutonomy = false;
     private projectBacklogFormPendingPriorityChange = false;
@@ -1214,6 +1228,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       }
       form.root.remove();
       this.projectBacklogForm = undefined;
+      this.runtimeBridgeLastCancelOutcome = null;
       this.projectBacklogFormPendingToggleAutonomy = false;
       this.projectBacklogFormPendingReevaluateAutonomy = false;
       this.projectBacklogFormPendingPriorityChange = false;

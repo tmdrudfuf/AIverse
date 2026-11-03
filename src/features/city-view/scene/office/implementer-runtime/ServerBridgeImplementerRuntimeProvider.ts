@@ -28,9 +28,9 @@ const STATUS_FROM_BRIDGE: Record<string, ImplementerRuntimeStatus> = {
  * the server route's response only carries a run's id once that run is
  * already terminal, so without a caller-supplied id there would be no way
  * to look up and cancel a run while it is still in flight. `getActiveRunId`/
- * `cancelActiveRun` expose that id and a cancel action for exactly this,
- * even though no UI control calls them yet (see tasks.md T016/T020's own
- * notes on that remaining, deliberately deferred wiring).
+ * `cancelActiveRun` expose that id and a cancel action for exactly this;
+ * `OfficeProjectPortalController.cancelActiveRuntimeBridgeRun()` calls the
+ * latter from the office UI's Cancel control (Spec 149 T029).
  *
  * `activeRunId` holds exactly one in-flight run (round-4 review finding
  * N-004, non-blocking): a second concurrent `invoke()` on the SAME
