@@ -3,21 +3,33 @@ import os from "node:os";
 import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { POST } from "./route";
+import { handleExecuteRequest } from "./route";
 import type { RuntimeBridgeExecuteRequest } from "../_lib/RuntimeBridgeTypes";
 
 const IMPLEMENTER_ENV_VAR = "AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN";
 const REVIEWER_ENV_VAR = "AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN";
 
+// Every test below stands in for the real "claude"/"codex" command with a
+// harmless, always-available real process (this test file's own Node
+// binary) via this test-only override -- production's `POST` never passes
+// it, so the real allowlist (route.ts's APPROVED_COMMANDS_BY_ROLE) is never
+// weakened. See route.ts's own comment on `handleExecuteRequest`'s options.
+const TEST_ALLOWED_COMMANDS = { implementer: process.execPath, reviewer: process.execPath };
+
 function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "runtime-bridge-execute-"));
 }
 
-function postRequest(body: RuntimeBridgeExecuteRequest) {
+function postRequest(body: unknown, headers?: Record<string, string>) {
   return new NextRequest("http://localhost/api/runtime/execute", {
     method: "POST",
     body: JSON.stringify(body),
+    headers,
   });
+}
+
+function callExecute(body: unknown, headers?: Record<string, string>) {
+  return handleExecuteRequest(postRequest(body, headers), { allowedCommandsByRole: TEST_ALLOWED_COMMANDS });
 }
 
 function createRequestBody(overrides: Partial<RuntimeBridgeExecuteRequest> = {}): RuntimeBridgeExecuteRequest {
@@ -52,7 +64,7 @@ describe("POST /api/runtime/execute", () => {
   it("refuses with not_enabled when the role's env var is unset", async () => {
     delete process.env[IMPLEMENTER_ENV_VAR];
 
-    const response = await POST(postRequest(createRequestBody()));
+    const response = await callExecute(createRequestBody());
     const body = await response.json();
 
     expect(body.status).toBe("refused");
@@ -62,12 +74,8 @@ describe("POST /api/runtime/execute", () => {
   });
 
   it("refuses with project_unavailable when the working directory does not exist", async () => {
-    const response = await POST(
-      postRequest(
-        createRequestBody({
-          command: { ...createRequestBody().command, workingDirectory: "C:/this/path/does/not/exist" },
-        }),
-      ),
+    const response = await callExecute(
+      createRequestBody({ command: { ...createRequestBody().command, workingDirectory: "C:/this/path/does/not/exist" } }),
     );
     const body = await response.json();
 
@@ -77,12 +85,8 @@ describe("POST /api/runtime/execute", () => {
   });
 
   it("refuses with unsafe_command when the command line fails existing safety validation", async () => {
-    const response = await POST(
-      postRequest(
-        createRequestBody({
-          command: { ...createRequestBody().command, arguments: ["-e", "x", "&&", "git push"] },
-        }),
-      ),
+    const response = await callExecute(
+      createRequestBody({ command: { ...createRequestBody().command, arguments: ["-e", "x", "&&", "git push"] } }),
     );
     const body = await response.json();
 
@@ -91,8 +95,43 @@ describe("POST /api/runtime/execute", () => {
     expect(body.evidence.stderrSummary).toMatch(/safety validation/i);
   });
 
+  it("refuses with unsafe_command when command.command is not the approved executable for the role (no test override)", async () => {
+    // Deliberately calls handleExecuteRequest directly WITHOUT the test
+    // override, proving production's own allowlist (not just the test
+    // harness) rejects an arbitrary executable.
+    const response = await handleExecuteRequest(postRequest(createRequestBody()));
+    const body = await response.json();
+
+    expect(body.status).toBe("refused");
+    expect(body.refusalReason).toBe("unsafe_command");
+  });
+
+  it("refuses a cross-origin request before even parsing the body", async () => {
+    const response = await callExecute(createRequestBody(), { origin: "https://evil.example" });
+    const body = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(body.status).toBe("refused");
+  });
+
+  it("refuses a malformed body (missing command fields) without a 500", async () => {
+    const response = await callExecute({ role: "implementer", command: { command: "claude" } });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.status).toBe("refused");
+  });
+
+  it("refuses a non-finite or out-of-range timeoutMs", async () => {
+    const response = await callExecute(
+      createRequestBody({ command: { ...createRequestBody().command, timeoutMs: Number.NaN } }),
+    );
+
+    expect(response.status).toBe(400);
+  });
+
   it("genuinely executes and reports completed with real evidence", async () => {
-    const response = await POST(postRequest(createRequestBody()));
+    const response = await callExecute(createRequestBody());
     const body = await response.json();
 
     expect(body.status).toBe("completed");
@@ -103,8 +142,8 @@ describe("POST /api/runtime/execute", () => {
   });
 
   it("reports failed on a genuine non-zero exit", async () => {
-    const response = await POST(
-      postRequest(createRequestBody({ command: { ...createRequestBody().command, arguments: ["-e", "process.exit(3)"] } })),
+    const response = await callExecute(
+      createRequestBody({ command: { ...createRequestBody().command, arguments: ["-e", "process.exit(3)"] } }),
     );
     const body = await response.json();
 
@@ -113,12 +152,10 @@ describe("POST /api/runtime/execute", () => {
   });
 
   it("reports timed_out when the process exceeds its time budget", async () => {
-    const response = await POST(
-      postRequest(
-        createRequestBody({
-          command: { ...createRequestBody().command, arguments: ["-e", "setInterval(() => {}, 1000)"], timeoutMs: 100 },
-        }),
-      ),
+    const response = await callExecute(
+      createRequestBody({
+        command: { ...createRequestBody().command, arguments: ["-e", "setInterval(() => {}, 1000)"], timeoutMs: 100 },
+      }),
     );
     const body = await response.json();
 
@@ -126,23 +163,30 @@ describe("POST /api/runtime/execute", () => {
     expect(body.evidence.timedOut).toBe(true);
   });
 
-  it("refuses a second concurrent request for the same working directory with already_running", async () => {
+  it("refuses a second concurrent request for the same working directory with already_running, and a refused request never writes implementer files", async () => {
     const workingDirectory = createTempDir();
     const longRunning = createRequestBody({
       command: { ...createRequestBody().command, workingDirectory, arguments: ["-e", "setTimeout(() => {}, 300)"], timeoutMs: 5_000 },
     });
 
-    const firstPromise = POST(postRequest(longRunning));
+    const firstPromise = callExecute(longRunning);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    const secondResponse = await POST(
-      postRequest(createRequestBody({ command: { ...createRequestBody().command, workingDirectory } })),
+    const secondResponse = await callExecute(
+      createRequestBody({
+        command: {
+          ...createRequestBody().command,
+          workingDirectory,
+          files: [{ relativePath: "should-not-be-written.txt", content: "x" }],
+        },
+      }),
     );
     const secondBody = await secondResponse.json();
 
     expect(secondBody.status).toBe("refused");
     expect(secondBody.refusalReason).toBe("already_running");
     expect(secondBody.evidence.stderrSummary).toMatch(/already in progress/i);
+    expect(fs.existsSync(path.join(workingDirectory, "should-not-be-written.txt"))).toBe(false);
 
     const firstBody = await (await firstPromise).json();
     expect(firstBody.status).toBe("completed");
@@ -150,14 +194,10 @@ describe("POST /api/runtime/execute", () => {
 
   it("frees the working directory for a new run once the prior one finishes", async () => {
     const workingDirectory = createTempDir();
-    const first = await POST(
-      postRequest(createRequestBody({ command: { ...createRequestBody().command, workingDirectory } })),
-    );
+    const first = await callExecute(createRequestBody({ command: { ...createRequestBody().command, workingDirectory } }));
     expect((await first.json()).status).toBe("completed");
 
-    const second = await POST(
-      postRequest(createRequestBody({ command: { ...createRequestBody().command, workingDirectory } })),
-    );
+    const second = await callExecute(createRequestBody({ command: { ...createRequestBody().command, workingDirectory } }));
     const secondBody = await second.json();
 
     expect(secondBody.status).toBe("completed");

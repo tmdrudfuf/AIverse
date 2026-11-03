@@ -27,7 +27,16 @@ export type RuntimeBridgeProcessOptions = {
   timeoutMs: number;
   gracePeriodMs?: number;
   spawnImpl?: RuntimeBridgeSpawnImpl;
+  maxBufferedOutputLength?: number;
 };
+
+const DEFAULT_MAX_BUFFERED_OUTPUT_LENGTH = 5_000_000; // 5MB per stream -- bounds memory against runaway output.
+
+function appendBounded(current: string, chunk: string, maxLength: number): string {
+  if (current.length >= maxLength) return current;
+  const next = current + chunk;
+  return next.length > maxLength ? next.slice(0, maxLength) : next;
+}
 
 /**
  * Async, cancellable subprocess execution for the real execution server
@@ -46,6 +55,7 @@ export function runRuntimeBridgeProcess(
 ): RuntimeBridgeProcessHandle {
   const spawnImpl = options.spawnImpl ?? spawn;
   const gracePeriodMs = options.gracePeriodMs ?? RUNTIME_BRIDGE_DEFAULT_GRACE_PERIOD_MS;
+  const maxBufferedOutputLength = options.maxBufferedOutputLength ?? DEFAULT_MAX_BUFFERED_OUTPUT_LENGTH;
   const startedAtMs = Date.now();
 
   let settled = false;
@@ -78,11 +88,17 @@ export function runRuntimeBridgeProcess(
   }, options.timeoutMs);
 
   child.stdout?.on("data", (chunk: Buffer) => {
-    stdout += chunk.toString();
+    stdout = appendBounded(stdout, chunk.toString(), maxBufferedOutputLength);
   });
   child.stderr?.on("data", (chunk: Buffer) => {
-    stderr += chunk.toString();
+    stderr = appendBounded(stderr, chunk.toString(), maxBufferedOutputLength);
   });
+  // Without this, an EPIPE/ENOENT writing to a child that already exited
+  // (e.g. it rejected stdin, or exited immediately) emits an unhandled
+  // 'error' event on the stream, which can crash the whole server process
+  // (P2-004). The child's own overall outcome is still reported correctly
+  // via the 'error'/'close' handlers below regardless.
+  child.stdin?.on("error", () => {});
 
   const result = new Promise<RuntimeBridgeProcessResult>((resolve) => {
     child.on("error", (error: NodeJS.ErrnoException) => {
