@@ -77,13 +77,27 @@
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Write `src/app/api/runtime/execute/[runId]/route.test.ts` first: `DELETE` on a known in-flight `runId` calls through to `RuntimeBridgeProcessRunner.cancel()` and returns `{accepted:true}`; on an unknown/already-terminal `runId` returns `{accepted:false}` without error.
-- [ ] T019 [P] [US3] Extend T007's route test with: a run whose fake process runner reports `timedOut: true` resolves as `timed_out` (not `completed`); a run whose fake process exits non-zero resolves as `failed` with captured evidence; a second concurrent request for the same working directory while the first is `running` resolves as `refused`/`already_running`.
+- [X] T018 [P] [US3] Write `src/app/api/runtime/execute/[runId]/route.test.ts` first: `DELETE` on a known in-flight run (registered directly against the shared registry) calls through to its handle's `cancel()` and returns `{accepted:true}`; on an unknown `runId` returns `{accepted:false}` without error.
+- [X] T019 [P] [US3] Already covered in `route.test.ts` (added alongside T007/T009): a genuinely timed-out real subprocess resolves as `timed_out`; a genuine non-zero exit resolves as `failed` with captured evidence; a second concurrent real request for the same working directory while the first is `running` resolves as `refused`/`already_running`.
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Implement `DELETE /api/runtime/execute/[runId]/route.ts`, looking up the run in `RuntimeBridgeRunRegistry` and delegating to the handle's `cancel()` from T004. Must make T018 pass. (depends on T006)
-- [ ] T021 [US3] Confirm (should already hold from T004/T009, add any missing assertions) that the registry removes a project's active-run entry as soon as it reaches any terminal status, so a subsequent request for that project is never wrongly refused `already_running` after the prior run actually finished.
+- [X] T020 [US3] Implement `DELETE /api/runtime/execute/[runId]/route.ts`, looking up the run in `RuntimeBridgeRunRegistry` and delegating to the handle's `cancel()`. Must make T018 pass. (depends on T006)
+
+  ponytail / scope boundary found while wiring this: cancelling requires knowing a run's `runId`
+  *while it is still running*, but `POST /api/runtime/execute` only returns the `runId` once the run
+  is already terminal (same call resolves once, at the end). The existing, already-reviewed
+  `ImplementerRuntimeProvider`/`ReviewerRuntimeProvider` contracts are explicitly documented as
+  "No mutation methods exist on this contract by design -- only a single, bounded, terminal
+  invocation," so they offer no hook to learn or supply a run id before `invoke()` resolves either.
+  Cancellation is therefore delivered and fully tested at the HTTP/registry layer (this route +
+  `RuntimeBridgeRunRegistry`) but is **not yet reachable from the existing office UI** -- no "Cancel"
+  button exists to call it from, because doing so would mean widening that deliberately minimal
+  provider contract, which is a separate design decision this feature does not make silently.
+  Add when: a future feature decides the contract should grow a cancel hook (e.g. the caller
+  generates and supplies its own `runId` up front, as an idempotency key, instead of the server
+  generating one only visible after completion) and wires an actual Cancel control to it.
+- [X] T021 [US3] Confirmed via the "frees the working directory for a new run once the prior one finishes" case in `route.test.ts`: the registry removes the active-run entry as soon as a run reaches any terminal status, so a subsequent request for the same working directory is never wrongly refused `already_running`.
 
 **Checkpoint**: All three user stories are independently functional and covered by fakes-only tests.
 
