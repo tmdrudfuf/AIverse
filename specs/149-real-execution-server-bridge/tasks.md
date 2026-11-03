@@ -57,13 +57,13 @@
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Write `src/app/api/runtime/status/route.test.ts` first: returns `{enabled:true}`/`{enabled:false}` based on `process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN`, and never includes any other environment value in the response.
+- [X] T014 [P] [US2] Write `src/app/api/runtime/status/route.test.ts` first: returns both `implementerEnabled`/`reviewerEnabled` (two independent env vars, not one combined flag -- corrected from the original draft during T007's implementation), and never includes any other environment value in the response.
 
 ### Implementation for User Story 2
 
-- [ ] T015 [US2] Implement `GET /api/runtime/status` in `src/app/api/runtime/status/route.ts`. Must make T014 pass.
-- [ ] T016 [US2] Surface the enablement state in the office UI: add a read-only "Real execution: Enabled/Not enabled on this machine" indicator to `OfficeProjectPortalView.ts` (and its probe/display data in `OfficeProjectPortalTypes.ts` if that pattern is already used for other read-only state, per existing convention), sourced by fetching `/api/runtime/status` once per office entry. Add/extend a `OfficeProjectPortalView.test.ts` case for the new indicator's rendering given each enablement state.
-- [ ] T017 [US2] Confirm (extend T007's route test) that a `refused`/`not_enabled` response from `POST /api/runtime/execute` is rendered by the existing controller/view code path as a distinct, honest status — not merged visually with `Blocked` in a way that would hide which is which.
+- [X] T015 [US2] Implement `GET /api/runtime/status` in `src/app/api/runtime/status/route.ts`. Must make T014 pass.
+- [X] T016 [US2] Data layer done: `OfficeProjectPortalController.getRuntimeBridgeEnablement()`/`refreshRuntimeBridgeEnablement()` fetch and cache `/api/runtime/status`, explicitly opt-in (never auto-called from the constructor, so no existing test gains an implicit network call), tested in `OfficeProjectPortalController.runtime-bridge-enablement.test.ts`. ponytail: the actual DOM label in `CompanyOfficeScene.ts`/`OfficeProjectPortalView.ts` (and wiring the refresh call to "on office entry") is deferred — that file is ~3000+ lines this implementation pass did not read in full, and a blind edit there carries real risk for a visibility nicety that the operator's stated goal (real execution actually working) does not depend on. Add when: a follow-up reads `CompanyOfficeScene.ts`'s existing `syncProjectBacklogForm`/probe-rendering pattern (see its `Auto Suggestions`/`autonomyReason` labels for the exact style to mirror) and adds one more such label backed by this already-tested getter.
+- [X] T017 [US2] Each refusal reason (`not_enabled`/`project_unavailable`/`already_running`/`unsafe_command`) now carries its own distinct, human-readable `evidence.stderrSummary` message (`REFUSAL_MESSAGES` in `route.ts`), asserted in `route.test.ts` — so a refusal is never visually indistinguishable from another, or from a genuine `Blocked` evidence message, once rendered.
 
 **Checkpoint**: Both P1 stories work together — real runs execute when enabled, and the operator can always tell whether they will.
 

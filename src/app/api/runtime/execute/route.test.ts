@@ -58,6 +58,7 @@ describe("POST /api/runtime/execute", () => {
     expect(body.status).toBe("refused");
     expect(body.refusalReason).toBe("not_enabled");
     expect(body.evidence.started).toBe(false);
+    expect(body.evidence.stderrSummary).toMatch(/not enabled/i);
   });
 
   it("refuses with project_unavailable when the working directory does not exist", async () => {
@@ -72,6 +73,7 @@ describe("POST /api/runtime/execute", () => {
 
     expect(body.status).toBe("refused");
     expect(body.refusalReason).toBe("project_unavailable");
+    expect(body.evidence.stderrSummary).toMatch(/does not exist|not readable|unsafe/i);
   });
 
   it("refuses with unsafe_command when the command line fails existing safety validation", async () => {
@@ -86,6 +88,7 @@ describe("POST /api/runtime/execute", () => {
 
     expect(body.status).toBe("refused");
     expect(body.refusalReason).toBe("unsafe_command");
+    expect(body.evidence.stderrSummary).toMatch(/safety validation/i);
   });
 
   it("genuinely executes and reports completed with real evidence", async () => {
@@ -139,6 +142,7 @@ describe("POST /api/runtime/execute", () => {
 
     expect(secondBody.status).toBe("refused");
     expect(secondBody.refusalReason).toBe("already_running");
+    expect(secondBody.evidence.stderrSummary).toMatch(/already in progress/i);
 
     const firstBody = await (await firstPromise).json();
     expect(firstBody.status).toBe("completed");

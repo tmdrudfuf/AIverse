@@ -51,6 +51,13 @@ function substitutePrompt(args: ReadonlyArray<string>, prompt: string, inputMode
   return substituted.includes(prompt) ? substituted : [...substituted, prompt];
 }
 
+const REFUSAL_MESSAGES: Record<RuntimeBridgeRefusalReason, string> = {
+  not_enabled: "Real execution is not enabled for this role on this machine.",
+  project_unavailable: "The target working directory does not exist, is not readable, or is unsafe to use.",
+  already_running: "A real run is already in progress for this working directory.",
+  unsafe_command: "Command rejected by safety validation.",
+};
+
 function refusalResponse(
   reason: RuntimeBridgeRefusalReason,
   runId: string,
@@ -68,7 +75,7 @@ function refusalResponse(
       cancelled: false,
       durationMs: 0,
       stdoutSummary: "",
-      stderrSummary: "",
+      stderrSummary: REFUSAL_MESSAGES[reason],
       outputTruncated: false,
       commandDisplay,
       workingDirectory,

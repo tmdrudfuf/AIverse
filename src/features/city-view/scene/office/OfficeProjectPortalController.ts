@@ -3042,6 +3042,42 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+  private runtimeBridgeEnablement: { implementerEnabled: boolean; reviewerEnabled: boolean } | null = null;
+
+  /**
+   * Read-only, cached snapshot of whether real execution (Spec 149's server
+   * bridge) is enabled for each role on this machine. `null` means it has
+   * never been fetched yet, not that it is disabled -- the operator should
+   * see "unknown" rather than a false "disabled" until the first
+   * `refreshRuntimeBridgeEnablement()` resolves.
+   */
+  getRuntimeBridgeEnablement(): { implementerEnabled: boolean; reviewerEnabled: boolean } | null {
+    return this.runtimeBridgeEnablement;
+  }
+
+  /**
+   * Fetches `/api/runtime/status` and caches the result. Never auto-invoked
+   * by the controller itself (construction stays synchronous and test-safe,
+   * with no implicit network call); a caller -- the office scene, once it
+   * renders a visibility indicator -- is expected to invoke this explicitly
+   * when the operator enters an office. A failed fetch leaves the previous
+   * cached value (or `null`) rather than throwing, so a transient network
+   * hiccup never crashes the office.
+   */
+  async refreshRuntimeBridgeEnablement(fetchImpl: typeof fetch = fetch): Promise<void> {
+    try {
+      const response = await fetchImpl("/api/runtime/status");
+      if (!response.ok) return;
+      const body = await response.json();
+      this.runtimeBridgeEnablement = {
+        implementerEnabled: Boolean(body.implementerEnabled),
+        reviewerEnabled: Boolean(body.reviewerEnabled),
+      };
+    } catch {
+      // Leave the previous value in place; see the doc comment above.
+    }
+  }
+
   /**
    * Requires a Runtime Start to already exist for this exact plan before
    * doing anything -- this method never originates a first Runtime Start on
