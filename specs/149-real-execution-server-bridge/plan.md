@@ -62,30 +62,32 @@ src/
 ├── app/
 │   └── api/
 │       └── runtime/
+│           ├── _lib/                                 # server-only; never imported by client-bundled code
+│           │   ├── RuntimeBridgeTypes.ts
+│           │   ├── RuntimeBridgeProcessRunner.ts     # async spawn + timeout + grace period + external cancel
+│           │   ├── RuntimeBridgeProcessRunner.test.ts
+│           │   ├── RuntimeBridgeRunRegistry.ts        # per-project in-memory concurrency guard + audit-file writer
+│           │   └── RuntimeBridgeRunRegistry.test.ts
 │           ├── status/
-│           │   └── route.ts                     # GET: { enabled: boolean }
+│           │   └── route.ts                     # GET: { implementerEnabled, reviewerEnabled }
 │           └── execute/
-│               ├── route.ts                      # POST: start a real run; GET: list/describe active runs
+│               ├── route.ts                      # POST: start a real run
+│               ├── route.test.ts
 │               └── [runId]/
-│                   └── route.ts                  # DELETE: cancel one in-flight run
+│                   ├── route.ts                  # DELETE: cancel one in-flight run
+│                   └── route.test.ts
 │
 └── features/city-view/scene/office/
     ├── implementer-runtime/
-    │   ├── ServerBridgeImplementerRuntimeProvider.ts         # browser-side: fetch()s the API route
+    │   ├── ServerBridgeImplementerRuntimeProvider.ts         # browser-side: fetch()s the API route, no node imports
     │   └── ServerBridgeImplementerRuntimeProvider.test.ts
     ├── reviewer-runtime/
-    │   ├── ServerBridgeReviewerRuntimeProvider.ts            # browser-side: fetch()s the API route
+    │   ├── ServerBridgeReviewerRuntimeProvider.ts            # browser-side: fetch()s the API route, no node imports
     │   └── ServerBridgeReviewerRuntimeProvider.test.ts
-    ├── runtime-bridge/                                        # new, server-only module
-    │   ├── RuntimeBridgeProcessRunner.ts        # async spawn + timeout + grace period + external cancel
-    │   ├── RuntimeBridgeProcessRunner.test.ts
-    │   ├── RuntimeBridgeRunRegistry.ts          # per-project in-memory concurrency guard + audit-file writer
-    │   ├── RuntimeBridgeRunRegistry.test.ts
-    │   └── RuntimeBridgeTypes.ts
     └── OfficeProjectPortalRegistry.ts            # existing file: swap default-wired provider construction
 ```
 
-**Structure Decision**: Single existing Next.js project; no new top-level project/package. The server-only pieces live under `src/app/api/runtime/` (Next.js convention for routes) and a new `runtime-bridge/` directory colocated with the other already-existing `*-runtime/` feature directories under `src/features/city-view/scene/office/`, matching this codebase's existing per-concern directory layout (e.g. `implementer-runtime/`, `reviewer-runtime/`, `validation-runtime/`).
+**Structure Decision**: Single existing Next.js project; no new top-level project/package. The process-spawning code lives under `src/app/api/runtime/_lib/`, inside the `app/api` tree rather than colocated with the browser-bundled `*-runtime/` feature directories (a deliberate adjustment made during implementation, not the original plan draft): anything under `src/features/city-view/scene/office/` is reachable, transitively, from `OfficeProjectPortalController`/`View`/`Registry`, which are bundled into the browser client (Spec 075 plan.md, Architecture Decision 2). Keeping the only files that statically import `node:child_process` physically inside `src/app/api/` removes any risk of that import graph ever reaching the client bundle, with no need to rely on the dynamic-import-plus-`typeof window` trick those existing providers use for a different reason (they are legitimately reachable from the browser and must no-op there; this new code must never be reachable from the browser at all). The two new client-side provider files stay colocated with their existing `*-runtime/` siblings, since they are plain `fetch()` wrappers with no server-only imports.
 
 ## Complexity Tracking
 
