@@ -149,29 +149,33 @@ describe("OfficeProjectPortalController Implementer Runtime concurrency and isol
     expect(result?.reasonCodes).not.toContain("IMPLEMENTER_RUNTIME_MALFORMED");
   });
 
-  it("wires the controller's real default ImplementerRuntimeService and ClaudeImplementerRuntimeProvider end to end, safely stopping at the spawn-allow env-var gate", async () => {
+  it("wires the controller's real default ImplementerRuntimeService and ServerBridgeImplementerRuntimeProvider end to end, safely reporting Blocked with no process ever spawned from this test process", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     await driveDailyProofToRuntimeStart(controller, internals);
 
     // IMPORTANT: uses the controller's own default-wired service and its
     // real, unmodified, approved Claude command configuration -- no
-    // substituted command. ImplementerRuntimeService now rejects any
-    // command configuration that is not an exact match for the approved
-    // one (a Codex review finding: a harmless-but-different substitute like
+    // substituted command. ImplementerRuntimeService rejects any command
+    // configuration that is not an exact match for the approved one (a
+    // Codex review finding: a harmless-but-different substitute like
     // `node --version` must not be treated as equivalent to "approved"), so
-    // a test wanting to reach the real ClaudeImplementerRuntimeProvider
-    // through the service can no longer inject a safe substitute -- it must
-    // use the real config. That real config's command is the literal
-    // `claude` CLI with `--dangerously-skip-permissions`; an early version
-    // of this test spawned five real, live, unsupervised Claude Code agent
-    // processes against this actual worktree before being caught and
-    // killed, which is exactly why AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN
-    // exists. This test deliberately leaves that variable unset, so the
-    // real service correctly accepts the real config and reaches the real
-    // provider, which then safely reports Blocked at the env-var gate
-    // without ever attempting node:child_process at all -- proving the full
-    // wiring is correct without spawning anything.
+    // this test cannot inject a safe substitute -- it must use the real
+    // config and reach the real, default-wired provider.
+    //
+    // As of Spec 149, the default provider is ServerBridgeImplementerRuntimeProvider,
+    // a plain fetch() to /api/runtime/execute -- it no longer touches
+    // node:child_process or SPAWN_ALLOW_ENV_VAR in this process at all (that
+    // check now lives entirely in the server route, exercised separately by
+    // src/app/api/runtime/execute/route.test.ts). In this Vitest/jsdom test
+    // environment there is no real server listening on that path, so the
+    // fetch itself fails and the provider reports Blocked -- proving the
+    // controller's wiring reaches the real provider and that no process is
+    // ever spawned from a test run, regardless of this env var's state
+    // (kept unset here only to document that it has no bearing on this
+    // provider anymore; ClaudeImplementerRuntimeProvider, which did check
+    // it directly, is no longer the default and is exercised on its own in
+    // ClaudeImplementerRuntimeProvider.test.ts).
     const originalSpawnAllowEnv = process.env[SPAWN_ALLOW_ENV_VAR];
     delete process.env[SPAWN_ALLOW_ENV_VAR];
     try {

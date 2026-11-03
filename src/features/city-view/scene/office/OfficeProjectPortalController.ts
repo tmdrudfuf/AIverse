@@ -70,7 +70,7 @@ import {
   createRuntimeStartCollection,
   createRuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
-import { ClaudeImplementerRuntimeProvider } from "./implementer-runtime/ClaudeImplementerRuntimeProvider";
+import { ServerBridgeImplementerRuntimeProvider } from "./implementer-runtime/ServerBridgeImplementerRuntimeProvider";
 import { ImplementerRuntimeService } from "./implementer-runtime/ImplementerRuntimeService";
 import {
   IMPLEMENTER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
@@ -79,7 +79,7 @@ import {
   createImplementerRuntimeCollection,
   createImplementerRuntimeResultCollection,
 } from "./implementer-runtime/ImplementerRuntimeTypes";
-import { CodexReviewerRuntimeProvider } from "./reviewer-runtime/CodexReviewerRuntimeProvider";
+import { ServerBridgeReviewerRuntimeProvider } from "./reviewer-runtime/ServerBridgeReviewerRuntimeProvider";
 import { ReviewerRuntimeService } from "./reviewer-runtime/ReviewerRuntimeService";
 import {
   REVIEWER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
@@ -481,13 +481,13 @@ export class OfficeProjectPortalController {
     this.runtimePreflightService = new RuntimePreflightService();
     this.runtimeStartService = new RuntimeStartService();
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
-    this.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
-    this.reviewerRuntimeService = new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
+    this.implementerRuntimeService = new ImplementerRuntimeService(new ServerBridgeImplementerRuntimeProvider());
+    this.reviewerRuntimeService = new ReviewerRuntimeService(new ServerBridgeReviewerRuntimeProvider());
     this.reviewDecisionService = new ReviewDecisionService();
     this.reviewFixRequestService = new ReviewFixRequestService();
     this.reviewFixPlanService = new ReviewFixPlanService();
     this.reviewFixRuntimeService = new ReviewFixRuntimeService(
-      new ImplementerReviewFixRuntimeProvider(new ClaudeImplementerRuntimeProvider()),
+      new ImplementerReviewFixRuntimeProvider(new ServerBridgeImplementerRuntimeProvider()),
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
     this.projectBacklogService = new ProjectBacklogService();
@@ -504,7 +504,7 @@ export class OfficeProjectPortalController {
     this.projectBacklogReadinessPromotionPolicyService = new ProjectBacklogReadinessPromotionPolicyService();
     this.projectBacklogSuggestionProvider = options.projectBacklogSuggestionProvider
       ?? new DeterministicProjectBacklogSuggestionProvider();
-    this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(new ClaudeImplementerRuntimeProvider());
+    this.externalProjectAdosExecutionService = new ExternalProjectAdosExecutionService(new ServerBridgeImplementerRuntimeProvider());
     this.postValidationReviewTargetService = new PostValidationReviewTargetService();
     this.taskService = new ProjectTaskService(new MockProjectTaskProvider());
     this.employeeService = new EmployeeService(new MockEmployeeProvider());
@@ -3052,7 +3052,7 @@ export class OfficeProjectPortalController {
    * ever constructing an Implementer Runtime request.
    */
   private async startImplementerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
-    this.implementerRuntimeService ??= new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
+    this.implementerRuntimeService ??= new ImplementerRuntimeService(new ServerBridgeImplementerRuntimeProvider());
     this.state.implementerRuntimeCollections ??= {};
     this.state.implementerRuntimeResultCollections ??= {};
 
@@ -3221,7 +3221,7 @@ export class OfficeProjectPortalController {
    * fails to hold.
    */
   private async startReviewerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
-    this.reviewerRuntimeService ??= new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
+    this.reviewerRuntimeService ??= new ReviewerRuntimeService(new ServerBridgeReviewerRuntimeProvider());
     this.state.reviewTargets ??= {};
     this.state.reviewerRuntimeCollections ??= {};
     this.state.reviewerRuntimeResultCollections ??= {};
