@@ -20,6 +20,8 @@ import type {
   RuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
 import type { IssueSnapshotCollection } from "./issue-sync/IssueSyncTypes";
+import type { ServerBridgeImplementerRuntimeProvider } from "./implementer-runtime/ServerBridgeImplementerRuntimeProvider";
+import type { ServerBridgeReviewerRuntimeProvider } from "./reviewer-runtime/ServerBridgeReviewerRuntimeProvider";
 import type {
   ImplementerRuntimeCollection,
   ImplementerRuntimeResultCollection,
@@ -150,6 +152,8 @@ export type ControllerInternals = {
       result: ImplementerRuntimeResultCollection["results"][number],
     ) => ImplementerRuntimeResultCollection;
   };
+  implementerRuntimeBridgeProvider: ServerBridgeImplementerRuntimeProvider;
+  reviewerRuntimeBridgeProvider: ServerBridgeReviewerRuntimeProvider;
   reviewerRuntimeService: {
     startReviewer: (input: ReviewerRuntimeInput) => Promise<ReviewerRuntimeOutcome>;
     upsertResult: (

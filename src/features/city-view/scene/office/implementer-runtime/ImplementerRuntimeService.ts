@@ -139,11 +139,20 @@ export class ImplementerRuntimeService {
       return this.createBlockedOutcome(input, implementerRuntimeId, "IMPLEMENTER_RUNTIME_INTERNAL_FAILURE", "Failed");
     }
 
-    // Blocked/Failed pre-spawn outcomes never create an ImplementerRuntime
-    // record -- only Completed/TimedOut represent an actual confirmed spawn
-    // (matching data-model.md's own stated rule); anything else is a
-    // result-only outcome with agentStarted/implementerStarted left false.
-    const spawned = providerResult.status === "Completed" || providerResult.status === "TimedOut";
+    // A record is created only for a provider result that genuinely
+    // started a real process (matching data-model.md's own stated rule);
+    // anything else is a result-only outcome with agentStarted/
+    // implementerStarted left false. This used to be inferred from
+    // `status === "Completed" || status === "TimedOut"`, which was only
+    // ever a proxy: under the previous provider, Blocked/Failed literally
+    // meant "never started." Spec 149's real server-bridge provider can
+    // genuinely start a process and still end in Failed (real non-zero
+    // exit) or Cancelled (real operator cancel) -- using
+    // `evidence.started` directly is what the comment above actually
+    // means, generalizes correctly to those new, real cases, and is
+    // unchanged for every status the old provider could ever produce
+    // (which never set `started: true` under a case this excludes).
+    const spawned = providerResult.evidence.started;
     if (!spawned) {
       const result = createResult({
         input,
@@ -411,7 +420,8 @@ function createRuntime(
   const plan = input.executionPlan!;
   const runtimeStart = input.runtimeStart!;
   const { command } = input;
-  const spawned = providerResult.status === "Completed" || providerResult.status === "TimedOut";
+  // See the matching comment at this function's call site above.
+  const spawned = providerResult.evidence.started;
   const runtime = {
     implementerRuntimeId,
     projectId: plan.projectId,

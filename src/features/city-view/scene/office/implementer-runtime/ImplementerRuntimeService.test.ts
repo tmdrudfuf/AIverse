@@ -633,7 +633,7 @@ describe("ImplementerRuntimeService", () => {
     expect(outcome.result.implementerStarted).toBe(false);
   });
 
-  it("does not create an ImplementerRuntime record for a Failed provider result (only a result)", async () => {
+  it("does not create an ImplementerRuntime record when the provider never actually started (evidence.started: false)", async () => {
     const chain = createValidChain();
     const provider = createStubProvider({
       status: "Failed",
@@ -643,7 +643,7 @@ describe("ImplementerRuntimeService", () => {
         role: "Implementer",
         commandDisplay: "claude ...",
         workingDirectory: "C:/worktrees/075",
-        started: true,
+        started: false,
         completed: false,
         timedOut: false,
         cancelled: false,
@@ -662,6 +662,76 @@ describe("ImplementerRuntimeService", () => {
     expect(outcome.runtimeCollection).toBeUndefined();
     expect(outcome.result.agentStarted).toBe(false);
     expect(outcome.result.implementerStarted).toBe(false);
+  });
+
+  // Round-5 independent review finding (P2-001): a genuinely-started real
+  // run (Spec 149's server bridge can honestly report `evidence.started:
+  // true` alongside `status: "Failed"` for a real non-zero exit, or
+  // `status: "Cancelled"` for a real operator cancel -- the previous
+  // provider could never produce either combination) must still create a
+  // real ImplementerRuntime record with its real evidence preserved, not
+  // be silently treated as never-spawned.
+  it("creates an ImplementerRuntime record with real evidence for a genuinely-started run that exited non-zero (Failed with evidence.started: true)", async () => {
+    const chain = createValidChain();
+    const provider = createStubProvider({
+      status: "Failed",
+      evidence: {
+        providerId: "claude",
+        agentId: "Claude",
+        role: "Implementer",
+        commandDisplay: "claude ...",
+        workingDirectory: "C:/worktrees/075",
+        started: true,
+        completed: false,
+        timedOut: false,
+        cancelled: false,
+        exitCode: 1,
+        durationMs: 500,
+        stdoutSummary: "did some real work then errored",
+        stderrSummary: "agent exited non-zero",
+        outputTruncated: false,
+      },
+    });
+    const service = new ImplementerRuntimeService(provider);
+
+    const outcome = await service.startImplementer(createInput(chain));
+
+    expect(outcome.result.status).toBe("Failed");
+    expect(outcome.runtime).toBeDefined();
+    expect(outcome.runtime?.agentStarted).toBe(true);
+    expect(outcome.runtime?.implementerStarted).toBe(true);
+    expect(outcome.runtime?.evidence.stdoutSummary).toBe("did some real work then errored");
+    expect(outcome.result.agentStarted).toBe(true);
+  });
+
+  it("creates an ImplementerRuntime record with real evidence for a genuinely-started run that was cancelled", async () => {
+    const chain = createValidChain();
+    const provider = createStubProvider({
+      status: "Cancelled",
+      evidence: {
+        providerId: "claude",
+        agentId: "Claude",
+        role: "Implementer",
+        commandDisplay: "claude ...",
+        workingDirectory: "C:/worktrees/075",
+        started: true,
+        completed: false,
+        timedOut: false,
+        cancelled: true,
+        durationMs: 300,
+        stdoutSummary: "partial output before cancel",
+        stderrSummary: "",
+        outputTruncated: false,
+      },
+    });
+    const service = new ImplementerRuntimeService(provider);
+
+    const outcome = await service.startImplementer(createInput(chain));
+
+    expect(outcome.result.status).toBe("Cancelled");
+    expect(outcome.runtime).toBeDefined();
+    expect(outcome.runtime?.agentStarted).toBe(true);
+    expect(outcome.result.agentStarted).toBe(true);
   });
 
   it("maps a provider exception to a Failed result without setting agentStarted", async () => {

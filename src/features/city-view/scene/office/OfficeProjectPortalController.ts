@@ -71,7 +71,7 @@ import {
   createRuntimeStartCollection,
   createRuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
-import { ClaudeImplementerRuntimeProvider } from "./implementer-runtime/ClaudeImplementerRuntimeProvider";
+import { ServerBridgeImplementerRuntimeProvider } from "./implementer-runtime/ServerBridgeImplementerRuntimeProvider";
 import {
   ExternalAdosChildRunImplementerProvider,
   type ExternalAdosChildRunGatewayModule,
@@ -84,7 +84,7 @@ import {
   createImplementerRuntimeCollection,
   createImplementerRuntimeResultCollection,
 } from "./implementer-runtime/ImplementerRuntimeTypes";
-import { CodexReviewerRuntimeProvider } from "./reviewer-runtime/CodexReviewerRuntimeProvider";
+import { ServerBridgeReviewerRuntimeProvider } from "./reviewer-runtime/ServerBridgeReviewerRuntimeProvider";
 import { ReviewerRuntimeService } from "./reviewer-runtime/ReviewerRuntimeService";
 import {
   REVIEWER_RUNTIME_APPROVED_IMPLEMENTER_AGENT,
@@ -403,8 +403,16 @@ export class OfficeProjectPortalController {
   private runtimeEnvironmentProvider: RuntimeEnvironmentProvider;
   private implementerRuntimeService: ImplementerRuntimeService;
   private readonly activeImplementerRuntimeKeys = new Set<string>();
+  // Typed reference to the concrete provider backing implementerRuntimeService
+  // specifically (not the review-fix or ADOS-execution providers, which are
+  // separate instances with their own flows) -- kept in sync wherever that
+  // service is constructed, purely so a Cancel control can reach
+  // getActiveRunId()/cancelActiveRun(), which the generic
+  // ImplementerRuntimeProvider interface does not expose (Spec 149 T029).
+  private implementerRuntimeBridgeProvider: ServerBridgeImplementerRuntimeProvider;
   private reviewerRuntimeService: ReviewerRuntimeService;
   private readonly activeReviewerRuntimeKeys = new Set<string>();
+  private reviewerRuntimeBridgeProvider: ServerBridgeReviewerRuntimeProvider;
   private readonly reviewDecisionService: ReviewDecisionService;
   private readonly reviewFixRequestService: ReviewFixRequestService;
   private readonly reviewFixPlanService: ReviewFixPlanService;
@@ -492,13 +500,15 @@ export class OfficeProjectPortalController {
     this.runtimePreflightService = new RuntimePreflightService();
     this.runtimeStartService = new RuntimeStartService();
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
-    this.implementerRuntimeService = new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
-    this.reviewerRuntimeService = new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
+    this.implementerRuntimeBridgeProvider = new ServerBridgeImplementerRuntimeProvider();
+    this.implementerRuntimeService = new ImplementerRuntimeService(this.implementerRuntimeBridgeProvider);
+    this.reviewerRuntimeBridgeProvider = new ServerBridgeReviewerRuntimeProvider();
+    this.reviewerRuntimeService = new ReviewerRuntimeService(this.reviewerRuntimeBridgeProvider);
     this.reviewDecisionService = new ReviewDecisionService();
     this.reviewFixRequestService = new ReviewFixRequestService();
     this.reviewFixPlanService = new ReviewFixPlanService();
     this.reviewFixRuntimeService = new ReviewFixRuntimeService(
-      new ImplementerReviewFixRuntimeProvider(new ClaudeImplementerRuntimeProvider()),
+      new ImplementerReviewFixRuntimeProvider(new ServerBridgeImplementerRuntimeProvider()),
     );
     this.validationRuntimeService = new ValidationRuntimeService(new LocalValidationRuntimeProvider());
     this.projectBacklogService = new ProjectBacklogService();
@@ -3064,6 +3074,66 @@ export class OfficeProjectPortalController {
     return true;
   }
 
+  private runtimeBridgeEnablement: { implementerEnabled: boolean; reviewerEnabled: boolean } | null = null;
+
+  /**
+   * Read-only, cached snapshot of whether real execution (Spec 149's server
+   * bridge) is enabled for each role on this machine. `null` means it has
+   * never been fetched yet, not that it is disabled -- the operator should
+   * see "unknown" rather than a false "disabled" until the first
+   * `refreshRuntimeBridgeEnablement()` resolves.
+   */
+  getRuntimeBridgeEnablement(): { implementerEnabled: boolean; reviewerEnabled: boolean } | null {
+    return this.runtimeBridgeEnablement;
+  }
+
+  /**
+   * Fetches `/api/runtime/status` and caches the result. Never auto-invoked
+   * by the controller itself (construction stays synchronous and test-safe,
+   * with no implicit network call); a caller -- the office scene, once it
+   * renders a visibility indicator -- is expected to invoke this explicitly
+   * when the operator enters an office. A failed fetch leaves the previous
+   * cached value (or `null`) rather than throwing, so a transient network
+   * hiccup never crashes the office.
+   */
+  async refreshRuntimeBridgeEnablement(fetchImpl: typeof fetch = fetch): Promise<void> {
+    try {
+      const response = await fetchImpl("/api/runtime/status");
+      if (!response.ok) return;
+      const body = await response.json();
+      this.runtimeBridgeEnablement = {
+        implementerEnabled: Boolean(body.implementerEnabled),
+        reviewerEnabled: Boolean(body.reviewerEnabled),
+      };
+    } catch {
+      // Leave the previous value in place; see the doc comment above.
+    }
+  }
+
+  /**
+   * The runId of whichever of the two main runtime bridge providers
+   * (`implementerRuntimeBridgeProvider`/`reviewerRuntimeBridgeProvider`) is
+   * currently mid-`invoke()`, or `null` if neither is (Spec 149 T029).
+   * Covers the "Start Implementer"/"Start Reviewer" path specifically --
+   * not the separate review-fix or ADOS-execution provider instances,
+   * which have their own flows and are out of scope for this one Cancel
+   * control.
+   */
+  getActiveRuntimeBridgeRunId(): string | null {
+    return this.implementerRuntimeBridgeProvider.getActiveRunId() ?? this.reviewerRuntimeBridgeProvider.getActiveRunId();
+  }
+
+  /** Cancels whichever run `getActiveRuntimeBridgeRunId()` currently reports, if any. */
+  async cancelActiveRuntimeBridgeRun(): Promise<boolean> {
+    if (this.implementerRuntimeBridgeProvider.getActiveRunId()) {
+      return this.implementerRuntimeBridgeProvider.cancelActiveRun();
+    }
+    if (this.reviewerRuntimeBridgeProvider.getActiveRunId()) {
+      return this.reviewerRuntimeBridgeProvider.cancelActiveRun();
+    }
+    return false;
+  }
+
   /**
    * Requires a Runtime Start to already exist for this exact plan before
    * doing anything -- this method never originates a first Runtime Start on
@@ -3074,7 +3144,10 @@ export class OfficeProjectPortalController {
    * ever constructing an Implementer Runtime request.
    */
   private async startImplementerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
-    this.implementerRuntimeService ??= new ImplementerRuntimeService(new ClaudeImplementerRuntimeProvider());
+    if (!this.implementerRuntimeService) {
+      this.implementerRuntimeBridgeProvider = new ServerBridgeImplementerRuntimeProvider();
+      this.implementerRuntimeService = new ImplementerRuntimeService(this.implementerRuntimeBridgeProvider);
+    }
     this.state.implementerRuntimeCollections ??= {};
     this.state.implementerRuntimeResultCollections ??= {};
 
@@ -3243,7 +3316,10 @@ export class OfficeProjectPortalController {
    * fails to hold.
    */
   private async startReviewerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
-    this.reviewerRuntimeService ??= new ReviewerRuntimeService(new CodexReviewerRuntimeProvider());
+    if (!this.reviewerRuntimeService) {
+      this.reviewerRuntimeBridgeProvider = new ServerBridgeReviewerRuntimeProvider();
+      this.reviewerRuntimeService = new ReviewerRuntimeService(this.reviewerRuntimeBridgeProvider);
+    }
     this.state.reviewTargets ??= {};
     this.state.reviewerRuntimeCollections ??= {};
     this.state.reviewerRuntimeResultCollections ??= {};

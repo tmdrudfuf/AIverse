@@ -180,7 +180,7 @@ describe("OfficeProjectPortalController Reviewer Runtime concurrency and isolati
     expect(startReviewer).not.toHaveBeenCalled();
   });
 
-  it("wires the controller's real default ReviewerRuntimeService and CodexReviewerRuntimeProvider end to end, safely blocking at the always-Uncommitted review-target gate without spawning", async () => {
+  it("wires the controller's real default ReviewerRuntimeService and ServerBridgeReviewerRuntimeProvider end to end, safely blocking at the always-Uncommitted review-target gate without spawning", async () => {
     const controller = new OfficeProjectPortalController(createSceneStub());
     const internals = getControllerInternals(controller);
     await driveDailyProofToCompletedImplementer(controller, internals);
