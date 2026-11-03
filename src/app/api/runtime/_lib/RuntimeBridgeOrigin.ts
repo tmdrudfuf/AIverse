@@ -25,6 +25,15 @@ export function isLocalHostHeader(hostHeader: string | null): boolean {
  * matching how browsers omit `Origin` for some same-origin requests too.
  * Requiring `Host` to be loopback as well is what actually defeats DNS
  * rebinding.
+ *
+ * Accepted trust assumption (round-6 review finding N-006, non-blocking):
+ * a request with a loopback `Host` and neither `Sec-Fetch-Site` nor
+ * `Origin` is trusted -- i.e. any process on this same machine capable of
+ * reaching localhost (curl, another local tool) can drive this endpoint
+ * once the operator has enabled real execution. This matches the
+ * feature's own single-operator, own-machine assumption (spec.md's
+ * Assumptions section): nothing on this machine is treated as more or
+ * less trusted than the browser itself.
  */
 export function isTrustedRuntimeBridgeRequest(request: Request): boolean {
   if (!isLocalHostHeader(request.headers.get("host"))) return false;

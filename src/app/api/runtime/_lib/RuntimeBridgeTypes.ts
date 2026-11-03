@@ -46,6 +46,13 @@ export type RuntimeBridgeExecuteRequest = {
    * `ServerBridgeReviewerRuntimeProvider` always generate a fresh
    * `crypto.randomUUID()` per call, so this is a direct-API caller's own
    * responsibility, not a risk from the browser's real usage path.
+   *
+   * One further consequence of reuse (round-6 review finding N-007,
+   * non-blocking): since `writeAuditRecord` now writes exclusively (round-5
+   * finding N-001), a refused request's audit record written under a
+   * reused runId could block a *later*, genuinely successful run that
+   * reuses the same id from ever recording its own audit record. Also not
+   * reachable via the browser's real usage path for the same reason above.
    */
   runId?: string;
 };
