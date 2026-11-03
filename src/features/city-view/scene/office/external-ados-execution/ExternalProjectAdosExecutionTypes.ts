@@ -24,6 +24,10 @@ export type ExternalProjectAdosExecution = {
   preparationId: string;
   developmentRequestDraftId: string;
   status: ExternalProjectAdosExecutionStatus;
+  // Received from the ImplementerRuntimeProvider's own result evidence (the
+  // execution boundary actually invoked), not propagated from an input-side
+  // literal - see specs/148-.../runtime-evidence.json.
+  durableAdosRunId?: string;
   featureId?: string;
   featureBranch: string;
   authoritativeBaseSha: string;
@@ -54,6 +58,7 @@ export type ExternalProjectAdosExecutionResult = {
   projectId: string;
   preparationId?: string;
   executionId?: string;
+  durableAdosRunId?: string;
   status: ExternalProjectAdosExecutionStatus;
   reasonCodes: ExternalProjectAdosExecutionReasonCode[];
   started: boolean;
@@ -98,6 +103,39 @@ export function copyExternalProjectAdosExecution(
     validationCommands: [...execution.validationCommands],
     evidence: { ...execution.evidence },
   };
+}
+
+/**
+ * Completion coordinator (Spec 148 finding 3, independent review): re-derives
+ * whether a task's execution reached verified technical publication
+ * readiness directly from the execution's own evidence -- the same
+ * evidence a real ExternalAdosChildRunImplementerProvider run populated by
+ * causally driving the child run and reading back its durable summary. This
+ * never accepts a caller-supplied confirmation; a caller with no real
+ * execution, or an execution whose provider never performed the child-run
+ * boundary, always gets `ready: false`.
+ *
+ * Recomputes readiness from `readiness`'s own conjuncts rather than reading
+ * `readiness.ready` -- trusting that precomputed flag would make this
+ * function a pass-through of whatever the gateway already decided, not a
+ * re-verification. The task/execution binding itself is established by the
+ * caller's own lookup (OfficeProjectPortalController.getAssociatedAdosExecution
+ * cross-checks id/projectId/preparationId/developmentRequestDraftId before
+ * this function ever sees the execution).
+ */
+export function deriveExecutionPublicationReadiness(
+  execution: ExternalProjectAdosExecution | undefined,
+): { ready: boolean; reasonCode: string } {
+  const readiness = execution?.evidence.childRunTechnicalReadiness;
+  if (!readiness) return { ready: false, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_EVIDENCE_MISSING" };
+  const ready = readiness.reviewDecision === "Approved"
+    && readiness.validatedMatchesCandidate
+    && readiness.reviewedMatchesCandidate
+    && readiness.exactHeadMatch
+    && /^[0-9a-f]{40}$/.test(readiness.candidateSha);
+  return ready
+    ? { ready: true, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_READY" }
+    : { ready: false, reasonCode: "EXTERNAL_ADOS_EXECUTION_CHILD_RUN_NOT_READY" };
 }
 
 export function copyExternalProjectAdosExecutionResult(

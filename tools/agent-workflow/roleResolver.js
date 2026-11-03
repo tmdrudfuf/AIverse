@@ -139,6 +139,24 @@ function resolveEffectiveRoles(options = {}) {
         ],
       };
     }
+    // Spec 148 C8: the durable/resumed role path is authoritative, so the
+    // self-review and reviewer-availability guards `resolveCliOverride` applies
+    // to a fresh resolution must hold here too. A corrupted or stale pin that
+    // puts one agent in both seats, or names a reviewer whose runner is
+    // disabled/unsafe, blocks before spawn rather than self-reviewing.
+    if (existingRunRoles.implementer === existingRunRoles.reviewer) {
+      return fail(
+        [
+          `Existing run roles put '${existingRunRoles.implementer}' in both Implementer and Reviewer.`,
+          "Rejected before spawn: an agent may not review its own candidate, even from durable run state.",
+        ],
+        "resume-invalid",
+      );
+    }
+    const resumedImplementer = validateAgentForRole(state, existingRunRoles.implementer, "implementer", "Resumed");
+    if (!resumedImplementer.ok) return fail(resumedImplementer.diagnostics, "resume-invalid");
+    const resumedReviewer = validateAgentForRole(state, existingRunRoles.reviewer, "reviewer", "Resumed");
+    if (!resumedReviewer.ok) return fail(resumedReviewer.diagnostics, "resume-invalid");
     return {
       ok: true,
       roles: { implementer: existingRunRoles.implementer, reviewer: existingRunRoles.reviewer },

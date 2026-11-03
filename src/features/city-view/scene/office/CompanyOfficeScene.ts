@@ -887,13 +887,26 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         });
       };
       const updateHandler = () => {
-        this.officeProjectPortalController?.updateSelectedBacklogTaskFromInput({
+        const updated = this.officeProjectPortalController?.updateSelectedBacklogTaskFromInput({
           title: titleInput.value,
           description: descriptionInput.value,
           priority: prioritySelect.value as never,
           status: statusSelect.value as never,
           blockedReason: blockedReasonInput.value,
         });
+        if (!updated) {
+          // Rejected (e.g. PublicationNotReady for a task with an
+          // executionRunId whose ADOS child run has not reached verified
+          // technical readiness, or any pre-existing rejection reason) -
+          // resync the status dropdown to the task's real current status
+          // instead of leaving it stuck on a value that was never applied.
+          // This form has no input for publication readiness at all: the
+          // controller re-derives it itself from the execution's own real
+          // evidence (deriveExecutionPublicationReadiness), so there is
+          // nothing for this control to supply.
+          const current = this.officeProjectPortalController?.getSelectedProjectBacklogTaskInput();
+          if (current) statusSelect.value = current.status;
+        }
       };
       const startDevelopmentHandler = () => {
         void this.officeProjectPortalController?.startSelectedBacklogTaskDevelopment();

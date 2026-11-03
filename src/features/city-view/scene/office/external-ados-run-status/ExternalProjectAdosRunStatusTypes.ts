@@ -22,6 +22,7 @@ export type ExternalProjectAdosRunStatus = {
   source: ExternalProjectAdosRunStatusSource;
   preparationId?: string;
   executionId?: string;
+  durableAdosRunId?: string;
   reasonCodes: ExternalProjectAdosExecutionReasonCode[];
   featureBranch?: string;
   worktreePath?: string;
