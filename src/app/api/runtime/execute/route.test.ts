@@ -24,7 +24,11 @@ function postRequest(body: unknown, headers?: Record<string, string>) {
   return new NextRequest("http://localhost/api/runtime/execute", {
     method: "POST",
     body: JSON.stringify(body),
-    headers,
+    // A manually-constructed Request/NextRequest never gets a `Host` header
+    // for free the way a real HTTP request does, so tests supply the one a
+    // genuine same-origin request would have; `isTrustedRuntimeBridgeRequest`
+    // requires it. Explicit `headers` (e.g. a cross-origin test) override it.
+    headers: { host: "localhost", ...headers },
   });
 }
 
@@ -201,5 +205,49 @@ describe("POST /api/runtime/execute", () => {
     const secondBody = await second.json();
 
     expect(secondBody.status).toBe("completed");
+  });
+
+  it("cancels the real process when the request is aborted mid-run (e.g. the browser tab closes)", async () => {
+    const controller = new AbortController();
+    const request = new NextRequest("http://localhost/api/runtime/execute", {
+      method: "POST",
+      body: JSON.stringify(
+        createRequestBody({
+          command: { ...createRequestBody().command, arguments: ["-e", "setInterval(() => {}, 1000)"], timeoutMs: 10_000 },
+        }),
+      ),
+      headers: { host: "localhost" },
+      signal: controller.signal,
+    });
+
+    const responsePromise = handleExecuteRequest(request, { allowedCommandsByRole: TEST_ALLOWED_COMMANDS });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    controller.abort();
+
+    const body = await (await responsePromise).json();
+
+    expect(body.status).toBe("cancelled");
+  });
+
+  it("lets the caller supply its own runId so it can be cancelled by a concurrent DELETE while still in flight", async () => {
+    const clientRunId = "client-generated-run-id";
+    const response = await callExecute(
+      createRequestBody({ runId: clientRunId, command: { ...createRequestBody().command, arguments: ["-e", "console.log('ok')"] } }),
+    );
+    const body = await response.json();
+
+    expect(body.runId).toBe(clientRunId);
+  });
+
+  it("reports started: false when the process genuinely never started (e.g. the executable does not exist)", async () => {
+    const nonexistentCommand = path.join(createTempDir(), "this-binary-does-not-exist");
+    const response = await handleExecuteRequest(
+      postRequest(createRequestBody({ command: { ...createRequestBody().command, command: nonexistentCommand } })),
+      { allowedCommandsByRole: { implementer: nonexistentCommand } },
+    );
+    const body = await response.json();
+
+    expect(body.status).toBe("failed");
+    expect(body.evidence.started).toBe(false);
   });
 });

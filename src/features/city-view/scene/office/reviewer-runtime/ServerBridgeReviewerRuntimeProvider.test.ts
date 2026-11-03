@@ -45,17 +45,58 @@ describe("ServerBridgeReviewerRuntimeProvider", () => {
 
     const result = await provider.invoke(createCommand());
 
-    expect(fetchImpl).toHaveBeenCalledWith(
-      "/api/runtime/execute",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ role: "reviewer", command: createCommand() }),
-      }),
-    );
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const [url, init] = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls[0];
+    expect(url).toBe("/api/runtime/execute");
+    expect(init?.method).toBe("POST");
+    const sentBody = JSON.parse(init?.body as string);
+    expect(sentBody.role).toBe("reviewer");
+    expect(sentBody.command).toEqual(createCommand());
+    expect(typeof sentBody.runId).toBe("string");
     expect(result.status).toBe("Completed");
     expect(result.decision).toBe("Approved");
     expect(result.findings).toEqual([]);
     expect(result.evidence.reviewTargetSha).toBe("abc123");
+  });
+
+  it("exposes the active run's id only while invoke() is in flight", async () => {
+    let sawActiveRunIdDuringFetch = false;
+    const provider = new ServerBridgeReviewerRuntimeProvider(
+      vi.fn(async () => {
+        sawActiveRunIdDuringFetch = provider.getActiveRunId() !== null;
+        return {
+          ok: true,
+          json: async () => ({
+            status: "completed",
+            decision: "Approved",
+            findings: [],
+            evidence: {
+              commandDisplay: "codex",
+              workingDirectory: "C:/scratch/project-a",
+              started: true,
+              completed: true,
+              timedOut: false,
+              exitCode: 0,
+              durationMs: 10,
+              stdoutSummary: "",
+              stderrSummary: "",
+              outputTruncated: false,
+            },
+          }),
+        };
+      }) as unknown as typeof fetch,
+    );
+
+    await provider.invoke(createCommand());
+
+    expect(sawActiveRunIdDuringFetch).toBe(true);
+    expect(provider.getActiveRunId()).toBeNull();
+  });
+
+  it("cancelActiveRun() returns false when no run is in flight", async () => {
+    const provider = new ServerBridgeReviewerRuntimeProvider(vi.fn() as unknown as typeof fetch);
+
+    expect(await provider.cancelActiveRun()).toBe(false);
   });
 
   it("maps a cancelled run to Failed, since ReviewerRuntimeStatus has no Cancelled member", async () => {

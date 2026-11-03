@@ -28,6 +28,16 @@ export type RuntimeBridgeCommand = {
 export type RuntimeBridgeExecuteRequest = {
   role: RuntimeBridgeRole;
   command: RuntimeBridgeCommand;
+  /**
+   * Optional, caller-generated id (e.g. `crypto.randomUUID()`). Supplying
+   * one lets the caller learn its own run's id before the run reaches a
+   * terminal status (POST only returns the run's id in its response once
+   * the run is already done), so it can call `DELETE
+   * /api/runtime/execute/:runId` on a genuinely in-flight run. When
+   * omitted, the server generates one as before, which the caller only
+   * ever sees after the run has already ended.
+   */
+  runId?: string;
 };
 
 export type RuntimeBridgeEvidence = {

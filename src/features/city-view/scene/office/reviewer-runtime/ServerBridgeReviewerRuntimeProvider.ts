@@ -24,53 +24,91 @@ const STATUS_FROM_BRIDGE: Record<string, ReviewerRuntimeStatus> = {
 
 /**
  * Browser-side `ReviewerRuntimeProvider`: a plain `fetch()` wrapper, mirroring
- * `ServerBridgeImplementerRuntimeProvider` for the Reviewer/Codex role. See
- * that file's own comment for why this carries no bundling risk.
+ * `ServerBridgeImplementerRuntimeProvider` for the Reviewer/Codex role,
+ * including the same caller-generated `runId` / `getActiveRunId()` /
+ * `cancelActiveRun()` mechanism -- see that file's own comment for why
+ * either exists.
  */
 export class ServerBridgeReviewerRuntimeProvider implements ReviewerRuntimeProvider {
   readonly providerId = "codex";
+  private activeRunId: string | null = null;
 
   constructor(private readonly fetchImpl: typeof fetch = fetch) {}
 
-  async invoke(command: ReviewerRuntimeProviderCommand): Promise<ReviewerRuntimeProviderResult> {
-    let response: Response;
+  getActiveRunId(): string | null {
+    return this.activeRunId;
+  }
+
+  async cancelActiveRun(): Promise<boolean> {
+    const runId = this.activeRunId;
+    if (!runId) return false;
     try {
-      response = await this.fetchImpl(EXECUTE_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "reviewer", command }),
-      });
+      const response = await this.fetchImpl(`${EXECUTE_ENDPOINT}/${runId}`, { method: "DELETE" });
+      if (!response.ok) return false;
+      const body = await response.json();
+      return Boolean(body?.accepted);
     } catch {
-      return { status: "Blocked", decision: "Unknown", findings: [], evidence: createUnreachableEvidence(command) };
+      return false;
     }
+  }
 
-    if (!response.ok) {
-      return { status: "Blocked", decision: "Unknown", findings: [], evidence: createUnreachableEvidence(command) };
+  async invoke(command: ReviewerRuntimeProviderCommand): Promise<ReviewerRuntimeProviderResult> {
+    const runId = globalThis.crypto.randomUUID();
+    this.activeRunId = runId;
+    try {
+      let response: Response;
+      try {
+        response = await this.fetchImpl(EXECUTE_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: "reviewer", command, runId }),
+        });
+      } catch {
+        return { status: "Blocked", decision: "Unknown", findings: [], evidence: createUnreachableEvidence(command) };
+      }
+
+      if (!response.ok) {
+        return { status: "Blocked", decision: "Unknown", findings: [], evidence: createUnreachableEvidence(command) };
+      }
+
+      let body: {
+        status?: string;
+        decision?: string;
+        findings?: ReviewerRuntimeFinding[];
+        evidence?: Partial<ReviewerRuntimeEvidence>;
+      };
+      try {
+        body = await response.json();
+        if (!body?.evidence) throw new Error("malformed response");
+      } catch {
+        return { status: "Blocked", decision: "Unknown", findings: [], evidence: createUnreachableEvidence(command) };
+      }
+
+      return {
+        status: STATUS_FROM_BRIDGE[body.status as string] ?? "Blocked",
+        decision: (body.decision as ReviewerRuntimeDecision) ?? "Unknown",
+        findings: body.findings ?? [],
+        evidence: {
+          providerId: "codex",
+          agentId: "Codex",
+          role: "Reviewer",
+          commandDisplay: body.evidence.commandDisplay ?? "",
+          workingDirectory: body.evidence.workingDirectory ?? command.workingDirectory,
+          reviewTargetSha: command.reviewTargetSha,
+          started: Boolean(body.evidence.started),
+          completed: Boolean(body.evidence.completed),
+          timedOut: Boolean(body.evidence.timedOut),
+          exitCode: body.evidence.exitCode,
+          signal: body.evidence.signal,
+          durationMs: body.evidence.durationMs ?? 0,
+          stdoutSummary: body.evidence.stdoutSummary ?? "",
+          stderrSummary: body.evidence.stderrSummary ?? "",
+          outputTruncated: Boolean(body.evidence.outputTruncated),
+        },
+      };
+    } finally {
+      this.activeRunId = null;
     }
-
-    const body = await response.json();
-    return {
-      status: STATUS_FROM_BRIDGE[body.status as string] ?? "Blocked",
-      decision: (body.decision as ReviewerRuntimeDecision) ?? "Unknown",
-      findings: (body.findings as ReviewerRuntimeFinding[]) ?? [],
-      evidence: {
-        providerId: "codex",
-        agentId: "Codex",
-        role: "Reviewer",
-        commandDisplay: body.evidence.commandDisplay,
-        workingDirectory: body.evidence.workingDirectory,
-        reviewTargetSha: command.reviewTargetSha,
-        started: body.evidence.started,
-        completed: body.evidence.completed,
-        timedOut: body.evidence.timedOut,
-        exitCode: body.evidence.exitCode,
-        signal: body.evidence.signal,
-        durationMs: body.evidence.durationMs,
-        stdoutSummary: body.evidence.stdoutSummary,
-        stderrSummary: body.evidence.stderrSummary,
-        outputTruncated: body.evidence.outputTruncated,
-      },
-    };
   }
 }
 

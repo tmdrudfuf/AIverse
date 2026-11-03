@@ -8,6 +8,7 @@ import { isSafeReviewerCommand } from "@/features/city-view/scene/office/reviewe
 import { parseReviewOutput } from "@/features/city-view/scene/office/reviewer-runtime/ReviewDecisionParser";
 import { getSharedRuntimeBridgeRunRegistry } from "../_lib/RuntimeBridgeRunRegistry";
 import { runRuntimeBridgeProcess } from "../_lib/RuntimeBridgeProcessRunner";
+import { isTrustedRuntimeBridgeRequest } from "../_lib/RuntimeBridgeOrigin";
 import type {
   RunAuditRecord,
   RuntimeBridgeCommand,
@@ -67,27 +68,6 @@ function substitutePrompt(args: ReadonlyArray<string>, prompt: string, inputMode
   return substituted.includes(prompt) ? substituted : [...substituted, prompt];
 }
 
-/**
- * Same-origin check (P1-001): a cross-origin page should never be able to
- * drive this endpoint. `Sec-Fetch-Site` (sent by all modern browsers) is
- * authoritative when present. Falling back to comparing `Origin` against
- * `Host` covers older/non-browser same-origin callers; a request with
- * neither header (e.g. a same-process server-to-server call, or curl) is
- * allowed, matching how browsers omit `Origin` for some same-origin
- * requests too.
- */
-function isTrustedRequestOrigin(request: NextRequest): boolean {
-  const secFetchSite = request.headers.get("sec-fetch-site");
-  if (secFetchSite) return secFetchSite === "same-origin" || secFetchSite === "none";
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === request.headers.get("host");
-  } catch {
-    return false;
-  }
-}
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
@@ -118,6 +98,8 @@ function parseExecuteRequest(body: unknown): RuntimeBridgeExecuteRequest | null 
     return null;
   }
   if (c.reviewTargetSha !== undefined && typeof c.reviewTargetSha !== "string") return null;
+  const { runId: suppliedRunId } = body as Record<string, unknown>;
+  if (suppliedRunId !== undefined && !isNonEmptyString(suppliedRunId)) return null;
   if (c.files !== undefined) {
     if (!Array.isArray(c.files)) return null;
     const filesValid = c.files.every(
@@ -133,7 +115,11 @@ function parseExecuteRequest(body: unknown): RuntimeBridgeExecuteRequest | null 
     if (!filesValid) return null;
   }
 
-  return { role, command: command as RuntimeBridgeCommand };
+  return {
+    role,
+    command: command as RuntimeBridgeCommand,
+    ...(typeof suppliedRunId === "string" ? { runId: suppliedRunId } : {}),
+  };
 }
 
 const REFUSAL_MESSAGES: Record<RuntimeBridgeRefusalReason, string> = {
@@ -177,7 +163,7 @@ export async function handleExecuteRequest(
   request: NextRequest,
   options: HandleExecuteRequestOptions = {},
 ): Promise<NextResponse<RuntimeBridgeExecuteResponse>> {
-  if (!isTrustedRequestOrigin(request)) {
+  if (!isTrustedRuntimeBridgeRequest(request)) {
     return NextResponse.json(refusalResponse("unsafe_command", crypto.randomUUID(), "", ""), { status: 403 });
   }
 
@@ -195,7 +181,7 @@ export async function handleExecuteRequest(
 
   const { role, command } = parsed;
   const commandDisplay = [command.command, ...command.arguments].join(" ");
-  const runId = crypto.randomUUID();
+  const runId = parsed.runId ?? crypto.randomUUID();
 
   if (!isRoleEnabled(role)) {
     return NextResponse.json(refusalResponse("not_enabled", runId, commandDisplay, command.workingDirectory));
@@ -229,6 +215,14 @@ export async function handleExecuteRequest(
     return NextResponse.json(refusalResponse("already_running", runId, commandDisplay, command.workingDirectory));
   }
 
+  // Round-2 review finding (P2-002): if the browser tab closes or the
+  // request is otherwise aborted mid-run, the real process must not keep
+  // running against the project unsupervised. `request.signal` is Next.js's
+  // own abort signal for exactly this.
+  const onAbort = () => liveCancel();
+  request.signal.addEventListener("abort", onAbort);
+
+  const startedAt = new Date().toISOString();
   try {
     if (role === "implementer" && (command.files?.length ?? 0) > 0) {
       const writeResult = await writeCommandFiles(command);
@@ -237,7 +231,6 @@ export async function handleExecuteRequest(
       }
     }
 
-    const startedAt = new Date().toISOString();
     const resolvedArgs = substitutePrompt(command.arguments, command.prompt, command.inputMode);
     const handle = runRuntimeBridgeProcess(command.command, resolvedArgs, {
       cwd: command.workingDirectory,
@@ -260,7 +253,10 @@ export async function handleExecuteRequest(
     const stderrSummary = truncate(result.stderr || result.errorMessage);
 
     const evidence: RuntimeBridgeEvidence = {
-      started: true,
+      // Round-2 review finding (P2-004): a spawn that never actually
+      // started (Node's 'error' event -- ENOENT, a broken Windows .cmd
+      // shim, etc.) must not be reported as started.
+      started: result.errorMessage === "",
       completed: status === "completed",
       timedOut: result.timedOut,
       cancelled: result.cancelled,
@@ -295,10 +291,41 @@ export async function handleExecuteRequest(
     registry.writeAuditRecord(auditRecord);
 
     return NextResponse.json(response);
+  } catch (error) {
+    // Round-2 review finding (P3-005, non-blocking): a synchronous throw
+    // (e.g. an invalid argument spawn rejects on) must still produce an
+    // honest, audited "failed" result rather than an unhandled 500 with no
+    // audit trail at all.
+    const message = error instanceof Error ? error.message : String(error);
+    const evidence: RuntimeBridgeEvidence = {
+      started: false,
+      completed: false,
+      timedOut: false,
+      cancelled: false,
+      durationMs: 0,
+      stdoutSummary: "",
+      stderrSummary: message,
+      outputTruncated: false,
+      commandDisplay,
+      workingDirectory: command.workingDirectory,
+    };
+    registry.writeAuditRecord({
+      runId,
+      role,
+      status: "failed",
+      refusalReason: null,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      command: commandDisplay,
+      workingDirectory: command.workingDirectory,
+      evidence,
+    });
+    return NextResponse.json({ runId, status: "failed", refusalReason: null, evidence });
   } finally {
     // P1-002: guaranteed even if the try block throws (e.g. a synchronous
     // spawn failure), so a working directory is never left permanently
     // already_running.
+    request.signal.removeEventListener("abort", onAbort);
     registry.finish(key);
   }
 }

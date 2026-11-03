@@ -84,19 +84,19 @@
 
 - [X] T020 [US3] Implement `DELETE /api/runtime/execute/[runId]/route.ts`, looking up the run in `RuntimeBridgeRunRegistry` and delegating to the handle's `cancel()`. Must make T018 pass. (depends on T006)
 
-  ponytail / scope boundary found while wiring this: cancelling requires knowing a run's `runId`
-  *while it is still running*, but `POST /api/runtime/execute` only returns the `runId` once the run
-  is already terminal (same call resolves once, at the end). The existing, already-reviewed
-  `ImplementerRuntimeProvider`/`ReviewerRuntimeProvider` contracts are explicitly documented as
-  "No mutation methods exist on this contract by design -- only a single, bounded, terminal
-  invocation," so they offer no hook to learn or supply a run id before `invoke()` resolves either.
-  Cancellation is therefore delivered and fully tested at the HTTP/registry layer (this route +
-  `RuntimeBridgeRunRegistry`) but is **not yet reachable from the existing office UI** -- no "Cancel"
-  button exists to call it from, because doing so would mean widening that deliberately minimal
-  provider contract, which is a separate design decision this feature does not make silently.
-  Add when: a future feature decides the contract should grow a cancel hook (e.g. the caller
-  generates and supplies its own `runId` up front, as an idempotency key, instead of the server
-  generating one only visible after completion) and wires an actual Cancel control to it.
+  Round-2 independent review (P2-003) pointed out that cancelling requires knowing a run's `runId`
+  *while it is still running*, but `POST /api/runtime/execute` only returned the `runId` once a run
+  was already terminal. Fixed without widening the existing, deliberately minimal
+  `ImplementerRuntimeProvider`/`ReviewerRuntimeProvider` interfaces themselves: `RuntimeBridgeExecuteRequest`
+  gained an optional caller-supplied `runId`, and `ServerBridgeImplementerRuntimeProvider`/
+  `ServerBridgeReviewerRuntimeProvider` each generate one (`globalThis.crypto.randomUUID()`), send it,
+  and expose it as extra public members (`getActiveRunId()`/`cancelActiveRun()`) beyond what the
+  shared interface requires -- a caller holding a reference to the concrete provider instance can
+  cancel its one in-flight run. The underlying mechanism is therefore fully wired end to end and
+  tested (`ServerBridgeImplementerRuntimeProvider.test.ts`/reviewer equivalent). ponytail: no "Cancel"
+  button in the office UI calls `cancelActiveRun()` yet -- that's the same deferred DOM-wiring work
+  already noted on T016, not a missing mechanism. Add when: a follow-up adds a Cancel control next to
+  the status label T016 describes, wired to the controller's own default-wired provider instance.
 - [X] T021 [US3] Confirmed via the "frees the working directory for a new run once the prior one finishes" case in `route.test.ts`: the registry removes the active-run entry as soon as a run reaches any terminal status, so a subsequent request for the same working directory is never wrongly refused `already_running`.
 
 **Checkpoint**: All three user stories are independently functional and covered by fakes-only tests.

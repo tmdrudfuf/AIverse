@@ -23,49 +23,88 @@ const STATUS_FROM_BRIDGE: Record<string, ImplementerRuntimeStatus> = {
  * in the browser; it IS the browser's path to real execution, mediated by
  * the server route at `EXECUTE_ENDPOINT` (see
  * specs/149-real-execution-server-bridge/contracts/real-execution-bridge.md).
+ *
+ * Generates its own `runId` (a round-2 independent review finding, P2-003):
+ * the server route's response only carries a run's id once that run is
+ * already terminal, so without a caller-supplied id there would be no way
+ * to look up and cancel a run while it is still in flight. `getActiveRunId`/
+ * `cancelActiveRun` expose that id and a cancel action for exactly this,
+ * even though no UI control calls them yet (see tasks.md T016/T020's own
+ * notes on that remaining, deliberately deferred wiring).
  */
 export class ServerBridgeImplementerRuntimeProvider implements ImplementerRuntimeProvider {
   readonly providerId = "claude";
+  private activeRunId: string | null = null;
 
   constructor(private readonly fetchImpl: typeof fetch = fetch) {}
 
-  async invoke(command: ImplementerRuntimeProviderCommand): Promise<ImplementerRuntimeProviderResult> {
-    let response: Response;
+  getActiveRunId(): string | null {
+    return this.activeRunId;
+  }
+
+  async cancelActiveRun(): Promise<boolean> {
+    const runId = this.activeRunId;
+    if (!runId) return false;
     try {
-      response = await this.fetchImpl(EXECUTE_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: "implementer", command }),
-      });
+      const response = await this.fetchImpl(`${EXECUTE_ENDPOINT}/${runId}`, { method: "DELETE" });
+      if (!response.ok) return false;
+      const body = await response.json();
+      return Boolean(body?.accepted);
     } catch {
-      return { status: "Blocked", evidence: createUnreachableEvidence(command) };
+      return false;
     }
+  }
 
-    if (!response.ok) {
-      return { status: "Blocked", evidence: createUnreachableEvidence(command) };
+  async invoke(command: ImplementerRuntimeProviderCommand): Promise<ImplementerRuntimeProviderResult> {
+    const runId = globalThis.crypto.randomUUID();
+    this.activeRunId = runId;
+    try {
+      let response: Response;
+      try {
+        response = await this.fetchImpl(EXECUTE_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role: "implementer", command, runId }),
+        });
+      } catch {
+        return { status: "Blocked", evidence: createUnreachableEvidence(command) };
+      }
+
+      if (!response.ok) {
+        return { status: "Blocked", evidence: createUnreachableEvidence(command) };
+      }
+
+      let body: { status?: string; evidence?: Partial<ImplementerRuntimeEvidence> };
+      try {
+        body = await response.json();
+        if (!body?.evidence) throw new Error("malformed response");
+      } catch {
+        return { status: "Blocked", evidence: createUnreachableEvidence(command) };
+      }
+
+      return {
+        status: STATUS_FROM_BRIDGE[body.status as string] ?? "Blocked",
+        evidence: {
+          providerId: "claude",
+          agentId: "Claude",
+          role: "Implementer",
+          commandDisplay: body.evidence.commandDisplay ?? "",
+          workingDirectory: body.evidence.workingDirectory ?? command.workingDirectory,
+          started: Boolean(body.evidence.started),
+          completed: Boolean(body.evidence.completed),
+          timedOut: Boolean(body.evidence.timedOut),
+          cancelled: Boolean(body.evidence.cancelled),
+          exitCode: body.evidence.exitCode,
+          signal: body.evidence.signal,
+          durationMs: body.evidence.durationMs ?? 0,
+          stdoutSummary: body.evidence.stdoutSummary ?? "",
+          stderrSummary: body.evidence.stderrSummary ?? "",
+          outputTruncated: Boolean(body.evidence.outputTruncated),
+        },
+      };
+    } finally {
+      this.activeRunId = null;
     }
-
-    const body = await response.json();
-    return {
-      status: STATUS_FROM_BRIDGE[body.status as string] ?? "Blocked",
-      evidence: {
-        providerId: "claude",
-        agentId: "Claude",
-        role: "Implementer",
-        commandDisplay: body.evidence.commandDisplay,
-        workingDirectory: body.evidence.workingDirectory,
-        started: body.evidence.started,
-        completed: body.evidence.completed,
-        timedOut: body.evidence.timedOut,
-        cancelled: body.evidence.cancelled,
-        exitCode: body.evidence.exitCode,
-        signal: body.evidence.signal,
-        durationMs: body.evidence.durationMs,
-        stdoutSummary: body.evidence.stdoutSummary,
-        stderrSummary: body.evidence.stderrSummary,
-        outputTruncated: body.evidence.outputTruncated,
-      },
-    };
   }
 }
 
