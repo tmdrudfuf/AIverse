@@ -35,7 +35,7 @@
 3. Confirm the office UI moves out of `Blocked` and shows a genuine terminal status once the underlying CLI process finishes — correlate the command it ran with what actually happened in the scratch project's own history/output.
 4. Inspect the durable record written for that run:
    ```bash
-   cat .agent-workflow/real-runs/<projectId>/<runId>.json
+   cat .agent-workflow/real-runs/<runId>.json
    ```
    Expected: the recorded `command`, `workingDirectory`, and terminal `status`/`evidence` match what was observed in the UI.
 
