@@ -252,6 +252,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       if (clickedInteractionResult && opensProjectWorkspace(clickedInteractionResult.action)) {
         this.officeInteractionPrompt?.update(undefined);
         this.officeProjectPortalController?.open();
+        void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
         this.employeeConversationBubbleOverlay?.hide();
       } else if (actionPressed) {
         const growthLoop = this.officeProjectPortalController?.getCompanyGrowthGameplayLoopResult();
@@ -270,6 +271,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         if (interactionResult && opensProjectWorkspace(interactionResult.action)) {
           this.officeInteractionPrompt?.update(undefined);
           this.officeProjectPortalController?.open();
+          void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
           this.employeeConversationBubbleOverlay?.hide();
         } else if (!interactionResult) {
           this.showNearbyEmployeeConversationBubble();
@@ -590,6 +592,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.readinessPromotionEvaluateButton.textContent = "Evaluate Readiness";
       form.readinessPromotionMaxInput.value = String(probe?.backlogReadinessPromotionMaxPromotions ?? 1);
       form.readinessPromotionReason.textContent = `Auto Ready: ${probe?.backlogReadinessPromotionEnabled ? "On" : "Off"} | ${formatAutonomyPriorities(probe?.backlogReadinessPromotionAllowedPriorities ?? [])} | Max ${probe?.backlogReadinessPromotionMaxPromotions ?? 1} | ${probe?.backlogReadinessPromotionLatestResult || "Manual promotion"}`;
+      form.runtimeBridgeEnablementReason.textContent = formatRuntimeBridgeEnablement(this.officeProjectPortalController?.getRuntimeBridgeEnablement());
       if (!form.isEditingSuggestionAutoAcceptPriorities) {
         for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
           form.suggestionAutoAcceptPriorityInputs[priority].checked = probe?.suggestionAutoAcceptAllowedPriorities.includes(priority) ?? false;
@@ -638,6 +641,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const autonomyReevaluateButton = document.createElement("button");
       const autonomyReason = document.createElement("div");
       const autonomyPriorityGroup = document.createElement("div");
+      const runtimeBridgeEnablementReason = document.createElement("div");
       const suggestionAutoAcceptToggleButton = document.createElement("button");
       const suggestionAutoAcceptEvaluateButton = document.createElement("button");
       const suggestionAutoAcceptReason = document.createElement("div");
@@ -834,6 +838,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         color: "#cbd5e1",
         font: "12px Courier New, monospace",
       });
+      Object.assign(runtimeBridgeEnablementReason.style, {
+        gridColumn: "1 / 4",
+        minWidth: "0",
+        color: "#cbd5e1",
+        font: "12px Courier New, monospace",
+      });
       Object.assign(suggestionAutoAcceptReason.style, {
         gridColumn: "1 / 4",
         minWidth: "0",
@@ -990,6 +1000,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         autonomyPriorityGroup,
         autonomyToggleButton,
         autonomyReevaluateButton,
+        runtimeBridgeEnablementReason,
       );
       document.body.appendChild(root);
       this.projectBacklogForm = {
@@ -1020,6 +1031,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         autonomyReevaluateButton,
         autonomyReason,
         autonomyPriorityInputs,
+        runtimeBridgeEnablementReason,
         createHandler,
         updateHandler,
         startDevelopmentHandler,
@@ -1223,6 +1235,7 @@ type ProjectBacklogFormElements = {
   autonomyReevaluateButton: HTMLButtonElement;
   autonomyReason: HTMLDivElement;
   autonomyPriorityInputs: Record<ProjectBacklogPriority, HTMLInputElement>;
+  runtimeBridgeEnablementReason: HTMLDivElement;
   createHandler: () => void;
   updateHandler: () => void;
   startDevelopmentHandler: () => void;
@@ -1260,6 +1273,13 @@ function formatAutonomyPriorities(priorities: readonly ProjectBacklogPriority[])
 
 function formatAutonomyReason(reason: string | undefined) {
   return reason ? `Reason: ${reason}` : "Waiting";
+}
+
+export function formatRuntimeBridgeEnablement(enablement: { implementerEnabled: boolean; reviewerEnabled: boolean } | null | undefined) {
+  if (!enablement) return "Real execution: checking this machine...";
+  const implementerState = enablement.implementerEnabled ? "Enabled" : "Not enabled";
+  const reviewerState = enablement.reviewerEnabled ? "Enabled" : "Not enabled";
+  return `Real execution: Implementer ${implementerState} | Reviewer ${reviewerState}`;
 }
 
 function opensProjectWorkspace(action: OfficeInteractiveAction) {
