@@ -8,21 +8,22 @@
 
 ## Enable real execution on this machine
 
-1. In the project root, set in `.env.local` (not committed):
+1. In the project root, set in `.env.local` (not committed) whichever role(s) you intend to exercise — the two gates are independent:
    ```text
    AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN=1
+   AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN=1
    ```
 2. Start (or restart) the app: `npm run dev`.
 3. Confirm the server sees it enabled without exposing it to the browser:
    ```bash
    curl -s http://localhost:3000/api/runtime/status
    ```
-   Expected: `{"enabled":true}`.
+   Expected: `{"implementerEnabled":true,"reviewerEnabled":true}`.
 
 ## Verify the "not enabled" path first
 
-1. Comment out / remove `AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN` and restart `npm run dev`.
-2. Repeat the `curl` above — expected `{"enabled":false}`.
+1. Comment out / remove both env vars and restart `npm run dev`.
+2. Repeat the `curl` above — expected `{"implementerEnabled":false,"reviewerEnabled":false}`.
 3. In the app, open a registered project's office and approve a queued run — expected: a `refused` status with reason `not_enabled`, never a hang and never a false success.
 4. Re-enable the env var and restart before continuing.
 

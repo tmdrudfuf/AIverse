@@ -4,11 +4,11 @@ Server-only Next.js API routes, Node.js runtime. Not part of the public internet
 
 ## `GET /api/runtime/status`
 
-Reports whether real execution is enabled on this machine, without ever exposing the raw environment variable.
+Reports whether real execution is enabled on this machine, per role (the Implementer/Claude and Reviewer/Codex spawn gates are independent env vars by existing design), without ever exposing the raw environment variables.
 
 **Response 200**:
 ```json
-{ "enabled": true }
+{ "implementerEnabled": true, "reviewerEnabled": false }
 ```
 
 ## `POST /api/runtime/execute`
@@ -32,7 +32,7 @@ Starts (or refuses) one real run.
 }
 ```
 
-`command.workingDirectory` MUST be validated server-side against the registered project's own recorded local path (FR-011) — the caller supplying it is not trusted as the sole check.
+`command.workingDirectory` MUST be independently re-checked server-side (exists, is readable, passes the existing path-safety checks) before any process is spawned (FR-011). Project-id-to-path identity itself is resolved and bound client-side (Spec 137's project registry, which has no server-side counterpart); the server does not re-derive that binding, only re-validates the path it was handed.
 
 **Response 200** (always 200; the real outcome is in `status`, mirroring the existing provider contract rather than using HTTP status codes to carry domain outcomes):
 ```json

@@ -32,9 +32,9 @@
 
 ## Decision 4: Enablement flag stays server-only
 
-**Decision**: Reuse the existing `AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN` environment variable name and semantics, but read it *only* inside the new server route (never via a `NEXT_PUBLIC_`-prefixed variable, which Next.js would inline into the browser bundle). A new `GET /api/runtime/status` route exposes only the derived boolean, never the raw environment.
+**Decision**: Reuse the existing, already-independent pair of environment variables — `AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN` (Claude/Implementer) and `AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN` (Codex/Reviewer) — rather than inventing one combined flag. Both are read *only* inside the new server route (never via a `NEXT_PUBLIC_`-prefixed variable, which Next.js would inline into the browser bundle). `GET /api/runtime/status` exposes only the two derived booleans, never the raw environment.
 
-**Rationale**: Satisfies FR-002/FR-003 without inventing a second enablement mechanism, and keeps the existing env var's documented meaning ("Real Claude CLI spawn requires this to be set explicitly") intact and consistent between the already-tested provider and the new server route.
+**Rationale**: These two env vars already exist, are already independently gated by design (`CodexReviewerRuntimeProvider.ts`'s own comment: "the Implementer spawn gate alone must never enable a real Codex spawn (and vice versa)"), and are already documented/tested. Collapsing them into one combined flag for this feature would weaken that existing, deliberate separation. Satisfies FR-002/FR-003 without inventing a third enablement mechanism.
 
 ## Decision 5: Per-project concurrency guard and audit trail location
 

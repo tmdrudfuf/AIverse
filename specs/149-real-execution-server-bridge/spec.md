@@ -80,7 +80,7 @@ As the operator, when a real run crashes, times out, is cancelled, or the app is
 - **FR-008**: The system MUST report a crashed real run as failed, preserving whatever evidence was captured before the crash.
 - **FR-009**: The system MUST record a durable, inspectable audit trail (command run, working project, outcome, evidence) for every real run, independent of whether that run succeeded.
 - **FR-010**: The system MUST continue to preserve the existing human-only boundary: a real run MUST NOT push, open, approve, or merge anything, or delete any branch, regardless of its outcome.
-- **FR-011**: The system MUST refuse a run request against a registered project whose local path is missing, unreadable, or does not match the repository identity recorded at registration time, reporting this as a distinct, honest status rather than attempting to run anyway.
+- **FR-011**: The system MUST refuse a run request whose target local path is missing, unreadable, or fails the existing path-safety checks, reporting this as a distinct, honest status rather than attempting to run anyway. (Project registration and identity — matching a project id to its local path — is already enforced where the run request is composed, before the server boundary; the server independently re-checks only what it alone can verify: that the given path genuinely exists and is safe to use as a working directory.)
 
 ### Key Entities *(include if feature involves data)*
 

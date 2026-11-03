@@ -2,11 +2,12 @@
 
 ## RealExecutionEnablementState
 
-Not a stored record — a live-derived fact, read fresh on every request.
+Not a stored record — a live-derived fact, read fresh on every request. The Implementer (Claude) and Reviewer (Codex) gates are independent by existing design (`AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN` / `AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN`); enabling one must never enable the other.
 
 | Field | Type | Source |
 |---|---|---|
-| `enabled` | boolean | `process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN === "1"`, read server-side only |
+| `implementerEnabled` | boolean | `process.env.AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN === "1"`, read server-side only |
+| `reviewerEnabled` | boolean | `process.env.AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN === "1"`, read server-side only |
 
 ## RealRun
 
