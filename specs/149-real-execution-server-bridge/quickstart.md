@@ -5,6 +5,7 @@
 - This repository's existing local setup (`npm install` already run).
 - Claude CLI and/or Codex CLI installed and authenticated on this machine (whichever role you intend to exercise), the same tools already required by `AGENTS.md`'s multi-agent workflow.
 - A project already registered in the app via the existing project registration/binding flow (Spec 123/137) — a real local directory that is safe to run an Implementer/Reviewer command against (use a disposable scratch repository for first verification, not a repository you care about).
+- **Windows only**: confirm `claude`/`codex` resolve to a real `.exe` on PATH (`where claude`, `where codex`), not a `.cmd`/`.ps1` shim — this bridge spawns with `shell: false` (consistent with this codebase's other process-spawning code), which cannot execute a `.cmd`/`.ps1` wrapper directly and would report every real run as `failed` with an `ENOENT`-style error if the resolved command is one (round-5 independent review finding N-002, non-blocking). A global npm install of either CLI commonly installs as exactly this kind of shim; a native installer or `.exe` release typically does not.
 
 ## Enable real execution on this machine
 

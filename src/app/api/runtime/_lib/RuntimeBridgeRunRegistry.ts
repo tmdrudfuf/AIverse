@@ -66,6 +66,13 @@ export class RuntimeBridgeRunRegistry {
    * this method independently refuses to write outside `auditRootDir`
    * regardless, so a future caller of this method is never the one place a
    * traversal could slip through.
+   *
+   * Writes exclusively (round-5 review finding N-001, non-blocking): a
+   * caller-supplied runId reused across two separate requests must not be
+   * able to silently overwrite an earlier run's real audit record. Throws
+   * if one already exists for this runId; callers decide how to handle
+   * that (the route's own callers treat it as best-effort and do not let
+   * it corrupt the actual run's own already-genuine result).
    */
   writeAuditRecord(record: RunAuditRecord): string {
     fs.mkdirSync(this.auditRootDir, { recursive: true });
@@ -75,7 +82,7 @@ export class RuntimeBridgeRunRegistry {
     if (!isInsideAuditRoot) {
       throw new Error(`Refusing to write audit record outside auditRootDir for runId "${record.runId}".`);
     }
-    fs.writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
+    fs.writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
     return filePath;
   }
 }

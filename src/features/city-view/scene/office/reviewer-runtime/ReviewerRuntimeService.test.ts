@@ -876,7 +876,7 @@ describe("ReviewerRuntimeService", () => {
     expect(outcome.result.reviewerStarted).toBe(false);
   });
 
-  it("does not create a ReviewerRuntime record for a Failed provider result (only a result)", async () => {
+  it("does not create a ReviewerRuntime record when the provider never actually started (evidence.started: false)", async () => {
     const chain = createValidChain();
     const provider = createStubProvider({
       status: "Failed",
@@ -889,7 +889,7 @@ describe("ReviewerRuntimeService", () => {
         commandDisplay: "codex ...",
         workingDirectory: "C:/worktrees/076",
         reviewTargetSha: "a".repeat(40),
-        started: true,
+        started: false,
         completed: false,
         timedOut: false,
         durationMs: 5,
@@ -905,6 +905,44 @@ describe("ReviewerRuntimeService", () => {
     expect(outcome.result.status).toBe("Failed");
     expect(outcome.runtime).toBeUndefined();
     expect(outcome.runtimeCollection).toBeUndefined();
+  });
+
+  // Round-5 independent review finding (P2-001): a genuinely-started real
+  // review run (Spec 149's server bridge maps a real operator cancel to
+  // "Failed" too, since ReviewerRuntimeStatus has no Cancelled member --
+  // see ServerBridgeReviewerRuntimeProvider's own comment) must still
+  // create a real ReviewerRuntime record with its real evidence
+  // preserved, not be silently treated as never-spawned.
+  it("creates a ReviewerRuntime record with real evidence for a genuinely-started run that exited non-zero (Failed with evidence.started: true)", async () => {
+    const chain = createValidChain();
+    const provider = createStubProvider({
+      status: "Failed",
+      decision: "Unknown",
+      findings: [],
+      evidence: {
+        providerId: "codex",
+        agentId: "Codex",
+        role: "Reviewer",
+        commandDisplay: "codex ...",
+        workingDirectory: "C:/worktrees/076",
+        reviewTargetSha: "a".repeat(40),
+        started: true,
+        completed: false,
+        timedOut: false,
+        exitCode: 1,
+        durationMs: 500,
+        stdoutSummary: "reviewed some files then errored",
+        stderrSummary: "agent exited non-zero",
+        outputTruncated: false,
+      },
+    });
+    const service = new ReviewerRuntimeService(provider);
+
+    const outcome = await service.startReviewer(createInput(chain));
+
+    expect(outcome.result.status).toBe("Failed");
+    expect(outcome.runtime).toBeDefined();
+    expect(outcome.runtime?.evidence.stdoutSummary).toBe("reviewed some files then errored");
   });
 
   it("creates a ReviewerRuntime record for a TimedOut provider result (a confirmed spawn)", async () => {

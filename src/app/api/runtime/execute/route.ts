@@ -334,7 +334,17 @@ export async function handleExecuteRequest(
 
     const response: RuntimeBridgeExecuteResponse = { runId, status, refusalReason: null, evidence };
     if (role === "reviewer") {
-      const reviewParsed = status === "completed" ? parseReviewOutput(result.stdout, result.exitCode ?? undefined) : { decision: "Unknown" as const, findings: [] };
+      // Round-5 review finding (P2-001, partial): parse real stdout
+      // whenever the process genuinely started, not only when status is
+      // "completed" -- a genuinely-started run that timed out, was
+      // cancelled, or exited non-zero can still have produced real,
+      // meaningful review output before that happened.
+      // `parseReviewOutput` already guards against trusting a false
+      // "Approved" on a non-zero exit; it does not need `status` to gate
+      // whether findings are extracted at all.
+      const reviewParsed = evidence.started
+        ? parseReviewOutput(result.stdout, result.exitCode ?? undefined)
+        : { decision: "Unknown" as const, findings: [] };
       response.decision = reviewParsed.decision;
       response.findings = reviewParsed.findings;
     }
@@ -350,7 +360,14 @@ export async function handleExecuteRequest(
       workingDirectory: command.workingDirectory,
       evidence,
     };
-    registry.writeAuditRecord(auditRecord);
+    try {
+      registry.writeAuditRecord(auditRecord);
+    } catch {
+      // Round-5 review finding (N-001, non-blocking): writeAuditRecord now
+      // refuses to overwrite an existing record for a reused runId (see its
+      // own comment); that must never corrupt the real, already-genuine
+      // result below with a manufactured "failed" response.
+    }
 
     return NextResponse.json(response);
   } catch (error) {

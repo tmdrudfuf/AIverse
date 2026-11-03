@@ -141,10 +141,15 @@ export class ReviewerRuntimeService {
       return this.createBlockedOutcome(input, reviewerRuntimeId, "REVIEWER_RUNTIME_INTERNAL_FAILURE", "Failed");
     }
 
-    // Blocked/Failed pre-spawn outcomes never create a ReviewerRuntime record
-    // -- only Completed/TimedOut represent an actual confirmed spawn, mirroring
-    // ImplementerRuntimeService's own rule.
-    const spawned = providerResult.status === "Completed" || providerResult.status === "TimedOut";
+    // A record is created only for a provider result that genuinely
+    // started a real process, mirroring ImplementerRuntimeService's own
+    // rule and its own comment on why `evidence.started` -- not a status
+    // enum subset -- is what this actually means now that Spec 149's real
+    // server-bridge provider can genuinely start a process and still end
+    // in Failed (a real non-zero exit, or a real cancel -- ReviewerRuntimeStatus
+    // has no Cancelled member, so the bridge maps a cancelled reviewer run
+    // to Failed too).
+    const spawned = providerResult.evidence.started;
     if (!spawned) {
       const result = createResult({
         input,
@@ -448,7 +453,8 @@ function createRuntime(
   const implementerRuntime = input.implementerRuntime!;
   const reviewTarget = input.reviewTarget!;
   const { command } = input;
-  const spawned = providerResult.status === "Completed" || providerResult.status === "TimedOut";
+  // See the matching comment at this function's call site above.
+  const spawned = providerResult.evidence.started;
   const runtime = {
     reviewerRuntimeId,
     projectId: plan.projectId,
