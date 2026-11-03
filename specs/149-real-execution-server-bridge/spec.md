@@ -40,7 +40,7 @@ As the operator, I can tell at a glance whether real execution is enabled on thi
 2. **Given** the operator has explicitly enabled real execution on this machine, **When** they open any registered project's office, **Then** the UI clearly indicates real execution is active for this machine.
 3. **Given** real execution is enabled, **When** the operator disables it, **Then** subsequent run attempts again report "not enabled" rather than executing.
 
-**Delivery status**: Scenarios 1 and 3 are fully delivered (a disabled role genuinely refuses, with an honest, distinct message — the server never trusts the browser's belief about enablement either way). Scenario 2's visible-office-label is not yet delivered: `OfficeProjectPortalController.getRuntimeBridgeEnablement()`/`refreshRuntimeBridgeEnablement()` fetch and cache the real state and are fully tested, but nothing in the office UI calls or renders them yet (see tasks.md's follow-up task). Until that lands, the operator can confirm enablement via `GET /api/runtime/status` directly but not at a glance in the app.
+**Delivery status**: Fully delivered, including scenario 2 — the office UI now shows a "Real execution: Implementer .../Reviewer ..." label (`CompanyOfficeScene.ts`'s `runtimeBridgeEnablementReason`), refreshed on each office entry via `OfficeProjectPortalController.refreshRuntimeBridgeEnablement()` and rendered from `getRuntimeBridgeEnablement()`.
 
 ---
 
@@ -58,7 +58,7 @@ As the operator, when a real run crashes, times out, is cancelled, or the app is
 2. **Given** the operator cancels a real run in progress, **When** cancellation is requested, **Then** the run stops and is reported as cancelled, not as success or silent disappearance.
 3. **Given** a real run's process crashes unexpectedly, **When** the crash occurs, **Then** the run is reported as failed with whatever evidence was captured before the crash, not as blocked or successful.
 
-**Delivery status**: Scenarios 1 and 3 are fully delivered, including the browser-tab-closed/aborted-request edge case. Scenario 2's *mechanism* is fully delivered and tested end to end (`DELETE /api/runtime/execute/:runId`, a caller-generated runId, `ServerBridgeImplementerRuntimeProvider.cancelActiveRun()`/reviewer equivalent) — but no Cancel control in the office UI calls it yet (see tasks.md's follow-up task), so an operator cannot yet trigger a cancel from the app itself.
+**Delivery status**: Fully delivered, including scenario 2 — the office UI now has a "Cancel Real Run" button (`CompanyOfficeScene.ts`'s `runtimeBridgeCancelButton`), enabled only while `OfficeProjectPortalController.getActiveRuntimeBridgeRunId()` is non-null, calling `cancelActiveRuntimeBridgeRun()` directly.
 
 ---
 
@@ -76,11 +76,11 @@ As the operator, when a real run crashes, times out, is cancelled, or the app is
 
 - **FR-001**: The system MUST allow an approved Implementer or Reviewer run against a registered real local project to genuinely execute, producing evidence (status, output, findings) derived from that real execution rather than a simulated or canned result.
 - **FR-002**: The system MUST NOT execute any real run unless the operator has explicitly enabled real execution on this machine; this enablement MUST be a distinct, deliberate action, never an implicit side effect of normal app use.
-- **FR-003**: The system MUST make the current real-execution-enabled/disabled state visible in the office UI at all times. *(As of this implementation: the state is correctly computed and available via `GET /api/runtime/status` and a tested controller method; rendering it in the office UI is an explicit, tracked follow-up — see tasks.md. This requirement is not yet fully met end to end.)*
+- **FR-003**: The system MUST make the current real-execution-enabled/disabled state visible in the office UI at all times.
 - **FR-004**: The capability to start a real process MUST NOT be reachable from within the browser page's own script context; it MUST be reachable only through a boundary the operator controls on their own machine.
 - **FR-005**: The system MUST run at most one real process at a time per registered project, rejecting or queuing a second concurrent request for the same project rather than running both.
 - **FR-006**: The system MUST terminate a real run that exceeds a bounded time limit and report it as timed out.
-- **FR-007**: The system MUST allow the operator to cancel a real run in progress and report it as cancelled, not as success. *(As of this implementation: the underlying mechanism is complete and tested end to end at the API/provider layer; a Cancel control in the office UI that calls it is an explicit, tracked follow-up — see tasks.md. This requirement is not yet fully met end to end.)*
+- **FR-007**: The system MUST allow the operator to cancel a real run in progress and report it as cancelled, not as success.
 - **FR-008**: The system MUST report a crashed real run as failed, preserving whatever evidence was captured before the crash.
 - **FR-009**: The system MUST record a durable, inspectable audit trail (command run, working project, outcome, evidence) for every real run, independent of whether that run succeeded.
 - **FR-010**: The system MUST continue to preserve the existing human-only boundary: a real run MUST NOT push, open, approve, or merge anything, or delete any branch, regardless of its outcome. This is enforced at the invocation-command-text level (the exact same command/argument safety checks already used elsewhere in this codebase, e.g. `tools/agent-workflow/agentRunner.js`'s own remote-mutating-command denylist) — it bounds what command line this bridge itself will launch, not what a launched agent process chooses to do once running with the permissions the operator's own configuration grants it (the Implementer/Reviewer runtimes' approved commands already run with broad agent permissions by design). An agent that disregards its own instructions is outside this feature's boundary, exactly as it already was before this feature existed.

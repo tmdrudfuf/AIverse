@@ -392,8 +392,16 @@ export class OfficeProjectPortalController {
   private runtimeEnvironmentProvider: RuntimeEnvironmentProvider;
   private implementerRuntimeService: ImplementerRuntimeService;
   private readonly activeImplementerRuntimeKeys = new Set<string>();
+  // Typed reference to the concrete provider backing implementerRuntimeService
+  // specifically (not the review-fix or ADOS-execution providers, which are
+  // separate instances with their own flows) -- kept in sync wherever that
+  // service is constructed, purely so a Cancel control can reach
+  // getActiveRunId()/cancelActiveRun(), which the generic
+  // ImplementerRuntimeProvider interface does not expose (Spec 149 T029).
+  private implementerRuntimeBridgeProvider: ServerBridgeImplementerRuntimeProvider;
   private reviewerRuntimeService: ReviewerRuntimeService;
   private readonly activeReviewerRuntimeKeys = new Set<string>();
+  private reviewerRuntimeBridgeProvider: ServerBridgeReviewerRuntimeProvider;
   private readonly reviewDecisionService: ReviewDecisionService;
   private readonly reviewFixRequestService: ReviewFixRequestService;
   private readonly reviewFixPlanService: ReviewFixPlanService;
@@ -481,8 +489,10 @@ export class OfficeProjectPortalController {
     this.runtimePreflightService = new RuntimePreflightService();
     this.runtimeStartService = new RuntimeStartService();
     this.runtimeEnvironmentProvider = new RepresentedRuntimeEnvironmentProvider();
-    this.implementerRuntimeService = new ImplementerRuntimeService(new ServerBridgeImplementerRuntimeProvider());
-    this.reviewerRuntimeService = new ReviewerRuntimeService(new ServerBridgeReviewerRuntimeProvider());
+    this.implementerRuntimeBridgeProvider = new ServerBridgeImplementerRuntimeProvider();
+    this.implementerRuntimeService = new ImplementerRuntimeService(this.implementerRuntimeBridgeProvider);
+    this.reviewerRuntimeBridgeProvider = new ServerBridgeReviewerRuntimeProvider();
+    this.reviewerRuntimeService = new ReviewerRuntimeService(this.reviewerRuntimeBridgeProvider);
     this.reviewDecisionService = new ReviewDecisionService();
     this.reviewFixRequestService = new ReviewFixRequestService();
     this.reviewFixPlanService = new ReviewFixPlanService();
@@ -3079,6 +3089,30 @@ export class OfficeProjectPortalController {
   }
 
   /**
+   * The runId of whichever of the two main runtime bridge providers
+   * (`implementerRuntimeBridgeProvider`/`reviewerRuntimeBridgeProvider`) is
+   * currently mid-`invoke()`, or `null` if neither is (Spec 149 T029).
+   * Covers the "Start Implementer"/"Start Reviewer" path specifically --
+   * not the separate review-fix or ADOS-execution provider instances,
+   * which have their own flows and are out of scope for this one Cancel
+   * control.
+   */
+  getActiveRuntimeBridgeRunId(): string | null {
+    return this.implementerRuntimeBridgeProvider.getActiveRunId() ?? this.reviewerRuntimeBridgeProvider.getActiveRunId();
+  }
+
+  /** Cancels whichever run `getActiveRuntimeBridgeRunId()` currently reports, if any. */
+  async cancelActiveRuntimeBridgeRun(): Promise<boolean> {
+    if (this.implementerRuntimeBridgeProvider.getActiveRunId()) {
+      return this.implementerRuntimeBridgeProvider.cancelActiveRun();
+    }
+    if (this.reviewerRuntimeBridgeProvider.getActiveRunId()) {
+      return this.reviewerRuntimeBridgeProvider.cancelActiveRun();
+    }
+    return false;
+  }
+
+  /**
    * Requires a Runtime Start to already exist for this exact plan before
    * doing anything -- this method never originates a first Runtime Start on
    * its own, so pressing the distinct Start-Implementer input can never be
@@ -3088,7 +3122,10 @@ export class OfficeProjectPortalController {
    * ever constructing an Implementer Runtime request.
    */
   private async startImplementerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
-    this.implementerRuntimeService ??= new ImplementerRuntimeService(new ServerBridgeImplementerRuntimeProvider());
+    if (!this.implementerRuntimeService) {
+      this.implementerRuntimeBridgeProvider = new ServerBridgeImplementerRuntimeProvider();
+      this.implementerRuntimeService = new ImplementerRuntimeService(this.implementerRuntimeBridgeProvider);
+    }
     this.state.implementerRuntimeCollections ??= {};
     this.state.implementerRuntimeResultCollections ??= {};
 
@@ -3257,7 +3294,10 @@ export class OfficeProjectPortalController {
    * fails to hold.
    */
   private async startReviewerRuntimeForPromotion(projectId: string, candidateTaskId: string): Promise<boolean> {
-    this.reviewerRuntimeService ??= new ReviewerRuntimeService(new ServerBridgeReviewerRuntimeProvider());
+    if (!this.reviewerRuntimeService) {
+      this.reviewerRuntimeBridgeProvider = new ServerBridgeReviewerRuntimeProvider();
+      this.reviewerRuntimeService = new ReviewerRuntimeService(this.reviewerRuntimeBridgeProvider);
+    }
     this.state.reviewTargets ??= {};
     this.state.reviewerRuntimeCollections ??= {};
     this.state.reviewerRuntimeResultCollections ??= {};
