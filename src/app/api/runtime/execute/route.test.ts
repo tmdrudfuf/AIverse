@@ -4,6 +4,7 @@ import path from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { handleExecuteRequest } from "./route";
+import { RuntimeBridgeRunRegistry } from "../_lib/RuntimeBridgeRunRegistry";
 import type { RuntimeBridgeExecuteRequest } from "../_lib/RuntimeBridgeTypes";
 
 const IMPLEMENTER_ENV_VAR = "AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN";
@@ -20,6 +21,11 @@ function createTempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "runtime-bridge-execute-"));
 }
 
+// Backed by a temp dir, never this repository's own real
+// `.agent-workflow/real-runs/` -- a test must never leave real files
+// behind in the actual project it runs in.
+const testRegistry = new RuntimeBridgeRunRegistry(createTempDir());
+
 function postRequest(body: unknown, headers?: Record<string, string>) {
   return new NextRequest("http://localhost/api/runtime/execute", {
     method: "POST",
@@ -33,7 +39,7 @@ function postRequest(body: unknown, headers?: Record<string, string>) {
 }
 
 function callExecute(body: unknown, headers?: Record<string, string>) {
-  return handleExecuteRequest(postRequest(body, headers), { allowedCommandsByRole: TEST_ALLOWED_COMMANDS });
+  return handleExecuteRequest(postRequest(body, headers), { allowedCommandsByRole: TEST_ALLOWED_COMMANDS, registry: testRegistry });
 }
 
 function createRequestBody(overrides: Partial<RuntimeBridgeExecuteRequest> = {}): RuntimeBridgeExecuteRequest {
@@ -103,7 +109,7 @@ describe("POST /api/runtime/execute", () => {
     // Deliberately calls handleExecuteRequest directly WITHOUT the test
     // override, proving production's own allowlist (not just the test
     // harness) rejects an arbitrary executable.
-    const response = await handleExecuteRequest(postRequest(createRequestBody()));
+    const response = await handleExecuteRequest(postRequest(createRequestBody()), { registry: testRegistry });
     const body = await response.json();
 
     expect(body.status).toBe("refused");
@@ -233,7 +239,7 @@ describe("POST /api/runtime/execute", () => {
       signal: controller.signal,
     });
 
-    const responsePromise = handleExecuteRequest(request, { allowedCommandsByRole: TEST_ALLOWED_COMMANDS });
+    const responsePromise = handleExecuteRequest(request, { allowedCommandsByRole: TEST_ALLOWED_COMMANDS, registry: testRegistry });
     await new Promise((resolve) => setTimeout(resolve, 20));
     controller.abort();
 
@@ -256,7 +262,7 @@ describe("POST /api/runtime/execute", () => {
     const nonexistentCommand = path.join(createTempDir(), "this-binary-does-not-exist");
     const response = await handleExecuteRequest(
       postRequest(createRequestBody({ command: { ...createRequestBody().command, command: nonexistentCommand } })),
-      { allowedCommandsByRole: { implementer: nonexistentCommand } },
+      { allowedCommandsByRole: { implementer: nonexistentCommand }, registry: testRegistry },
     );
     const body = await response.json();
 

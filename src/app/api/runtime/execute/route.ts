@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasPathTraversal, isSafeImplementerCommand, writeCommandFiles } from "@/features/city-view/scene/office/implementer-runtime/ClaudeImplementerRuntimeProvider";
 import { isSafeReviewerCommand } from "@/features/city-view/scene/office/reviewer-runtime/CodexReviewerRuntimeProvider";
 import { parseReviewOutput } from "@/features/city-view/scene/office/reviewer-runtime/ReviewDecisionParser";
-import { getSharedRuntimeBridgeRunRegistry } from "../_lib/RuntimeBridgeRunRegistry";
+import { getSharedRuntimeBridgeRunRegistry, RuntimeBridgeRunRegistry } from "../_lib/RuntimeBridgeRunRegistry";
 import { runRuntimeBridgeProcess } from "../_lib/RuntimeBridgeProcessRunner";
 import { isTrustedRuntimeBridgeRequest } from "../_lib/RuntimeBridgeOrigin";
 import type {
@@ -49,6 +49,17 @@ function isRoleEnabled(role: RuntimeBridgeRole): boolean {
   return process.env[envVar] === "1";
 }
 
+/**
+ * Accepted trust assumption (round-4 review finding N-005, non-blocking):
+ * any existing, safe-looking local directory is accepted as a working
+ * directory -- there is no allowlist of "registered project paths" here,
+ * because no server-side project registry exists to check against (Spec
+ * 137's registry lives only in the browser; see spec.md's FR-011 and
+ * research.md's corresponding note). The browser is trusted to only ever
+ * send the working directory of a project it itself already resolved and
+ * bound, consistent with this feature's single-operator, own-machine
+ * assumption (spec.md's Assumptions section).
+ */
 function isWorkingDirectoryUsable(workingDirectory: string): boolean {
   if (!workingDirectory || hasPathTraversal(workingDirectory)) return false;
   try {
@@ -166,6 +177,12 @@ function refusalResponse(
 export type HandleExecuteRequestOptions = {
   /** Test-only: substitutes the approved command for one role. `POST` never passes this. */
   allowedCommandsByRole?: Partial<Record<RuntimeBridgeRole, string>>;
+  /**
+   * Test-only: a registry backed by a temp directory, so tests never write
+   * real audit JSON into this repository's own `.agent-workflow/real-runs/`.
+   * `POST` never passes this -- it always uses the one real shared registry.
+   */
+  registry?: RuntimeBridgeRunRegistry;
 };
 
 export async function handleExecuteRequest(
@@ -191,18 +208,45 @@ export async function handleExecuteRequest(
   const { role, command } = parsed;
   const commandDisplay = [command.command, ...command.arguments].join(" ");
   const runId = parsed.runId ?? crypto.randomUUID();
+  const registry = options.registry ?? getSharedRuntimeBridgeRunRegistry();
+
+  // Round-4 review finding (N-001, non-blocking): a refused request never
+  // spawned a process, but it is still a terminal outcome for this runId
+  // and FR-009 asks for every real run -- successful or not -- to leave an
+  // audit record. From here on, every return path is audited.
+  const refuse = (reason: RuntimeBridgeRefusalReason): NextResponse<RuntimeBridgeExecuteResponse> => {
+    const response = refusalResponse(reason, runId, commandDisplay, command.workingDirectory);
+    try {
+      const now = new Date().toISOString();
+      registry.writeAuditRecord({
+        runId,
+        role,
+        status: "refused",
+        refusalReason: reason,
+        startedAt: now,
+        completedAt: now,
+        command: commandDisplay,
+        workingDirectory: command.workingDirectory,
+        evidence: response.evidence,
+      });
+    } catch {
+      // Best-effort: the response below still carries the honest result
+      // even if the audit write itself failed.
+    }
+    return NextResponse.json(response);
+  };
 
   if (!isRoleEnabled(role)) {
-    return NextResponse.json(refusalResponse("not_enabled", runId, commandDisplay, command.workingDirectory));
+    return refuse("not_enabled");
   }
 
   if (!isWorkingDirectoryUsable(command.workingDirectory)) {
-    return NextResponse.json(refusalResponse("project_unavailable", runId, commandDisplay, command.workingDirectory));
+    return refuse("project_unavailable");
   }
 
   const approvedCommand = options.allowedCommandsByRole?.[role] ?? APPROVED_COMMANDS_BY_ROLE[role];
   if (command.command !== approvedCommand) {
-    return NextResponse.json(refusalResponse("unsafe_command", runId, commandDisplay, command.workingDirectory));
+    return refuse("unsafe_command");
   }
 
   const isSafe =
@@ -210,13 +254,12 @@ export async function handleExecuteRequest(
       ? isSafeImplementerCommand(command)
       : isSafeReviewerCommand({ ...command, reviewTargetSha: command.reviewTargetSha ?? "" });
   if (!isSafe) {
-    return NextResponse.json(refusalResponse("unsafe_command", runId, commandDisplay, command.workingDirectory));
+    return refuse("unsafe_command");
   }
 
   // Concurrency guard MUST come before any file write or spawn (P1-003): a
   // request later refused as already_running must have no side effect on
   // the project at all.
-  const registry = getSharedRuntimeBridgeRunRegistry();
   const key = workingDirectoryKey(command.workingDirectory);
   // Round-3 review finding (N-002, non-blocking): a cancel request that
   // arrives during the file-write phase (before `handle.cancel` exists)
@@ -230,7 +273,7 @@ export async function handleExecuteRequest(
   };
   const accepted = registry.tryStart(key, runId, { cancel: () => liveCancel() });
   if (!accepted) {
-    return NextResponse.json(refusalResponse("already_running", runId, commandDisplay, command.workingDirectory));
+    return refuse("already_running");
   }
 
   // Round-2 review finding (P2-002): if the browser tab closes or the
@@ -245,7 +288,7 @@ export async function handleExecuteRequest(
     if (role === "implementer" && (command.files?.length ?? 0) > 0) {
       const writeResult = await writeCommandFiles(command);
       if (!writeResult.ok) {
-        return NextResponse.json(refusalResponse("unsafe_command", runId, commandDisplay, command.workingDirectory));
+        return refuse("unsafe_command");
       }
     }
 

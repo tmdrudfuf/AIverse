@@ -36,6 +36,16 @@ export type RuntimeBridgeExecuteRequest = {
    * /api/runtime/execute/:runId` on a genuinely in-flight run. When
    * omitted, the server generates one as before, which the caller only
    * ever sees after the run has already ended.
+   *
+   * Must be unique per in-flight run (round-4 review finding N-002,
+   * non-blocking): the route restricts it to a safe charset, but does not
+   * deduplicate it against other runIds -- a caller that reuses one while
+   * its prior run is still active (or whose audit record still exists)
+   * can overwrite that audit record and make `DELETE`'s cancel lookup
+   * ambiguous. `ServerBridgeImplementerRuntimeProvider`/
+   * `ServerBridgeReviewerRuntimeProvider` always generate a fresh
+   * `crypto.randomUUID()` per call, so this is a direct-API caller's own
+   * responsibility, not a risk from the browser's real usage path.
    */
   runId?: string;
 };

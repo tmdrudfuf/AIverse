@@ -114,6 +114,15 @@
 
 ---
 
+## Phase 7: Follow-up (not done — raised by round-4 independent review)
+
+**Why these are separate from Phase 4/5 above**: round-4 review (P2-001, P2-002) correctly pointed out that FR-003 and FR-007 are not fully met end to end while these two tasks are outstanding — the underlying mechanisms (T016, T020) are complete and tested, but nothing in the office UI calls them yet. spec.md's User Story 2/3 "Delivery status" notes and FR-003/FR-007 now say so explicitly. These tasks are NOT marked done and are not claimed as complete by this implementation pass.
+
+- [ ] T028 [US2] Add a read-only "Real execution: Enabled/Not enabled" label for each role to the office UI. Read `CompanyOfficeScene.ts`'s existing `syncProjectBacklogForm` and its `Auto Suggestions`/`autonomyReason` label-rendering pattern first and mirror it; call `OfficeProjectPortalController.refreshRuntimeBridgeEnablement()` once per office entry and render `getRuntimeBridgeEnablement()`'s result. Add an `OfficeProjectPortalView.test.ts` (or scene-level) case covering both enabled and not-yet-fetched (`null`) states.
+- [ ] T029 [US3] Add a Cancel control next to T028's label, enabled only while a run is active, calling the controller's currently-active `ServerBridgeImplementerRuntimeProvider`/`ServerBridgeReviewerRuntimeProvider` instance's `cancelActiveRun()`. Requires the controller to retain a typed reference to the concrete provider instance (it currently only stores the service, which only knows the generic `ImplementerRuntimeProvider`/`ReviewerRuntimeProvider` interface) — resolve that access path before wiring the control itself. Add a test asserting the control is disabled when `getActiveRunId()` is null and calls `cancelActiveRun()` when clicked while a run is active.
+
+---
+
 ## Dependencies & Execution Order
 
 - Phase 1 before all phases.

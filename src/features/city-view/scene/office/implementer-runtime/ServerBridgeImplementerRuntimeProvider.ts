@@ -31,6 +31,15 @@ const STATUS_FROM_BRIDGE: Record<string, ImplementerRuntimeStatus> = {
  * `cancelActiveRun` expose that id and a cancel action for exactly this,
  * even though no UI control calls them yet (see tasks.md T016/T020's own
  * notes on that remaining, deliberately deferred wiring).
+ *
+ * `activeRunId` holds exactly one in-flight run (round-4 review finding
+ * N-004, non-blocking): a second concurrent `invoke()` on the SAME
+ * instance would overwrite it, making `cancelActiveRun()` target the
+ * wrong run. `ImplementerRuntimeService` (this provider's only real
+ * caller) already serializes calls to its one provider instance and
+ * refuses a second concurrent start before ever reaching `invoke()`
+ * again, so this is a latent constraint on how this class may be reused,
+ * not a reachable bug in this provider's current, only caller.
  */
 export class ServerBridgeImplementerRuntimeProvider implements ImplementerRuntimeProvider {
   readonly providerId = "claude";

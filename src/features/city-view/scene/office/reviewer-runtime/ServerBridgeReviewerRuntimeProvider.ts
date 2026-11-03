@@ -28,6 +28,12 @@ const STATUS_FROM_BRIDGE: Record<string, ReviewerRuntimeStatus> = {
  * including the same caller-generated `runId` / `getActiveRunId()` /
  * `cancelActiveRun()` mechanism -- see that file's own comment for why
  * either exists.
+ *
+ * `activeRunId` holds exactly one in-flight run (round-4 review finding
+ * N-004, non-blocking) -- see `ServerBridgeImplementerRuntimeProvider`'s
+ * own comment on the same constraint; `ReviewerRuntimeService` is this
+ * provider's only real caller and already serializes its calls the same
+ * way.
  */
 export class ServerBridgeReviewerRuntimeProvider implements ReviewerRuntimeProvider {
   readonly providerId = "codex";

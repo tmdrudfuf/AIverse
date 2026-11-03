@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 
 import { RUNTIME_BRIDGE_DEFAULT_GRACE_PERIOD_MS } from "./RuntimeBridgeTypes";
 
@@ -73,9 +73,29 @@ export function runRuntimeBridgeProcess(
   let stdout = "";
   let stderr = "";
 
+  // Round-4 review finding (N-003): on Windows, `child.kill()` only
+  // terminates the direct child process, never any grandchildren it spawned
+  // (there is no real signal propagation to a process tree the way POSIX
+  // signals work) -- a real CLI that forks its own subprocesses could
+  // outlive a timeout or cancel entirely. `taskkill /T /F` terminates the
+  // whole tree in one step, so it is used as the primary mechanism on
+  // win32 instead of SIGTERM-then-grace-then-SIGKILL (which still runs as
+  // a fallback below in case `taskkill` itself is unavailable).
+  const killProcessTree = () => {
+    if (process.platform === "win32" && typeof child.pid === "number") {
+      try {
+        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
+        return;
+      } catch {
+        // fall through to the signal-based kill below
+      }
+    }
+    child.kill("SIGTERM");
+  };
+
   const requestShutdown = () => {
     if (child.exitCode !== null || child.signalCode !== null) return;
-    child.kill("SIGTERM");
+    killProcessTree();
     clearTimeout(forceKillTimeout);
     forceKillTimeout = setTimeout(() => {
       if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
