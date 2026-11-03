@@ -41,6 +41,8 @@ Allow agents to perform controlled implementation work.
 
 **Exit condition:** an approved task can invoke Codex CLI in the selected repository and return an inspectable result without bypassing access controls.
 
+> Spec 149 (Real Execution Server Bridge) delivers the server-side adapter and credential boundary this phase calls for: a Next.js API route (`src/app/api/runtime/`) is the only place real process execution can happen, reachable from the browser only via `fetch`, with per-machine explicit enablement, a one-run-per-project guard, and a durable audit trail. GitHub write access (opening real pull requests, Phase 4) and a brand-new-project design flow remain separately specified and out of scope for Spec 149.
+
 ## Phase 4: GitHub PR/review integration
 
 Connect completed work to a collaborative review lifecycle.

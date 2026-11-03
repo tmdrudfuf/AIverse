@@ -105,12 +105,12 @@
 
 ## Phase 6: Polish & Validation
 
-- [ ] T022 [P] Add a brief "Real Execution Server Bridge" subsection to `docs/roadmap.md` Phase 3 noting this feature's scope and that GitHub write access / new-project design remain separately specified, out of scope here (per spec.md's Assumptions).
-- [ ] T023 Run the full existing suite plus the new tests: `npm test`.
-- [ ] T024 `npx tsc --noEmit`.
-- [ ] T025 `npm run build`.
-- [ ] T026 `git diff --check` and `git diff --cached --check`.
-- [ ] T027 Walk through `quickstart.md` manually on this machine with a disposable scratch project and a real CLI install — this is the one verification the automated test suite cannot do (an actual real subprocess), and is required before this feature can be considered genuinely proven, not just believed correct from fakes.
+- [X] T022 [P] Added a `docs/roadmap.md` Phase 3 note on this feature's scope and that GitHub write access / new-project design remain separately specified, out of scope here.
+- [X] T023 `npm test`: 209 files / 2245 tests passing.
+- [X] T024 `npx tsc --noEmit`: clean.
+- [X] T025 `npm run build`: clean (also confirms the three `/api/runtime/*` routes compile as server-only dynamic routes with no client-bundle leakage).
+- [X] T026 `git diff --check` / `git diff --cached --check`: clean.
+- [ ] T027 Walk through `quickstart.md` manually on this machine with a disposable scratch project and a real CLI install — this is the one verification the automated test suite cannot do (an actual real subprocess) and genuinely spawns a real, consequential agent process against a real local path. **Deliberately left for the operator to run themselves** (not run by this implementation pass): it requires `AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN`/`AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN` to be genuinely set and a real CLI call to actually fire, which is exactly the class of action `SPAWN_ALLOW_ENV_VAR`'s own existing safety comment warns an automated process should not do unsupervised.
 
 ---
 
