@@ -76,6 +76,13 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+// Round-3 review finding (P1-001): a client-supplied runId is joined
+// directly into the audit file path (RuntimeBridgeRunRegistry.writeAuditRecord).
+// Restricting it to this charset makes a traversal sequence ("../") or any
+// path separator impossible by construction -- defense in depth alongside
+// the registry's own resolved-path check.
+const SAFE_RUN_ID_PATTERN = /^[A-Za-z0-9_-]{1,100}$/;
+
 /**
  * Shape-validates the request body (P2-005) before any of it is trusted --
  * a missing field, wrong type, unknown role, or a non-finite/out-of-range
@@ -99,7 +106,9 @@ function parseExecuteRequest(body: unknown): RuntimeBridgeExecuteRequest | null 
   }
   if (c.reviewTargetSha !== undefined && typeof c.reviewTargetSha !== "string") return null;
   const { runId: suppliedRunId } = body as Record<string, unknown>;
-  if (suppliedRunId !== undefined && !isNonEmptyString(suppliedRunId)) return null;
+  if (suppliedRunId !== undefined && (!isNonEmptyString(suppliedRunId) || !SAFE_RUN_ID_PATTERN.test(suppliedRunId))) {
+    return null;
+  }
   if (c.files !== undefined) {
     if (!Array.isArray(c.files)) return null;
     const filesValid = c.files.every(
@@ -209,7 +218,16 @@ export async function handleExecuteRequest(
   // the project at all.
   const registry = getSharedRuntimeBridgeRunRegistry();
   const key = workingDirectoryKey(command.workingDirectory);
-  let liveCancel: () => boolean = () => false;
+  // Round-3 review finding (N-002, non-blocking): a cancel request that
+  // arrives during the file-write phase (before `handle.cancel` exists)
+  // must not be silently dropped -- `liveCancel` records it so it can be
+  // honored the moment the real handle is created, instead of only taking
+  // effect for a cancel that arrives after spawn.
+  let cancelRequestedEarly = false;
+  let liveCancel: () => boolean = () => {
+    cancelRequestedEarly = true;
+    return true;
+  };
   const accepted = registry.tryStart(key, runId, { cancel: () => liveCancel() });
   if (!accepted) {
     return NextResponse.json(refusalResponse("already_running", runId, commandDisplay, command.workingDirectory));
@@ -238,6 +256,7 @@ export async function handleExecuteRequest(
       timeoutMs: command.timeoutMs,
     });
     liveCancel = handle.cancel;
+    if (cancelRequestedEarly) handle.cancel();
 
     const result = await handle.result;
 
@@ -309,17 +328,23 @@ export async function handleExecuteRequest(
       commandDisplay,
       workingDirectory: command.workingDirectory,
     };
-    registry.writeAuditRecord({
-      runId,
-      role,
-      status: "failed",
-      refusalReason: null,
-      startedAt,
-      completedAt: new Date().toISOString(),
-      command: commandDisplay,
-      workingDirectory: command.workingDirectory,
-      evidence,
-    });
+    try {
+      registry.writeAuditRecord({
+        runId,
+        role,
+        status: "failed",
+        refusalReason: null,
+        startedAt,
+        completedAt: new Date().toISOString(),
+        command: commandDisplay,
+        workingDirectory: command.workingDirectory,
+        evidence,
+      });
+    } catch {
+      // Round-3 review finding (N-001, non-blocking): recording a failure
+      // must never itself produce an unhandled 500 -- the response below
+      // still carries the honest result even if the audit write failed.
+    }
     return NextResponse.json({ runId, status: "failed", refusalReason: null, evidence });
   } finally {
     // P1-002: guaranteed even if the try block throws (e.g. a synchronous

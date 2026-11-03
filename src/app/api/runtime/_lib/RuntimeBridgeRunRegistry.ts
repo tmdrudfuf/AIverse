@@ -56,10 +56,25 @@ export class RuntimeBridgeRunRegistry {
     return false;
   }
 
-  /** Writes one terminal run's durable record to `<auditRootDir>/<runId>.json`. */
+  /**
+   * Writes one terminal run's durable record to `<auditRootDir>/<runId>.json`.
+   *
+   * Defense in depth (round-3 review finding P1-001): `record.runId` can
+   * originate from the caller (an operator-supplied id, see
+   * `RuntimeBridgeTypes.RuntimeBridgeExecuteRequest.runId`). The route layer
+   * already restricts it to a safe charset before it ever reaches here, but
+   * this method independently refuses to write outside `auditRootDir`
+   * regardless, so a future caller of this method is never the one place a
+   * traversal could slip through.
+   */
   writeAuditRecord(record: RunAuditRecord): string {
     fs.mkdirSync(this.auditRootDir, { recursive: true });
-    const filePath = path.join(this.auditRootDir, `${record.runId}.json`);
+    const auditRoot = path.resolve(this.auditRootDir);
+    const filePath = path.resolve(auditRoot, `${record.runId}.json`);
+    const isInsideAuditRoot = filePath === auditRoot || filePath.startsWith(`${auditRoot}${path.sep}`);
+    if (!isInsideAuditRoot) {
+      throw new Error(`Refusing to write audit record outside auditRootDir for runId "${record.runId}".`);
+    }
     fs.writeFileSync(filePath, `${JSON.stringify(record, null, 2)}\n`, "utf8");
     return filePath;
   }

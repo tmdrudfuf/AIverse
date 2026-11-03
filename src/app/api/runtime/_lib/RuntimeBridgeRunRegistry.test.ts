@@ -86,6 +86,15 @@ describe("RuntimeBridgeRunRegistry", () => {
     expect(registry.cancel("unknown-run")).toBe(false);
   });
 
+  it("refuses to write an audit record whose runId would escape auditRootDir", () => {
+    const auditRootDir = createTempAuditDir();
+    const registry = new RuntimeBridgeRunRegistry(auditRootDir);
+    const record = createRecord({ runId: "../../escaped" });
+
+    expect(() => registry.writeAuditRecord(record)).toThrow();
+    expect(fs.existsSync(path.resolve(auditRootDir, "..", "..", "escaped.json"))).toBe(false);
+  });
+
   it("writes a terminal run's audit record to <auditRootDir>/<runId>.json", () => {
     const auditRootDir = createTempAuditDir();
     const registry = new RuntimeBridgeRunRegistry(auditRootDir);

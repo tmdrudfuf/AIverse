@@ -134,6 +134,19 @@ describe("POST /api/runtime/execute", () => {
     expect(response.status).toBe(400);
   });
 
+  it("refuses a client-supplied runId containing path traversal characters", async () => {
+    const response = await callExecute(createRequestBody({ runId: "../../../../etc/passwd" }));
+
+    expect(response.status).toBe(400);
+  });
+
+  it("accepts a client-supplied runId and uses it as-is in the response", async () => {
+    const response = await callExecute(createRequestBody({ runId: "abc-123_XYZ" }));
+    const body = await response.json();
+
+    expect(body.runId).toBe("abc-123_XYZ");
+  });
+
   it("genuinely executes and reports completed with real evidence", async () => {
     const response = await callExecute(createRequestBody());
     const body = await response.json();
