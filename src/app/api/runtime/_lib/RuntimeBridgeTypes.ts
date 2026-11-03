@@ -37,8 +37,10 @@ export type RuntimeBridgeEvidence = {
   cancelled: boolean;
   exitCode?: number;
   signal?: string;
+  durationMs: number;
   stdoutSummary: string;
   stderrSummary: string;
+  outputTruncated: boolean;
   commandDisplay: string;
   workingDirectory: string;
 };
@@ -48,6 +50,10 @@ export type RuntimeBridgeExecuteResponse = {
   status: RuntimeBridgeStatus;
   refusalReason: RuntimeBridgeRefusalReason | null;
   evidence: RuntimeBridgeEvidence;
+  /** Reviewer role only: the parsed review decision, "Unknown" unless status is "completed". */
+  decision?: "Approved" | "ChangesRequested" | "Unknown";
+  /** Reviewer role only: parsed findings, present (possibly empty) only when status is "completed". */
+  findings?: ReadonlyArray<unknown>;
 };
 
 export type RunAuditRecord = {

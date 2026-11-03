@@ -50,7 +50,7 @@ export class RuntimeBridgeRunRegistry {
 
   /** Requests cancellation of the run with this id, wherever it is active. Returns false if none is found. */
   cancel(runId: string): boolean {
-    for (const entry of this.active.values()) {
+    for (const entry of Array.from(this.active.values())) {
       if (entry.runId === runId) return entry.handle.cancel();
     }
     return false;

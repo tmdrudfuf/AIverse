@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { hasPathTraversal, isSafeImplementerCommand, writeCommandFiles } from "@/features/city-view/scene/office/implementer-runtime/ClaudeImplementerRuntimeProvider";
 import { isSafeReviewerCommand } from "@/features/city-view/scene/office/reviewer-runtime/CodexReviewerRuntimeProvider";
+import { parseReviewOutput } from "@/features/city-view/scene/office/reviewer-runtime/ReviewDecisionParser";
 import { getSharedRuntimeBridgeRunRegistry } from "../_lib/RuntimeBridgeRunRegistry";
 import { runRuntimeBridgeProcess } from "../_lib/RuntimeBridgeProcessRunner";
 import type {
@@ -21,8 +22,9 @@ const IMPLEMENTER_SPAWN_ALLOW_ENV_VAR = "AIVERSE_ALLOW_IMPLEMENTER_RUNTIME_SPAWN
 const REVIEWER_SPAWN_ALLOW_ENV_VAR = "AIVERSE_ALLOW_REVIEWER_RUNTIME_SPAWN";
 const OUTPUT_SUMMARY_MAX_LENGTH = 2_000;
 
-function truncate(text: string): string {
-  return text.length <= OUTPUT_SUMMARY_MAX_LENGTH ? text : `${text.slice(0, OUTPUT_SUMMARY_MAX_LENGTH)}...`;
+function truncate(text: string): { text: string; truncated: boolean } {
+  if (text.length <= OUTPUT_SUMMARY_MAX_LENGTH) return { text, truncated: false };
+  return { text: `${text.slice(0, OUTPUT_SUMMARY_MAX_LENGTH)}...`, truncated: true };
 }
 
 function isRoleEnabled(role: RuntimeBridgeExecuteRequest["role"]): boolean {
@@ -64,8 +66,10 @@ function refusalResponse(
       completed: false,
       timedOut: false,
       cancelled: false,
+      durationMs: 0,
       stdoutSummary: "",
       stderrSummary: "",
+      outputTruncated: false,
       commandDisplay,
       workingDirectory,
     },
@@ -136,6 +140,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<RuntimeBr
         ? "completed"
         : "failed";
 
+  const stdoutSummary = truncate(result.stdout);
+  const stderrSummary = truncate(result.stderr || result.errorMessage);
+
   const evidence: RuntimeBridgeEvidence = {
     started: true,
     completed: status === "completed",
@@ -143,13 +150,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<RuntimeBr
     cancelled: result.cancelled,
     exitCode: result.exitCode ?? undefined,
     signal: result.signal ?? undefined,
-    stdoutSummary: truncate(result.stdout),
-    stderrSummary: truncate(result.stderr || result.errorMessage),
+    durationMs: result.durationMs,
+    stdoutSummary: stdoutSummary.text,
+    stderrSummary: stderrSummary.text,
+    outputTruncated: stdoutSummary.truncated || stderrSummary.truncated,
     commandDisplay,
     workingDirectory: command.workingDirectory,
   };
 
   const response: RuntimeBridgeExecuteResponse = { runId, status, refusalReason: null, evidence };
+  if (role === "reviewer") {
+    const parsed = status === "completed" ? parseReviewOutput(result.stdout, result.exitCode ?? undefined) : { decision: "Unknown" as const, findings: [] };
+    response.decision = parsed.decision;
+    response.findings = parsed.findings;
+  }
 
   const auditRecord: RunAuditRecord = {
     runId,
