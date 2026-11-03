@@ -18,7 +18,6 @@ Starts (or refuses) one real run.
 **Request body**:
 ```json
 {
-  "projectId": "string",
   "role": "implementer" | "reviewer",
   "command": {
     "command": "string",
@@ -32,7 +31,7 @@ Starts (or refuses) one real run.
 }
 ```
 
-`command.workingDirectory` MUST be independently re-checked server-side (exists, is readable, passes the existing path-safety checks) before any process is spawned (FR-011). Project-id-to-path identity itself is resolved and bound client-side (Spec 137's project registry, which has no server-side counterpart); the server does not re-derive that binding, only re-validates the path it was handed.
+`command.workingDirectory` MUST be independently re-checked server-side (exists, is readable, passes the existing path-safety checks) before any process is spawned (FR-011). Project-id-to-path identity itself is resolved and bound client-side (Spec 137's project registry, which has no server-side counterpart); the server does not re-derive that binding, only re-validates the path it was handed. There is no separate `projectId` concept at this boundary: the normalized `command.workingDirectory` itself is the per-project concurrency key (FR-005), since each registered project already has its own distinct, stable local path.
 
 **Response 200** (always 200; the real outcome is in `status`, mirroring the existing provider contract rather than using HTTP status codes to carry domain outcomes):
 ```json

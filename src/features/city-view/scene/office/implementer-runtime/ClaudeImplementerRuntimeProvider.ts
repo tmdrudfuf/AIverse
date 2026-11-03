@@ -298,7 +298,7 @@ export function hasPathTraversal(value: string) {
   return /\.\.[\\/]/.test(value);
 }
 
-async function writeCommandFiles(command: ImplementerRuntimeProviderCommand): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function writeCommandFiles(command: ImplementerRuntimeProviderCommand): Promise<{ ok: true } | { ok: false; message: string }> {
   const files = command.files ?? [];
   if (files.length === 0) return { ok: true };
 

@@ -12,7 +12,6 @@ function createTempAuditDir() {
 function createRecord(overrides: Partial<RunAuditRecord> = {}): RunAuditRecord {
   return {
     runId: "run-1",
-    projectId: "project-a",
     role: "implementer",
     status: "completed",
     refusalReason: null,
@@ -36,32 +35,32 @@ function createRecord(overrides: Partial<RunAuditRecord> = {}): RunAuditRecord {
 }
 
 describe("RuntimeBridgeRunRegistry", () => {
-  it("allows only one active run per project", () => {
+  it("allows only one active run per working directory key", () => {
     const registry = new RuntimeBridgeRunRegistry(createTempAuditDir());
 
-    const firstAccepted = registry.tryStart("project-a", "run-1", { cancel: () => true });
-    const secondAccepted = registry.tryStart("project-a", "run-2", { cancel: () => true });
+    const firstAccepted = registry.tryStart("c:/scratch/project-a", "run-1", { cancel: () => true });
+    const secondAccepted = registry.tryStart("c:/scratch/project-a", "run-2", { cancel: () => true });
 
     expect(firstAccepted).toBe(true);
     expect(secondAccepted).toBe(false);
-    expect(registry.isActive("project-a")).toBe(true);
+    expect(registry.isActive("c:/scratch/project-a")).toBe(true);
   });
 
-  it("frees the project for a new run once the prior one finishes", () => {
+  it("frees the working directory for a new run once the prior one finishes", () => {
     const registry = new RuntimeBridgeRunRegistry(createTempAuditDir());
 
-    registry.tryStart("project-a", "run-1", { cancel: () => true });
-    registry.finish("project-a");
-    const accepted = registry.tryStart("project-a", "run-2", { cancel: () => true });
+    registry.tryStart("c:/scratch/project-a", "run-1", { cancel: () => true });
+    registry.finish("c:/scratch/project-a");
+    const accepted = registry.tryStart("c:/scratch/project-a", "run-2", { cancel: () => true });
 
     expect(accepted).toBe(true);
   });
 
-  it("different projects never block each other", () => {
+  it("different working directories never block each other", () => {
     const registry = new RuntimeBridgeRunRegistry(createTempAuditDir());
 
-    const a = registry.tryStart("project-a", "run-1", { cancel: () => true });
-    const b = registry.tryStart("project-b", "run-2", { cancel: () => true });
+    const a = registry.tryStart("c:/scratch/project-a", "run-1", { cancel: () => true });
+    const b = registry.tryStart("c:/scratch/project-b", "run-2", { cancel: () => true });
 
     expect(a).toBe(true);
     expect(b).toBe(true);
@@ -71,7 +70,7 @@ describe("RuntimeBridgeRunRegistry", () => {
     const registry = new RuntimeBridgeRunRegistry(createTempAuditDir());
     let cancelled = false;
 
-    registry.tryStart("project-a", "run-1", { cancel: () => { cancelled = true; return true; } });
+    registry.tryStart("c:/scratch/project-a", "run-1", { cancel: () => { cancelled = true; return true; } });
 
     const accepted = registry.cancel("run-1");
 
@@ -85,7 +84,7 @@ describe("RuntimeBridgeRunRegistry", () => {
     expect(registry.cancel("unknown-run")).toBe(false);
   });
 
-  it("writes a terminal run's audit record to <auditRootDir>/<projectId>/<runId>.json", () => {
+  it("writes a terminal run's audit record to <auditRootDir>/<runId>.json", () => {
     const auditRootDir = createTempAuditDir();
     const registry = new RuntimeBridgeRunRegistry(auditRootDir);
     const record = createRecord();
@@ -95,6 +94,6 @@ describe("RuntimeBridgeRunRegistry", () => {
     expect(fs.existsSync(filePath)).toBe(true);
     const written = JSON.parse(fs.readFileSync(filePath, "utf8"));
     expect(written).toEqual(record);
-    expect(filePath).toBe(path.join(auditRootDir, "project-a", "run-1.json"));
+    expect(filePath).toBe(path.join(auditRootDir, "run-1.json"));
   });
 });

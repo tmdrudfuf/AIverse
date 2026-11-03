@@ -18,12 +18,14 @@ export type RuntimeBridgeCommand = {
   inputMode: "argument" | "stdin";
   workingDirectory: string;
   prompt: string;
+  /** Implementer role only. */
   files?: ReadonlyArray<RuntimeBridgeCommandFile>;
+  /** Reviewer role only. */
+  reviewTargetSha?: string;
   timeoutMs: number;
 };
 
 export type RuntimeBridgeExecuteRequest = {
-  projectId: string;
   role: RuntimeBridgeRole;
   command: RuntimeBridgeCommand;
 };
@@ -50,7 +52,6 @@ export type RuntimeBridgeExecuteResponse = {
 
 export type RunAuditRecord = {
   runId: string;
-  projectId: string;
   role: RuntimeBridgeRole;
   status: RuntimeBridgeTerminalStatus;
   refusalReason: RuntimeBridgeRefusalReason | null;
