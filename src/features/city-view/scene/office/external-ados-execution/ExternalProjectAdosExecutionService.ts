@@ -62,6 +62,7 @@ export class ExternalProjectAdosExecutionService {
         projectId: input.projectId,
         preparationId: preparation.id,
         executionId: input.existingExecution.id,
+        durableAdosRunId: input.existingExecution.durableAdosRunId,
         status: input.existingExecution.status,
         reasonCodes: ["EXTERNAL_ADOS_EXECUTION_ALREADY_COMPLETED"],
         resultAt: timestamp,
@@ -129,6 +130,7 @@ export class ExternalProjectAdosExecutionService {
         projectId: input.projectId,
         preparationId: preparation.id,
         executionId,
+        durableAdosRunId: execution.durableAdosRunId,
         status: execution.status,
         reasonCodes: [statusReasonCode(execution.status)],
         resultAt: timestamp,
@@ -234,6 +236,10 @@ function createExecution(input: {
     projectId: input.input.projectId,
     preparationId: input.preparation.id,
     developmentRequestDraftId: input.preparation.developmentRequestDraftId,
+    // Received through the execution boundary itself (the provider's own
+    // result evidence), never propagated from an input-side literal - see
+    // ExternalProjectAdosExecutionTypes.ts.
+    durableAdosRunId: input.evidence.durableAdosRunId,
     status: input.status,
     featureId: input.preparation.featureId,
     featureBranch: input.preparation.featureBranch,
@@ -266,6 +272,7 @@ function createResult(input: {
   projectId: string;
   preparationId?: string;
   executionId?: string;
+  durableAdosRunId?: string;
   status: ExternalProjectAdosExecutionStatus;
   reasonCodes: ExternalProjectAdosExecutionReasonCode[];
   resultAt: string;
@@ -278,6 +285,7 @@ function createResult(input: {
     projectId: input.projectId || "unknown-project",
     preparationId: input.preparationId,
     executionId: input.executionId,
+    durableAdosRunId: input.durableAdosRunId,
     status: input.status,
     reasonCodes: input.reasonCodes,
     started: Boolean(input.started),

@@ -62,6 +62,28 @@ export type ImplementerRuntimeEvidence = {
   stdoutSummary: string;
   stderrSummary: string;
   outputTruncated: boolean;
+  // The durable ADOS run identity this invocation was executed under, when the
+  // provider that talked to the actual process/run knows one (e.g. the
+  // tools/agent-workflow run id). Absent by default; only a provider that
+  // genuinely observed the run (never a caller-supplied input elsewhere in the
+  // chain) may set it.
+  durableAdosRunId?: string;
+  // Verified technical publication readiness for a real ADOS child run
+  // (Spec 148 child-run architecture). Populated only by a provider that
+  // causally drove the run through the real external-run prepare/continue/
+  // inspect boundary and re-derived this from the run's own durable summary
+  // output -- never from a caller-declared confirmation. Absent for
+  // providers that don't perform this boundary (e.g. a plain single-shot
+  // Implementer spawn).
+  childRunTechnicalReadiness?: {
+    childRunId: string;
+    candidateSha: string;
+    reviewDecision: "Approved" | "Changes Requested" | "Questions" | "Unknown";
+    validatedMatchesCandidate: boolean;
+    reviewedMatchesCandidate: boolean;
+    exactHeadMatch: boolean;
+    ready: boolean;
+  };
 };
 
 export type ImplementerRuntime = {
