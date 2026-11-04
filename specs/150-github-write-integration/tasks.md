@@ -61,11 +61,11 @@
 
 ### Tests for User Story 3
 
-- [ ] T016 [P] [US3] Extend T008's route test with: not-authorized refusal (stub `gh auth status` failing), no-remote refusal (a scratch repo with no `origin` configured), and a mid-sequence failure (push to an unreachable remote) reporting `failed` with the correct `failureStep` and the `branchName` that was actually created.
+- [X] T016 [P] [US3] Extend T008's route test with: not-authorized refusal (stub `gh auth status` failing), no-remote refusal (a scratch repo with no `origin` configured), and a mid-sequence failure (push to an unreachable remote) reporting `failed` with the correct `failureStep` and the `branchName` that was actually created.
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Confirm (add any missing assertions) that every refusal/failure path writes its own audit record (mirroring Spec 149's round-4 `N-001` fix) and that the registry frees the project immediately on any terminal outcome.
+- [X] T017 [US3] Confirm (add any missing assertions) that every refusal/failure path writes its own audit record (mirroring Spec 149's round-4 `N-001` fix) and that the registry frees the project immediately on any terminal outcome.
 
 **Checkpoint**: All three user stories independently functional and tested.
 
@@ -73,11 +73,11 @@
 
 ## Phase 6: Polish & Validation
 
-- [ ] T018 [P] Add a brief note to `docs/roadmap.md` Phase 4 pointing at this feature as its public-read-to-write step, noting new-project design remains separately deferred.
-- [ ] T019 `npm test`.
-- [ ] T020 `npx tsc --noEmit`.
-- [ ] T021 `npm run build`.
-- [ ] T022 `git diff --check` / `git diff --cached --check`.
+- [X] T018 [P] Add a brief note to `docs/roadmap.md` Phase 4 pointing at this feature as its public-read-to-write step, noting new-project design remains separately deferred.
+- [X] T019 `npm test`.
+- [X] T020 `npx tsc --noEmit`.
+- [X] T021 `npm run build`.
+- [X] T022 `git diff --check` / `git diff --cached --check`.
 - [ ] T023 Walk through `quickstart.md` manually against a real, disposable scratch GitHub repository — the one verification (a genuine push + `gh pr create` against real GitHub) this implementation pass should not do unsupervised, left for the operator exactly as Spec 149's T027 was.
 
 ---

@@ -68,7 +68,8 @@ function createHybridSpawnImpl(ghResponses: Record<string, { stdout: string; exi
   }) as unknown as RuntimeBridgeSpawnImpl;
 }
 
-const testRegistry = new GitHubPublishRegistry(createTempDir());
+const testRegistryAuditDir = createTempDir();
+const testRegistry = new GitHubPublishRegistry(testRegistryAuditDir);
 
 function postRequest(body: unknown) {
   return new NextRequest("http://localhost/api/github-publish/publish", {
@@ -76,6 +77,15 @@ function postRequest(body: unknown) {
     body: JSON.stringify(body),
     headers: { host: "localhost" },
   });
+}
+
+function auditRecordPath(attemptId: string) {
+  return path.join(testRegistryAuditDir, `${attemptId}.json`);
+}
+
+/** Mirrors route.ts's own (private) workingDirectoryKey() exactly. */
+function workingDirectoryKey(workingDirectory: string) {
+  return path.resolve(workingDirectory).toLowerCase();
 }
 
 describe("POST /api/github-publish/publish", () => {
@@ -96,6 +106,8 @@ describe("POST /api/github-publish/publish", () => {
 
     expect(body.status).toBe("published");
     expect(body.pullRequestUrl).toBe("https://github.com/example/repo/pull/1");
+    expect(fs.existsSync(auditRecordPath(body.attemptId))).toBe(true);
+    expect(testRegistry.isActive(workingDirectoryKey(repoPath))).toBe(false);
   });
 
   it("refuses not_authorized without touching git at all", async () => {
@@ -109,6 +121,8 @@ describe("POST /api/github-publish/publish", () => {
 
     expect(body.status).toBe("refused");
     expect(body.refusalReason).toBe("not_authorized");
+    expect(fs.existsSync(auditRecordPath(body.attemptId))).toBe(true);
+    expect(testRegistry.isActive(workingDirectoryKey(repoPath))).toBe(false);
   });
 
   it("refuses no_remote when the project has no configured remote", async () => {
@@ -123,6 +137,8 @@ describe("POST /api/github-publish/publish", () => {
 
     expect(body.status).toBe("refused");
     expect(body.refusalReason).toBe("no_remote");
+    expect(fs.existsSync(auditRecordPath(body.attemptId))).toBe(true);
+    expect(testRegistry.isActive(workingDirectoryKey(repoPath))).toBe(false);
   });
 
   it("refuses nothing_to_publish for a clean, non-ahead repo", async () => {
@@ -138,6 +154,29 @@ describe("POST /api/github-publish/publish", () => {
 
     expect(body.status).toBe("refused");
     expect(body.refusalReason).toBe("nothing_to_publish");
+    expect(fs.existsSync(auditRecordPath(body.attemptId))).toBe(true);
+    expect(testRegistry.isActive(workingDirectoryKey(repoPath))).toBe(false);
+  });
+
+  it("reports failed with the push failureStep and the real branchName when the remote is unreachable", async () => {
+    const repoPath = createScratchRepoWithRemote();
+    fs.writeFileSync(path.join(repoPath, "hello.txt"), "hi\n");
+    spawnSync("git", ["remote", "set-url", "origin", path.join(repoPath, "..", "does-not-exist.git")], { cwd: repoPath });
+    const spawnImpl = createHybridSpawnImpl({ repo: { stdout: "main", exitCode: 0 } });
+
+    const response = await handlePublishRequest(postRequest({ workingDirectory: repoPath }), {
+      registry: testRegistry,
+      isAuthorizedOverride: async () => true,
+      spawnImpl,
+    });
+    const body = await response.json();
+
+    expect(body.status).toBe("failed");
+    expect(body.evidence.failureStep).toBe("push");
+    expect(body.branchName).toMatch(/^aiverse\/publish-/);
+    expect(body.commitMessage).toBe("AIverse maintenance update: 1 file changed");
+    expect(fs.existsSync(auditRecordPath(body.attemptId))).toBe(true);
+    expect(testRegistry.isActive(workingDirectoryKey(repoPath))).toBe(false);
   });
 
   it("refuses already_running for a second concurrent attempt on the same project", async () => {
@@ -164,8 +203,10 @@ describe("POST /api/github-publish/publish", () => {
 
     expect(secondBody.status).toBe("refused");
     expect(secondBody.refusalReason).toBe("already_running");
+    expect(fs.existsSync(auditRecordPath(secondBody.attemptId))).toBe(true);
 
     const firstBody = await (await firstPromise).json();
     expect(firstBody.status).toBe("published");
+    expect(testRegistry.isActive(workingDirectoryKey(repoPath))).toBe(false);
   });
 });

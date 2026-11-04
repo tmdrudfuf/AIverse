@@ -56,6 +56,8 @@ Connect completed work to a collaborative review lifecycle.
 
 **Exit condition:** a local task can progress to a GitHub pull request with traceable QA and review evidence.
 
+> Spec 150 (GitHub Write Integration) delivers this phase's one-operator-triggered write path: `POST /api/github-publish/publish` commits (if needed), pushes a new branch, and opens a draft pull request, reusing the operator's own `git`/`gh` CLI login rather than a new credential store. It never merges, approves, marks ready, or deletes a branch -- those stay human-only. A brand-new-project design flow remains separately specified and out of scope for Spec 150.
+
 ## Phase 5: Multiple buildings/projects
 
 Scale the proven workflow into a city of projects.
