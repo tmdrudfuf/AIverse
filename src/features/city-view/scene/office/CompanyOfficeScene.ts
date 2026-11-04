@@ -1,4 +1,5 @@
 import type { Rect } from "../buildings/buildingTypes";
+import type { GitHubPublishResult } from "./github-publish/GitHubPublishClient";
 import { INITIAL_ZOOM } from "../config/navigationConfig";
 import { FounderEntity } from "../founder/FounderEntity";
 import { FounderMovementController } from "../founder/FounderMovementController";
@@ -253,6 +254,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         this.officeInteractionPrompt?.update(undefined);
         this.officeProjectPortalController?.open();
         void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
+        void this.officeProjectPortalController?.refreshGitHubPublishStatusAndPreview();
         this.employeeConversationBubbleOverlay?.hide();
       } else if (actionPressed) {
         const growthLoop = this.officeProjectPortalController?.getCompanyGrowthGameplayLoopResult();
@@ -272,6 +274,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           this.officeInteractionPrompt?.update(undefined);
           this.officeProjectPortalController?.open();
           void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
+          void this.officeProjectPortalController?.refreshGitHubPublishStatusAndPreview();
           this.employeeConversationBubbleOverlay?.hide();
         } else if (!interactionResult) {
           this.showNearbyEmployeeConversationBubble();
@@ -606,6 +609,19 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.runtimeBridgeCancelButton.disabled = !activeRuntimeBridgeRunId;
       form.runtimeBridgeCancelButton.style.opacity = activeRuntimeBridgeRunId ? "1" : "0.52";
       form.runtimeBridgeCancelButton.style.cursor = activeRuntimeBridgeRunId ? "pointer" : "not-allowed";
+      const githubPublishAuthorized = this.officeProjectPortalController?.getGitHubPublishAuthorized() ?? null;
+      const githubPublishPreview = this.officeProjectPortalController?.getGitHubPublishPreview() ?? null;
+      const githubPublishEnabled = githubPublishAuthorized === true && (githubPublishPreview?.hasAnythingToPublish ?? false);
+      form.githubPublishButton.textContent = "Publish to GitHub";
+      form.githubPublishButton.disabled = !githubPublishEnabled;
+      form.githubPublishButton.style.opacity = githubPublishEnabled ? "1" : "0.52";
+      form.githubPublishButton.style.cursor = githubPublishEnabled ? "pointer" : "not-allowed";
+      form.githubPublishButton.title = githubPublishEnabled
+        ? "Publish real local changes to GitHub (Spec 150 server bridge): commit, push, and open a draft PR."
+        : "Not available right now -- see the status line below.";
+      form.githubPublishReason.textContent = this.githubPublishLastResult
+        ? formatGitHubPublishResult(this.githubPublishLastResult)
+        : formatGitHubPublishPreview(githubPublishAuthorized, githubPublishPreview);
       if (!form.isEditingSuggestionAutoAcceptPriorities) {
         for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
           form.suggestionAutoAcceptPriorityInputs[priority].checked = probe?.suggestionAutoAcceptAllowedPriorities.includes(priority) ?? false;
@@ -656,6 +672,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       const autonomyPriorityGroup = document.createElement("div");
       const runtimeBridgeEnablementReason = document.createElement("div");
       const runtimeBridgeCancelButton = document.createElement("button");
+      const githubPublishReason = document.createElement("div");
+      const githubPublishButton = document.createElement("button");
       const suggestionAutoAcceptToggleButton = document.createElement("button");
       const suggestionAutoAcceptEvaluateButton = document.createElement("button");
       const suggestionAutoAcceptReason = document.createElement("div");
@@ -760,6 +778,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         autonomyToggleButton,
         autonomyReevaluateButton,
         runtimeBridgeCancelButton,
+        githubPublishButton,
       ]) {
         Object.assign(element.style, {
           minWidth: "0",
@@ -859,6 +878,12 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         color: "#cbd5e1",
         font: "12px Courier New, monospace",
       });
+      Object.assign(githubPublishReason.style, {
+        gridColumn: "1 / 4",
+        minWidth: "0",
+        color: "#cbd5e1",
+        font: "12px Courier New, monospace",
+      });
       Object.assign(suggestionAutoAcceptReason.style, {
         gridColumn: "1 / 4",
         minWidth: "0",
@@ -904,6 +929,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       Object.assign(autonomyToggleButton.style, { gridColumn: "1 / 3" });
       Object.assign(autonomyReevaluateButton.style, { gridColumn: "3 / 4" });
       Object.assign(runtimeBridgeCancelButton.style, { gridColumn: "1 / 4" });
+      Object.assign(githubPublishButton.style, { gridColumn: "1 / 4" });
 
       const createHandler = () => {
         this.officeProjectPortalController?.createBacklogTaskFromInput({
@@ -971,6 +997,16 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
         });
       };
+      // Same direct-side-effect shape as runtimeBridgeCancelHandler above --
+      // this is the one operator-triggered action that is allowed to push
+      // and open a real PR (Spec 150 FR-002), so it bypasses the pending-
+      // flag machinery entirely rather than risk a stray automatic retrigger.
+      const githubPublishHandler = () => {
+        this.githubPublishLastResult = null;
+        void this.officeProjectPortalController?.publishToGitHub().then((result) => {
+          this.githubPublishLastResult = result;
+        });
+      };
       const autonomyPriorityChangeHandler = () => {
         this.projectBacklogFormPendingPriorityChange = true;
         if (this.projectBacklogForm) this.projectBacklogForm.isEditingAutonomyPriorities = true;
@@ -1013,6 +1049,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       autonomyToggleButton.addEventListener("click", autonomyToggleHandler);
       autonomyReevaluateButton.addEventListener("click", autonomyReevaluateHandler);
       runtimeBridgeCancelButton.addEventListener("click", runtimeBridgeCancelHandler);
+      githubPublishButton.addEventListener("click", githubPublishHandler);
       for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
         autonomyPriorityInputs[priority].addEventListener("change", autonomyPriorityChangeHandler);
         suggestionAutoAcceptPriorityInputs[priority].addEventListener("change", suggestionAutoAcceptPriorityChangeHandler);
@@ -1048,6 +1085,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         autonomyReevaluateButton,
         runtimeBridgeEnablementReason,
         runtimeBridgeCancelButton,
+        githubPublishReason,
+        githubPublishButton,
       );
       document.body.appendChild(root);
       this.projectBacklogForm = {
@@ -1080,6 +1119,8 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         autonomyPriorityInputs,
         runtimeBridgeEnablementReason,
         runtimeBridgeCancelButton,
+        githubPublishReason,
+        githubPublishButton,
         createHandler,
         updateHandler,
         startDevelopmentHandler,
@@ -1098,11 +1139,13 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         autonomyReevaluateHandler,
         autonomyPriorityChangeHandler,
         runtimeBridgeCancelHandler,
+        githubPublishHandler,
       };
       return this.projectBacklogForm;
     }
 
     private runtimeBridgeLastCancelOutcome: boolean | null = null;
+    private githubPublishLastResult: GitHubPublishResult | null = null;
     private projectBacklogFormPendingToggleAutonomy = false;
     private projectBacklogFormPendingReevaluateAutonomy = false;
     private projectBacklogFormPendingPriorityChange = false;
@@ -1209,6 +1252,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         form.autonomyToggleButton,
         form.autonomyReevaluateButton,
         form.runtimeBridgeCancelButton,
+        form.githubPublishButton,
       ]) {
         element.removeEventListener("keydown", stopPortalShortcutPropagation);
         element.removeEventListener("keyup", stopPortalShortcutPropagation);
@@ -1228,6 +1272,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.autonomyToggleButton.removeEventListener("click", form.autonomyToggleHandler);
       form.autonomyReevaluateButton.removeEventListener("click", form.autonomyReevaluateHandler);
       form.runtimeBridgeCancelButton.removeEventListener("click", form.runtimeBridgeCancelHandler);
+      form.githubPublishButton.removeEventListener("click", form.githubPublishHandler);
       for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
         form.autonomyPriorityInputs[priority].removeEventListener("change", form.autonomyPriorityChangeHandler);
         form.autonomyPriorityInputs[priority].removeEventListener("keydown", stopPortalShortcutPropagation);
@@ -1242,6 +1287,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.root.remove();
       this.projectBacklogForm = undefined;
       this.runtimeBridgeLastCancelOutcome = null;
+      this.githubPublishLastResult = null;
       this.projectBacklogFormPendingToggleAutonomy = false;
       this.projectBacklogFormPendingReevaluateAutonomy = false;
       this.projectBacklogFormPendingPriorityChange = false;
@@ -1290,6 +1336,8 @@ type ProjectBacklogFormElements = {
   autonomyPriorityInputs: Record<ProjectBacklogPriority, HTMLInputElement>;
   runtimeBridgeEnablementReason: HTMLDivElement;
   runtimeBridgeCancelButton: HTMLButtonElement;
+  githubPublishReason: HTMLDivElement;
+  githubPublishButton: HTMLButtonElement;
   createHandler: () => void;
   updateHandler: () => void;
   startDevelopmentHandler: () => void;
@@ -1308,6 +1356,7 @@ type ProjectBacklogFormElements = {
   autonomyReevaluateHandler: () => void;
   autonomyPriorityChangeHandler: () => void;
   runtimeBridgeCancelHandler: () => void;
+  githubPublishHandler: () => void;
   lastSelectedTaskId?: string;
   isEditingAutonomyPriorities?: boolean;
   isEditingSuggestionAutoAcceptPriorities?: boolean;
@@ -1335,6 +1384,29 @@ export function formatRuntimeBridgeEnablement(enablement: { implementerEnabled: 
   const implementerState = enablement.implementerEnabled ? "Enabled" : "Not enabled";
   const reviewerState = enablement.reviewerEnabled ? "Enabled" : "Not enabled";
   return `Real execution: Implementer ${implementerState} | Reviewer ${reviewerState}`;
+}
+
+export function formatGitHubPublishPreview(
+  authorized: boolean | null,
+  preview: { changedFiles: string[]; plannedCommitMessage: string; hasAnythingToPublish: boolean } | null,
+) {
+  if (authorized === null || preview === null) return "GitHub publish: checking this project...";
+  if (!authorized) return "GitHub publish: not authorized on this machine (gh auth status).";
+  if (!preview.hasAnythingToPublish) return "GitHub publish: nothing to publish right now.";
+  const fileCount = preview.changedFiles.length;
+  const fileSummary = fileCount > 0 ? `${fileCount} file${fileCount === 1 ? "" : "s"} changed` : "already committed, ahead of default branch";
+  return `GitHub publish: Ready -- ${fileSummary}.`;
+}
+
+export function formatGitHubPublishResult(result: GitHubPublishResult | null) {
+  if (!result) return "GitHub publish: not yet attempted this session.";
+  if (result.status === "published") {
+    return `GitHub publish: Published${result.pullRequestUrl ? ` -> ${result.pullRequestUrl}` : ""}`;
+  }
+  if (result.status === "refused") {
+    return `GitHub publish: Refused (${result.refusalReason ?? "unknown reason"})`;
+  }
+  return `GitHub publish: Failed${result.evidence.stderrSummary ? ` -- ${result.evidence.stderrSummary}` : ""}`;
 }
 
 function opensProjectWorkspace(action: OfficeInteractiveAction) {
