@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { runGitHubPublishSequence } from "./GitHubPublishSequence";
+import { parsePorcelainFiles, runGitHubPublishSequence } from "./GitHubPublishSequence";
 import type { RuntimeBridgeSpawnImpl } from "../../runtime/_lib/RuntimeBridgeProcessRunner";
 
 function createScratchRepoWithRemote() {
@@ -65,10 +65,38 @@ function createHybridSpawnImpl(ghResponses: Record<string, { stdout: string; exi
   }) as unknown as RuntimeBridgeSpawnImpl;
 }
 
+describe("parsePorcelainFiles", () => {
+  // Regression coverage for a real bug found via Spec 150 T023's scratch-
+  // repo verification: a modified *tracked* file's porcelain line has a
+  // leading status space (" M file") that a pre-slice .trim() used to eat,
+  // truncating the filename (README.md -> EADME.md). Untracked files ("??
+  // file") have no leading space, which is why the existing sequence tests
+  // -- all using brand-new files -- never caught this.
+  it("parses a modified tracked file without truncating its name", () => {
+    expect(parsePorcelainFiles(" M README.md\n")).toEqual(["README.md"]);
+  });
+
+  it("parses an untracked file", () => {
+    expect(parsePorcelainFiles("?? hello.txt\n")).toEqual(["hello.txt"]);
+  });
+
+  it("parses a staged addition", () => {
+    expect(parsePorcelainFiles("A  new.txt\n")).toEqual(["new.txt"]);
+  });
+
+  it("handles multiple lines and Windows-style line endings", () => {
+    expect(parsePorcelainFiles(" M README.md\r\n?? hello.txt\r\n")).toEqual(["README.md", "hello.txt"]);
+  });
+});
+
 describe("runGitHubPublishSequence", () => {
   it("commits uncommitted changes, pushes, and opens a PR (published)", async () => {
     const repoPath = createScratchRepoWithRemote();
     fs.writeFileSync(path.join(repoPath, "hello.txt"), "hi\n");
+    // Also modify the already-tracked README.md -- regression coverage for
+    // the parsePorcelainFiles truncation bug above (brand-new untracked
+    // files alone never exercised the " M " leading-space case).
+    fs.appendFileSync(path.join(repoPath, "README.md"), "more\n");
     const spawnImpl = createHybridSpawnImpl({
       repo: { stdout: "main", exitCode: 0 },
       pr: { stdout: "https://github.com/example/repo/pull/1\n", exitCode: 0 },
@@ -78,7 +106,7 @@ describe("runGitHubPublishSequence", () => {
 
     expect(result.status).toBe("published");
     expect(result.branchName).toMatch(/^aiverse\/publish-/);
-    expect(result.commitMessage).toContain("1 file changed");
+    expect(result.commitMessage).toContain("2 files changed");
     expect(result.pullRequestUrl).toBe("https://github.com/example/repo/pull/1");
   });
 

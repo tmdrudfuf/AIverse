@@ -78,7 +78,7 @@
 - [X] T020 `npx tsc --noEmit`.
 - [X] T021 `npm run build`.
 - [X] T022 `git diff --check` / `git diff --cached --check`.
-- [ ] T023 Walk through `quickstart.md` manually against a real, disposable scratch GitHub repository — the one verification (a genuine push + `gh pr create` against real GitHub) this implementation pass should not do unsupervised, left for the operator exactly as Spec 149's T027 was.
+- [X] T023 Walk through `quickstart.md` against a real, disposable scratch GitHub repository (`tmdrudfuf/aiverse-publish-scratch-test`, operator-authorized, deleted after). Found and fixed a real bug: `parsePorcelainFiles` truncated filenames for already-tracked modified files (` M README.md` -> `EADME.md`) because it trimmed the leading status-space before slicing the fixed-width prefix; every existing test had only used brand-new untracked files (`??`, no leading space), which never exercised this path. Verified after the fix: `/status` reports `authorized`; `/preview` lists the real changed file with the correct name; a real publish opened a genuine draft PR (`tmdrudfuf/aiverse-publish-scratch-test#1`) containing exactly that change; `nothing_to_publish` refused correctly once back on a clean `main`; two concurrent publish calls produced one `published` and one `refused: already_running`; every attempt's audit record landed in the (gitignored) local `.agent-workflow/github-publishes/`; none of the three PRs opened during verification were ever merged, approved, or marked ready.
 
 ---
 
