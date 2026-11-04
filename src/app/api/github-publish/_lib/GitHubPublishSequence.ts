@@ -26,10 +26,16 @@ function truncate(text: string): string {
 }
 
 export function parsePorcelainFiles(porcelainOutput: string): string[] {
+  // `git status --porcelain` lines are exactly 2 status chars + 1 space +
+  // path -- trimming the line first (as this used to) eats that leading
+  // space for a worktree-only change (" M file"), truncating the filename
+  // (found via Spec 150 T023's real scratch-repo verification: "README.md"
+  // came back as "EADME.md"). Only strip a trailing \r (Windows git), never
+  // leading whitespace, before slicing off the fixed-width status prefix.
   return porcelainOutput
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
+    .map((line) => line.replace(/\r$/, ""))
+    .filter((line) => line.length > 0)
     .map((line) => line.slice(3).trim());
 }
 
