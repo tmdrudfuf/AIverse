@@ -72,6 +72,7 @@ import {
   createRuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
 import { ServerBridgeImplementerRuntimeProvider } from "./implementer-runtime/ServerBridgeImplementerRuntimeProvider";
+import { GitHubPublishClient, type GitHubPublishResult } from "./github-publish/GitHubPublishClient";
 import {
   ExternalAdosChildRunImplementerProvider,
   type ExternalAdosChildRunGatewayModule,
@@ -413,6 +414,7 @@ export class OfficeProjectPortalController {
   private reviewerRuntimeService: ReviewerRuntimeService;
   private readonly activeReviewerRuntimeKeys = new Set<string>();
   private reviewerRuntimeBridgeProvider: ServerBridgeReviewerRuntimeProvider;
+  private readonly githubPublishClient: GitHubPublishClient;
   private readonly reviewDecisionService: ReviewDecisionService;
   private readonly reviewFixRequestService: ReviewFixRequestService;
   private readonly reviewFixPlanService: ReviewFixPlanService;
@@ -504,6 +506,7 @@ export class OfficeProjectPortalController {
     this.implementerRuntimeService = new ImplementerRuntimeService(this.implementerRuntimeBridgeProvider);
     this.reviewerRuntimeBridgeProvider = new ServerBridgeReviewerRuntimeProvider();
     this.reviewerRuntimeService = new ReviewerRuntimeService(this.reviewerRuntimeBridgeProvider);
+    this.githubPublishClient = new GitHubPublishClient();
     this.reviewDecisionService = new ReviewDecisionService();
     this.reviewFixRequestService = new ReviewFixRequestService();
     this.reviewFixPlanService = new ReviewFixPlanService();
@@ -3132,6 +3135,31 @@ export class OfficeProjectPortalController {
       return this.reviewerRuntimeBridgeProvider.cancelActiveRun();
     }
     return false;
+  }
+
+  /**
+   * The active project's real local repository directory -- the same
+   * `localRepositoryBinding.repositoryPath`/`repositoryIdentity.localPath`
+   * resolution `createExecutionPlanRepositoryContext` uses, but project-
+   * scoped rather than task/plan-scoped (Spec 150 T012: the GitHub publish
+   * bridge operates on "the project", not on any one task's worktree).
+   */
+  getActiveProjectWorkingDirectory(): string | null {
+    const activeProjectId = this.getActiveProjectId();
+    const project = activeProjectId ? this.state.projects.find((item) => item.id === activeProjectId) : undefined;
+    return project?.localRepositoryBinding?.repositoryPath ?? project?.repositoryIdentity?.localPath ?? null;
+  }
+
+  /**
+   * Publishes the active project's real local changes to GitHub via the
+   * Spec 150 server bridge (`GitHubPublishClient`). Returns `null` -- never
+   * throws -- when there is no active project with a resolvable local
+   * directory, since there is then nothing to send to the bridge.
+   */
+  async publishToGitHub(): Promise<GitHubPublishResult | null> {
+    const workingDirectory = this.getActiveProjectWorkingDirectory();
+    if (!workingDirectory) return null;
+    return this.githubPublishClient.publish(workingDirectory);
   }
 
   /**

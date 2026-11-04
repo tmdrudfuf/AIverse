@@ -8,18 +8,18 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm `src/app/api/github-publish/` does not already exist (it doesn't — verified during planning).
+- [X] T001 Confirm `src/app/api/github-publish/` does not already exist (it doesn't — verified during planning).
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T002 [P] Define `PublishAttempt`, `PublishAuditRecord`, `PublishPreview`, `GitHubPublishRefusalReason` types in `src/app/api/github-publish/_lib/GitHubPublishTypes.ts`.
-- [ ] T003 [P] Write `GitHubPublishRegistry.test.ts` first (mirrors `RuntimeBridgeRunRegistry.test.ts`): one active attempt per working-directory key, path-traversal-safe audit writes, exclusive (`wx`) writes. (depends on T002)
-- [ ] T004 Implement `GitHubPublishRegistry.ts` by copying `RuntimeBridgeRunRegistry`'s proven shape (concurrency guard + audit-file writer to `.agent-workflow/github-publishes/`), adapted to this feature's own types. Must make T003 pass.
-- [ ] T005 [P] Write `GitHubPublishSequence.test.ts` first, using a real scratch git repo (created fresh per test, `git init`, a local-only second scratch repo used as its `origin` remote so `git push` is real but never touches the network) covering: (a) uncommitted changes get committed and pushed with a generated message; (b) already-committed-but-unpushed commits get pushed without an extra empty commit; (c) a clean, non-ahead repo refuses `nothing_to_publish` without creating any branch; (d) a missing `origin` remote refuses `no_remote`; (e) a failure at any step (simulate by pointing the push at an unreachable remote) reports `failed` with the correct `failureStep` and whatever `branchName`/`commitMessage` had already been set.
-- [ ] T006 Implement `GitHubPublishSequence.ts`: the fixed branch/commit/push sequence (research.md Decision 4), computing "ahead of default branch" and "uncommitted changes" *before* creating any branch so a true no-op never creates one; using `runRuntimeBridgeProcess` (reused, not duplicated) for every `git` subprocess. Must make T005 pass. (depends on T002, and reuses `src/app/api/runtime/_lib/RuntimeBridgeProcessRunner.ts` as-is)
-- [ ] T007 [P] Write a small commit/PR message generator (`generatePublishMessage(changedFiles: string[]): { commitMessage, prTitle, prBody }`) with its own unit test, covering zero/one/many changed files.
+- [X] T002 [P] Define `PublishAttempt`, `PublishAuditRecord`, `PublishPreview`, `GitHubPublishRefusalReason` types in `src/app/api/github-publish/_lib/GitHubPublishTypes.ts`.
+- [X] T003 [P] Write `GitHubPublishRegistry.test.ts` first (mirrors `RuntimeBridgeRunRegistry.test.ts`): one active attempt per working-directory key, path-traversal-safe audit writes, exclusive (`wx`) writes. (depends on T002)
+- [X] T004 Implement `GitHubPublishRegistry.ts` by copying `RuntimeBridgeRunRegistry`'s proven shape (concurrency guard + audit-file writer to `.agent-workflow/github-publishes/`), adapted to this feature's own types. Must make T003 pass.
+- [X] T005 [P] Write `GitHubPublishSequence.test.ts` first, using a real scratch git repo (created fresh per test, `git init`, a local-only second scratch repo used as its `origin` remote so `git push` is real but never touches the network) covering: (a) uncommitted changes get committed and pushed with a generated message; (b) already-committed-but-unpushed commits get pushed without an extra empty commit; (c) a clean, non-ahead repo refuses `nothing_to_publish` without creating any branch; (d) a missing `origin` remote refuses `no_remote`; (e) a failure at any step (simulate by pointing the push at an unreachable remote) reports `failed` with the correct `failureStep` and whatever `branchName`/`commitMessage` had already been set.
+- [X] T006 Implement `GitHubPublishSequence.ts`: the fixed branch/commit/push sequence (research.md Decision 4), computing "ahead of default branch" and "uncommitted changes" *before* creating any branch so a true no-op never creates one; using `runRuntimeBridgeProcess` (reused, not duplicated) for every `git` subprocess. Must make T005 pass. (depends on T002, and reuses `src/app/api/runtime/_lib/RuntimeBridgeProcessRunner.ts` as-is)
+- [X] T007 [P] Write a small commit/PR message generator (`generatePublishMessage(changedFiles: string[]): { commitMessage, prTitle, prBody }`) with its own unit test, covering zero/one/many changed files.
 
 **Checkpoint**: Foundational ready — the publish sequence works and is tested against real (but network-free) git repos.
 
@@ -29,14 +29,14 @@
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Write `src/app/api/github-publish/publish/route.test.ts` first: happy path (real scratch repo, real-but-local-only remote) resolves `published` with a real `branchName`/`commitMessage`; `nothing_to_publish` when clean and not ahead; `already_running` for a second concurrent attempt on the same working directory.
-- [ ] T009 [P] [US1] Write `GitHubPublishClient.test.ts` (browser-side, fake `fetch`) mirroring `ServerBridgeImplementerRuntimeProvider.test.ts`'s style: POSTs the working directory, maps the response.
+- [X] T008 [P] [US1] Write `src/app/api/github-publish/publish/route.test.ts` first: happy path (real scratch repo, real-but-local-only remote) resolves `published` with a real `branchName`/`commitMessage`; `nothing_to_publish` when clean and not ahead; `already_running` for a second concurrent attempt on the same working directory.
+- [X] T009 [P] [US1] Write `GitHubPublishClient.test.ts` (browser-side, fake `fetch`) mirroring `ServerBridgeImplementerRuntimeProvider.test.ts`'s style: POSTs the working directory, maps the response.
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Implement `POST /api/github-publish/publish` in `src/app/api/github-publish/publish/route.ts`: same trusted-origin check as the execute route (reuse `isTrustedRuntimeBridgeRequest`), re-validate the working directory server-side, check authorization (T013) and remote existence, enforce the concurrency guard (T004), run the sequence (T006), write the audit record. Must make T008 pass.
-- [ ] T011 [US1] Implement `GitHubPublishClient.ts` (browser-side `fetch()` wrapper, no node imports) in `src/features/city-view/scene/office/github-publish/`. Must make T009 pass.
-- [ ] T012 [US1] Wire `GitHubPublishClient` into `OfficeProjectPortalController.ts` (a new field + a `publishToGitHub(workingDirectory)` passthrough method, mirroring how `ServerBridgeImplementerRuntimeProvider` is already retained), and add a "Publish to GitHub" button to `CompanyOfficeScene.ts`'s project backlog form, mirroring T028/T029's exact styling/append/cleanup pattern.
+- [X] T010 [US1] Implement `POST /api/github-publish/publish` in `src/app/api/github-publish/publish/route.ts`: same trusted-origin check as the execute route (reuse `isTrustedRuntimeBridgeRequest`), re-validate the working directory server-side, check authorization (T013) and remote existence, enforce the concurrency guard (T004), run the sequence (T006), write the audit record. Must make T008 pass.
+- [X] T011 [US1] Implement `GitHubPublishClient.ts` (browser-side `fetch()` wrapper, no node imports) in `src/features/city-view/scene/office/github-publish/`. Must make T009 pass.
+- [X] T012 [US1] Wire `GitHubPublishClient` into `OfficeProjectPortalController.ts` (a new field + a `publishToGitHub(workingDirectory)` passthrough method, mirroring how `ServerBridgeImplementerRuntimeProvider` is already retained), and add a "Publish to GitHub" button to `CompanyOfficeScene.ts`'s project backlog form, mirroring T028/T029's exact styling/append/cleanup pattern.
 
 **Checkpoint**: User Story 1 is independently functional — triggering the button genuinely pushes and opens a PR for a registered real project.
 
