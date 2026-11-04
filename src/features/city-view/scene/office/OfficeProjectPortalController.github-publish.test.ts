@@ -1,8 +1,26 @@
 import { describe, expect, it } from "vitest";
 
 import { OfficeProjectPortalController } from "./OfficeProjectPortalController";
-import { GitHubPublishClient, type GitHubPublishResult } from "./github-publish/GitHubPublishClient";
+import { GitHubPublishClient, type GitHubPublishPreview, type GitHubPublishResult } from "./github-publish/GitHubPublishClient";
 import { createSceneStub, getControllerInternals } from "./OfficeProjectPortalController.testHelpers";
+
+function fakePreview(overrides: Partial<GitHubPublishPreview> = {}): GitHubPublishPreview {
+  return { changedFiles: [], plannedCommitMessage: "", hasAnythingToPublish: false, ...overrides };
+}
+
+function installFakeGitHubPublishClient(
+  internals: ReturnType<typeof getControllerInternals>,
+  overrides: Partial<GitHubPublishClient> = {},
+) {
+  const client = {
+    publish: async () => fakeResult(),
+    getStatus: async () => false,
+    getPreview: async () => fakePreview(),
+    ...overrides,
+  } as GitHubPublishClient;
+  (internals as unknown as { githubPublishClient: GitHubPublishClient }).githubPublishClient = client;
+  return client;
+}
 
 function fakeResult(overrides: Partial<GitHubPublishResult> = {}): GitHubPublishResult {
   return {
@@ -66,16 +84,69 @@ describe("OfficeProjectPortalController T012 GitHub publish", () => {
 
     let receivedWorkingDirectory: string | undefined;
     const expectedResult = fakeResult();
-    (internals as unknown as { githubPublishClient: GitHubPublishClient }).githubPublishClient = {
+    installFakeGitHubPublishClient(internals, {
       publish: async (workingDirectory: string) => {
         receivedWorkingDirectory = workingDirectory;
         return expectedResult;
       },
-    } as GitHubPublishClient;
+    });
 
     const result = await controller.publishToGitHub();
 
     expect(receivedWorkingDirectory).toBe(expectedWorkingDirectory);
     expect(result).toEqual(expectedResult);
+  });
+
+  it("getGitHubPublishAuthorized()/getGitHubPublishPreview() start as null before any refresh", () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+
+    expect(controller.getGitHubPublishAuthorized()).toBeNull();
+    expect(controller.getGitHubPublishPreview()).toBeNull();
+  });
+
+  it("refreshGitHubPublishStatusAndPreview() caches the fetched authorization and preview for the active project", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    const dailyProof = internals.state.projects.find((project) => project.id === "daily-proof")!;
+    const expectedWorkingDirectory = (dailyProof as { localRepositoryBinding?: { repositoryPath?: string } }).localRepositoryBinding!.repositoryPath!;
+
+    let receivedWorkingDirectory: string | undefined;
+    const preview = fakePreview({ changedFiles: ["a.ts"], hasAnythingToPublish: true });
+    installFakeGitHubPublishClient(internals, {
+      getStatus: async () => true,
+      getPreview: async (workingDirectory: string) => {
+        receivedWorkingDirectory = workingDirectory;
+        return preview;
+      },
+    });
+
+    await controller.refreshGitHubPublishStatusAndPreview();
+
+    expect(receivedWorkingDirectory).toBe(expectedWorkingDirectory);
+    expect(controller.getGitHubPublishAuthorized()).toBe(true);
+    expect(controller.getGitHubPublishPreview()).toEqual(preview);
+  });
+
+  it("refreshGitHubPublishStatusAndPreview() caches a null preview when there is no resolvable working directory", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    internals.state.selectedProjectId = "portfolio";
+    installFakeGitHubPublishClient(internals, { getStatus: async () => true });
+
+    await controller.refreshGitHubPublishStatusAndPreview();
+
+    expect(controller.getGitHubPublishAuthorized()).toBe(true);
+    expect(controller.getGitHubPublishPreview()).toBeNull();
+  });
+
+  it("publishToGitHub() refreshes the cached preview after a real publish attempt", async () => {
+    const controller = new OfficeProjectPortalController(createSceneStub());
+    const internals = getControllerInternals(controller);
+    const refreshedPreview = fakePreview({ hasAnythingToPublish: false });
+    installFakeGitHubPublishClient(internals, { getPreview: async () => refreshedPreview });
+
+    await controller.publishToGitHub();
+
+    expect(controller.getGitHubPublishPreview()).toEqual(refreshedPreview);
   });
 });

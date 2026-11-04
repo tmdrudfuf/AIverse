@@ -48,4 +48,42 @@ describe("GitHubPublishClient", () => {
 
     expect(result.status).toBe("failed");
   });
+
+  it("getStatus() returns the server's authorized flag", async () => {
+    const fetchImpl = fakeFetchReturning({ authorized: true });
+    const client = new GitHubPublishClient(fetchImpl);
+
+    expect(await client.getStatus()).toBe(true);
+  });
+
+  it("getStatus() returns false, never throws, when the bridge cannot be reached", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("network error");
+    }) as unknown as typeof fetch;
+    const client = new GitHubPublishClient(fetchImpl);
+
+    expect(await client.getStatus()).toBe(false);
+  });
+
+  it("getPreview() GETs the working directory as a query param and returns the parsed preview", async () => {
+    const fetchImpl = fakeFetchReturning({ changedFiles: ["a.ts"], plannedCommitMessage: "AIverse maintenance update: 1 file changed", hasAnythingToPublish: true });
+    const client = new GitHubPublishClient(fetchImpl);
+
+    const preview = await client.getPreview("C:/scratch/project a");
+
+    expect(fetchImpl).toHaveBeenCalledWith("/api/github-publish/preview?workingDirectory=C%3A%2Fscratch%2Fproject%20a");
+    expect(preview.hasAnythingToPublish).toBe(true);
+    expect(preview.changedFiles).toEqual(["a.ts"]);
+  });
+
+  it("getPreview() returns an empty, honest preview when the bridge cannot be reached", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("network error");
+    }) as unknown as typeof fetch;
+    const client = new GitHubPublishClient(fetchImpl);
+
+    const preview = await client.getPreview("C:/scratch/project-a");
+
+    expect(preview).toEqual({ changedFiles: [], plannedCommitMessage: "", hasAnythingToPublish: false });
+  });
 });

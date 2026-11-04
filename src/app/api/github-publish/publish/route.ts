@@ -1,26 +1,15 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
 import path from "node:path";
 import { NextRequest, NextResponse } from "next/server";
 
-import { hasPathTraversal } from "@/features/city-view/scene/office/implementer-runtime/ClaudeImplementerRuntimeProvider";
 import { isTrustedRuntimeBridgeRequest } from "../../runtime/_lib/RuntimeBridgeOrigin";
 import type { RuntimeBridgeSpawnImpl } from "../../runtime/_lib/RuntimeBridgeProcessRunner";
 import { GitHubPublishRegistry, getSharedGitHubPublishRegistry } from "../_lib/GitHubPublishRegistry";
-import { hasConfiguredRemote, isGitHubWriteAuthorized } from "../_lib/GitHubPublishChecks";
+import { hasConfiguredRemote, isGitHubWriteAuthorized, isWorkingDirectoryUsable } from "../_lib/GitHubPublishChecks";
 import { runGitHubPublishSequence } from "../_lib/GitHubPublishSequence";
 import type { GitHubPublishRefusalReason, PublishAuditRecord, PublishResponse } from "../_lib/GitHubPublishTypes";
 
 export const runtime = "nodejs";
-
-function isWorkingDirectoryUsable(workingDirectory: string): boolean {
-  if (!workingDirectory || hasPathTraversal(workingDirectory)) return false;
-  try {
-    return fs.statSync(workingDirectory).isDirectory();
-  } catch {
-    return false;
-  }
-}
 
 function workingDirectoryKey(workingDirectory: string): string {
   return path.resolve(workingDirectory).toLowerCase();

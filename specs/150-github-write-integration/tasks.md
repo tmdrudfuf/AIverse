@@ -46,12 +46,12 @@
 
 ### Tests for User Story 2
 
-- [ ] T013 [P] [US2] Write `src/app/api/github-publish/preview/route.test.ts` and `status/route.test.ts` first: preview lists real changed files and the same generated message T007 would produce; status reflects a real (or stubbed-failing) `gh auth status` call.
+- [X] T013 [P] [US2] Write `src/app/api/github-publish/preview/route.test.ts` and `status/route.test.ts` first: preview lists real changed files and the same generated message T007 would produce; status reflects a real (or stubbed-failing) `gh auth status` call.
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Implement `GET /api/github-publish/status/route.ts` (runs `gh auth status`, maps exit code + scope check to `{authorized}`) and `GET /api/github-publish/preview/route.ts` (runs `git status --porcelain` + the ahead-count check, reuses T007's generator). Must make T013 pass.
-- [ ] T015 [US2] Extend `GitHubPublishClient.ts` with `getStatus()`/`getPreview()`, and show the preview (changed files + planned commit message) in the office UI before the Publish button is enabled, mirroring T028's enablement-label pattern.
+- [X] T014 [US2] Implement `GET /api/github-publish/status/route.ts` (runs `gh auth status`, maps exit code + scope check to `{authorized}`) and `GET /api/github-publish/preview/route.ts` (runs `git status --porcelain` + the ahead-count check, reuses T007's generator). Must make T013 pass.
+- [X] T015 [US2] Extend `GitHubPublishClient.ts` with `getStatus()`/`getPreview()`, and show the preview (changed files + planned commit message) in the office UI before the Publish button is enabled, mirroring T028's enablement-label pattern.
 
 **Checkpoint**: Both P1 stories work together.
 

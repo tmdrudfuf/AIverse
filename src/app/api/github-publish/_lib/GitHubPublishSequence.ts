@@ -25,7 +25,7 @@ function truncate(text: string): string {
   return trimmed.length <= OUTPUT_SUMMARY_MAX_LENGTH ? trimmed : `${trimmed.slice(0, OUTPUT_SUMMARY_MAX_LENGTH)}...`;
 }
 
-function parsePorcelainFiles(porcelainOutput: string): string[] {
+export function parsePorcelainFiles(porcelainOutput: string): string[] {
   return porcelainOutput
     .split("\n")
     .map((line) => line.trim())

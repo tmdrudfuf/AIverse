@@ -1,6 +1,18 @@
+import fs from "node:fs";
 import { runRuntimeBridgeProcess, type RuntimeBridgeSpawnImpl } from "../../runtime/_lib/RuntimeBridgeProcessRunner";
+import { hasPathTraversal } from "@/features/city-view/scene/office/implementer-runtime/ClaudeImplementerRuntimeProvider";
 
 const CHECK_TIMEOUT_MS = 10_000;
+
+/** Shared by every github-publish route that accepts a client-supplied `workingDirectory`. */
+export function isWorkingDirectoryUsable(workingDirectory: string): boolean {
+  if (!workingDirectory || hasPathTraversal(workingDirectory)) return false;
+  try {
+    return fs.statSync(workingDirectory).isDirectory();
+  } catch {
+    return false;
+  }
+}
 
 /**
  * "GitHub write access authorized" (FR-004) is a live, derived fact --

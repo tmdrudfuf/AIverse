@@ -254,6 +254,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
         this.officeInteractionPrompt?.update(undefined);
         this.officeProjectPortalController?.open();
         void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
+        void this.officeProjectPortalController?.refreshGitHubPublishStatusAndPreview();
         this.employeeConversationBubbleOverlay?.hide();
       } else if (actionPressed) {
         const growthLoop = this.officeProjectPortalController?.getCompanyGrowthGameplayLoopResult();
@@ -273,6 +274,7 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
           this.officeInteractionPrompt?.update(undefined);
           this.officeProjectPortalController?.open();
           void this.officeProjectPortalController?.refreshRuntimeBridgeEnablement();
+          void this.officeProjectPortalController?.refreshGitHubPublishStatusAndPreview();
           this.employeeConversationBubbleOverlay?.hide();
         } else if (!interactionResult) {
           this.showNearbyEmployeeConversationBubble();
@@ -607,9 +609,19 @@ export function createCompanyOfficeScene(PhaserRuntime: PhaserRuntime) {
       form.runtimeBridgeCancelButton.disabled = !activeRuntimeBridgeRunId;
       form.runtimeBridgeCancelButton.style.opacity = activeRuntimeBridgeRunId ? "1" : "0.52";
       form.runtimeBridgeCancelButton.style.cursor = activeRuntimeBridgeRunId ? "pointer" : "not-allowed";
+      const githubPublishAuthorized = this.officeProjectPortalController?.getGitHubPublishAuthorized() ?? null;
+      const githubPublishPreview = this.officeProjectPortalController?.getGitHubPublishPreview() ?? null;
+      const githubPublishEnabled = githubPublishAuthorized === true && (githubPublishPreview?.hasAnythingToPublish ?? false);
       form.githubPublishButton.textContent = "Publish to GitHub";
-      form.githubPublishButton.title = "Publish real local changes to GitHub (Spec 150 server bridge): commit, push, and open a draft PR.";
-      form.githubPublishReason.textContent = formatGitHubPublishResult(this.githubPublishLastResult);
+      form.githubPublishButton.disabled = !githubPublishEnabled;
+      form.githubPublishButton.style.opacity = githubPublishEnabled ? "1" : "0.52";
+      form.githubPublishButton.style.cursor = githubPublishEnabled ? "pointer" : "not-allowed";
+      form.githubPublishButton.title = githubPublishEnabled
+        ? "Publish real local changes to GitHub (Spec 150 server bridge): commit, push, and open a draft PR."
+        : "Not available right now -- see the status line below.";
+      form.githubPublishReason.textContent = this.githubPublishLastResult
+        ? formatGitHubPublishResult(this.githubPublishLastResult)
+        : formatGitHubPublishPreview(githubPublishAuthorized, githubPublishPreview);
       if (!form.isEditingSuggestionAutoAcceptPriorities) {
         for (const priority of BACKLOG_AUTONOMY_PRIORITIES) {
           form.suggestionAutoAcceptPriorityInputs[priority].checked = probe?.suggestionAutoAcceptAllowedPriorities.includes(priority) ?? false;
@@ -1372,6 +1384,18 @@ export function formatRuntimeBridgeEnablement(enablement: { implementerEnabled: 
   const implementerState = enablement.implementerEnabled ? "Enabled" : "Not enabled";
   const reviewerState = enablement.reviewerEnabled ? "Enabled" : "Not enabled";
   return `Real execution: Implementer ${implementerState} | Reviewer ${reviewerState}`;
+}
+
+export function formatGitHubPublishPreview(
+  authorized: boolean | null,
+  preview: { changedFiles: string[]; plannedCommitMessage: string; hasAnythingToPublish: boolean } | null,
+) {
+  if (authorized === null || preview === null) return "GitHub publish: checking this project...";
+  if (!authorized) return "GitHub publish: not authorized on this machine (gh auth status).";
+  if (!preview.hasAnythingToPublish) return "GitHub publish: nothing to publish right now.";
+  const fileCount = preview.changedFiles.length;
+  const fileSummary = fileCount > 0 ? `${fileCount} file${fileCount === 1 ? "" : "s"} changed` : "already committed, ahead of default branch";
+  return `GitHub publish: Ready -- ${fileSummary}.`;
 }
 
 export function formatGitHubPublishResult(result: GitHubPublishResult | null) {

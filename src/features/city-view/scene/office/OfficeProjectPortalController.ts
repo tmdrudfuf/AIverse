@@ -72,7 +72,7 @@ import {
   createRuntimeStartResultCollection,
 } from "./runtime-start/RuntimeStartTypes";
 import { ServerBridgeImplementerRuntimeProvider } from "./implementer-runtime/ServerBridgeImplementerRuntimeProvider";
-import { GitHubPublishClient, type GitHubPublishResult } from "./github-publish/GitHubPublishClient";
+import { GitHubPublishClient, type GitHubPublishPreview, type GitHubPublishResult } from "./github-publish/GitHubPublishClient";
 import {
   ExternalAdosChildRunImplementerProvider,
   type ExternalAdosChildRunGatewayModule,
@@ -415,6 +415,8 @@ export class OfficeProjectPortalController {
   private readonly activeReviewerRuntimeKeys = new Set<string>();
   private reviewerRuntimeBridgeProvider: ServerBridgeReviewerRuntimeProvider;
   private readonly githubPublishClient: GitHubPublishClient;
+  private githubPublishAuthorized: boolean | null = null;
+  private githubPublishPreview: GitHubPublishPreview | null = null;
   private readonly reviewDecisionService: ReviewDecisionService;
   private readonly reviewFixRequestService: ReviewFixRequestService;
   private readonly reviewFixPlanService: ReviewFixPlanService;
@@ -3159,7 +3161,34 @@ export class OfficeProjectPortalController {
   async publishToGitHub(): Promise<GitHubPublishResult | null> {
     const workingDirectory = this.getActiveProjectWorkingDirectory();
     if (!workingDirectory) return null;
-    return this.githubPublishClient.publish(workingDirectory);
+    const result = await this.githubPublishClient.publish(workingDirectory);
+    await this.refreshGitHubPublishPreview();
+    return result;
+  }
+
+  /**
+   * Cached `{authorized}`/preview facts (Spec 150 T015, User Story 2) --
+   * `null` means "never fetched yet", not "false"/"nothing to publish",
+   * mirroring `getRuntimeBridgeEnablement()`'s own null-until-fetched
+   * contract above.
+   */
+  getGitHubPublishAuthorized(): boolean | null {
+    return this.githubPublishAuthorized;
+  }
+
+  getGitHubPublishPreview(): GitHubPublishPreview | null {
+    return this.githubPublishPreview;
+  }
+
+  /** Fetches both `/status` and `/preview` for the active project and caches the results. Never throws. */
+  async refreshGitHubPublishStatusAndPreview(): Promise<void> {
+    this.githubPublishAuthorized = await this.githubPublishClient.getStatus();
+    await this.refreshGitHubPublishPreview();
+  }
+
+  private async refreshGitHubPublishPreview(): Promise<void> {
+    const workingDirectory = this.getActiveProjectWorkingDirectory();
+    this.githubPublishPreview = workingDirectory ? await this.githubPublishClient.getPreview(workingDirectory) : null;
   }
 
   /**
